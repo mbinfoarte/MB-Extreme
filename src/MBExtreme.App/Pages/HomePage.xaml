@@ -1,0 +1,29 @@
+<UserControl x:Class="MBExtreme.UI.Pages.HomePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:MBExtreme.UI.Controls">
+    <Grid>
+        <ScrollViewer x:Name="MainView" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="40,32" HorizontalAlignment="Center" MaxWidth="640">
+                <TextBlock x:Name="HealthText" FontSize="18" HorizontalAlignment="Right" />
+
+                <Button x:Name="ScanButton" Content="ESCANEAR" Style="{StaticResource ScanButton}"
+                        Margin="0,56,0,0" HorizontalAlignment="Center" Click="ScanButton_Click" />
+
+                <TextBlock Margin="0,32,0,0" TextAlignment="Center" TextWrapping="Wrap" FontSize="16"
+                           Text="Analisa a memória e testa os servidores DNS. A análise só lê informações: nada no seu PC é alterado." />
+
+                <Border x:Name="SummaryCard" Style="{StaticResource Card}" Margin="0,28,0,0" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="Resultado da última análise" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock x:Name="SummaryText" Margin="0,10,0,0" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,10,0,0" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"
+                                   Text="Abra Memória ou DNS no menu lateral para aplicar as melhorias." />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <ctl:ProgressPanel x:Name="ProgressView" Visibility="Collapsed" Background="{StaticResource BgBrush}" />
+    </Grid>
+</UserControl>

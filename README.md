@@ -1,38 +1,54 @@
 # MB Extreme
 
-Software de otimização completa para Windows, da MB InfoArt.
+Software de otimização completa para Windows, da MB InfoArt. Visual preto e laranja.
 
 ## Objetivo
 
-Melhorar a experiência em jogos e no uso diário do PC com:
-
 1. **Otimização de ping e rota**: mede latência e perda de pacotes por caminho e escolhe a melhor rota.
-2. **Otimização de desempenho do Windows**: serviços, plano de energia, processos em segundo plano, startup e ajustes de rede (TCP/DNS).
-3. **IA de decisão**: aprende o perfil de uso e de rede do usuário e recomenda ou aplica ajustes.
-4. **Instalador Windows** (`.msi`/`.exe`) com atualização automática.
+2. **Desempenho do Windows**: ajustes reversíveis, limpeza de RAM, inicialização, DNS.
+3. **IA de decisão**: aprende o perfil de uso e de rede e recomenda ou aplica ajustes.
+4. **Ferramentas**: informações de hardware, sensores, benchmarks, drivers e programas.
+5. **Instalador Windows** com atualização automática.
+
+## Stack
+
+- **.NET 8 + WPF** (C#): interface e lógica de Windows (registro, serviços, rede).
+- `src/MBExtreme.Core`: núcleo sem interface (memória, DNS, progresso, configurações).
+- `src/MBExtreme.App`: aplicativo WPF com menu lateral e tema preto e laranja.
+- `tests/MBExtreme.Core.Tests`: testes de unidade (xUnit).
 
 ## Estrutura
 
 ```
-├── apps/desktop/      Interface (React + TypeScript) empacotada com Tauri
-├── crates/core/       Núcleo em Rust: medição de rede, rotas, ajustes do sistema
-├── crates/ai/         Motor de decisão (regras + modelo de aprendizado)
-├── installer/         Empacotamento e assinatura do instalador Windows
-├── docs/              Arquitetura, roadmap e política de desenvolvimento
-└── scripts/           Automação de build e testes
+src/MBExtreme.Core/    Núcleo: Memory, Dns, Progress, Settings
+src/MBExtreme.App/     Interface: Themes, Controls (progresso), Pages, MainWindow
+tests/                 Testes
+docs/                  Especificações, arquitetura, roadmap e política de desenvolvimento
+installer/             Empacotamento do instalador (a fazer)
+scripts/               Automação (a fazer)
 ```
 
-## Stack proposta
+## Como compilar
 
-- **Tauri 2** (Rust + WebView): instalador pequeno e acesso ao sistema.
-- **React + TypeScript + Tailwind**.
-- **Rust** no núcleo: desempenho e segurança em operações de baixo nível.
-- **WinDivert** ou túnel UDP/WireGuard para roteamento (decisão em `docs/ARCHITECTURE.md`).
+Requer Windows 10/11 e o [.NET 8 SDK](https://dotnet.microsoft.com/download).
 
-## Status
+```
+dotnet test tests/MBExtreme.Core.Tests
+dotnet run --project src/MBExtreme.App
+```
 
-Estrutura criada. Nenhum código funcional ainda. Veja `docs/ROADMAP.md`.
+O app pede privilégio de administrador (limpar a lista de espera da RAM e alterar o DNS exigem isso).
+
+O build do Windows também roda no GitHub Actions (`.github/workflows/build.yml`) e publica o executável como artefato.
+
+## Estado atual (v0.1)
+
+- Janela com menu lateral, tema preto e laranja e **janela de progresso padrão** (anel com porcentagem, etapas, parar).
+- **Início**: análise rápida (somente leitura) de memória e DNS.
+- **Memória**: status, limpeza (processos e lista de espera) e lista de aplicativos protegidos.
+- **DNS**: teste de provedores, ranking, aplicar e restaurar.
+- Demais abas aparecem como "Em desenvolvimento". Veja `docs/ROADMAP.md`.
 
 ## Política de desenvolvimento
 
-Veja `docs/CLEAN-ROOM.md`. Resumo: o MB Extreme implementa funcionalidades próprias, sem copiar código, binários ou recursos de outros produtos.
+Veja `docs/CLEAN-ROOM.md`: funcionalidades próprias, sem copiar código, binários ou recursos de outros produtos.

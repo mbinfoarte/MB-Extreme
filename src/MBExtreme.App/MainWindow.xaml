@@ -1,0 +1,60 @@
+<Window x:Class="MBExtreme.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MB Extreme" Width="1180" Height="720" MinWidth="960" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
+        FontFamily="Segoe UI">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,1,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="24,28,24,20">
+                    <TextBlock FontSize="26" FontWeight="Bold">
+                        <Run Text="MB " /><Run Text="EXTREME" Foreground="{StaticResource AccentBrush}" />
+                    </TextBlock>
+                    <TextBlock Text="by MB InfoArt" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                </StackPanel>
+
+                <TextBlock DockPanel.Dock="Bottom" Text="v0.1 · pré-lançamento" FontSize="11" Margin="24,12"
+                           Foreground="{StaticResource MutedBrush}" />
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12,0,12,0">
+                        <RadioButton Content="Início" Tag="home" IsChecked="True" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+
+                        <TextBlock Text="OTIMIZAR" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
+                        <RadioButton Content="Ajustes de sistema" Tag="tweaks" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                        <RadioButton Content="Memória" Tag="memory" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+
+                        <TextBlock Text="REDE" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
+                        <RadioButton Content="DNS" Tag="dns" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                        <RadioButton Content="Analisador de rede" Tag="netanalyzer" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+
+                        <TextBlock Text="DESEMPENHO" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
+                        <RadioButton Content="Hardware e benchmarks" Tag="perf" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+
+                        <TextBlock Text="FERRAMENTAS" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
+                        <RadioButton Content="Drivers e programas" Tag="tools" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                        <RadioButton Content="Central de ações" Tag="actions" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <ContentControl x:Name="ContentHost" Grid.Column="1" />
+    </Grid>
+</Window>

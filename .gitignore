@@ -15,3 +15,10 @@ dist/
 # IDE
 .vscode/
 .idea/
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+out/

@@ -62,6 +62,25 @@ public static class DriverService
         return list;
     }
 
+    /// <summary>Entre as atualizações do Windows Update, só as de vídeo do fabricante informado.</summary>
+    public static IReadOnlyList<PendingDriver> FilterGpuDrivers(IEnumerable<PendingDriver> drivers, GpuVendor vendor)
+    {
+        string[] makers = vendor switch
+        {
+            GpuVendor.Amd => new[] { "amd", "advanced micro", "radeon" },
+            GpuVendor.Intel => new[] { "intel" },
+            GpuVendor.Nvidia => new[] { "nvidia" },
+            _ => Array.Empty<string>(),
+        };
+        string[] kinds = { "display", "graphics", "video", "radeon", "geforce", "arc", "uhd", "iris" };
+
+        return drivers.Where(d =>
+        {
+            string text = (d.Title + " " + d.Manufacturer + " " + d.Model).ToLowerInvariant();
+            return makers.Any(text.Contains) && kinds.Any(text.Contains);
+        }).ToList();
+    }
+
     public static string OfficialPage(GpuVendor vendor) => vendor switch
     {
         GpuVendor.Nvidia => "https://www.nvidia.com/Download/index.aspx?lang=pt-br",

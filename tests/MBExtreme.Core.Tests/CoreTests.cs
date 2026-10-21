@@ -392,3 +392,75 @@ public class ToolsTests
         Assert.Contains("Interrompido", result.Reason);
     }
 }
+
+public class DriverUpdateTests
+{
+    [Theory]
+    [InlineData("NVIDIA GeForce RTX 3060 Ti", "GeForce RTX 3060 Ti")]
+    [InlineData("NVIDIA GeForce RTX 3060 Laptop GPU", "GeForce RTX 3060 Laptop GPU")]
+    [InlineData("  NVIDIA  GeForce GTX 1650-Ti ", "GeForce GTX 1650 Ti")]
+    public void GpuNamesMatchAcrossSources(string installed, string catalog) =>
+        Assert.Equal(MBExtreme.Core.Drivers.NvidiaDriverUpdater.NormalizeGpuName(catalog),
+                     MBExtreme.Core.Drivers.NvidiaDriverUpdater.NormalizeGpuName(installed));
+
+    [Fact]
+    public void LookupXmlIsParsed()
+    {
+        const string xml = "<LookupValueSearch><TypeID>3</TypeID><LookupValues>" +
+            "<LookupValue ParentID=\"120\"><Name>GeForce RTX 3060 Ti</Name><Value>933</Value></LookupValue>" +
+            "<LookupValue ParentID=\"120\"><Name>GeForce RTX 3070</Name><Value>934</Value></LookupValue></LookupValues></LookupValueSearch>";
+
+        var values = MBExtreme.Core.Drivers.NvidiaDriverUpdater.ParseLookupValues(xml);
+
+        Assert.Equal(2, values.Count);
+        Assert.Equal(("GeForce RTX 3060 Ti", "933"), values[0]);
+        Assert.Empty(MBExtreme.Core.Drivers.NvidiaDriverUpdater.ParseLookupValues("não é xml"));
+    }
+
+    [Fact]
+    public void DriverJsonIsParsedAndForcesHttps()
+    {
+        const string json = "{\"Success\":\"1\",\"IDS\":[{\"downloadInfo\":{\"Version\":\"560.94\",\"DownloadURL\":\"http://us.download.nvidia.com/Windows/560.94/560.94-desktop-win10-win11-64bit-international-dch-whql.exe\"}}]}";
+
+        var latest = MBExtreme.Core.Drivers.NvidiaDriverUpdater.ParseDriverJson(json);
+
+        Assert.NotNull(latest);
+        Assert.Equal("560.94", latest!.Version);
+        Assert.StartsWith("https://us.download.nvidia.com/", latest.DownloadUrl);
+        Assert.Null(MBExtreme.Core.Drivers.NvidiaDriverUpdater.ParseDriverJson("{\"IDS\":[]}"));
+        Assert.Null(MBExtreme.Core.Drivers.NvidiaDriverUpdater.ParseDriverJson("lixo"));
+    }
+
+    [Theory]
+    [InlineData("https://us.download.nvidia.com/Windows/560.94/x.exe", true)]
+    [InlineData("http://us.download.nvidia.com/Windows/560.94/x.exe", false)]
+    [InlineData("https://evil.example.com/nvidia.com/x.exe", false)]
+    [InlineData("https://us.download.nvidia.com.evil.com/x.exe", false)]
+    [InlineData("https://us.download.nvidia.com/x.zip", false)]
+    public void OnlyNvidiaHttpsExeDownloadsAreTrusted(string url, bool trusted) =>
+        Assert.Equal(trusted, MBExtreme.Core.Drivers.NvidiaDriverUpdater.IsTrustedDownload(url));
+
+    [Theory]
+    [InlineData("617.42", "560.94", 1)]
+    [InlineData("560.94", "560.94", 0)]
+    [InlineData("99.5", "560.94", -1)]
+    public void VersionsAreComparedNumerically(string a, string b, int sign) =>
+        Assert.Equal(sign, Math.Sign(MBExtreme.Core.Drivers.NvidiaDriverUpdater.CompareVersions(a, b)));
+
+    [Fact]
+    public void WindowsUpdateDriversAreFilteredByGpuVendor()
+    {
+        var drivers = new[]
+        {
+            new MBExtreme.Core.Drivers.PendingDriver("1", "Intel - Display - 31.0.101.5333", "Intel", "Intel(R) UHD Graphics", "2026-09-01"),
+            new MBExtreme.Core.Drivers.PendingDriver("2", "Realtek - Audio", "Realtek", "Realtek Audio", "2026-09-01"),
+            new MBExtreme.Core.Drivers.PendingDriver("3", "AMD - Display", "Advanced Micro Devices", "AMD Radeon RX 6600", "2026-09-01"),
+        };
+
+        var intel = MBExtreme.Core.Drivers.DriverService.FilterGpuDrivers(drivers, MBExtreme.Core.Drivers.GpuVendor.Intel);
+        var amd = MBExtreme.Core.Drivers.DriverService.FilterGpuDrivers(drivers, MBExtreme.Core.Drivers.GpuVendor.Amd);
+
+        Assert.Equal("1", Assert.Single(intel).Id);
+        Assert.Equal("3", Assert.Single(amd).Id);
+    }
+}

@@ -1,6 +1,6 @@
 # MB Extreme
 
-Software de otimização completa para Windows, da MB InfoArt. Visual preto e laranja.
+Software de otimização completa para Windows, da MB InfoArt. Visual preto e amarelo.
 
 ## Objetivo
 
@@ -14,7 +14,7 @@ Software de otimização completa para Windows, da MB InfoArt. Visual preto e la
 
 - **.NET 8 + WPF** (C#): interface e lógica de Windows (registro, serviços, rede).
 - `src/MBExtreme.Core`: núcleo sem interface (memória, DNS, progresso, configurações).
-- `src/MBExtreme.App`: aplicativo WPF com menu lateral e tema preto e laranja.
+- `src/MBExtreme.App`: aplicativo WPF com menu lateral e tema preto e amarelo.
 - `tests/MBExtreme.Core.Tests`: testes de unidade (xUnit).
 
 ## Estrutura
@@ -43,7 +43,7 @@ O build do Windows também roda no GitHub Actions (`.github/workflows/build.yml`
 
 ## Estado atual (v0.2)
 
-- Janela com menu lateral organizado por grupos (Otimizar, Rede, Windows, Ferramentas), tema preto e laranja e **janela de progresso padrão**.
+- Janela com menu lateral organizado por grupos (Otimizar, Rede, Windows, Ferramentas), tema preto e amarelo e **janela de progresso padrão**.
 - **Motor de ajustes reversíveis**: cada ajuste guarda o valor original antes de mudar; risco baixo, médio ou alto; confirmação para risco alto.
 - **Ajustes**: Desempenho, Jogos e GPU, Otimizações de rede, Privacidade, Inicialização e boot, Periféricos (23 ajustes).
 - **Aplicativos**: remoção individual de apps do Windows, com ponto de restauração.

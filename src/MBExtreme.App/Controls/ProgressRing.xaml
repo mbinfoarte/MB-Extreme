@@ -8,7 +8,7 @@
             <Path x:Name="Arc" Stroke="{StaticResource AccentBrush}" StrokeThickness="12"
                   StrokeStartLineCap="Round" StrokeEndLineCap="Round">
                 <Path.Effect>
-                    <DropShadowEffect Color="#FF6A00" BlurRadius="18" ShadowDepth="0" Opacity="0.6" />
+                    <DropShadowEffect Color="#FFCC00" BlurRadius="18" ShadowDepth="0" Opacity="0.6" />
                 </Path.Effect>
             </Path>
         </Canvas>

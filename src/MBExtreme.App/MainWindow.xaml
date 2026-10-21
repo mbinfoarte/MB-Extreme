@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MB Extreme" Width="1180" Height="720" MinWidth="960" MinHeight="620"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
+        Icon="Assets/app.ico"
+        Background="{StaticResource WindowBackdropBrush}" Foreground="{StaticResource TextBrush}"
         FontFamily="Segoe UI">
     <Grid>
         <Grid.ColumnDefinitions>
@@ -14,14 +15,21 @@
         <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,1,0">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Top" Margin="24,28,24,20">
-                    <TextBlock FontSize="26" FontWeight="Bold">
-                        <Run Text="MB " /><Run Text="EXTREME" Foreground="{StaticResource AccentBrush}" />
-                    </TextBlock>
-                    <TextBlock Text="by MB InfoArt" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                <StackPanel DockPanel.Dock="Top" Margin="20,24,20,18">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="46" Height="46" CornerRadius="10" ClipToBounds="True">
+                            <Image Source="Assets/logo.png" Stretch="UniformToFill" />
+                        </Border>
+                        <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock FontSize="22" FontWeight="Bold">
+                                <Run Text="MB " /><Run Text="EXTREME" Foreground="{StaticResource AccentBrush}" />
+                            </TextBlock>
+                            <TextBlock Text="by MB InfoArt" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
 
-                <TextBlock DockPanel.Dock="Bottom" Text="v0.1 · pré-lançamento" FontSize="11" Margin="24,12"
+                <TextBlock DockPanel.Dock="Bottom" Text="v0.2 · pré-lançamento" FontSize="11" Margin="24,12"
                            Foreground="{StaticResource MutedBrush}" />
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

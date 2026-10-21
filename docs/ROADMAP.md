@@ -7,7 +7,7 @@
 - [ ] Importar a base atual do software (a ser enviada)
 
 ## Fase 1: MVP Windows
-- [x] Tema preto e laranja, menu lateral e janela de progresso padrão
+- [x] Tema preto e amarelo, menu lateral e janela de progresso padrão
 - [x] Memória: status, limpeza e lista de protegidos
 - [x] DNS: teste, ranking, aplicar e restaurar
 - [x] CI no GitHub Actions (build Windows)

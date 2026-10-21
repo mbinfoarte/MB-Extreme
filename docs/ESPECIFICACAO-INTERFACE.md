@@ -2,22 +2,22 @@
 
 Base: referências de layout enviadas pelo dono do projeto (programa de limpeza com abas no topo, botão central de varredura e tela de progresso). **Usamos apenas a ideia de organização.** Cores, ícones, textos, nome e arte são próprios (veja `CLEAN-ROOM.md`).
 
-## 1. Identidade visual: preto e laranja
+## 1. Identidade visual: preto e amarelo
 
 | Token | Valor sugerido | Uso |
 |---|---|---|
 | `--bg` | `#0B0B0B` | fundo principal |
-| `--surface` | `#141414` | cartões e painéis |
-| `--surface-2` | `#1C1C1C` | itens, campos, abas inativas |
-| `--border` | `#2A2A2A` | divisórias |
-| `--accent` | `#FF6A00` | laranja principal: botões, progresso, aba ativa |
-| `--accent-hover` | `#FF8533` | hover |
-| `--accent-glow` | `rgba(255,106,0,.35)` | brilho do botão central e do anel de progresso |
+| `--surface` | `#B3101010` (translúcido) | cartões e painéis sobre o fundo com brilho amarelo |
+| `--surface-2` | `#CC1C1C1C` (translúcido) | itens, campos, abas inativas |
+| `--border` | `#33FFFFFF` | divisórias |
+| `--accent` | `#FFCC00` | amarelo da marca (cor do logotipo): botões, progresso, aba ativa |
+| `--accent-hover` | `#FFDB4D` | hover |
+| `--accent-glow` | `rgba(255,204,0,.35)` | brilho do botão central e do anel de progresso |
 | `--text` | `#F2F2F2` | texto |
 | `--text-muted` | `#9A9A9A` | texto secundário |
-| `--ok` / `--warn` / `--bad` | `#2ECC71` / `#F5B301` / `#E5484D` | estados (usados com parcimônia, o laranja é o destaque) |
+| `--ok` / `--warn` / `--bad` | `#2ECC71` / `#FF8A3D` / `#E5484D` | estados (usados com parcimônia, o amarelo é o destaque; o aviso usa laranja `#FF8A3D` para não se confundir) |
 
-Regras: só duas cores de marca (preto e laranja); o contraste do texto laranja sobre preto deve ser verificado para acessibilidade; ícones de traço simples; cantos arredondados.
+Regras: só duas cores de marca (preto e amarelo); o contraste do texto amarelo sobre preto deve ser verificado para acessibilidade; ícones de traço simples; cantos arredondados.
 
 ## 2. Estrutura de navegação
 
@@ -30,14 +30,14 @@ Abas no topo (ou menu lateral, a decidir):
 5. **Ferramentas**: drivers, programas, inicialização (seção 7)
 6. **Central de ações**: histórico, restaurar alterações, relatórios
 
-Tela inicial: botão grande central **ESCANEAR** com anel brilhante em laranja, seleção das categorias com caixas de marcação ("Selecionar tudo") e indicador de saúde do PC.
+Tela inicial: botão grande central **ESCANEAR** com anel brilhante em amarelo, seleção das categorias com caixas de marcação ("Selecionar tudo") e indicador de saúde do PC.
 
 ## 3. Varredura e janela de progresso (padrão para todas as ações)
 
 Toda operação longa usa o **mesmo componente de progresso**:
 
-- Lista de etapas à esquerda, com a etapa atual destacada em laranja e as concluídas marcadas.
-- Anel circular grande com a **porcentagem** (0 a 100%) preenchendo em laranja.
+- Lista de etapas à esquerda, com a etapa atual destacada em amarelo e as concluídas marcadas.
+- Anel circular grande com a **porcentagem** (0 a 100%) preenchendo em amarelo.
 - Linha de status com o que está sendo analisado agora (ex.: "Procurando arquivos temporários...").
 - Caixa **Corrigir automaticamente** (padrão: desligada) e botões **Pular** (etapa) e **Parar** (tudo).
 - Ao fim: resumo do que foi encontrado/feito, espaço liberado, e **Desfazer**.
@@ -98,6 +98,6 @@ O objetivo é ter dentro do app o que o usuário hoje busca em programas separad
 ## 8. Pontos em aberto
 
 - Confirmar a stack: .NET 8 com WPF (recomendada para esse visual) ou Tauri com Rust.
-- Nome final e logotipo (o nome "MB Extreme" é nosso; criar logo próprio em preto e laranja).
+- Nome final e logotipo (o nome "MB Extreme" é nosso; logotipo da MB InfoArt aplicado (ícone do app e menu)).
 - Menu em abas no topo ou lateral.
 - Idiomas: português primeiro; inglês depois?

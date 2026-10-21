@@ -24,6 +24,6 @@
             </StackPanel>
         </ScrollViewer>
 
-        <ctl:ProgressPanel x:Name="ProgressView" Visibility="Collapsed" Background="{StaticResource BgBrush}" />
+        <ctl:ProgressPanel x:Name="ProgressView" Visibility="Collapsed" Background="{StaticResource OverlayBrush}" />
     </Grid>
 </UserControl>

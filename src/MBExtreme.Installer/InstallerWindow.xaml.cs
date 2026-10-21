@@ -63,9 +63,9 @@ public partial class InstallerWindow : Window
         if (dialog.ShowDialog(this) != true) return;
 
         string folder = dialog.FolderName;
-        _directory = Path.GetFileName(folder.TrimEnd('\\')).Equals(InstallInfo.AppName, StringComparison.OrdinalIgnoreCase)
+        _directory = Path.GetFileName(folder.TrimEnd('\\')).Equals(InstallInfo.FolderName, StringComparison.OrdinalIgnoreCase)
             ? folder
-            : Path.Combine(folder, InstallInfo.AppName);
+            : Path.Combine(folder, InstallInfo.FolderName);
         DirectoryBox.Text = _directory;
     }
 
@@ -97,7 +97,7 @@ public partial class InstallerWindow : Window
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            MessageBox.Show("Não foi possível abrir o MB Extreme: " + ex.Message, "MB Extreme");
+            MessageBox.Show("Não foi possível abrir o " + InstallInfo.AppName + ": " + ex.Message, InstallInfo.AppName);
         }
     }
 
@@ -106,7 +106,7 @@ public partial class InstallerWindow : Window
         string root = Path.GetPathRoot(Path.GetFullPath(_directory)) ?? "";
         if (string.IsNullOrWhiteSpace(_directory) || Path.GetFullPath(_directory).TrimEnd('\\') == root.TrimEnd('\\'))
         {
-            MessageBox.Show("Escolha uma pasta, não a raiz do disco.", "MB Extreme", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Escolha uma pasta, não a raiz do disco.", InstallInfo.AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 

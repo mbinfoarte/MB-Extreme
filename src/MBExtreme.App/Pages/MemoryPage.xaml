@@ -52,7 +52,7 @@
                 </Border>
 
                 <TextBlock Margin="0,16,0,0" Foreground="{StaticResource MutedBrush}"
-                           Text="Em breve: limpeza automática ao iniciar um jogo ou quando o status mudar." />
+                           Text="Dica: o Modo Jogo (menu Jogos) limpa e ajusta o PC automaticamente quando um jogo abre." />
             </StackPanel>
         </ScrollViewer>
 

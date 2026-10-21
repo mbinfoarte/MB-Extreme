@@ -1,4 +1,4 @@
-# MB Extreme
+# MB Extreme Beta
 
 Software de otimização completa para Windows, da MB InfoArt. Visual preto, com cartões arredondados e botões amarelos.
 
@@ -31,7 +31,7 @@ scripts/               Automação (a fazer)
 
 ## Instalação (usuário)
 
-Baixe `MBExtreme-Setup.exe` na página de releases do repositório e execute. O instalador mostra uma janela com barra de progresso e um mini tutorial do sistema, copia o programa para `C:\Program Files\MB Extreme`, cria atalhos e registra o programa em "Aplicativos instalados". Para remover, use "Aplicativos instalados" do Windows (ou `MBExtreme.exe /uninstall`). Também há uma versão portátil (`MBExtreme-portatil-win-x64.zip`).
+Baixe `MBExtreme-Beta-Setup.exe` na página de releases do repositório e execute. O instalador mostra uma janela com barra de progresso e um mini tutorial do sistema, copia o programa para `C:\Program Files\MB Extreme`, cria atalhos e registra o programa em "Aplicativos instalados". Para remover, use "Aplicativos instalados" do Windows (ou `MBExtreme.exe /uninstall`). Também há uma versão portátil (`MBExtreme-Beta-portatil-win-x64.zip`).
 
 ## Como compilar
 
@@ -46,14 +46,20 @@ O app pede privilégio de administrador (limpar a lista de espera da RAM e alter
 
 O build do Windows também roda no GitHub Actions (`.github/workflows/build.yml`) e publica o executável como artefato.
 
-## Estado atual (v0.3)
+## O que o MB Extreme Beta faz
 
-- **Painel** (tela inicial): medidores de temperatura da CPU e da placa de vídeo, uso de memória e ping; gráficos de uso da internet e da CPU; ventoinhas e consumo de energia. Os sensores usam a biblioteca LibreHardwareMonitor (veja `THIRD-PARTY.md`); para ler a temperatura da CPU é preciso o driver PawnIO (o painel oferece instalar pelo winget).
-- **Menu por módulos** (Otimização, Rede, Windows, Ferramentas): ao clicar, aparecem atalhos com ícones; cada atalho abre a página com botão de voltar.
-- **Limpeza**: escaneia temporários, Prefetch, relatórios de erro, cache de navegadores, miniaturas e memória RAM; mostra o que foi encontrado e só apaga o que você marcar. Nunca toca em cookies, senhas, histórico ou documentos.
-- **Ajustes reversíveis** (23), remoção de aplicativos do Windows, Memória e DNS, como nas versões anteriores.
-- Visual: fundo preto, cartões arredondados e botões amarelos com texto preto. Janela de progresso padrão e instalador (.exe) com mini tutorial.
-- Páginas ainda em desenvolvimento: Armazenamento, Analisador de rede, Hardware e benchmarks, Drivers e programas, Central de ações.
+Detalhes em `docs/ESPECIFICACAO-FERRAMENTAS.md`; a base das recomendações (testes publicados e fontes) está em `docs/PESQUISA-OTIMIZACAO-GAMER.md`.
+
+- **Painel**: medidores de temperatura da CPU e da GPU, memória e ping; gráficos de internet e CPU. Sensores via LibreHardwareMonitor (`THIRD-PARTY.md`); para temperatura da CPU é preciso o driver PawnIO (o painel oferece instalar pelo winget).
+- **Otimização**: Perfis (Jogo, Competitivo, PC fraco), Limpeza segura, Inicialização (liga/desliga programas), Desempenho, Efeitos visuais, Memória e Armazenamento (saúde e otimização de SSD/HD).
+- **Jogos**: Modo Jogo automático, energia e agendamento de GPU, Diagnóstico de latência (driver que causa micro-travadas), Assistente de jogo, Monitor de FPS com overlay e Gravação de tela pela placa de vídeo (1080p, 1440p e 4K, 30 ou 60 fps).
+- **Testes**: Informações do sistema, Monitor em tempo real (clock e uso por núcleo, tensões, temperaturas), Benchmark (CPU, memória com latência, disco e GPU em 3D), Antes e depois e Teste de estresse (geral e por núcleo).
+- **Hardware e BIOS**: leitura das peças com alertas (XMP/EXPO, canal único, Windows 24H2, BIOS antiga, microcódigo Intel, chipset AMD), página de BIOS e Receita de BIOS/PBO. O app orienta; nunca atualiza BIOS sozinho.
+- **Dispositivos**: lista de USB e do hardware, cache de portas USB.
+- **Rede**: DNS, ajustes, Analisador de rede (Ping, TCPing, MTR, jitter) e Wi-Fi.
+- **Windows**: privacidade, remoção de aplicativos, boot e periféricos.
+- **Drivers e programas**: driver da NVIDIA direto do servidor oficial, AMD/Intel pelo Windows Update, programas pelo winget.
+- Todo ajuste mostra o risco, guarda o valor original e pode ser restaurado. Visual preto com cartões arredondados e botões amarelos; janela de progresso padrão e instalador (.exe) com mini tutorial.
 
 ## Política de desenvolvimento
 

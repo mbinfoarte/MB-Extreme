@@ -7,14 +7,17 @@ namespace MBExtreme.Core.Setup;
 [SupportedOSPlatform("windows")]
 public static class InstallInfo
 {
-    public const string AppName = "MB Extreme";
+    public const string AppName = AppInfo.Name;
+    /// <summary>Nome da pasta de instalação (mantido para atualizar instalações anteriores).</summary>
+    public const string FolderName = "MB Extreme";
+    private const string LegacyShortcutName = "MB Extreme";
     public const string Publisher = "MB InfoArt";
-    public const string Version = "0.2.0";
+    public const string Version = AppInfo.DisplayVersion;
     public const string ExecutableName = "MBExtreme.exe";
     public const string UninstallKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MBExtreme";
 
     public static string DefaultDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), AppName);
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), FolderName);
 
     public static string StartMenuShortcut =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), AppName + ".lnk");
@@ -56,7 +59,13 @@ public static class InstallInfo
     /// <summary>Remove atalhos e o registro. Os arquivos da pasta de instalação são removidos por quem chama.</summary>
     public static void RemoveIntegration()
     {
-        foreach (var shortcut in new[] { StartMenuShortcut, DesktopShortcut })
+        string programs = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
+        string desktop = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
+        foreach (var shortcut in new[]
+        {
+            StartMenuShortcut, DesktopShortcut,
+            Path.Combine(programs, LegacyShortcutName + ".lnk"), Path.Combine(desktop, LegacyShortcutName + ".lnk"),
+        })
         {
             try { if (File.Exists(shortcut)) File.Delete(shortcut); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }

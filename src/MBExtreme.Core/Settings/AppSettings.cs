@@ -8,6 +8,19 @@ public sealed class AppSettings
     /// <summary>Nomes de processos que a limpeza de RAM nunca toca.</summary>
     public List<string> MemoryAllowlist { get; set; } = new();
 
+    /// <summary>Programas (sem .exe) que contam como jogo no Modo Jogo.</summary>
+    public List<string> GameProcesses { get; set; } = new();
+
+    /// <summary>Programas (sem .exe) que o Modo Jogo pede para fechar quando um jogo abre.</summary>
+    public List<string> BoostCloseApps { get; set; } = new();
+
+    /// <summary>Liga o Modo Jogo sozinho quando um programa da lista de jogos abre.</summary>
+    public bool BoostAuto { get; set; }
+
+    public bool BoostSwitchPlan { get; set; } = true;
+
+    public bool BoostCleanMemory { get; set; }
+
     private static string FolderPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme");
 

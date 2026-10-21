@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using MBExtreme.Core.Hardware;
 using MBExtreme.Core.Sensors;
 using MBExtreme.Core.Stress;
 using MBExtreme.UI.Controls;
@@ -21,6 +22,10 @@ public sealed class StressPage : ToolPageBase
     private readonly TextBlock _live = new() { FontSize = 14, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap };
     private readonly Button _start;
     private readonly Button _stop;
+    private readonly Button _perCore;
+    private readonly StackPanel _coreResults = new();
+    private static readonly int[] SecondsPerCore = { 30, 60, 120 };
+    private int _secondsIndex = 1;
     private int _minutesIndex = 1;
     private int _limitIndex = 1;
     private bool _running;
@@ -31,6 +36,7 @@ public sealed class StressPage : ToolPageBase
         _start = AddButton("Iniciar teste", async (_, _) => await RunAsync());
         _stop = AddButton("Parar", (_, _) => Cts?.Cancel(), false);
         _stop.IsEnabled = false;
+        _perCore = AddButton("Teste por núcleo (Curve Optimizer)", async (_, _) => await RunPerCoreAsync(), false);
 
         _cpu.Foreground = Brush("TextBrush");
         _memory.Foreground = Brush("TextBrush");
@@ -44,6 +50,9 @@ public sealed class StressPage : ToolPageBase
         Body.Children.Add(Choice(Minutes.Select(m => m + " min").ToList(), _minutesIndex, i => _minutesIndex = i));
         Body.Children.Add(Heading("Parar se a temperatura chegar a"));
         Body.Children.Add(Choice(Limits.Select(l => l + " °C").ToList(), _limitIndex, i => _limitIndex = i));
+        Body.Children.Add(Heading("Teste por núcleo: tempo em cada núcleo"));
+        Body.Children.Add(Choice(SecondsPerCore.Select(x => x + " s").ToList(), _secondsIndex, i => _secondsIndex = i));
+        Body.Children.Add(Muted("Roda um núcleo de cada vez com cálculos conferidos. Serve para ajustar Curve Optimizer/undervolt: o núcleo que der erro está instável. Cada núcleo físico é testado uma vez."));
         Body.Children.Add(RecordOption());
 
         var gauges = new UniformGrid { Columns = 3, Margin = new Thickness(0, 18, 0, 0) };
@@ -52,6 +61,7 @@ public sealed class StressPage : ToolPageBase
         gauges.Children.Add(Captioned("Temperatura da GPU", _gpuTemp));
         Body.Children.Add(gauges);
         Body.Children.Add(_live);
+        Body.Children.Add(_coreResults);
     }
 
     private static ArcGauge Gauge(string unit, double max, double warn, double bad) =>
@@ -107,6 +117,60 @@ public sealed class StressPage : ToolPageBase
             _stop.IsEnabled = false;
         }
     }
+
+    private async Task RunPerCoreAsync()
+    {
+        if (_running) return;
+        _running = true;
+        _start.IsEnabled = false;
+        _perCore.IsEnabled = false;
+        _stop.IsEnabled = true;
+        Cts = new CancellationTokenSource();
+        var token = Cts.Token;
+        SetStatus("Teste por núcleo em andamento...");
+        string? recording = BeginRecordingIfChecked("estresse-por-nucleo");
+        try
+        {
+            var hw = await AppServices.Hardware();
+            var cores = PerCoreStress.CoresToTest(hw.Cpu.Threads, hw.Cpu.Cores, true);
+            var sensors = await AppServices.Sensors;
+            var options = new PerCoreOptions(SecondsPerCore[_secondsIndex], Limits[_limitIndex], true);
+            var results = await Task.Run(() => PerCoreStress.Run(options, cores, () => ReadSafe(sensors), OnCoreProgress, token));
+
+            _live.Text = "";
+            _coreResults.Children.Clear();
+            _coreResults.Children.Add(Heading("Resultado por núcleo"));
+            foreach (var r in results)
+            {
+                string state = r.Errors > 0 ? $"✖ {r.Errors} erro(s): instável" : r.Completed ? "✓ estável" : "interrompido";
+                _coreResults.Children.Add(Row($"Núcleo {r.LogicalCore / (cores.Count < hw.Cpu.Threads ? 2 : 1) + 1}", $"{state}" + (r.MaxTemperature is { } t ? $" · máx {t:0} °C" : ""),
+                    null, r.Errors > 0 ? "BadBrush" : "MutedBrush"));
+            }
+
+            bool bad = results.Any(r => r.Errors > 0);
+            SetStatus(bad ? "Há núcleos instáveis: reduza o ajuste de undervolt/Curve Optimizer em 5 pontos para esses núcleos." :
+                      results.All(r => r.Completed) ? "Todos os núcleos testados ficaram estáveis." : "Teste interrompido.", bad ? "BadBrush" : "OkBrush");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or AggregateException)
+        {
+            SetStatus("Não foi possível executar o teste: " + ex.Message, "BadBrush");
+        }
+        finally
+        {
+            EndRecording(recording);
+            _running = false;
+            _start.IsEnabled = true;
+            _perCore.IsEnabled = true;
+            _stop.IsEnabled = false;
+        }
+    }
+
+    private void OnCoreProgress(PerCoreProgress p) => Dispatcher.BeginInvoke(new Action(() =>
+    {
+        _cpuTemp.Value = p.CpuTemperature;
+        _live.Text = $"Núcleo {p.Index + 1} de {p.Total} · {p.Elapsed:mm\\:ss} · erros: {p.Errors}";
+        _live.Foreground = Brush(p.Errors > 0 ? "BadBrush" : "TextBrush");
+    }));
 
     private static SensorSnapshot? ReadSafe(SensorService sensors)
     {

@@ -43,7 +43,7 @@ Lista de jogos e regiões de servidor, com ping por região e recomendação da 
 ## Ligação com o resto do produto
 
 - `core::probe` fornece medição de latência/jitter/perda para todas as abas.
-- O MTR identifica **onde** está o problema e justifica a troca de rota (fase 2).
+- O MTR identifica **onde** está o problema e justifica a troca de rota (em versão futura).
 - O diagnóstico pode alimentar a IA com padrões do usuário.
 
 ## Pontos em aberto

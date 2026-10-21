@@ -36,7 +36,7 @@ public static class NvidiaDriverUpdater
     private static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("MBExtreme/0.3");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MBExtreme/" + AppInfo.Version);
         return client;
     }
 

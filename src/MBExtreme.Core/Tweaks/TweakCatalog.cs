@@ -272,6 +272,116 @@ public static class TweakCatalog
                 Recommended = true,
             },
 
+            // ---------------------------------------------------------------- Energia para jogos (na tomada)
+            new PowerSettingTweak(store, "power-min-cpu", TweakCategory.Gaming, TweakRisk.Low,
+                "Processador sempre em desempenho máximo (na tomada)",
+                "Define o estado mínimo do processador em 100% quando o PC está ligado na tomada, evitando que o clock caia entre uma tarefa e outra.",
+                "54533251-82be-4824-96c1-47b60b740d00", "893dee8e-2bef-41e0-89c6-b55d0929964c", 100)
+            {
+                Effect = "Resposta mais constante; evita a queda de clock em jogos leves.",
+                Warning = "Gasta mais energia e esquenta mais em repouso. Só vale na tomada; na bateria nada muda.",
+            },
+
+            new PowerSettingTweak(store, "power-core-parking", TweakCategory.Gaming, TweakRisk.Low,
+                "Não estacionar núcleos do processador (na tomada)",
+                "Impede o Windows de \"adormecer\" núcleos quando a carga é baixa; todos ficam disponíveis na hora.",
+                "54533251-82be-4824-96c1-47b60b740d00", "0cc5b647-c1df-4637-891a-dec35c318583", 100)
+            {
+                Effect = "Evita o atraso para acordar núcleos quando o jogo pede mais threads.",
+                Warning = "Sem teste independente que comprove ganho em PCs atuais. Use a medição antes e depois.",
+            },
+
+            new PowerSettingTweak(store, "power-pcie-aspm", TweakCategory.Gaming, TweakRisk.Low,
+                "PCI Express sem economia de energia (na tomada)",
+                "Desliga a economia de energia do link PCI Express (ASPM), que pode atrasar a placa de vídeo e discos NVMe ao acordar.",
+                "501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5", 0)
+            {
+                Effect = "Latência mais estável nos dispositivos PCI Express.",
+                Warning = "Consome um pouco mais de energia. O efeito é pequeno; meça antes e depois.",
+            },
+
+            new PowerSettingTweak(store, "power-usb-suspend", TweakCategory.Gaming, TweakRisk.Low,
+                "USB sem suspensão seletiva (na tomada)",
+                "Impede o Windows de desligar portas USB ociosas, o que pode causar atraso no primeiro movimento de mouse e teclado.",
+                "2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", 0)
+            {
+                Effect = "Mouse, teclado e controles respondem sem o atraso de reativação.",
+                Warning = "Consome um pouco mais de energia.",
+                Recommended = true,
+            },
+
+            new RegistryTweak(store, "perf-power-throttling-off", TweakCategory.Performance, TweakRisk.Medium,
+                "Desligar a limitação de energia por processo (EcoQoS)",
+                "O Windows pode colocar programas em \"modo de eficiência\" (menos clock). Este ajuste desliga essa limitação no PC inteiro.",
+                new[] { new RegistryValueSpec(Hklm, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", 1) })
+            {
+                Effect = "Evita que processos de jogo e de captura sejam desacelerados por engano.",
+                Warning = "Experimental: sem teste independente de ganho. Em notebook aumenta consumo e calor. O Modo Jogo faz o mesmo só para o jogo aberto, sem mexer no PC todo.",
+                RequiresRestart = true,
+            },
+
+            new RegistryTweak(store, "perf-vbs-off", TweakCategory.Performance, TweakRisk.High,
+                "Desligar a Integridade da Memória e a VBS",
+                "Desliga a proteção do kernel por virtualização (Integridade da Memória/HVCI). Testes publicados mostram perda de cerca de 2 a 10% de FPS com ela ligada, mais nos 1% pior.",
+                new[]
+                {
+                    new RegistryValueSpec(Hklm, @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "Enabled", 0),
+                    new RegistryValueSpec(Hklm, @"SYSTEM\CurrentControlSet\Control\DeviceGuard", "EnableVirtualizationBasedSecurity", 0),
+                })
+            {
+                Effect = "Mais FPS (principalmente nos 1% pior) em CPUs onde a proteção pesa mais.",
+                Warning = "REDUZ A SEGURANÇA: drivers maliciosos ficam mais fáceis de carregar no kernel. Algumas atualizações do Windows ligam de novo. Meça antes e depois e decida.",
+                RequiresRestart = true,
+            },
+
+            // ---------------------------------------------------------------- Efeitos visuais
+            new RegistryTweak(store, "visual-transparency", TweakCategory.Visual, TweakRisk.Low,
+                "Desligar a transparência do Windows",
+                "Remove o efeito de vidro na barra de tarefas, no Iniciar e nas janelas.",
+                new[] { new RegistryValueSpec(Hkcu, @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 0) })
+            {
+                Effect = "Menos uso de GPU na área de trabalho; ajuda PCs com vídeo integrado.",
+                Recommended = true,
+            },
+
+            new RegistryTweak(store, "visual-animations", TweakCategory.Visual, TweakRisk.Low,
+                "Desligar animações de janelas e da barra de tarefas",
+                "Remove as animações ao abrir, minimizar e trocar de janela.",
+                new[]
+                {
+                    new RegistryValueSpec(Hkcu, @"Control Panel\Desktop\WindowMetrics", "MinAnimate", "0", Str),
+                    new RegistryValueSpec(Hkcu, explorerAdvanced, "TaskbarAnimations", 0),
+                    new RegistryValueSpec(Hkcu, explorerAdvanced, "ListviewAlphaSelect", 0),
+                    new RegistryValueSpec(Hkcu, explorerAdvanced, "ListviewShadow", 0),
+                })
+            {
+                Effect = "O Windows parece mais rápido, principalmente em PCs fracos.",
+                RequiresRestart = true,
+                Recommended = true,
+            },
+
+            new RegistryTweak(store, "visual-menu-delay", TweakCategory.Visual, TweakRisk.Low,
+                "Menus abrem sem atraso",
+                "Tira o pequeno atraso antes de os menus aparecerem e de arrastar janelas mostrando o conteúdo.",
+                new[]
+                {
+                    new RegistryValueSpec(Hkcu, @"Control Panel\Desktop", "MenuShowDelay", "0", Str),
+                    new RegistryValueSpec(Hkcu, @"Control Panel\Desktop", "DragFullWindows", "0", Str),
+                })
+            {
+                Effect = "Menus mais ágeis.",
+                Warning = "Arrastar janelas passa a mostrar só o contorno.",
+                RequiresRestart = true,
+            },
+
+            new RegistryTweak(store, "visual-aero-peek", TweakCategory.Visual, TweakRisk.Low,
+                "Desligar a visualização ao passar o mouse na barra de tarefas",
+                "Desliga o Aero Peek (prévia da janela ao passar o mouse).",
+                new[] { new RegistryValueSpec(Hkcu, @"Software\Microsoft\Windows\DWM", "EnableAeroPeek", 0) })
+            {
+                Effect = "Menos trabalho para a GPU e para o gerenciador de janelas.",
+            },
+
             // ---------------------------------------------------------------- Inicialização e boot
             new RegistryTweak(store, "boot-fast-startup-off", TweakCategory.Boot, TweakRisk.Low,
                 "Desativar a inicialização rápida",

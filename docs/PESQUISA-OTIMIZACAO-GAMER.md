@@ -147,21 +147,27 @@ Segunda rodada de pesquisa, limitada a veículos e documentação técnica de re
 3. A maior parte dos "tweaks de registro" não tem teste independente. Ficam como Experimental, com A/B.
 4. Itens a **remover da lista de recomendados**: desligar HAGS por padrão, desligar Defender, desligar E-cores, limpar cache de shaders.
 
-## 3. Ordem sugerida
-**Fase A (sem dependência nova, alto valor):**
-1. Monitor em tempo real completo (2.1).
-2. Hardware e BIOS: detecção, alerta de XMP/EXPO e canal único, microcode, idade da BIOS, base de versões recomendadas, **Receita de BIOS/PBO**.
-3. Gerenciador de inicialização, efeitos visuais, cache de shaders.
-4. Perfil de energia avançado (ASPM, USB suspend, core parking) e **Modo Jogo MB** (ao abrir um jogo: fecha apps pesados escolhidos, ajusta energia/prioridade e restaura depois).
-5. Benchmarks de CPU/RAM ampliados e o **A/B antes/depois**.
+## 3. Onde cada recomendação está no app
+| Recomendação | Onde no MB Extreme |
+|---|---|
+| Avisar XMP/EXPO desligado, canal único, Windows 24H2, BIOS antiga, microcódigo Intel, chipset AMD, Resizable BAR | Hardware e BIOS > Meu hardware |
+| Versão da BIOS e busca no site oficial; lista de cuidados | Hardware e BIOS > BIOS e atualizações |
+| PBO/Curve Optimizer, memória e Resizable BAR passo a passo | Hardware e BIOS > Receita de BIOS |
+| Teste de estabilidade por núcleo | Testes > Teste de estresse > Teste por núcleo |
+| Clock/uso por núcleo, tensões, temperaturas | Testes > Monitor em tempo real |
+| Benchmark de CPU, memória (latência) e GPU 3D | Testes > Benchmark |
+| Medir o efeito real de cada ajuste | Testes > Antes e depois |
+| Driver que causa micro-travadas (DPC/ISR) | Jogos > Diagnóstico de latência |
+| Plano de energia, ASPM, USB, núcleos (na tomada) | Jogos > Ajustes para jogos e Jogos e energia |
+| Boost ao abrir o jogo (EcoQoS, prioridade, apps) | Jogos > Modo Jogo |
+| Configurações dentro do jogo conforme o hardware | Jogos > Assistente de jogo |
+| Gerenciador de inicialização e efeitos visuais | Otimização > Inicialização e Efeitos visuais |
+| Conjuntos prontos de ajustes | Otimização > Perfis |
+| Integridade da Memória/VBS (opção de risco alto) | Otimização > Desempenho |
+| Wi-Fi e jitter | Rede > Diagnóstico de Wi-Fi e Analisador de rede |
+| Gravação por GPU em 1080p/1440p/4K, 30/60 fps | Jogos > Gravação de tela |
 
-**Fase B:**
-6. Diagnóstico de latência por ETW (DPC/ISR).
-7. Teste de estresse **por núcleo** (para Curve Optimizer).
-8. Benchmark 3D de GPU (Vortice).
-9. Gravação com codificação por GPU (FFmpeg).
-
-**Fase C:** integração com ferramentas de OEM, áudio na gravação, Media Foundation nativo, assistente de configuração por jogo.
+Fora do app por decisão: cache de shaders (só orientar), exclusões do Defender, desligar E-cores, ajustes de timer/`bcdedit`.
 
 ## 4. O que não vamos fazer
 - Prometer percentual de FPS.
@@ -170,12 +176,11 @@ Segunda rodada de pesquisa, limitada a veículos e documentação técnica de re
 - Atualizar BIOS automaticamente.
 - Aplicar overclock/PBO sem o usuário entender e confirmar.
 
-## 5. Decisões que dependem de você
-1. **VBS/Integridade da Memória**: oferecer como opção de alto risco, com medição antes/depois?
-2. **FFmpeg** para a gravação (instalado sob demanda pelo winget) ou só solução nativa (mais lenta de entregar)?
-3. **Vortice.Windows** como nova dependência para o benchmark 3D?
-4. **BIOS**: concorda em só orientar (nunca atualizar sozinho)?
-5. Qual fase começar primeiro?
+## 5. Decisões adotadas
+1. A Integridade da Memória/VBS entra como opção de **risco alto**, com aviso de segurança e medição antes e depois.
+2. O FFmpeg é usado na gravação por GPU, instalado **sob demanda** pelo winget (o app só chama o programa); há também o modo compatível embutido.
+3. O benchmark 3D usa Vortice.Windows (MIT).
+4. Em BIOS o app **só orienta**: nunca atualiza sozinho.
 
 ## Fontes
 - Segunda rodada (internacional): [GamersNexus: HAGS](https://gamersnexus.net/guides/3599-windows-10-hardware-accelerated-gpu-scheduling-benchmarks), [Tom's Hardware: HAGS](https://www.tomshardware.com/news/gpu-hardware-scheduling-tested), [ComputerBase: Windows 10 x 11](https://www.computerbase.de/artikel/betriebssysteme/windows-10-vs-windows-11-gaming-leistung-test.90348/), [ComputerBase: Ryzen e 24H2](https://www.computerbase.de/artikel/prozessoren/amd-ryzen-intel-core-gaming-benchmarks-windows-11-24h2.90044/), [Tom's Hardware: Ryzen no 24H2](https://www.tomshardware.com/pc-components/cpus/ryzen-cpus-receive-a-performance-bump-with-the-windows-11-24h2-release-preview-version), [Puget Systems: 9800X3D](https://www.pugetsystems.com/labs/articles/amd-ryzen-7-9800x3d-content-creation-review/), [GamersNexus: plano Ryzen](https://gamersnexus.net/news-pc/2870-ryzen-power-plan-update-min-frequency-90-pct), [Tom's Hardware: DDR5 de um pente](https://www.tomshardware.com/pc-components/ddr5/single-dimm-ddr5-gaming-works-better-than-you-probably-think-amds-3d-v-cache-chips-drop-less-than-3-percent-one-ddr5-dimm-beats-dual-channel-ddr4-ram), [TechPowerUp: DDR5 em Zen 5](https://www.techpowerup.com/review/ddr5-memory-performance-scaling-with-amd-zen-5/22.html), [Guru3D: EXPO ULL](https://www.guru3d.com/review/gskill-6000-amd-expo-ull-ultra-low-latency-ddr5-ram-review/), [Tom's Hardware: Resizable BAR RTX 3090](https://www.tomshardware.com/news/nvidia-geforce-rtx-3090-3-percent-performance-boost-resizable-bar), [TechPowerUp: Dead Space e ReBAR](https://www.techpowerup.com/304346/dead-space-performance-jumps-46-with-resizable-bar-enabled), [TechPowerUp: E-cores](https://www.techpowerup.com/312242/atlas-fallen-optimization-fail-gain-50-additional-performance-by-turning-off-the-e-cores?cp=3), [TechPowerUp: Defender e CPU Intel](https://www.techpowerup.com/295877/windows-defender-can-significantly-impact-intel-cpu-performance-we-have-the-fix), [AV-Comparatives: desempenho](https://av-comparatives.org/tests/performance-test-september-2026/), [Tom's Hardware: Ryzen 9 9950X (PBO/CO −10)](https://www.tomshardware.com/pc-components/cpus/amd-ryzen-9-9950x-cpu-review/4), [Tom's Hardware: DirectStorage](https://www.tomshardware.com/news/directstorage-reduces-forspoken-load-times-to-less-than-two-seconds), [Tom's Hardware: AMF x NVENC](https://www.tomshardware.com/news/amd-amf-encoder-quality-boost), [Tom's Hardware: AV1 Intel Arc](https://www.tomshardware.com/news/intel-arc-av1-encoder-dominates-nvenc), [NVIDIA: tamanho do cache de shaders](https://www.nvidia.com/content/Control-Panel-Help/vLatest/en-us/mergedProjects/3D%20Settings/Manage_3D_Settings_(reference).htm), [Blur Busters: Reflex](https://forums.blurbusters.com/viewtopic.php?t=7522), [Microsoft: EcoQoS](https://devblogs.microsoft.com/performance-diagnostics/introducing-ecoqos/), [Microsoft: SetProcessInformation](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setprocessinformation)

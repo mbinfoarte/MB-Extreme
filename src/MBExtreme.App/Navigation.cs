@@ -13,23 +13,37 @@ internal static class NavigationMap
     {
         new("opt", "Otimização", "Deixe o computador mais rápido e leve.", "\uE945", new Tile[]
         {
+            new("profiles", "Perfis", "Jogo, Competitivo e PC fraco em um clique.", "\uE945"),
             new("cleanup", "Limpeza", "Procura lixo, temporários, cache e libera memória.", "\uE74D"),
+            new("startup", "Inicialização", "Programas que abrem junto com o Windows.", "\uE7E8"),
             new("tweaks-perf", "Desempenho", "Prioridade de CPU, energia e serviços.", "\uE9D9"),
+            new("visual", "Efeitos visuais", "Transparência e animações do Windows.", "\uE713"),
             new("memory", "Memória", "Limpe a RAM e proteja aplicativos.", "\uE950"),
             new("storage", "Armazenamento", "SSD, HD e saúde dos discos.", "\uEDA2"),
         }),
-        new("games", "Jogos", "Windows, GPU e energia para jogar melhor.", "\uE7FC", new Tile[]
+        new("games", "Jogos", "Windows, GPU, energia e latência para jogar melhor.", "\uE7FC", new Tile[]
         {
-            new("gamesettings", "Jogos e energia", "Modo de Jogo, agendamento de GPU e plano de energia.", "\uE7FC"),
-            new("tweaks-game", "Ajustes para jogos", "Prioridade, gravação em segundo plano e mais.", "\uE713"),
+            new("gameboost", "Modo Jogo", "Prepara o PC quando um jogo abre.", "\uE7FC"),
+            new("gamesettings", "Jogos e energia", "Modo de Jogo do Windows, agendamento de GPU e plano de energia.", "\uE713"),
+            new("tweaks-game", "Ajustes para jogos", "Prioridade, gravação em segundo plano, energia e mais.", "\uE9D9"),
+            new("latency", "Diagnóstico de latência", "Acha o driver que causa micro-travadas.", "\uE9D9"),
+            new("gameadvisor", "Assistente de jogo", "Configurações ideais para o seu hardware.", "\uE770"),
             new("fps", "Monitor de FPS", "Overlay com FPS, temperatura e uso.", "\uE9D9"),
-            new("record", "Gravação de tela", "Grave a janela para guardar testes.", "\uE714"),
+            new("record", "Gravação de tela", "Full HD, 2K e 4K pela placa de vídeo.", "\uE714"),
         }),
-        new("test", "Testes", "Informações, benchmark e teste de estresse.", "\uE9D9", new Tile[]
+        new("test", "Testes", "Informações, sensores, benchmark e estresse.", "\uE9D9", new Tile[]
         {
             new("sysinfo", "Informações do sistema", "Estilo CPU-Z, GPU-Z e AIDA.", "\uE770"),
-            new("bench", "Benchmark", "Pontuação de CPU, memória e disco.", "\uE9D9"),
-            new("stress", "Teste de estresse", "Carga no hardware com limite de temperatura.", "\uE7BA"),
+            new("monitor", "Monitor em tempo real", "Clock, uso, tensões e temperaturas.", "\uE9D9"),
+            new("bench", "Benchmark", "CPU, memória, disco e GPU em 3D.", "\uE9D9"),
+            new("compare", "Antes e depois", "Mede o efeito real de cada mudança.", "\uE9D9"),
+            new("stress", "Teste de estresse", "Carga no hardware, por núcleo ou geral.", "\uE7BA"),
+        }),
+        new("hw", "Hardware e BIOS", "Leitura das peças, BIOS e PBO.", "\uE950", new Tile[]
+        {
+            new("hardware", "Meu hardware", "O que melhorar: memória, Windows, BIOS e mais.", "\uE950"),
+            new("bios", "BIOS e atualizações", "Versão da BIOS e onde achar a mais nova.", "\uE896"),
+            new("recipe", "Receita de BIOS", "XMP/EXPO, Resizable BAR e PBO para o seu PC.", "\uE713"),
         }),
         new("dev", "Dispositivos", "USB e tudo que está conectado ao PC.", "\uE88E", new Tile[]
         {
@@ -40,7 +54,8 @@ internal static class NavigationMap
         {
             new("dns", "DNS", "Teste e escolha o servidor mais rápido.", "\uE774"),
             new("net-tweaks", "Otimizações de rede", "Ajustes do Windows para a rede.", "\uE713"),
-            new("netanalyzer", "Analisador de rede", "Ping, TCPing e MTR.", "\uE9D9"),
+            new("netanalyzer", "Analisador de rede", "Ping, TCPing, MTR e jitter.", "\uE9D9"),
+            new("wifi", "Diagnóstico de Wi-Fi", "Sinal, banda e dicas.", "\uE774"),
         }),
         new("win", "Windows", "Privacidade, aplicativos e inicialização.", "\uE713", new Tile[]
         {

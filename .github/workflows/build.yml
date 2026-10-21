@@ -27,22 +27,22 @@ jobs:
         run: |
           Remove-Item out\*.pdb -ErrorAction SilentlyContinue
           Compress-Archive -Path out\* -DestinationPath payload.zip
-          Copy-Item payload.zip MBExtreme-portatil-win-x64.zip
+          Copy-Item payload.zip MBExtreme-Beta-portatil-win-x64.zip
 
       - name: Gerar o instalador (.exe)
         run: dotnet publish src/MBExtreme.Installer/MBExtreme.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:PayloadZip=${{ github.workspace }}\payload.zip" -o setup
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MBExtreme-instalador
-          path: setup/MBExtreme-Setup.exe
+          name: MBExtreme-Beta-instalador
+          path: setup/MBExtreme-Beta-Setup.exe
 
-      - name: Publicar versão de teste (pré-lançamento)
+      - name: Publicar o MB Extreme Beta
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >
-          gh release create "teste-${{ github.run_number }}" setup/MBExtreme-Setup.exe MBExtreme-portatil-win-x64.zip
+          gh release create "beta-${{ github.run_number }}" setup/MBExtreme-Beta-Setup.exe MBExtreme-Beta-portatil-win-x64.zip
           --prerelease
           --target "${{ github.sha }}"
-          --title "MB Extreme (teste) ${{ github.run_number }}"
-          --notes "Versão de teste gerada automaticamente do commit ${{ github.sha }}. Baixe MBExtreme-Setup.exe para instalar (pede permissão de administrador). MBExtreme-portatil-win-x64.zip é a versão sem instalação. Teste primeiro em uma máquina secundária ou crie um ponto de restauração antes."
+          --title "MB Extreme Beta ${{ github.run_number }}"
+          --notes "MB Extreme Beta, compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador). MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes."

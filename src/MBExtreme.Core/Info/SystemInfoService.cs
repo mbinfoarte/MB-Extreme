@@ -43,7 +43,7 @@ public static class SystemInfoService
     public static string ToText(IEnumerable<InfoSection> sections)
     {
         var text = new StringBuilder();
-        text.AppendLine($"MB Extreme - relatório do sistema ({DateTime.Now:dd/MM/yyyy HH:mm})");
+        text.AppendLine($"MB Extreme Beta - relatório do sistema ({DateTime.Now:dd/MM/yyyy HH:mm})");
         foreach (var section in sections)
         {
             text.AppendLine().AppendLine("== " + section.Title);
@@ -168,7 +168,7 @@ public static class SystemInfoService
     }
 
     /// <summary>O WMI limita AdapterRAM a 4 GB; o registro guarda o valor real.</summary>
-    private static double? VideoMemoryFromRegistry(string adapterName)
+    internal static double? VideoMemoryFromRegistry(string adapterName)
     {
         const string classPath = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
         using var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);

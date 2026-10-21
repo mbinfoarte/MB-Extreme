@@ -7,10 +7,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <RootNamespace>MBExtreme.Installer</RootNamespace>
-    <AssemblyName>MBExtreme-Setup</AssemblyName>
+    <AssemblyName>MBExtreme-Beta-Setup</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\MBExtreme.App\Assets\app.ico</ApplicationIcon>
-    <Version>0.2.0</Version>
+    <Version>0.9.0</Version>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>

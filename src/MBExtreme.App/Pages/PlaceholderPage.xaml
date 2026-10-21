@@ -7,7 +7,7 @@
                    Foreground="{StaticResource MutedBrush}" />
         <Border Margin="0,24,0,0" HorizontalAlignment="Center" Padding="14,6" CornerRadius="14"
                 Background="{StaticResource Surface2Brush}">
-            <TextBlock Text="Em desenvolvimento" Foreground="{StaticResource AccentBrush}" FontSize="12" />
+            <TextBlock Text="Indisponível nesta versão" Foreground="{StaticResource AccentBrush}" FontSize="12" />
         </Border>
     </StackPanel>
 </UserControl>

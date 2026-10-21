@@ -98,7 +98,7 @@ public sealed class NetAnalyzerPage : ToolPageBase
             _chart.Values = recent.ToList();
             _output.Text = string.Join("\n", lines) +
                 $"\n\nEnviados {stats.Sent} · recebidos {stats.Received} · perda {stats.LossPercent:0.#}%" +
-                (stats.Received > 0 ? $"\nmín {stats.BestOrZero:0.0} · média {stats.Average:0.0} · máx {stats.Worst:0.0} ms" : "");
+                (stats.Received > 0 ? $"\nmín {stats.BestOrZero:0.0} · média {stats.Average:0.0} · máx {stats.Worst:0.0} ms · jitter {stats.Jitter:0.0} ms" : "");
 
             await Task.Delay(1000, token);
         }

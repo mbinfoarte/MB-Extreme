@@ -17,3 +17,11 @@ Ideias e técnicas de outros projetos usados apenas como referência de estudo e
 ## System.Drawing.Common
 - Uso: captura de tela e codificação JPEG da gravação de tela.
 - Licença: MIT.
+
+## Vortice.Windows (Vortice.Direct3D11, Vortice.D3DCompiler)
+- Uso: benchmark 3D da GPU em Direct3D 11.
+- Licença: MIT. https://github.com/amerkoleci/Vortice.Windows
+
+## FFmpeg (não incluído)
+- Uso: gravação de tela acelerada pela placa de vídeo. O MB Extreme **não distribui** o FFmpeg: ele é instalado pelo usuário (winget, pacote Gyan.FFmpeg) e o aplicativo apenas executa o programa.
+- Licença: LGPL/GPL conforme a compilação instalada. https://ffmpeg.org

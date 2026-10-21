@@ -14,6 +14,13 @@
     <PackageReference Include="System.Management" Version="10.0.2" />
     <!-- Eventos de apresentação de quadros (ETW) para o monitor de FPS. MIT. -->
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.16" />
+    <!-- Direct3D 11 para o benchmark 3D da GPU. MIT. -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MBExtreme.Core.Tests" />
   </ItemGroup>
 
 </Project>

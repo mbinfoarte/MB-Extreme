@@ -1,7 +1,7 @@
 <Window x:Class="MBExtreme.Installer.InstallerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Instalar MB Extreme" Width="780" Height="600" ResizeMode="NoResize"
+        Title="Instalar MB Extreme Beta" Width="780" Height="600" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
         Icon="Assets/app.ico"
         Background="{StaticResource WindowBackdropBrush}" Foreground="{StaticResource TextBrush}"
@@ -58,7 +58,7 @@
                 <TextBlock FontSize="26" FontWeight="Bold">
                     <Run Text="MB " /><Run Text="EXTREME" Foreground="{StaticResource AccentBrush}" />
                 </TextBlock>
-                <TextBlock Text="Instalador · MB InfoArt" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                <TextBlock Text="Instalador · Beta · MB InfoArt" FontSize="12" Foreground="{StaticResource MutedBrush}" />
             </StackPanel>
         </StackPanel>
 
@@ -69,7 +69,7 @@
             <StackPanel x:Name="WelcomePage" VerticalAlignment="Center">
                 <TextBlock Text="Bem-vindo!" FontSize="28" FontWeight="SemiBold" />
                 <TextBlock Margin="0,8,0,22" TextWrapping="Wrap" FontSize="14" Foreground="{StaticResource MutedBrush}"
-                           Text="O MB Extreme vai ser instalado neste computador. Durante a instalação você vê um tutorial rápido de como o programa funciona." />
+                           Text="O MB Extreme Beta vai ser instalado neste computador. Durante a instalação você vê um tutorial rápido de como o programa funciona." />
 
                 <TextBlock Text="Pasta de instalação" Foreground="{StaticResource MutedBrush}" />
                 <Grid Margin="0,6,0,0">
@@ -223,7 +223,7 @@
                                    Foreground="{StaticResource AccentBrush}" Text="0%" />
                     </Grid>
                     <ProgressBar x:Name="Bar" Margin="0,6,0,0" Value="0" />
-                    <CheckBox x:Name="LaunchBox" Content="Abrir o MB Extreme ao concluir" IsChecked="True" Margin="0,12,0,0"
+                    <CheckBox x:Name="LaunchBox" Content="Abrir o MB Extreme Beta ao concluir" IsChecked="True" Margin="0,12,0,0"
                               Visibility="Collapsed" Foreground="{StaticResource TextBrush}" />
                 </StackPanel>
             </Grid>

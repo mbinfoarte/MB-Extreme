@@ -6,7 +6,7 @@ Levantamento baseado **somente em informações públicas** dos fornecedores (si
 
 Fontes: [Tecnologia](https://www.exitlag.com/pt/tecnologia), [Central de ajuda: funcionalidades](https://www.exitlag.com/knowledge-base/203), [Guia](https://www.exitlag.com/blog/exitlag-guide/), [Como funciona](https://www.exitlag.com/en/how-it-works).
 
-| Funcionalidade (descrição pública) | Ideia | Módulo MB Extreme | Fase | Prioridade |
+| Funcionalidade (descrição pública) | Ideia | Módulo MB Extreme | Ordem | Prioridade |
 |---|---|---|---|---|
 | Roteamento multipath: envia pacotes por várias rotas e troca se uma ficar instável | Rotas redundantes e failover | `core::route` | 2 | Alta |
 | Escolha da melhor rota por monitoramento contínuo | Medição de latência/jitter/perda e seleção automática | `core::probe` + `core::route` | 1 e 2 | Alta |

@@ -15,9 +15,14 @@ public sealed class HopStats
     public double Best { get; private set; } = double.MaxValue;
     public double Worst { get; private set; }
     private double _total;
+    private double? _previousRtt;
+    private double _jitterTotal;
+    private int _jitterCount;
 
     public double LossPercent => Sent == 0 ? 0 : 100.0 * (Sent - Received) / Sent;
     public double Average => Received == 0 ? 0 : _total / Received;
+    /// <summary>Variação média entre respostas seguidas (ms). Valores altos causam "picos" de lag mesmo com ping médio bom.</summary>
+    public double Jitter => _jitterCount == 0 ? 0 : _jitterTotal / _jitterCount;
     public double BestOrZero => Received == 0 ? 0 : Best;
 
     public void Add(double? milliseconds)
@@ -26,6 +31,13 @@ public sealed class HopStats
         Last = milliseconds;
         if (milliseconds is not { } ms) return;
         Received++;
+        if (_previousRtt is { } before)
+        {
+            _jitterTotal += Math.Abs(ms - before);
+            _jitterCount++;
+        }
+
+        _previousRtt = ms;
         _total += ms;
         Best = Math.Min(Best, ms);
         Worst = Math.Max(Worst, ms);

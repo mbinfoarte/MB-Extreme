@@ -18,6 +18,7 @@ public partial class MainWindow : Window
         Current = this;
         Loaded += (_, _) => AppServices.Overlay.AttachHotkey(this);
         Go("home");
+        if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
     }
 
     /// <summary>Janela principal, para as páginas pedirem navegação (ex.: o painel abre a limpeza).</summary>
@@ -128,11 +129,25 @@ public partial class MainWindow : Window
         "gamesettings" => new GameSettingsPage(),
         "drivers" => new DriversPage(),
         "programs" => new ProgramsPage(),
+        "hardware" => new HardwarePage(),
+        "bios" => new BiosPage(),
+        "recipe" => new RecipePage(),
+        "monitor" => new LiveMonitorPage(),
+        "compare" => new ComparePage(),
+        "profiles" => new ProfilesPage(),
+        "startup" => new StartupPage(),
+        "latency" => new LatencyPage(),
+        "gameboost" => new GameBoostPage(),
+        "gameadvisor" => new GameAdvisorPage(),
+        "wifi" => new WifiPage(),
+        "visual" => new TweaksPage("Efeitos visuais",
+            "Transparência e animações do Windows. Em PCs fracos, desligar libera GPU e deixa o Windows mais ágil.",
+            TweakCategory.Visual),
         "tweaks-perf" => new TweaksPage("Desempenho",
             "Prioridade de CPU, plano de energia e serviços do Windows. Cada ajuste mostra o risco e pode ser restaurado.",
             TweakCategory.Performance),
         "tweaks-game" => new TweaksPage("Jogos e GPU",
-            "Ajustes para jogar melhor: prioridade, gravação em segundo plano, agendamento de GPU e drivers.",
+            "Ajustes para jogar melhor: prioridade, gravação em segundo plano, energia na tomada e agendamento de GPU. Cada ajuste mostra o risco e pode ser desfeito.",
             TweakCategory.Gaming),
         "net-tweaks" => new TweaksPage("Otimizações de rede",
             "Ajustes do Windows que afetam a rede. O ganho varia; meça o ping antes e depois no Painel.",
@@ -146,6 +161,6 @@ public partial class MainWindow : Window
         "periph" => new TweaksPage("Periféricos",
             "Mouse e teclado.",
             TweakCategory.Peripherals),
-        _ => new PlaceholderPage(tile?.Title ?? key, (tile?.Description ?? "") + " Em breve."),
+        _ => new PlaceholderPage(tile?.Title ?? key, tile?.Description ?? ""),
     };
 }

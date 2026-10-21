@@ -82,7 +82,7 @@ O objetivo é ter dentro do app o que o usuário hoje busca em programas separad
 - Varredura de uma lista de provedores (com campo para o usuário adicionar o seu), com várias consultas por provedor e **ranking por tempo de resposta**; sugestão do mais rápido.
 - Botão **Aplicar** direto no app (adaptadores ativos), com **Restaurar padrão do Windows**.
 - Mostrar se o provedor filtra conteúdo/anúncios.
-- **Ponto honesto:** o DNS muda o tempo de resolução de nomes e a velocidade para abrir sites e conectar a servidores, **não a rota nem o ping dentro da partida**. Para rota e ping de jogo, a ferramenta é o módulo de rotas (MTR, ping por região e, na fase 2, relays). O app deve deixar isso claro.
+- **Ponto honesto:** o DNS muda o tempo de resolução de nomes e a velocidade para abrir sites e conectar a servidores, **não a rota nem o ping dentro da partida**. Para rota e ping de jogo, a ferramenta é o módulo de rotas (MTR, ping por região e, em versão futura, relays). O app deve deixar isso claro.
 
 ## 7. Drivers e programas
 

@@ -14,6 +14,7 @@ namespace MBExtreme.UI.Pages;
 public sealed class DriversPage : ToolPageBase
 {
     private readonly Dictionary<PendingDriver, CheckBox> _boxes = new();
+    private static (string Gpu, NvidiaLatest? Latest, DateTime At)? _latestCache;
 
     public DriversPage() : base("Drivers",
         "Mostra a placa de vídeo e atualiza o driver sem você precisar abrir site nenhum. Também procura outros drivers pelo Windows Update.")
@@ -80,7 +81,17 @@ public sealed class DriversPage : ToolPageBase
     {
         try
         {
-            var latest = await NvidiaDriverUpdater.FindLatestAsync(gpu.Name, CancellationToken.None);
+            NvidiaLatest? latest;
+            if (_latestCache is { } cache && cache.Gpu == gpu.Name && DateTime.Now - cache.At < TimeSpan.FromMinutes(30))
+            {
+                latest = cache.Latest;
+            }
+            else
+            {
+                latest = await NvidiaDriverUpdater.FindLatestAsync(gpu.Name, CancellationToken.None);
+                _latestCache = (gpu.Name, latest, DateTime.Now);
+            }
+
             if (latest is null)
             {
                 status.Text = "Não achei esta placa no catálogo da NVIDIA. Use a página oficial.";

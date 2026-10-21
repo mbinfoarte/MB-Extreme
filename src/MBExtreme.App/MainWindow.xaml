@@ -1,7 +1,7 @@
 <Window x:Class="MBExtreme.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MB Extreme" Width="1280" Height="780" MinWidth="1040" MinHeight="660"
+        Title="MB Extreme Beta" Width="1280" Height="780" MinWidth="1040" MinHeight="660"
         WindowStartupLocation="CenterScreen"
         Icon="Assets/app.ico"
         Background="{StaticResource WindowBackdropBrush}" Foreground="{StaticResource TextBrush}"
@@ -20,10 +20,10 @@
                         <Image Source="Assets/logo.png" Stretch="UniformToFill" />
                     </Border>
                     <TextBlock FontSize="22" FontWeight="Bold" Margin="0,12,0,0" Text="MB EXTREME" />
-                    <TextBlock Text="by MB InfoArt" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                    <TextBlock Text="Beta · by MB InfoArt" FontSize="11" Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
 
-                <TextBlock DockPanel.Dock="Bottom" Text="v0.3 · pré-lançamento" FontSize="11" Margin="24,14"
+                <TextBlock DockPanel.Dock="Bottom" Text="Beta 0.9.0" FontSize="11" Margin="24,14"
                            Foreground="{StaticResource MutedBrush}" />
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

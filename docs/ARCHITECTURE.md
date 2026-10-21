@@ -10,7 +10,7 @@
 
 ## Decisão de stack
 
-**.NET 8 + WPF.** Motivos: interface escura com anéis, brilho e animações é direta em WPF; o acesso a registro, serviços, rede e APIs do Windows é nativo; o instalador e a publicação são simples. Componentes de alto desempenho para rotas (fase 2) podem ser separados depois, se necessário.
+**.NET 8 + WPF.** Motivos: interface escura com anéis, brilho e animações é direta em WPF; o acesso a registro, serviços, rede e APIs do Windows é nativo; o instalador e a publicação são simples. Componentes de alto desempenho para rotas (versão futura) podem ser separados depois, se necessário.
 
 ## Projetos
 
@@ -33,7 +33,7 @@ Toda tarefa longa publica `ProgressEvent(etapa, porcentagem, mensagem)` por `IPr
 
 ## Decisões em aberto
 
-- Roteamento (fase 2): WinDivert vs túnel UDP/WireGuard para relays.
+- Roteamento (versão futura): WinDivert vs túnel UDP/WireGuard para relays.
 - Infraestrutura de relays e regiões.
 - Modelo de IA: começar com regras e estatística; modelo treinado só após coletar dados com consentimento.
 - Instalador: MSIX, WiX (MSI) ou Inno Setup.

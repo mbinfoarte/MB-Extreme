@@ -21,7 +21,7 @@
                 <StackPanel x:Name="RowsHost" Margin="0,18,0,0" />
 
                 <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
-                           Text="A remoção vale para o seu usuário. Para reinstalar um aplicativo, use a Microsoft Store ou o winget (aba Drivers e programas, em breve). Remover a Loja ou o Xbox é difícil de reverter." />
+                           Text="A remoção vale para o seu usuário. Para reinstalar um aplicativo, use a Microsoft Store ou o winget (menu Drivers e programas > Programas). Remover a Loja ou o Xbox é difícil de reverter." />
             </StackPanel>
         </ScrollViewer>
 

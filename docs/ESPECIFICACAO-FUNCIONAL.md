@@ -11,7 +11,7 @@ Legenda de risco: **B** baixo, **M** médio (depende do hardware/uso), **A** alt
 | # | Ajuste | Mecanismo previsto | Risco | Observação |
 |---|---|---|---|---|
 | 1 | Potenciador de Unreal Engine (Beta) | Perfil por jogo que ajusta arquivos de configuração do jogo (com backup) | M | Beta. Abrir o jogo ao menos uma vez para gerar a configuração. Não tocar em jogos com anti-cheat que verifica arquivos |
-| 2 | Alto desempenho da GPU (Beta) | Preferência de GPU por aplicativo do Windows + plano de energia + (fase 2) perfil do driver | M | Mais consumo e calor. Notebooks: avisar |
+| 2 | Alto desempenho da GPU (Beta) | Preferência de GPU por aplicativo do Windows + plano de energia + (em versão futura) perfil do driver | M | Mais consumo e calor. Notebooks: avisar |
 | 3 | Reduzir input lag | Desativar otimizações de tela cheia por jogo, Modo de Jogo, HAGS quando compatível | B/M | HAGS exige reiniciar e GPU/driver compatíveis |
 | 4 | Reduzir tempo de entrada do teclado | Atraso e velocidade de repetição de teclas nas configurações do usuário | B | Efeito perceptível em digitação, não em FPS |
 | 5 | Desligar contadores de desempenho do Windows | Não implementar no MVP | A | Pouco ganho e quebra ferramentas de monitoramento (inclusive as nossas). Reavaliar depois |

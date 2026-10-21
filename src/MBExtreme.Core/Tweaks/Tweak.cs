@@ -8,6 +8,7 @@ public enum TweakCategory
     Privacy,
     Peripherals,
     Boot,
+    Visual,
 }
 
 public enum TweakRisk

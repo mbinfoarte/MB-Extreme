@@ -1,0 +1,61 @@
+namespace MBExtreme.Core.Tweaks;
+
+public enum TweakCategory
+{
+    Performance,
+    Gaming,
+    Network,
+    Privacy,
+    Peripherals,
+    Boot,
+}
+
+public enum TweakRisk
+{
+    Low,
+    Medium,
+    High,
+}
+
+/// <summary>Um ajuste do Windows: lê o estado, aplica e restaura o valor original.</summary>
+public abstract class Tweak
+{
+    protected Tweak(TweakStore store, string id, TweakCategory category, TweakRisk risk, string title, string description)
+    {
+        Store = store;
+        Id = id;
+        Category = category;
+        Risk = risk;
+        Title = title;
+        Description = description;
+    }
+
+    protected TweakStore Store { get; }
+
+    public string Id { get; }
+    public TweakCategory Category { get; }
+    public TweakRisk Risk { get; }
+    public string Title { get; }
+    public string Description { get; }
+
+    /// <summary>Efeito esperado, em uma frase.</summary>
+    public string Effect { get; init; } = "";
+
+    /// <summary>Quando não usar ou o que se perde. Mostrado em destaque.</summary>
+    public string Warning { get; init; } = "";
+
+    /// <summary>Entra no botão "Marcar recomendados". Nunca vale para risco alto.</summary>
+    public bool Recommended { get; init; }
+
+    public bool RequiresRestart { get; init; }
+
+    /// <summary>true = aplicado, false = não aplicado, null = não foi possível saber.</summary>
+    public abstract bool? IsApplied();
+
+    public abstract void Apply();
+
+    public abstract void Revert();
+
+    /// <summary>Existe valor original guardado, portanto dá para restaurar.</summary>
+    public bool HasBackup => Store.HasPrefix(Id + "|");
+}

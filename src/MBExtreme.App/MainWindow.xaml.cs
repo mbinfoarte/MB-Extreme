@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using MBExtreme.Core.Tweaks;
 using MBExtreme.UI.Pages;
 
 namespace MBExtreme.UI;
@@ -37,7 +38,26 @@ public partial class MainWindow : Window
         "home" => new HomePage(),
         "memory" => new MemoryPage(),
         "dns" => new DnsPage(),
-        "tweaks" => new PlaceholderPage("Ajustes de sistema", "Ajustes reversíveis de desempenho do Windows. Veja docs/ESPECIFICACAO-FUNCIONAL.md."),
+        "debloat" => new DebloatPage(),
+        "tweaks-perf" => new TweaksPage("Desempenho",
+            "Prioridade de CPU, plano de energia e serviços do Windows. Cada ajuste mostra o risco e pode ser restaurado.",
+            TweakCategory.Performance),
+        "tweaks-game" => new TweaksPage("Jogos e GPU",
+            "Ajustes para jogar melhor: prioridade, gravação em segundo plano, agendamento de GPU e drivers.",
+            TweakCategory.Gaming),
+        "net-tweaks" => new TweaksPage("Otimizações de rede",
+            "Ajustes do Windows que afetam a rede. O ganho varia; use o analisador de rede para medir antes e depois.",
+            TweakCategory.Network),
+        "privacy" => new TweaksPage("Privacidade",
+            "Anúncios, histórico, Copilot, Cortana e SmartScreen.",
+            TweakCategory.Privacy),
+        "boot" => new TweaksPage("Inicialização e boot",
+            "Como o Windows liga e desliga.",
+            TweakCategory.Boot),
+        "periph" => new TweaksPage("Periféricos",
+            "Mouse e teclado.",
+            TweakCategory.Peripherals),
+        "storage" => new PlaceholderPage("Armazenamento", "Ajustes de SSD e HD, limpeza e saúde dos discos. Veja docs/CATALOGO-AJUSTES.md."),
         "netanalyzer" => new PlaceholderPage("Analisador de rede", "MTR, Ping, TCPing, monitoramento e ping para jogos. Veja docs/ESPECIFICACAO-REDE.md."),
         "perf" => new PlaceholderPage("Hardware e benchmarks", "Informações do sistema, sensores, stress test e benchmarks próprios."),
         "tools" => new PlaceholderPage("Drivers e programas", "Atualização de drivers por fontes oficiais e instalação de programas pelo winget."),

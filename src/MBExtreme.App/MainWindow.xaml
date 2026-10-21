@@ -30,22 +30,36 @@
                                      Style="{StaticResource NavItem}" Checked="Nav_Checked" />
 
                         <TextBlock Text="OTIMIZAR" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
-                        <RadioButton Content="Ajustes de sistema" Tag="tweaks" GroupName="nav"
+                        <RadioButton Content="Desempenho" Tag="tweaks-perf" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                        <RadioButton Content="Jogos e GPU" Tag="tweaks-game" GroupName="nav"
                                      Style="{StaticResource NavItem}" Checked="Nav_Checked" />
                         <RadioButton Content="Memória" Tag="memory" GroupName="nav"
                                      Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                        <RadioButton Content="Armazenamento" Tag="storage" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
 
                         <TextBlock Text="REDE" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
+                        <RadioButton Content="Otimizações de rede" Tag="net-tweaks" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
                         <RadioButton Content="DNS" Tag="dns" GroupName="nav"
                                      Style="{StaticResource NavItem}" Checked="Nav_Checked" />
                         <RadioButton Content="Analisador de rede" Tag="netanalyzer" GroupName="nav"
                                      Style="{StaticResource NavItem}" Checked="Nav_Checked" />
 
-                        <TextBlock Text="DESEMPENHO" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
-                        <RadioButton Content="Hardware e benchmarks" Tag="perf" GroupName="nav"
+                        <TextBlock Text="WINDOWS" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
+                        <RadioButton Content="Privacidade" Tag="privacy" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                        <RadioButton Content="Aplicativos" Tag="debloat" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                        <RadioButton Content="Inicialização e boot" Tag="boot" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
+                        <RadioButton Content="Periféricos" Tag="periph" GroupName="nav"
                                      Style="{StaticResource NavItem}" Checked="Nav_Checked" />
 
                         <TextBlock Text="FERRAMENTAS" FontSize="11" Margin="12,18,0,4" Foreground="{StaticResource MutedBrush}" />
+                        <RadioButton Content="Hardware e benchmarks" Tag="perf" GroupName="nav"
+                                     Style="{StaticResource NavItem}" Checked="Nav_Checked" />
                         <RadioButton Content="Drivers e programas" Tag="tools" GroupName="nav"
                                      Style="{StaticResource NavItem}" Checked="Nav_Checked" />
                         <RadioButton Content="Central de ações" Tag="actions" GroupName="nav"

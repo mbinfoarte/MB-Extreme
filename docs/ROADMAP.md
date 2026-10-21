@@ -11,8 +11,12 @@
 - [x] Memória: status, limpeza e lista de protegidos
 - [x] DNS: teste, ranking, aplicar e restaurar
 - [x] CI no GitHub Actions (build Windows)
-- [ ] Validar o primeiro build e testar em um PC Windows
-- [ ] Ajustes de sistema reversíveis (energia, Game Bar, rede, núcleos, teclado)
+- [x] Primeiro build validado no GitHub Actions
+- [ ] Testar em um PC Windows (visual, limpeza de RAM, DNS)
+- [x] Motor de ajustes reversíveis e 23 ajustes (energia, jogos, rede, privacidade, boot, periféricos)
+- [x] Remoção de aplicativos do Windows, um por um, com ponto de restauração
+- [ ] Ajustes planejados do `CATALOGO-AJUSTES.md` (TCP, MTU por teste, bcdedit, armazenamento)
+- [ ] Ferramenta de Reparo do Windows (chkdsk, DISM, sfc)
 - [ ] Limpeza automática da RAM (ao iniciar jogo / por status)
 - [ ] Analisador de rede: Ping, TCPing e MTR
 - [ ] Inicialização do Windows

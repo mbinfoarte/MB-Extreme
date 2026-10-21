@@ -41,13 +41,14 @@ O app pede privilégio de administrador (limpar a lista de espera da RAM e alter
 
 O build do Windows também roda no GitHub Actions (`.github/workflows/build.yml`) e publica o executável como artefato.
 
-## Estado atual (v0.1)
+## Estado atual (v0.2)
 
-- Janela com menu lateral, tema preto e laranja e **janela de progresso padrão** (anel com porcentagem, etapas, parar).
-- **Início**: análise rápida (somente leitura) de memória e DNS.
-- **Memória**: status, limpeza (processos e lista de espera) e lista de aplicativos protegidos.
-- **DNS**: teste de provedores, ranking, aplicar e restaurar.
-- Demais abas aparecem como "Em desenvolvimento". Veja `docs/ROADMAP.md`.
+- Janela com menu lateral organizado por grupos (Otimizar, Rede, Windows, Ferramentas), tema preto e laranja e **janela de progresso padrão**.
+- **Motor de ajustes reversíveis**: cada ajuste guarda o valor original antes de mudar; risco baixo, médio ou alto; confirmação para risco alto.
+- **Ajustes**: Desempenho, Jogos e GPU, Otimizações de rede, Privacidade, Inicialização e boot, Periféricos (23 ajustes).
+- **Aplicativos**: remoção individual de apps do Windows, com ponto de restauração.
+- **Memória** e **DNS**, como na v0.1.
+- Demais abas aparecem como "Em desenvolvimento". Veja `docs/CATALOGO-AJUSTES.md` e `docs/ROADMAP.md`.
 
 ## Política de desenvolvimento
 

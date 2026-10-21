@@ -9,6 +9,16 @@ internal static class Shell
     public static (int ExitCode, string Output, string Error) Run(string file, params string[] arguments) =>
         Execute(file, null, arguments);
 
+    /// <summary>Como <see cref="Run"/>, mas lê a saída na página de código do console do Windows (netsh, ipconfig...), onde os acentos ficam corretos.</summary>
+    public static (int ExitCode, string Output, string Error) RunOem(string file, params string[] arguments)
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        Encoding oem;
+        try { oem = Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException) { oem = Encoding.UTF8; }
+        return Execute(file, oem, arguments);
+    }
+
     /// <summary>Como <see cref="Run"/>, mas lê a saída em UTF-8 (nomes com acento, winget).</summary>
     public static (int ExitCode, string Output, string Error) RunUtf8(string file, params string[] arguments) =>
         Execute(file, Encoding.UTF8, arguments);

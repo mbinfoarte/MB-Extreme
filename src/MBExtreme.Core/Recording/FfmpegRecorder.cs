@@ -12,6 +12,9 @@ public sealed class FfmpegRecorder
     private Process? _process;
 
     public bool IsRecording => _process is { HasExited: false };
+
+    /// <summary>O FFmpeg terminou sozinho depois de iniciar (disco cheio, driver reiniciado...).</summary>
+    public bool EndedUnexpectedly => _process is { HasExited: true };
     public string? CurrentFile { get; private set; }
 
     public static string? Locate()
@@ -74,7 +77,14 @@ public sealed class FfmpegRecorder
 
         // Se o FFmpeg fechar logo, a configuração não funciona nesta placa/versão.
         if (_process.WaitForExit(1500))
-            throw new InvalidOperationException("O FFmpeg encerrou ao iniciar: " + (LastMessage ?? "configuração não suportada nesta placa de vídeo."));
+        {
+            _process.WaitForExit(); // espera terminar de ler a mensagem de erro
+            string message = LastMessage ?? "configuração não suportada nesta placa de vídeo.";
+            _process.Dispose();
+            _process = null;
+            throw new InvalidOperationException("O FFmpeg encerrou ao iniciar: " + message);
+        }
+
         return request.OutputPath;
     }
 

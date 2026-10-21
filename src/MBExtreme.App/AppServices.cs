@@ -2,6 +2,7 @@ using MBExtreme.Core.Hardware;
 using MBExtreme.Core.Network;
 using MBExtreme.Core.Recording;
 using MBExtreme.Core.Sensors;
+using MBExtreme.Core.Sensors;
 using MBExtreme.Core.Tweaks;
 using MBExtreme.UI.Overlay;
 using MBExtreme.UI.Recording;
@@ -30,6 +31,17 @@ internal static class AppServices
 
     public static Task<SensorService> Sensors => SensorsLazy.Value;
 
+    // Instância única do monitor completo, aberta uma vez e mantida até o fim: fechar a biblioteca de sensores
+    // ao sair da página poderia descarregar o driver usado pelo Painel e pelo overlay.
+    private static readonly Lazy<Task<HardwareMonitorService>> MonitorLazy = new(() => Task.Run(() =>
+    {
+        var monitor = new HardwareMonitorService();
+        if (monitor.IsAvailable) monitor.ReadAll(); // leitura de aquecimento: alguns sensores só têm valor na segunda atualização
+        return monitor;
+    }));
+
+    public static Task<HardwareMonitorService> Monitor => MonitorLazy.Value;
+
     private static Task<HardwareInventory>? _hardware;
 
     /// <summary>Leitura do hardware, feita uma vez e reaproveitada pelas páginas. <paramref name="refresh"/> lê de novo.</summary>
@@ -45,7 +57,16 @@ internal static class AppServices
         Boost.Shutdown();
         if (Recorder.IsRecording) Recorder.Stop();
         if (GpuRecorder.IsRecording) GpuRecorder.Stop();
-        if (SensorsLazy.IsValueCreated && SensorsLazy.Value.IsCompletedSuccessfully)
-            SensorsLazy.Value.Result.Dispose();
+        try
+        {
+            if (MonitorLazy.IsValueCreated && MonitorLazy.Value.IsCompletedSuccessfully)
+                MonitorLazy.Value.Result.Dispose();
+            if (SensorsLazy.IsValueCreated && SensorsLazy.Value.IsCompletedSuccessfully)
+                SensorsLazy.Value.Result.Dispose();
+        }
+        catch (Exception)
+        {
+            // fechando o programa: falha ao liberar o driver de sensores não deve mostrar erro
+        }
     }
 }

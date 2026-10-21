@@ -12,8 +12,8 @@ public sealed class StoragePage : ToolPageBase
     public StoragePage() : base("Armazenamento",
         "Espaço usado, saúde dos discos e otimização com a ferramenta do Windows (TRIM em SSD, desfragmentação em HD). Temperatura e desgaste dependem do que o disco informa.")
     {
-        AddButton("Atualizar", async (_, _) => await LoadAsync(), false);
-        Loaded += async (_, _) => await LoadAsync();
+        AddButton("Atualizar", async (_, _) => await RunOnce(LoadAsync), false);
+        Loaded += async (_, _) => await RunOnce(LoadAsync);
     }
 
     private async Task LoadAsync()

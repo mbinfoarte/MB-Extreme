@@ -13,15 +13,14 @@ public sealed class SystemInfoPage : ToolPageBase
     public SystemInfoPage() : base("Informações do sistema",
         "Processador, placa-mãe, memória, placa de vídeo, discos, rede e Windows em um só lugar. Só leitura: nada é alterado.")
     {
-        AddButton("Atualizar", async (_, _) => await LoadAsync());
+        AddButton("Atualizar", async (_, _) => await RunOnce(LoadAsync));
         AddButton("Copiar relatório", (_, _) =>
         {
             if (_sections.Count == 0) return;
-            Clipboard.SetText(SystemInfoService.ToText(_sections));
-            SetStatus("Relatório copiado.", "OkBrush");
+            if (TryCopy(SystemInfoService.ToText(_sections))) SetStatus("Relatório copiado.", "OkBrush");
         }, false);
         AddButton("Salvar relatório", (_, _) => Save(), false);
-        Loaded += async (_, _) => { if (_sections.Count == 0) await LoadAsync(); };
+        Loaded += async (_, _) => { if (_sections.Count == 0) await RunOnce(LoadAsync); };
     }
 
     private async Task LoadAsync()

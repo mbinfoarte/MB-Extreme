@@ -37,36 +37,62 @@ public sealed class PowerSettingTweak : Tweak
         return (Value(matches[^2]), Value(matches[^1]));
     }
 
-    private int? ReadAc()
+    private static string? ActiveScheme() => FirstGuid(Shell.Run("powercfg.exe", "/getactivescheme").Output);
+
+    private static string? FirstGuid(string text) => PowerPlanTweak.FirstGuid(text);
+
+    /// <summary>Plano em que o ajuste foi aplicado (guardado no backup); sem backup, o plano ativo.</summary>
+    private (string? Scheme, int? Original) Saved()
     {
-        var result = Shell.Run("powercfg.exe", "/query", "SCHEME_CURRENT", _subgroup, _setting);
+        string? saved = Store.Get(BackupKey);
+        if (saved is null) return (null, null);
+        int split = saved.IndexOf(':');
+        if (split < 0) return (null, int.TryParse(saved, out int legacy) ? legacy : null);
+        return (saved[..split], int.TryParse(saved[(split + 1)..], out int value) ? value : null);
+    }
+
+    private int? ReadAc(string scheme)
+    {
+        var result = Shell.Run("powercfg.exe", "/query", scheme, _subgroup, _setting);
         return result.ExitCode == 0 ? ParseIndexes(result.Output).Ac : null;
     }
 
-    private void WriteAc(int value)
+    private void WriteAc(string scheme, int value)
     {
-        var set = Shell.Run("powercfg.exe", "/setacvalueindex", "SCHEME_CURRENT", _subgroup, _setting, value.ToString());
+        var set = Shell.Run("powercfg.exe", "/setacvalueindex", scheme, _subgroup, _setting, value.ToString());
         if (set.ExitCode != 0) throw new InvalidOperationException("O Windows recusou alterar o plano de energia.");
-        Shell.Run("powercfg.exe", "/setactive", "SCHEME_CURRENT");
+        // Reaplica só se o plano alterado é o que está ativo agora.
+        if (string.Equals(ActiveScheme(), scheme, StringComparison.OrdinalIgnoreCase))
+            Shell.Run("powercfg.exe", "/setactive", scheme);
     }
 
-    public override bool? IsApplied() => ReadAc() is { } current ? current == _value : null;
+    public override bool? IsApplied()
+    {
+        string? scheme = Saved().Scheme ?? ActiveScheme();
+        if (scheme is null) return null;
+        return ReadAc(scheme) is { } current ? current == _value : null;
+    }
 
     public override void Apply()
     {
+        var (savedScheme, _) = Saved();
+        string scheme = savedScheme ?? ActiveScheme()
+            ?? throw new InvalidOperationException("Não foi possível ler o plano de energia atual.");
+
         if (!Store.Has(BackupKey))
         {
-            int original = ReadAc() ?? throw new InvalidOperationException("Não foi possível ler a opção do plano de energia.");
-            Store.Set(BackupKey, original.ToString());
+            int original = ReadAc(scheme) ?? throw new InvalidOperationException("Não foi possível ler a opção do plano de energia.");
+            Store.Set(BackupKey, $"{scheme}:{original}");
         }
 
-        WriteAc(_value);
+        WriteAc(scheme, _value);
     }
 
     public override void Revert()
     {
-        if (Store.Get(BackupKey) is not { } saved || !int.TryParse(saved, out int original)) return;
-        WriteAc(original);
+        var (scheme, original) = Saved();
+        if (original is not { } value) return;
+        WriteAc(scheme ?? ActiveScheme() ?? "SCHEME_CURRENT", value);
         Store.Remove(BackupKey);
     }
 }

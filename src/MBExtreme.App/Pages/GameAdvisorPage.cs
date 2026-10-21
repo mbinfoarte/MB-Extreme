@@ -12,7 +12,7 @@ public sealed class GameAdvisorPage : ToolPageBase
     {
         AddButton("Ver meu hardware", (_, _) => MainWindow.Current?.Go("hardware"), false);
         AddButton("Aplicar perfil PC fraco", (_, _) => MainWindow.Current?.Go("profiles"), false);
-        Loaded += async (_, _) => { if (Body.Children.Count == 0) await LoadAsync(); };
+        Loaded += async (_, _) => { if (Body.Children.Count == 0) await RunOnce(LoadAsync); };
     }
 
     private async Task LoadAsync()

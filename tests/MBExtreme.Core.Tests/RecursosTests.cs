@@ -557,6 +557,17 @@ public class NetworkExtensionTests
     }
 
     [Fact]
+    public void PortugueseNetworkTypeIsNotTheRadioType()
+    {
+        const string output = "    Nome                   : Wi-Fi\n    Estado                 : conectado\n    SSID                   : Casa\n    Tipo de rede           : Infraestrutura\n    Tipo de rádio          : 802.11ac\n    Canal                  : 36\n    Sinal                  : 90%\n";
+        Assert.Equal("802.11ac", WifiService.Parse(output)!.RadioType);
+    }
+
+    [Fact]
+    public void MissingStateMeansNoWifiInterface() =>
+        Assert.Null(WifiService.Parse("A solicitação requer permissão de localização para acessar informações de Wi-Fi.\n"));
+
+    [Fact]
     public void DisconnectedWifiRecommendsCable()
     {
         var status = WifiService.Parse("    State : disconnected\n    SSID :\n")!;

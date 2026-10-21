@@ -16,12 +16,11 @@ public sealed class RecipePage : ToolPageBase
         AddButton("Copiar receita", (_, _) =>
         {
             if (_hw is null) return;
-            Clipboard.SetText(BiosGuide.RecipeToText(_hw));
-            SetStatus("Receita copiada.", "OkBrush");
+            if (TryCopy(BiosGuide.RecipeToText(_hw))) SetStatus("Receita copiada.", "OkBrush");
         }, false);
         AddButton("Salvar receita", (_, _) => Save(), false);
         AddButton("Teste de estresse", (_, _) => MainWindow.Current?.Go("stress"), false);
-        Loaded += async (_, _) => { if (Body.Children.Count == 0) await LoadAsync(); };
+        Loaded += async (_, _) => { if (Body.Children.Count == 0) await RunOnce(LoadAsync); };
     }
 
     private async Task LoadAsync()

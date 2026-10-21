@@ -205,6 +205,15 @@ public sealed class RecordPage : ToolPageBase
 
     private void Tick()
     {
+        if (_ffmpeg.EndedUnexpectedly)
+        {
+            string? last = _ffmpeg.LastMessage;
+            _ffmpeg.Stop();
+            SetStatus("A gravação terminou sozinha" + (last is null ? "." : ": " + last), "WarnBrush");
+            Refresh();
+            return;
+        }
+
         if (_ffmpeg.IsRecording)
         {
             long size = _ffmpeg.CurrentFile is { } f && File.Exists(f) ? new FileInfo(f).Length : 0;

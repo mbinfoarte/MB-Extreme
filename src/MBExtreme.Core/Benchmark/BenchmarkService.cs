@@ -108,10 +108,19 @@ public static class BenchmarkService
         if (options.Gpu3D)
         {
             progress.Report(new ProgressEvent(StepGpu, Pct(), "Preparando a placa de vídeo"));
-            var gpu = Gpu3DBenchmark.Run(progress, StepGpu, Pct(), 100.0 / total, null, token);
-            gpuName = gpu.GpuName;
-            gpuScore = gpu.Score;
-            scenes = gpu.Scenes;
+            try
+            {
+                var gpu = Gpu3DBenchmark.Run(progress, StepGpu, Pct(), 100.0 / total, null, token);
+                gpuName = gpu.GpuName;
+                gpuScore = gpu.Score;
+                scenes = gpu.Scenes;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Sem Direct3D 11 (máquina virtual, driver antigo, placa reiniciada): o resultado da CPU e da memória continua valendo.
+                gpuName = "GPU 3D indisponível: " + ex.Message;
+            }
+
             done++;
         }
 

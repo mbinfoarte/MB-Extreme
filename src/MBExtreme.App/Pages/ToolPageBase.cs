@@ -50,6 +50,38 @@ public abstract class ToolPageBase : UserControl
 
     protected virtual void OnProgressClosed() { }
 
+    private bool _loadingNow;
+
+    /// <summary>Evita duas cargas ao mesmo tempo (a página volta à tela enquanto a leitura anterior ainda roda).</summary>
+    protected async Task RunOnce(Func<Task> load)
+    {
+        if (_loadingNow) return;
+        _loadingNow = true;
+        try
+        {
+            await load();
+        }
+        finally
+        {
+            _loadingNow = false;
+        }
+    }
+
+    /// <summary>Copia texto para a área de transferência; outro programa pode estar usando-a, o que não deve derrubar o app.</summary>
+    protected bool TryCopy(string text)
+    {
+        try
+        {
+            Clipboard.SetText(text);
+            return true;
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            SetStatus("A área de transferência está em uso por outro programa. Tente de novo.", "WarnBrush");
+            return false;
+        }
+    }
+
     protected Brush Brush(string key) => (Brush)FindResource(key);
 
     protected Button AddButton(string text, RoutedEventHandler click, bool primary = true)

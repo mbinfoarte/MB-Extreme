@@ -12,7 +12,7 @@ public static class WifiService
 {
     public static WifiStatus? Read()
     {
-        var result = Shell.RunUtf8("netsh.exe", "wlan", "show", "interfaces");
+        var result = Shell.RunOem("netsh.exe", "wlan", "show", "interfaces");
         return result.ExitCode == 0 ? Parse(result.Output) : null;
     }
 
@@ -26,6 +26,8 @@ public static class WifiService
         }
 
         if (values.Count == 0) return null;
+        // Sem a linha de estado não há interface Wi-Fi (ou o Windows pediu permissão de localização): não é "desconectado".
+        if (!values.Keys.Any(k => k.Contains("State", StringComparison.OrdinalIgnoreCase) || k.Contains("Estado", StringComparison.OrdinalIgnoreCase))) return null;
 
         string? Find(params string[] keys)
         {
@@ -46,7 +48,19 @@ public static class WifiService
         int channel = (int)Number(Find("Channel", "Canal"));
         string band = Find("Band", "Banda") ?? (channel is > 0 and <= 14 ? "2,4 GHz" : channel >= 32 ? "5 GHz" : "");
         return new WifiStatus(connected, ssid, (int)Number(Find("Signal", "Sinal")), channel,
-            Find("Radio type", "Tipo de r") ?? "", Number(Find("Receive rate", "recep")), Number(Find("Transmit rate", "transm")), band);
+            FindRadio(values) ?? "", Number(Find("Receive rate", "recep")), Number(Find("Transmit rate", "transm")), band);
+    }
+
+    /// <summary>"Radio type" (inglês) ou "Tipo de rádio" (português); não confundir com "Tipo de rede".</summary>
+    private static string? FindRadio(Dictionary<string, string> values)
+    {
+        foreach (var kv in values)
+        {
+            if (kv.Key.Contains("Radio type", StringComparison.OrdinalIgnoreCase)) return kv.Value;
+            if (kv.Key.Contains("Tipo", StringComparison.OrdinalIgnoreCase) && kv.Key.Contains("dio", StringComparison.OrdinalIgnoreCase)) return kv.Value;
+        }
+
+        return null;
     }
 
     public static IReadOnlyList<string> Advice(WifiStatus status)

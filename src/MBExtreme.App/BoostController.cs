@@ -9,49 +9,77 @@ internal sealed class BoostController
 {
     private readonly GameBoostService _service = new();
     private readonly GameWatcher _watcher = new();
+    private volatile string[] _games = Array.Empty<string>();
 
     public BoostController()
     {
-        _watcher.GameStarted += (name, pid) => Application.Current?.Dispatcher.BeginInvoke(new Action(() => Start(name, pid)));
-        _watcher.GameStopped += _ => Application.Current?.Dispatcher.BeginInvoke(new Action(Stop));
+        _watcher.GameStarted += (name, pid) =>
+            Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await StartAsync(name, pid)));
+        _watcher.GameStopped += _ =>
+            Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await StopAsync()));
     }
 
     public AppSettings Settings { get; } = AppSettings.Load();
     public bool IsActive => _service.IsActive;
     public string? ActiveGame => _service.ActiveGame;
     public BoostReport? LastReport { get; private set; }
+    public string? LastError { get; private set; }
     public event EventHandler? Changed;
+
+    /// <summary>Atualiza a cópia da lista de jogos que o vigia usa (a lista original é alterada pela interface).</summary>
+    public void RefreshGames() => _games = Settings.GameProcesses.ToArray();
 
     public void SetAuto(bool on)
     {
         Settings.BoostAuto = on;
         Settings.Save();
-        if (on) _watcher.Start(() => Settings.GameProcesses.ToList());
+        RefreshGames();
+        if (on) _watcher.Start(() => _games);
         else _watcher.Stop();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Aplica o boost agora, sem esperar um jogo abrir.</summary>
-    public void ActivateNow() => Start("manual", null);
+    public Task ActivateNowAsync() => StartAsync("manual", null);
 
-    public void Deactivate() => Stop();
+    public Task DeactivateAsync() => StopAsync();
 
-    private void Start(string game, int? pid)
+    private async Task StartAsync(string game, int? pid)
     {
-        LastReport = _service.Activate(game, pid, new BoostOptions(
-            Settings.BoostCloseApps.ToList(), Settings.BoostSwitchPlan, Settings.BoostCleanMemory, Settings.MemoryAllowlist.ToList()));
+        var options = new BoostOptions(Settings.BoostCloseApps.ToList(), Settings.BoostSwitchPlan, Settings.BoostCleanMemory, Settings.MemoryAllowlist.ToList());
+        try
+        {
+            // powercfg, pedidos para fechar programas e limpeza de RAM levam alguns segundos: fora da thread da interface.
+            LastReport = await Task.Run(() => _service.Activate(game, pid, options));
+            LastError = null;
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+        }
+
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    private void Stop()
+    private async Task StopAsync()
     {
-        _service.Deactivate();
+        try
+        {
+            await Task.Run(_service.Deactivate);
+            LastError = null;
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+        }
+
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public void Shutdown()
     {
         _watcher.Dispose();
-        _service.Deactivate();
+        try { _service.Deactivate(); }
+        catch (Exception) { /* fechando: o plano de energia volta no próximo uso do Windows */ }
     }
 }

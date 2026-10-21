@@ -13,7 +13,6 @@ public sealed class LiveMonitorPage : ToolPageBase
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Dictionary<string, TextBlock> _cells = new();
     private readonly StackPanel _summary = new();
-    private HardwareMonitorService? _service;
     private IReadOnlyList<SensorGroup> _last = Array.Empty<SensorGroup>();
     private bool _busy;
     private bool _built;
@@ -36,14 +35,7 @@ public sealed class LiveMonitorPage : ToolPageBase
             _timer.Start();
             await TickAsync();
         };
-        Unloaded += (_, _) =>
-        {
-            _timer.Stop();
-            _service?.Dispose();
-            _service = null;
-            _built = false;
-            _cells.Clear();
-        };
+        Unloaded += (_, _) => _timer.Stop();
     }
 
     private async Task FillSummaryAsync()
@@ -69,20 +61,21 @@ public sealed class LiveMonitorPage : ToolPageBase
         _busy = true;
         try
         {
-            _service ??= await Task.Run(() => new HardwareMonitorService());
-            if (!_service.IsAvailable)
+            var service = await AppServices.Monitor;
+            if (!service.IsAvailable)
             {
-                SetStatus("Sensores indisponíveis: " + (_service.OpenError ?? "execute como administrador."), "WarnBrush");
+                SetStatus("Sensores indisponíveis: " + (service.OpenError ?? "execute como administrador."), "WarnBrush");
                 _timer.Stop();
                 return;
             }
 
-            var groups = await Task.Run(() => _service.ReadAll());
+            var groups = await Task.Run(service.ReadAll);
+            if (!IsLoaded) return;
             _last = groups;
             if (!_built) Build(groups);
             Update(groups);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or AggregateException)
+        catch (Exception ex)
         {
             SetStatus("Falha ao ler os sensores: " + ex.Message, "WarnBrush");
         }

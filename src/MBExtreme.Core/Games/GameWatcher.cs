@@ -43,6 +43,21 @@ public sealed class GameWatcher : IDisposable
         if (Interlocked.Exchange(ref _busy, 1) == 1) return;
         try
         {
+            CheckCore();
+        }
+        catch (Exception)
+        {
+            // Uma falha ao listar processos não pode derrubar o programa; a próxima verificação tenta de novo.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _busy, 0);
+        }
+    }
+
+    private void CheckCore()
+    {
+        {
             if (_current is { } running)
             {
                 if (!IsRunning(running, out _))
@@ -64,10 +79,6 @@ public sealed class GameWatcher : IDisposable
                 }
             }
         }
-        finally
-        {
-            Interlocked.Exchange(ref _busy, 0);
-        }
     }
 
     private static bool IsRunning(string name, out int pid)
@@ -84,7 +95,7 @@ public sealed class GameWatcher : IDisposable
                 }
             }
         }
-        catch (InvalidOperationException)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             // lista de processos indisponível neste instante
         }

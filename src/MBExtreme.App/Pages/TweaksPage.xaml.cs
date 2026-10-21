@@ -37,20 +37,27 @@ public partial class TweaksPage : UserControl
             return tweak.IsApplied();
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException
-                                       or InvalidOperationException or IOException)
+                                       or InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
         {
             return null;
         }
     }
 
-    private void BuildRows()
+    private int _buildVersion;
+
+    private async void BuildRows()
     {
+        // Ler o estado de cada ajuste pode chamar o powercfg; isso roda fora da thread da interface.
+        int version = ++_buildVersion;
+        var tweaks = AppServices.Tweaks.Where(t => _categories.Contains(t.Category)).ToList();
+        var states = await Task.Run(() => tweaks.Select(t => (Tweak: t, Applied: SafeIsApplied(t))).ToList());
+        if (version != _buildVersion) return;
+
         RowsHost.Children.Clear();
         _boxes.Clear();
 
-        foreach (var tweak in AppServices.Tweaks.Where(t => _categories.Contains(t.Category)))
+        foreach (var (tweak, applied) in states)
         {
-            bool? applied = SafeIsApplied(tweak);
             var content = BuildContent(tweak);
             content.Margin = new Thickness(8, 0, 0, 0);
 
@@ -131,10 +138,12 @@ public partial class TweaksPage : UserControl
     private async void ApplyButton_Click(object sender, RoutedEventArgs e)
     {
         var work = new List<TweakWork>();
-        foreach (var (tweak, box) in _boxes)
+        var snapshot = _boxes.ToList();
+        var currentStates = await Task.Run(() => snapshot.ToDictionary(p => p.Key, p => SafeIsApplied(p.Key) == true));
+        foreach (var (tweak, box) in snapshot)
         {
             bool wanted = box.IsChecked == true;
-            bool current = SafeIsApplied(tweak) == true;
+            bool current = currentStates[tweak];
             if (wanted && !current) work.Add(new TweakWork(tweak, true));
             else if (!wanted && current && tweak.HasBackup) work.Add(new TweakWork(tweak, false));
         }

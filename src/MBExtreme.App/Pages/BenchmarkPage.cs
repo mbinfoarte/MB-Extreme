@@ -65,7 +65,7 @@ public sealed class BenchmarkPage : ToolPageBase
         {
             Progress.Finish("Interrompido.", false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Progress.Finish("Não foi possível concluir.", false, ex.Message);
         }
@@ -99,7 +99,7 @@ public sealed class BenchmarkPage : ToolPageBase
         {
             SetStatus("Interrompido.");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.Runtime.InteropServices.COMException or DllNotFoundException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             SetStatus("Não foi possível rodar o benchmark 3D: " + ex.Message + " (atualize o driver da placa de vídeo)", "BadBrush");
         }
@@ -176,6 +176,9 @@ public sealed class BenchmarkPage : ToolPageBase
         if (last.Gpu3DScore > 0)
             _results.Children.Add(Row($"GPU 3D: {last.GpuName}", $"Pontuação {last.Gpu3DScore}" +
                 (last.GpuScenes is { Count: > 0 } sc ? "\n" + string.Join(" · ", sc.Select(s => $"{s.Scene} {s.Fps:0} FPS")) : "")));
+
+        else if (last.GpuName is { Length: > 0 } gpuNote)
+            _results.Children.Add(Row("GPU 3D", gpuNote, null, "WarnBrush"));
 
         if (history.Count > 1)
         {

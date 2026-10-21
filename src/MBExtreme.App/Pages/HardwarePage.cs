@@ -10,10 +10,10 @@ public sealed class HardwarePage : ToolPageBase
     public HardwarePage() : base("Meu hardware",
         "O MB Extreme lê as peças do seu PC e aponta o que pode ser melhorado: memória em velocidade errada, canal único, Windows desatualizado, BIOS antiga e mais. Só leitura; nada é alterado.")
     {
-        AddButton("Ler de novo", async (_, _) => await LoadAsync(true));
+        AddButton("Ler de novo", async (_, _) => await RunOnce(() => LoadAsync(true)));
         AddButton("Receita de BIOS", (_, _) => MainWindow.Current?.Go("recipe"), false);
         AddButton("BIOS e atualizações", (_, _) => MainWindow.Current?.Go("bios"), false);
-        Loaded += async (_, _) => { if (Body.Children.Count == 0) await LoadAsync(false); };
+        Loaded += async (_, _) => { if (Body.Children.Count == 0) await RunOnce(() => LoadAsync(false)); };
     }
 
     private static string LevelBrush(CheckLevel level) => level switch

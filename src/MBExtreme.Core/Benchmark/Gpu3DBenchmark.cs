@@ -174,17 +174,17 @@ void CS(uint3 id : SV_DispatchThreadID)
     private static Gpu3DResult RunScenes(ID3D11Device device, ID3D11DeviceContext ctx, string gpuName, IProgress<ProgressEvent> progress,
         string step, double from, double span, Action<byte[], int, int>? preview, CancellationToken token, int seconds)
     {
-        var target = device.CreateTexture2D(new Texture2DDescription
+        using var target = device.CreateTexture2D(new Texture2DDescription
         {
             Width = Width, Height = Height, MipLevels = 1, ArraySize = 1, Format = Format.B8G8R8A8_UNorm,
             SampleDescription = new SampleDescription(1, 0), Usage = ResourceUsage.Default, BindFlags = BindFlags.RenderTarget,
         });
-        var depth = device.CreateTexture2D(new Texture2DDescription
+        using var depth = device.CreateTexture2D(new Texture2DDescription
         {
             Width = Width, Height = Height, MipLevels = 1, ArraySize = 1, Format = Format.D32_Float,
             SampleDescription = new SampleDescription(1, 0), Usage = ResourceUsage.Default, BindFlags = BindFlags.DepthStencil,
         });
-        var staging = device.CreateTexture2D(new Texture2DDescription
+        using var staging = device.CreateTexture2D(new Texture2DDescription
         {
             Width = Width, Height = Height, MipLevels = 1, ArraySize = 1, Format = Format.B8G8R8A8_UNorm,
             SampleDescription = new SampleDescription(1, 0), Usage = ResourceUsage.Staging, CPUAccessFlags = CpuAccessFlags.Read,
@@ -198,13 +198,28 @@ void CS(uint3 id : SV_DispatchThreadID)
         using var opaque = device.CreateBlendState(BlendDescription.Opaque);
 
         IntPtr eventData = Marshal.AllocHGlobal(4);
+        try
+        {
+            return RunScenesCore();
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(eventData);
+        }
 
         void Wait()
         {
             ctx.End(query);
             ctx.Flush();
-            // S_OK (0) = o trabalho terminou; S_FALSE (1) = ainda rodando.
-            while (ctx.GetData(query, eventData, 4, AsyncGetDataFlags.None).Code != 0) Thread.Yield();
+            // S_OK (0) = o trabalho terminou; S_FALSE (1) = ainda rodando; falha = placa de vídeo reiniciada (TDR).
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                var state = ctx.GetData(query, eventData, 4, AsyncGetDataFlags.None);
+                if (state.Failure) throw new InvalidOperationException("A placa de vídeo foi reiniciada pelo Windows durante o teste (TDR).");
+                if (state.Code == 0) return;
+                Thread.Yield();
+            }
         }
 
         void Present(double elapsed, ref double lastPreview)
@@ -226,6 +241,8 @@ void CS(uint3 id : SV_DispatchThreadID)
             }
         }
 
+        Gpu3DResult RunScenesCore()
+        {
         ctx.RSSetViewport(0, 0, Width, Height);
         ctx.RSSetState(noCull);
         ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
@@ -329,8 +346,8 @@ void CS(uint3 id : SV_DispatchThreadID)
         done = 1;
         progress.Report(new ProgressEvent(step, from + span * done, "Concluído"));
 
-        Marshal.FreeHGlobal(eventData);
         int score = (int)Math.Round(fractalFps * 25 + cubesFps * 8 + fillFps * 15 + gflops * 0.5);
         return new Gpu3DResult(gpuName, score, scenes);
+        }
     }
 }

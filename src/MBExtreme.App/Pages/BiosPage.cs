@@ -10,7 +10,7 @@ public sealed class BiosPage : ToolPageBase
     public BiosPage() : base("BIOS e atualizações",
         "Mostra a BIOS instalada e abre a busca no site oficial da fabricante da sua placa ou do seu equipamento. Não existe uma API pública das fabricantes para saber a versão mais nova, por isso a conferência final é feita no site delas.")
     {
-        Loaded += async (_, _) => { if (Body.Children.Count == 0) await LoadAsync(); };
+        Loaded += async (_, _) => { if (Body.Children.Count == 0) await RunOnce(LoadAsync); };
     }
 
     private async Task LoadAsync()

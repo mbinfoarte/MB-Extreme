@@ -17,7 +17,7 @@ public sealed class GameBoostPage : ToolPageBase
     public GameBoostPage() : base("Modo Jogo",
         "Quando um jogo da sua lista abre, o MB Extreme troca para o plano de energia de alto desempenho, pede para fechar os programas pesados que você escolher (sem forçar), tira o jogo do modo de eficiência do Windows, sobe a prioridade dele e, se quiser, libera RAM. Ao fechar o jogo, o plano de energia volta ao que era.")
     {
-        _toggle = AddButton("Ativar agora", (_, _) => Toggle());
+        _toggle = AddButton("Ativar agora", async (_, _) => await ToggleAsync());
         AddButton("Atualizar listas", (_, _) => Build(), false);
 
         Body.Children.Add(_status);
@@ -52,17 +52,20 @@ public sealed class GameBoostPage : ToolPageBase
         AppServices.Boost.Settings.Save();
     }
 
-    private void Toggle()
+    private async Task ToggleAsync()
     {
+        _toggle.IsEnabled = false;
         try
         {
-            if (AppServices.Boost.IsActive) AppServices.Boost.Deactivate();
-            else AppServices.Boost.ActivateNow();
+            if (AppServices.Boost.IsActive) await AppServices.Boost.DeactivateAsync();
+            else await AppServices.Boost.ActivateNowAsync();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        finally
         {
-            SetStatus("Não foi possível alterar o Modo Jogo: " + ex.Message, "BadBrush");
+            _toggle.IsEnabled = true;
         }
+
+        if (AppServices.Boost.LastError is { } error) SetStatus("Não foi possível alterar o Modo Jogo: " + error, "BadBrush");
     }
 
     private void Build()
@@ -80,6 +83,7 @@ public sealed class GameBoostPage : ToolPageBase
                 {
                     settings.GameProcesses.Remove(g);
                     settings.Save();
+                    AppServices.Boost.RefreshGames();
                     Build();
                 })));
         }
@@ -112,6 +116,7 @@ public sealed class GameBoostPage : ToolPageBase
                 {
                     settings.GameProcesses.Add(name);
                     settings.Save();
+                    AppServices.Boost.RefreshGames();
                     Build();
                 })));
         }

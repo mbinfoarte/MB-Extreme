@@ -13,11 +13,11 @@ public sealed class GhostDevicesPage : ToolPageBase
     public GhostDevicesPage() : base("Cache de portas USB",
         "O Windows guarda um registro de cada dispositivo USB já conectado. Com o tempo isso acumula entradas que não existem mais. Aqui você remove só as que estão desconectadas; se plugar o dispositivo de novo, o Windows o reconhece normalmente.")
     {
-        AddButton("Procurar", async (_, _) => await ScanAsync());
+        AddButton("Procurar", async (_, _) => await RunOnce(ScanAsync));
         AddButton("Remover selecionados", async (_, _) => await RemoveAsync());
         AddButton("Selecionar todos", (_, _) => { foreach (var b in _boxes.Values) b.IsChecked = true; }, false);
         AddButton("Limpar seleção", (_, _) => { foreach (var b in _boxes.Values) b.IsChecked = false; }, false);
-        Loaded += async (_, _) => { if (_boxes.Count == 0) await ScanAsync(); };
+        Loaded += async (_, _) => { if (_boxes.Count == 0) await RunOnce(ScanAsync); };
     }
 
     private async Task ScanAsync()

@@ -32,10 +32,9 @@ public sealed class LatencyPage : ToolPageBase
     {
         _start.IsEnabled = false;
         _results.Children.Clear();
-        Cts = new CancellationTokenSource();
-        var token = Cts.Token;
         SetStatus("Medindo... clique em Parar na janela de progresso ou aguarde o fim.");
         ShowProgress("Diagnóstico de latência", "Medição");
+        var token = Cts!.Token;
         var duration = TimeSpan.FromSeconds(Seconds[_secondsIndex]);
         try
         {

@@ -28,36 +28,6 @@
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel x:Name="NavPanel" Margin="12,0,12,0">
-                        <RadioButton Tag="home" IsChecked="True" GroupName="nav" Style="{StaticResource NavItem}" Checked="Nav_Checked">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="18" Text="&#xE80F;" Width="28" VerticalAlignment="Center" />
-                                <TextBlock Text="Painel" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton Tag="opt" GroupName="nav" Style="{StaticResource NavItem}" Checked="Nav_Checked">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="18" Text="&#xE945;" Width="28" VerticalAlignment="Center" />
-                                <TextBlock Text="Otimização" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton Tag="net" GroupName="nav" Style="{StaticResource NavItem}" Checked="Nav_Checked">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="18" Text="&#xE774;" Width="28" VerticalAlignment="Center" />
-                                <TextBlock Text="Rede" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton Tag="win" GroupName="nav" Style="{StaticResource NavItem}" Checked="Nav_Checked">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="18" Text="&#xE713;" Width="28" VerticalAlignment="Center" />
-                                <TextBlock Text="Windows" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton Tag="tools" GroupName="nav" Style="{StaticResource NavItem}" Checked="Nav_Checked">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="18" Text="&#xE90F;" Width="28" VerticalAlignment="Center" />
-                                <TextBlock Text="Ferramentas" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </RadioButton>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>

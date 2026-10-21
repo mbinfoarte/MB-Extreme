@@ -11,32 +11,48 @@ internal static class NavigationMap
     // Ícones: fonte "Segoe MDL2 Assets", que já vem no Windows 10 e 11.
     public static IReadOnlyList<Module> Modules { get; } = new Module[]
     {
-        new("opt", "Otimização", "Deixe o computador mais rápido e leve.", "", new Tile[]
+        new("opt", "Otimização", "Deixe o computador mais rápido e leve.", "\uE945", new Tile[]
         {
-            new("cleanup", "Limpeza", "Procura lixo, temporários, cache e libera memória.", ""),
-            new("tweaks-perf", "Desempenho", "Prioridade de CPU, energia e serviços.", ""),
-            new("tweaks-game", "Jogos e GPU", "Ajustes para jogar melhor.", ""),
-            new("memory", "Memória", "Limpe a RAM e proteja aplicativos.", ""),
-            new("storage", "Armazenamento", "SSD, HD e saúde dos discos.", ""),
+            new("cleanup", "Limpeza", "Procura lixo, temporários, cache e libera memória.", "\uE74D"),
+            new("tweaks-perf", "Desempenho", "Prioridade de CPU, energia e serviços.", "\uE9D9"),
+            new("memory", "Memória", "Limpe a RAM e proteja aplicativos.", "\uE950"),
+            new("storage", "Armazenamento", "SSD, HD e saúde dos discos.", "\uEDA2"),
         }),
-        new("net", "Rede", "Conexão, ping e DNS.", "", new Tile[]
+        new("games", "Jogos", "Windows, GPU e energia para jogar melhor.", "\uE7FC", new Tile[]
         {
-            new("dns", "DNS", "Teste e escolha o servidor mais rápido.", ""),
-            new("net-tweaks", "Otimizações de rede", "Ajustes do Windows para a rede.", ""),
-            new("netanalyzer", "Analisador de rede", "Ping, TCPing e MTR.", ""),
+            new("gamesettings", "Jogos e energia", "Modo de Jogo, agendamento de GPU e plano de energia.", "\uE7FC"),
+            new("tweaks-game", "Ajustes para jogos", "Prioridade, gravação em segundo plano e mais.", "\uE713"),
+            new("fps", "Monitor de FPS", "Overlay com FPS, temperatura e uso. Em breve.", "\uE9D9"),
+            new("record", "Gravação de tela", "Grave a janela para guardar testes. Em breve.", "\uE714"),
         }),
-        new("win", "Windows", "Privacidade, aplicativos e inicialização.", "", new Tile[]
+        new("test", "Testes", "Informações, benchmark e teste de estresse.", "\uE9D9", new Tile[]
         {
-            new("privacy", "Privacidade", "Anúncios, histórico, Copilot e SmartScreen.", ""),
-            new("debloat", "Aplicativos", "Remova apps do Windows que você não usa.", ""),
-            new("boot", "Inicialização e boot", "Como o Windows liga e desliga.", ""),
-            new("periph", "Periféricos", "Mouse e teclado.", ""),
+            new("sysinfo", "Informações do sistema", "Estilo CPU-Z, GPU-Z e AIDA.", "\uE770"),
+            new("bench", "Benchmark", "Pontuação de CPU, memória e disco. Em breve.", "\uE9D9"),
+            new("stress", "Teste de estresse", "Carga no hardware com limite de temperatura. Em breve.", "\uE7BA"),
         }),
-        new("tools", "Ferramentas", "Hardware, drivers e histórico.", "", new Tile[]
+        new("dev", "Dispositivos", "USB e tudo que está conectado ao PC.", "\uE88E", new Tile[]
         {
-            new("perf", "Hardware e benchmarks", "Informações do sistema e testes.", ""),
-            new("tools-drivers", "Drivers e programas", "Atualizações por fontes oficiais.", ""),
-            new("actions", "Central de ações", "Histórico e desfazer.", ""),
+            new("devices", "Dispositivos conectados", "Lista de USB e de todo o hardware.", "\uE88E"),
+            new("ghosts", "Cache de portas USB", "Remove registros de USB que não existem mais.", "\uE74D"),
+        }),
+        new("net", "Rede", "Conexão, ping e DNS.", "\uE774", new Tile[]
+        {
+            new("dns", "DNS", "Teste e escolha o servidor mais rápido.", "\uE774"),
+            new("net-tweaks", "Otimizações de rede", "Ajustes do Windows para a rede.", "\uE713"),
+            new("netanalyzer", "Analisador de rede", "Ping, TCPing e MTR. Em breve.", "\uE9D9"),
+        }),
+        new("win", "Windows", "Privacidade, aplicativos e inicialização.", "\uE713", new Tile[]
+        {
+            new("privacy", "Privacidade", "Anúncios, histórico, Copilot e SmartScreen.", "\uE72E"),
+            new("debloat", "Aplicativos", "Remova apps do Windows que você não usa.", "\uE74D"),
+            new("boot", "Inicialização e boot", "Como o Windows liga e desliga.", "\uE7E8"),
+            new("periph", "Periféricos", "Mouse e teclado.", "\uE765"),
+        }),
+        new("drv", "Drivers e programas", "Atualizações por fontes oficiais.", "\uE896", new Tile[]
+        {
+            new("drivers", "Drivers", "Placa de vídeo (NVIDIA, AMD, Intel) e Windows Update.", "\uE950"),
+            new("programs", "Programas", "Atualize e instale ferramentas pelo winget.", "\uE896"),
         }),
     };
 

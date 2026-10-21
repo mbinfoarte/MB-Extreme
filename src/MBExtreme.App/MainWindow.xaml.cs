@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        BuildMenu();
         Current = this;
         Go("home");
     }
@@ -35,6 +36,43 @@ public partial class MainWindow : Window
 
         if (autoStart && _inner.TryGetValue(key, out var inner) && inner is CleanupPage cleanup)
             cleanup.StartScan();
+    }
+
+    private void BuildMenu()
+    {
+        AddNavItem("home", "Painel", "\uE80F", true);
+        foreach (var module in NavigationMap.Modules)
+            AddNavItem(module.Key, module.Title, module.Icon, false);
+    }
+
+    private void AddNavItem(string key, string title, string glyph, bool selected)
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(new TextBlock
+        {
+            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+            FontSize = 18,
+            Text = glyph,
+            Width = 28,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var radio = new RadioButton
+        {
+            Tag = key,
+            GroupName = "nav",
+            IsChecked = selected,
+            Style = (Style)FindResource("NavItem"),
+            Content = content,
+        };
+        radio.Checked += Nav_Checked;
+        NavPanel.Children.Add(radio);
     }
 
     private IEnumerable<RadioButton> NavRadios() => NavPanel.Children.OfType<RadioButton>();
@@ -77,6 +115,12 @@ public partial class MainWindow : Window
         "memory" => new MemoryPage(),
         "dns" => new DnsPage(),
         "debloat" => new DebloatPage(),
+        "sysinfo" => new SystemInfoPage(),
+        "devices" => new DevicesPage(),
+        "ghosts" => new GhostDevicesPage(),
+        "gamesettings" => new GameSettingsPage(),
+        "drivers" => new DriversPage(),
+        "programs" => new ProgramsPage(),
         "tweaks-perf" => new TweaksPage("Desempenho",
             "Prioridade de CPU, plano de energia e serviços do Windows. Cada ajuste mostra o risco e pode ser restaurado.",
             TweakCategory.Performance),

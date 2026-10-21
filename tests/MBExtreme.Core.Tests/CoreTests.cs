@@ -154,3 +154,98 @@ public class CleanupServiceTests : IDisposable
         }
     }
 }
+
+public class ParsingTests
+{
+    [Fact]
+    public void WingetTableIsParsedByHeaderColumns()
+    {
+        const string output =
+            "Nome            Id                  Versão   Disponível Fonte\n" +
+            "-----------------------------------------------------------------\n" +
+            "Discord         Discord.Discord     1.0.9    1.0.10     winget\n" +
+            "7-Zip           7zip.7zip           23.01    24.08      winget\n" +
+            "2 atualizações disponíveis.\n";
+
+        var apps = MBExtreme.Core.Apps.WingetService.ParseUpgradeTable(output);
+
+        Assert.Equal(2, apps.Count);
+        Assert.Equal("Discord.Discord", apps[0].Id);
+        Assert.Equal("1.0.10", apps[0].Available);
+        Assert.Equal("7zip.7zip", apps[1].Id);
+        Assert.Equal("23.01", apps[1].Version);
+    }
+
+    [Fact]
+    public void WingetWithoutTableReturnsEmpty() =>
+        Assert.Empty(MBExtreme.Core.Apps.WingetService.ParseUpgradeTable("Nenhuma atualização disponível."));
+
+    [Theory]
+    [InlineData("Valve.Steam", true)]
+    [InlineData("7zip.7zip", true)]
+    [InlineData("x; calc", false)]
+    [InlineData("", false)]
+    public void WingetIdsAreValidated(string id, bool valid) =>
+        Assert.Equal(valid, MBExtreme.Core.Apps.WingetService.IsValidId(id));
+
+    [Fact]
+    public void WingetCatalogHasUniqueValidIds()
+    {
+        var catalog = MBExtreme.Core.Apps.WingetService.Catalog;
+        Assert.Equal(catalog.Count, catalog.Select(c => c.Id).Distinct().Count());
+        Assert.All(catalog, c => Assert.True(MBExtreme.Core.Apps.WingetService.IsValidId(c.Id)));
+    }
+
+    [Theory]
+    [InlineData("32.0.15.6094", "560.94")]
+    [InlineData("31.0.15.5123", "551.23")]
+    [InlineData("30.0.14.7168", "471.68")]
+    public void NvidiaVersionIsConvertedToTheMarketingNumber(string windows, string expected) =>
+        Assert.Equal(expected, MBExtreme.Core.Drivers.DriverService.NvidiaDisplayVersion(windows));
+
+    [Theory]
+    [InlineData(@"PCI\VEN_10DE&DEV_2684", MBExtreme.Core.Drivers.GpuVendor.Nvidia)]
+    [InlineData(@"PCI\VEN_1002&DEV_744C", MBExtreme.Core.Drivers.GpuVendor.Amd)]
+    [InlineData(@"PCI\VEN_8086&DEV_A780", MBExtreme.Core.Drivers.GpuVendor.Intel)]
+    [InlineData(@"PCI\VEN_1234&DEV_0001", MBExtreme.Core.Drivers.GpuVendor.Other)]
+    public void GpuVendorIsReadFromThePciId(string id, MBExtreme.Core.Drivers.GpuVendor expected) =>
+        Assert.Equal(expected, MBExtreme.Core.Drivers.DriverService.VendorFromPnpId(id));
+
+    [Fact]
+    public void PowerPlansAreParsedAndActiveIsDetected()
+    {
+        const string output =
+            "Existing Power Schemes (* Active)\n-----------------------------------\n" +
+            "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n" +
+            "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
+
+        var plans = MBExtreme.Core.Windows.GameSettingsService.ParsePlans(output);
+
+        Assert.Equal(2, plans.Count);
+        Assert.True(plans[0].Active);
+        Assert.Equal("Balanced", plans[0].Name);
+        Assert.False(plans[1].Active);
+    }
+
+    [Fact]
+    public void DeviceJsonAcceptsASingleObjectOrAnArray()
+    {
+        var one = MBExtreme.Core.Devices.DeviceService.ParseDevices("{\"InstanceId\":\"USB\\\\VID_1\",\"FriendlyName\":\"Pen\",\"Class\":\"USB\"}");
+        var many = MBExtreme.Core.Devices.DeviceService.ParseDevices("[{\"InstanceId\":\"A\"},{\"InstanceId\":\"B\",\"FriendlyName\":\"Mouse\"}]");
+
+        Assert.Single(one);
+        Assert.Equal("Pen", one[0].Name);
+        Assert.Equal(2, many.Count);
+        Assert.Equal("A", many[0].Name);
+        Assert.Empty(MBExtreme.Core.Devices.DeviceService.ParseDevices(""));
+    }
+
+    [Fact]
+    public void PendingDriversWithoutAValidGuidAreIgnored()
+    {
+        const string json = "[{\"Id\":\"123e4567-e89b-12d3-a456-426614174000\",\"Title\":\"Driver A\"},{\"Id\":\"nao-e-guid\",\"Title\":\"B\"}]";
+        var drivers = MBExtreme.Core.Drivers.DriverService.ParsePendingDrivers(json);
+        Assert.Single(drivers);
+        Assert.Equal("Driver A", drivers[0].Title);
+    }
+}

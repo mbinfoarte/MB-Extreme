@@ -10,6 +10,8 @@
   <ItemGroup>
     <!-- Sensores de hardware (MPL 2.0). Veja THIRD-PARTY.md. -->
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <!-- Consultas WMI (informações do sistema, dispositivos, drivers). MIT. -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 
 </Project>

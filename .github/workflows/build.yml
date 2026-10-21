@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -20,7 +23,20 @@ jobs:
       - name: Publicar app (Windows x64)
         run: dotnet publish src/MBExtreme.App/MBExtreme.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
 
+      - name: Compactar
+        run: Compress-Archive -Path out\MBExtreme.exe -DestinationPath MBExtreme-teste-win-x64.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: MBExtreme-win-x64
           path: out/
+
+      - name: Publicar versão de teste (pré-lançamento)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "teste-${{ github.run_number }}" MBExtreme-teste-win-x64.zip
+          --prerelease
+          --target "${{ github.sha }}"
+          --title "MB Extreme (teste) ${{ github.run_number }}"
+          --notes "Versão de teste gerada automaticamente do commit ${{ github.sha }}. Execute como administrador. Teste primeiro em uma máquina secundária ou crie um ponto de restauração antes."

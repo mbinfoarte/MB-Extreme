@@ -48,7 +48,7 @@ public partial class CleanupPage : UserControl
 
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
-        var progress = new Progress<ProgressEvent>(ProgressView.Report);
+        IProgress<ProgressEvent> progress = new Progress<ProgressEvent>(ProgressView.Report);
         var categories = CleanupCatalog.Create();
 
         try
@@ -180,7 +180,7 @@ public partial class CleanupPage : UserControl
 
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
-        var progress = new Progress<ProgressEvent>(ProgressView.Report);
+        IProgress<ProgressEvent> progress = new Progress<ProgressEvent>(ProgressView.Report);
         var allowlist = AppSettings.Load().MemoryAllowlist.ToArray();
 
         try

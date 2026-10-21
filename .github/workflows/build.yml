@@ -24,7 +24,9 @@ jobs:
         run: dotnet publish src/MBExtreme.App/MBExtreme.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
 
       - name: Compactar
-        run: Compress-Archive -Path out\MBExtreme.exe -DestinationPath MBExtreme-teste-win-x64.zip
+        run: |
+          Remove-Item out\*.pdb -ErrorAction SilentlyContinue
+          Compress-Archive -Path out\* -DestinationPath MBExtreme-teste-win-x64.zip
 
       - uses: actions/upload-artifact@v4
         with:

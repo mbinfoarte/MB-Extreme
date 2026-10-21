@@ -11,6 +11,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>0.2.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- Embute as DLLs nativas do WPF no executável único (sem isso, o .exe sozinho não abre). -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>

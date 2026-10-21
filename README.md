@@ -15,6 +15,7 @@ Software de otimização completa para Windows, da MB InfoArt. Visual preto e am
 - **.NET 8 + WPF** (C#): interface e lógica de Windows (registro, serviços, rede).
 - `src/MBExtreme.Core`: núcleo sem interface (memória, DNS, progresso, configurações).
 - `src/MBExtreme.App`: aplicativo WPF com menu lateral e tema preto e amarelo.
+- `src/MBExtreme.Installer`: instalador (.exe) com barra de progresso e mini tutorial; embute o aplicativo.
 - `tests/MBExtreme.Core.Tests`: testes de unidade (xUnit).
 
 ## Estrutura
@@ -27,6 +28,10 @@ docs/                  Especificações, arquitetura, roadmap e política de des
 installer/             Empacotamento do instalador (a fazer)
 scripts/               Automação (a fazer)
 ```
+
+## Instalação (usuário)
+
+Baixe `MBExtreme-Setup.exe` na página de releases do repositório e execute. O instalador mostra uma janela com barra de progresso e um mini tutorial do sistema, copia o programa para `C:\Program Files\MB Extreme`, cria atalhos e registra o programa em "Aplicativos instalados". Para remover, use "Aplicativos instalados" do Windows (ou `MBExtreme.exe /uninstall`). Também há uma versão portátil (`MBExtreme-portatil-win-x64.zip`).
 
 ## Como compilar
 

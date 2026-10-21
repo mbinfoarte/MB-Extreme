@@ -20,7 +20,8 @@
 - [ ] Limpeza automática da RAM (ao iniciar jogo / por status)
 - [ ] Analisador de rede: Ping, TCPing e MTR
 - [ ] Inicialização do Windows
-- [ ] Instalador e assinatura de código
+- [x] Instalador (.exe) com barra de progresso, mini tutorial, atalhos e desinstalação
+- [ ] Assinatura de código (evita o aviso do SmartScreen)
 
 ## Fase 2: Desempenho e ferramentas
 - [ ] Informações de hardware e sensores

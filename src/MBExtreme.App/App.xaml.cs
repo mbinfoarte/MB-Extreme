@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using MBExtreme.Core.Setup;
 
 namespace MBExtreme.UI;
 
@@ -10,6 +12,64 @@ public partial class App : Application
     {
         DispatcherUnhandledException += OnDispatcherException;
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Report(e.ExceptionObject as Exception);
+    }
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        // "Aplicativos instalados" do Windows chama o programa com /uninstall.
+        if (e.Args.Any(a => a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase)))
+        {
+            RunUninstall();
+            Shutdown(0);
+            return;
+        }
+
+        base.OnStartup(e);
+    }
+
+    private static void RunUninstall()
+    {
+        string? exe = Environment.ProcessPath;
+        string directory = exe is null ? "" : Path.GetDirectoryName(exe) ?? "";
+
+        var answer = MessageBox.Show(
+            "Remover o MB Extreme deste computador?\n\n" +
+            "Os ajustes do Windows que você aplicou NÃO são desfeitos ao desinstalar. " +
+            "Para desfazê-los, cancele, abra o programa e use \"Restaurar originais\" em cada página.\n\n" +
+            "Os backups dos valores originais ficam em %AppData%\\MBExtreme.",
+            "Desinstalar MB Extreme", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+
+        if (!InstallInfo.IsSafeInstallDirectory(directory))
+        {
+            MessageBox.Show("Não foi possível confirmar a pasta de instalação. Nada foi removido.", "Desinstalar MB Extreme",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            InstallInfo.RemoveIntegration();
+
+            // O programa em execução não consegue apagar a própria pasta: um comando separado apaga depois que ele fechar.
+            var cleanup = new ProcessStartInfo("cmd.exe")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            cleanup.ArgumentList.Add("/c");
+            cleanup.ArgumentList.Add($"ping 127.0.0.1 -n 3 > nul & rmdir /s /q \"{directory}\"");
+            Process.Start(cleanup);
+
+            MessageBox.Show("MB Extreme removido.", "Desinstalar MB Extreme", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException
+                                       or System.ComponentModel.Win32Exception)
+        {
+            MessageBox.Show("Não foi possível concluir a remoção: " + ex.Message, "Desinstalar MB Extreme",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void OnDispatcherException(object sender, DispatcherUnhandledExceptionEventArgs e)

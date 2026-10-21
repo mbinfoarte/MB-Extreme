@@ -23,22 +23,26 @@ jobs:
       - name: Publicar app (Windows x64)
         run: dotnet publish src/MBExtreme.App/MBExtreme.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
 
-      - name: Compactar
+      - name: Compactar o aplicativo
         run: |
           Remove-Item out\*.pdb -ErrorAction SilentlyContinue
-          Compress-Archive -Path out\* -DestinationPath MBExtreme-teste-win-x64.zip
+          Compress-Archive -Path out\* -DestinationPath payload.zip
+          Copy-Item payload.zip MBExtreme-portatil-win-x64.zip
+
+      - name: Gerar o instalador (.exe)
+        run: dotnet publish src/MBExtreme.Installer/MBExtreme.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:PayloadZip=${{ github.workspace }}\payload.zip" -o setup
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MBExtreme-win-x64
-          path: out/
+          name: MBExtreme-instalador
+          path: setup/MBExtreme-Setup.exe
 
       - name: Publicar versão de teste (pré-lançamento)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >
-          gh release create "teste-${{ github.run_number }}" MBExtreme-teste-win-x64.zip
+          gh release create "teste-${{ github.run_number }}" setup/MBExtreme-Setup.exe MBExtreme-portatil-win-x64.zip
           --prerelease
           --target "${{ github.sha }}"
           --title "MB Extreme (teste) ${{ github.run_number }}"
-          --notes "Versão de teste gerada automaticamente do commit ${{ github.sha }}. Execute como administrador. Teste primeiro em uma máquina secundária ou crie um ponto de restauração antes."
+          --notes "Versão de teste gerada automaticamente do commit ${{ github.sha }}. Baixe MBExtreme-Setup.exe para instalar (pede permissão de administrador). MBExtreme-portatil-win-x64.zip é a versão sem instalação. Teste primeiro em uma máquina secundária ou crie um ponto de restauração antes."

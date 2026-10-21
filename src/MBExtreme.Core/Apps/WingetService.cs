@@ -59,7 +59,7 @@ public static class WingetService
         if (separator < 1) return Array.Empty<WingetApp>();
 
         string header = lines[separator - 1];
-        var starts = Regex.Matches(header, @"\S+(?: \S+)*").Select(m => m.Index).ToList();
+        var starts = Regex.Matches(header, @"\S+").Select(m => m.Index).ToList();
         if (starts.Count < 4) return Array.Empty<WingetApp>();
 
         string Cut(string line, int column)

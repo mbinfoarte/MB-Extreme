@@ -16,6 +16,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         BuildMenu();
         Current = this;
+        Loaded += (_, _) => AppServices.Overlay.AttachHotkey(this);
         Go("home");
     }
 
@@ -116,6 +117,12 @@ public partial class MainWindow : Window
         "dns" => new DnsPage(),
         "debloat" => new DebloatPage(),
         "sysinfo" => new SystemInfoPage(),
+        "bench" => new BenchmarkPage(),
+        "stress" => new StressPage(),
+        "fps" => new FpsPage(),
+        "record" => new RecordPage(),
+        "storage" => new StoragePage(),
+        "netanalyzer" => new NetAnalyzerPage(),
         "devices" => new DevicesPage(),
         "ghosts" => new GhostDevicesPage(),
         "gamesettings" => new GameSettingsPage(),

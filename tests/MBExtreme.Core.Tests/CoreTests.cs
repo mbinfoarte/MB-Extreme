@@ -249,3 +249,146 @@ public class ParsingTests
         Assert.Equal("Driver A", drivers[0].Title);
     }
 }
+
+public class ToolsTests
+{
+    [Fact]
+    public void PresentTrackerComputesFpsAndFrameTime()
+    {
+        var times = Enumerable.Range(0, 120).Select(i => i / 60.0).ToList(); // 2 s a 60 fps
+        var reading = MBExtreme.Core.Fps.PresentTracker.Compute(10, times, times[^1]);
+
+        Assert.NotNull(reading);
+        Assert.InRange(reading!.Fps, 58, 62);
+        Assert.InRange(reading.FrameTimeMs, 16, 17.5);
+        Assert.InRange(reading.Low1PercentFps, 55, 62);
+    }
+
+    [Fact]
+    public void PresentTrackerOneSlowFrameLowersOnePercent()
+    {
+        var times = new List<double>();
+        double t = 0;
+        for (int i = 0; i < 200; i++) { times.Add(t); t += i == 100 ? 0.2 : 1 / 100.0; }
+        var reading = MBExtreme.Core.Fps.PresentTracker.Compute(1, times, times[^1]);
+
+        Assert.True(reading!.Low1PercentFps < 20);
+    }
+
+    [Fact]
+    public void AviWriterProducesValidHeaderAndIndex()
+    {
+        var stream = new MemoryStream();
+        using (var writer = new MBExtreme.Core.Recording.MjpegAviWriter(stream, 64, 48, 15, leaveOpen: true))
+        {
+            writer.AddFrame(new byte[] { 1, 2, 3 });
+            writer.AddFrame(new byte[] { 4, 5, 6, 7 });
+            writer.AddFrame(new byte[] { 8 });
+            writer.Finish(15);
+        }
+
+        var bytes = stream.ToArray();
+        Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(bytes, 0, 4));
+        Assert.Equal(bytes.Length - 8, BitConverter.ToInt32(bytes, 4));
+        Assert.Equal("AVI ", System.Text.Encoding.ASCII.GetString(bytes, 8, 4));
+
+        string text = System.Text.Encoding.ASCII.GetString(bytes);
+        int avih = text.IndexOf("avih", StringComparison.Ordinal);
+        Assert.Equal(3, BitConverter.ToInt32(bytes, avih + 8 + 16)); // dwTotalFrames
+        Assert.Equal(6, System.Text.RegularExpressions.Regex.Matches(text, "00dc").Count); // 3 quadros + 3 entradas no índice
+        Assert.Contains("idx1", text);
+    }
+
+    [Fact]
+    public void DisksAreParsedFromJson()
+    {
+        const string json =
+            "[{\"Name\":\"Samsung SSD\",\"Media\":\"SSD\",\"Bus\":\"NVMe\",\"Health\":\"Healthy\",\"Size\":500107862016,\"Temp\":38,\"Wear\":3,\"Hours\":1200,\"ReadErrors\":0,\"WriteErrors\":null}," +
+            "{\"Name\":\"HD\",\"Media\":\"HDD\",\"Bus\":\"SATA\",\"Health\":\"Warning\",\"Size\":1000000000000,\"Temp\":null,\"Wear\":null,\"Hours\":null,\"ReadErrors\":null,\"WriteErrors\":null}]";
+
+        var disks = MBExtreme.Core.Storage.StorageService.ParseDisks(json);
+
+        Assert.Equal(2, disks.Count);
+        Assert.Equal(38, disks[0].Temperature);
+        Assert.Null(disks[0].WriteErrors);
+        Assert.Equal("Warning", disks[1].Health);
+        Assert.Null(disks[1].Temperature);
+    }
+
+    [Theory]
+    [InlineData("C:", true)]
+    [InlineData("D:\\", true)]
+    [InlineData("C:\\Windows", false)]
+    [InlineData("C: & calc", false)]
+    public void DriveNamesAreValidated(string name, bool valid) =>
+        Assert.Equal(valid, MBExtreme.Core.Storage.StorageService.IsValidDrive(name));
+
+    [Fact]
+    public void HopStatsTracksLossAndLatency()
+    {
+        var hop = new MBExtreme.Core.Network.HopStats { Hop = 1 };
+        hop.Add(10);
+        hop.Add(null);
+        hop.Add(30);
+
+        Assert.Equal(3, hop.Sent);
+        Assert.Equal(2, hop.Received);
+        Assert.InRange(hop.LossPercent, 33, 34);
+        Assert.Equal(20, hop.Average);
+        Assert.Equal(10, hop.BestOrZero);
+        Assert.Equal(30, hop.Worst);
+    }
+
+    [Theory]
+    [InlineData("1.1.1.1", true)]
+    [InlineData("exemplo.com.br", true)]
+    [InlineData("", false)]
+    [InlineData("a b; calc", false)]
+    public void HostsAreValidated(string host, bool valid) =>
+        Assert.Equal(valid, MBExtreme.Core.Network.NetAnalyzer.IsValidHost(host));
+
+    [Fact]
+    public void BenchmarkHistoryKeepsLastResults()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "mbx-bench-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            for (int i = 0; i < 25; i++)
+                MBExtreme.Core.Benchmark.BenchmarkHistory.Add(
+                    new MBExtreme.Core.Benchmark.BenchmarkResult(DateTime.Now, 8, 1, 2, 3, 4, 5, i), path);
+
+            var loaded = MBExtreme.Core.Benchmark.BenchmarkHistory.Load(path);
+            Assert.Equal(20, loaded.Count);
+            Assert.Equal(24, loaded[^1].Score);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void StressRunsAndStopsOnTime()
+    {
+        var options = new MBExtreme.Core.Stress.StressOptions(true, false, TimeSpan.FromSeconds(2), null, 64);
+        var samples = 0;
+
+        var result = MBExtreme.Core.Stress.StressService.Run(options, () => null, _ => samples++, CancellationToken.None);
+
+        Assert.True(result.Completed);
+        Assert.Equal(0, result.Errors);
+        Assert.True(samples >= 1);
+    }
+
+    [Fact]
+    public void StressStopsWhenCancelled()
+    {
+        using var cts = new CancellationTokenSource(500);
+        var options = new MBExtreme.Core.Stress.StressOptions(true, true, TimeSpan.FromMinutes(5), null, 64);
+
+        var result = MBExtreme.Core.Stress.StressService.Run(options, () => null, _ => { }, cts.Token);
+
+        Assert.False(result.Completed);
+        Assert.Contains("Interrompido", result.Reason);
+    }
+}

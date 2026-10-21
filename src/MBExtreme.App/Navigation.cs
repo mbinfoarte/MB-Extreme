@@ -22,14 +22,14 @@ internal static class NavigationMap
         {
             new("gamesettings", "Jogos e energia", "Modo de Jogo, agendamento de GPU e plano de energia.", "\uE7FC"),
             new("tweaks-game", "Ajustes para jogos", "Prioridade, gravação em segundo plano e mais.", "\uE713"),
-            new("fps", "Monitor de FPS", "Overlay com FPS, temperatura e uso. Em breve.", "\uE9D9"),
-            new("record", "Gravação de tela", "Grave a janela para guardar testes. Em breve.", "\uE714"),
+            new("fps", "Monitor de FPS", "Overlay com FPS, temperatura e uso.", "\uE9D9"),
+            new("record", "Gravação de tela", "Grave a janela para guardar testes.", "\uE714"),
         }),
         new("test", "Testes", "Informações, benchmark e teste de estresse.", "\uE9D9", new Tile[]
         {
             new("sysinfo", "Informações do sistema", "Estilo CPU-Z, GPU-Z e AIDA.", "\uE770"),
-            new("bench", "Benchmark", "Pontuação de CPU, memória e disco. Em breve.", "\uE9D9"),
-            new("stress", "Teste de estresse", "Carga no hardware com limite de temperatura. Em breve.", "\uE7BA"),
+            new("bench", "Benchmark", "Pontuação de CPU, memória e disco.", "\uE9D9"),
+            new("stress", "Teste de estresse", "Carga no hardware com limite de temperatura.", "\uE7BA"),
         }),
         new("dev", "Dispositivos", "USB e tudo que está conectado ao PC.", "\uE88E", new Tile[]
         {
@@ -40,7 +40,7 @@ internal static class NavigationMap
         {
             new("dns", "DNS", "Teste e escolha o servidor mais rápido.", "\uE774"),
             new("net-tweaks", "Otimizações de rede", "Ajustes do Windows para a rede.", "\uE713"),
-            new("netanalyzer", "Analisador de rede", "Ping, TCPing e MTR. Em breve.", "\uE9D9"),
+            new("netanalyzer", "Analisador de rede", "Ping, TCPing e MTR.", "\uE9D9"),
         }),
         new("win", "Windows", "Privacidade, aplicativos e inicialização.", "\uE713", new Tile[]
         {

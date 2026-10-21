@@ -12,6 +12,8 @@
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <!-- Consultas WMI (informações do sistema, dispositivos, drivers). MIT. -->
     <PackageReference Include="System.Management" Version="10.0.2" />
+    <!-- Eventos de apresentação de quadros (ETW) para o monitor de FPS. MIT. -->
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.16" />
   </ItemGroup>
 
 </Project>

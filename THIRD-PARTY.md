@@ -9,3 +9,11 @@ A leitura de temperatura da CPU em versões recentes usa o driver **PawnIO** (in
 Ao distribuir o programa, mantenha os avisos de licença acima.
 
 Ideias e técnicas de outros projetos usados apenas como referência de estudo estão em `docs/REFERENCIA-*.md`; nenhum código foi copiado.
+
+## Microsoft.Diagnostics.Tracing.TraceEvent
+- Uso: leitura dos eventos ETW de apresentação de quadros (monitor de FPS).
+- Licença: MIT. https://github.com/microsoft/perfview
+
+## System.Drawing.Common
+- Uso: captura de tela e codificação JPEG da gravação de tela.
+- Licença: MIT.

@@ -21,11 +21,13 @@ Funções inspiradas em CPU-Z/GPU-Z/AIDA, OCCT, MSI Afterburner e recursos do pr
 - **Drivers**: detecta GPU (NVIDIA/AMD/Intel), mostra versão, abre a página oficial do fabricante; drivers do Windows Update via COM `Microsoft.Update.Session`, com ponto de restauração antes de instalar.
 - **Programas**: `winget upgrade` e catálogo de instalação (IDs validados por expressão regular).
 
-## Próximas etapas
-2. **Benchmark** (CPU, memória, disco, com histórico) e **teste de estresse** (CPU/RAM, limite de temperatura, parada automática, detecção de erros).
-3. **Monitor de FPS** por ETW (eventos de apresentação do DXGI/D3D) e overlay transparente com FPS, frametime, 1% low, temperaturas e uso.
-4. **Gravação de tela** em `Vídeos\MB Extreme`.
+## Etapa 2 a 4 (implementadas)
+- **Benchmark**: CPU em 1 núcleo e em todos, largura de banda de memória e disco (256 MB, gravação com WriteThrough). Pontuação relativa e histórico (20 últimas) em `%AppData%\MBExtreme\bench-history.json`.
+- **Teste de estresse**: CPU (cálculo determinístico conferido contra um valor de referência) e memória (padrões gravados e verificados). Para por duração, por limite de temperatura (80/90/95 °C) ou por você. Erros contam como sinal de instabilidade.
+- **Monitor de FPS**: sessão ETW com o provedor Microsoft-Windows-DXGI (evento Present, id 42), por processo, sem injetar nada no jogo. FPS, tempo de quadro e "1% pior". Overlay transparente, topmost e sem captura de mouse; atalho global Ctrl+Shift+F10. Limite: jogo em tela cheia exclusiva pode esconder o overlay; Vulkan/OpenGL puros podem não gerar eventos DXGI.
+- **Gravação de tela**: captura GDI da tela principal, JPEG por quadro, AVI Motion JPEG escrito pelo próprio app (`MjpegAviWriter`), em `Vídeos\MB Extreme`. Sem som. Limite de ~1,9 GB por arquivo. Pode ser ligada junto do benchmark e do teste de estresse.
+- **Armazenamento**: volumes, saúde (Get-PhysicalDisk/StorageReliabilityCounter) e otimização com `defrag /O`.
+- **Analisador de rede**: Ping, TCPing e MTR (TTL crescente, perda e latência por salto).
 
-## Limites conhecidos
-- Sem busca automática do "driver mais novo" de cada fabricante (sem API oficial estável); usamos página oficial + Windows Update + winget.
-- Temperatura de CPU depende do driver PawnIO.
+## Pendências
+- Central de ações (histórico geral e desfazer tudo), assinatura de código do instalador, gravação de áudio e de uma janela específica.

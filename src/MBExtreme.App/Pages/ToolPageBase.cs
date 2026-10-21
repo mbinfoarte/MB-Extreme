@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -134,6 +135,69 @@ public abstract class ToolPageBase : UserControl
         content.Children.Add(new TextBlock { Text = text, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         if (detail.Length > 0) content.Children.Add(Muted(detail));
         return new CheckBox { Content = content, Foreground = Brush("TextBrush"), VerticalContentAlignment = VerticalAlignment.Top };
+    }
+
+    /// <summary>Grupo de botões de escolha única (o escolhido fica amarelo).</summary>
+    protected StackPanel Choice(IReadOnlyList<string> options, int selected, Action<int> onChange)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 6) };
+        var buttons = new List<Button>();
+        void Paint(int index)
+        {
+            for (int i = 0; i < buttons.Count; i++)
+                buttons[i].Style = (Style)FindResource(i == index ? "PrimaryButton" : "GhostButton");
+        }
+
+        for (int i = 0; i < options.Count; i++)
+        {
+            int index = i;
+            var button = new Button { Content = options[i], Margin = new Thickness(i == 0 ? 0 : 8, 0, 0, 0) };
+            button.Click += (_, _) =>
+            {
+                Paint(index);
+                onChange(index);
+            };
+            buttons.Add(button);
+            panel.Children.Add(button);
+        }
+
+        Paint(selected);
+        return panel;
+    }
+
+    private CheckBox? _recordOption;
+
+    /// <summary>Caixa "Gravar a tela durante o teste". Use <see cref="BeginRecordingIfChecked"/> e <see cref="EndRecording"/> ao redor do teste.</summary>
+    protected CheckBox RecordOption()
+    {
+        _recordOption = new CheckBox
+        {
+            Content = "Gravar a tela durante o teste (salva em Vídeos\\MB Extreme)",
+            Foreground = Brush("TextBrush"),
+            Margin = new Thickness(0, 14, 0, 0),
+        };
+        return _recordOption;
+    }
+
+    protected string? BeginRecordingIfChecked(string label)
+    {
+        if (_recordOption?.IsChecked != true || AppServices.Recorder.IsRecording) return null;
+        try
+        {
+            return AppServices.Recorder.Start(label, 15, 0.75);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            SetStatus("Não foi possível gravar: " + ex.Message, "WarnBrush");
+            return null;
+        }
+    }
+
+    protected void EndRecording(string? file)
+    {
+        if (file is null) return;
+        AppServices.Recorder.Stop();
+        SetStatus("Gravação salva em " + file, "OkBrush");
     }
 
     protected static void Open(string url)

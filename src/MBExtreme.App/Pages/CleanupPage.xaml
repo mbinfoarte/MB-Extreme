@@ -1,0 +1,25 @@
+<UserControl x:Class="MBExtreme.UI.Pages.CleanupPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:MBExtreme.UI.Controls">
+    <Grid>
+        <ScrollViewer x:Name="MainView" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="36,24,36,32">
+                <TextBlock Text="Limpeza do sistema" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Margin="0,4,0,18" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                           Text="Procura arquivos que o Windows e os navegadores recriam sozinhos e libera memória. Você escolhe o que apagar. Cookies, senhas, histórico e documentos nunca são tocados." />
+
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Escanear" Style="{StaticResource PrimaryButton}" Click="ScanButton_Click" />
+                    <Button x:Name="CleanButton" Content="Limpar selecionados" Style="{StaticResource PrimaryButton}"
+                            Margin="12,0,0,0" Click="CleanButton_Click" Visibility="Collapsed" />
+                </StackPanel>
+                <TextBlock x:Name="SummaryText" Margin="0,14,0,0" FontSize="15" FontWeight="SemiBold" />
+
+                <StackPanel x:Name="RowsHost" Margin="0,14,0,0" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <ctl:ProgressPanel x:Name="ProgressView" Visibility="Collapsed" Background="{StaticResource OverlayBrush}" />
+    </Grid>
+</UserControl>

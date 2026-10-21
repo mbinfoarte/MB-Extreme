@@ -14,6 +14,12 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Report(e.ExceptionObject as Exception);
     }
 
+    protected override void OnExit(ExitEventArgs e)
+    {
+        AppServices.Shutdown();
+        base.OnExit(e);
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // "Aplicativos instalados" do Windows chama o programa com /uninstall.

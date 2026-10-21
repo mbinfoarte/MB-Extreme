@@ -1,0 +1,17 @@
+<UserControl x:Class="MBExtreme.UI.Controls.AreaChart"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             SizeChanged="OnSizeChanged">
+    <Grid ClipToBounds="True">
+        <Polygon x:Name="Area">
+            <Polygon.Fill>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#55FFFFFF" Offset="0" />
+                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                </LinearGradientBrush>
+            </Polygon.Fill>
+        </Polygon>
+        <Polyline x:Name="Line" Stroke="{StaticResource AccentBrush}" StrokeThickness="2"
+                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+    </Grid>
+</UserControl>

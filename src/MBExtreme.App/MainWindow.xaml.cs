@@ -8,21 +8,45 @@ namespace MBExtreme.UI;
 public partial class MainWindow : Window
 {
     private readonly Dictionary<string, UserControl> _pages = new();
+    private readonly Dictionary<string, UserControl> _inner = new();
+    private bool _suppressNav;
 
     public MainWindow()
     {
         InitializeComponent();
-        Navigate("home");
+        Current = this;
+        Go("home");
     }
+
+    /// <summary>Janela principal, para as páginas pedirem navegação (ex.: o painel abre a limpeza).</summary>
+    internal static MainWindow? Current { get; private set; }
+
+    /// <summary>Abre uma página pelo nome e destaca o módulo dela no menu lateral.</summary>
+    internal void Go(string key, bool autoStart = false)
+    {
+        string moduleKey = key == "home" ? "home" : NavigationMap.ModuleOf(key)?.Key ?? "home";
+
+        _suppressNav = true;
+        foreach (var radio in NavRadios())
+            radio.IsChecked = (string?)radio.Tag == moduleKey;
+        _suppressNav = false;
+
+        ShowPage(key);
+
+        if (autoStart && _inner.TryGetValue(key, out var inner) && inner is CleanupPage cleanup)
+            cleanup.StartScan();
+    }
+
+    private IEnumerable<RadioButton> NavRadios() => NavPanel.Children.OfType<RadioButton>();
 
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
         // O evento dispara durante o carregamento do XAML, antes de ContentHost existir.
-        if (ContentHost is null) return;
-        if (sender is RadioButton { Tag: string key }) Navigate(key);
+        if (_suppressNav || ContentHost is null) return;
+        if (sender is RadioButton { Tag: string key }) ShowPage(key);
     }
 
-    private void Navigate(string key)
+    private void ShowPage(string key)
     {
         if (!_pages.TryGetValue(key, out var page))
         {
@@ -33,9 +57,23 @@ public partial class MainWindow : Window
         ContentHost.Content = page;
     }
 
-    private static UserControl Create(string key) => key switch
+    private UserControl Create(string key)
     {
-        "home" => new HomePage(),
+        if (key == "home") return new DashboardPage();
+
+        var module = NavigationMap.Modules.FirstOrDefault(m => m.Key == key);
+        if (module is not null) return new ModuleHubPage(module, k => Go(k));
+
+        var tile = NavigationMap.TileOf(key);
+        var owner = NavigationMap.ModuleOf(key);
+        var inner = CreateInner(key, tile);
+        _inner[key] = inner;
+        return tile is null || owner is null ? inner : new SubPageHost(owner, tile, inner, k => Go(k));
+    }
+
+    private static UserControl CreateInner(string key, Tile? tile) => key switch
+    {
+        "cleanup" => new CleanupPage(),
         "memory" => new MemoryPage(),
         "dns" => new DnsPage(),
         "debloat" => new DebloatPage(),
@@ -46,7 +84,7 @@ public partial class MainWindow : Window
             "Ajustes para jogar melhor: prioridade, gravação em segundo plano, agendamento de GPU e drivers.",
             TweakCategory.Gaming),
         "net-tweaks" => new TweaksPage("Otimizações de rede",
-            "Ajustes do Windows que afetam a rede. O ganho varia; use o analisador de rede para medir antes e depois.",
+            "Ajustes do Windows que afetam a rede. O ganho varia; meça o ping antes e depois no Painel.",
             TweakCategory.Network),
         "privacy" => new TweaksPage("Privacidade",
             "Anúncios, histórico, Copilot, Cortana e SmartScreen.",
@@ -57,11 +95,6 @@ public partial class MainWindow : Window
         "periph" => new TweaksPage("Periféricos",
             "Mouse e teclado.",
             TweakCategory.Peripherals),
-        "storage" => new PlaceholderPage("Armazenamento", "Ajustes de SSD e HD, limpeza e saúde dos discos. Veja docs/CATALOGO-AJUSTES.md."),
-        "netanalyzer" => new PlaceholderPage("Analisador de rede", "MTR, Ping, TCPing, monitoramento e ping para jogos. Veja docs/ESPECIFICACAO-REDE.md."),
-        "perf" => new PlaceholderPage("Hardware e benchmarks", "Informações do sistema, sensores, stress test e benchmarks próprios."),
-        "tools" => new PlaceholderPage("Drivers e programas", "Atualização de drivers por fontes oficiais e instalação de programas pelo winget."),
-        "actions" => new PlaceholderPage("Central de ações", "Histórico do que foi alterado e botão de desfazer."),
-        _ => new PlaceholderPage(key, ""),
+        _ => new PlaceholderPage(tile?.Title ?? key, (tile?.Description ?? "") + " Em breve."),
     };
 }

@@ -80,3 +80,77 @@ public class ProgressEventTests
         Assert.Equal(0, new ProgressEvent("a", -5, "x").Percent);
     }
 }
+
+public class CleanupServiceTests : IDisposable
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "mbx-clean-" + Guid.NewGuid().ToString("N"));
+
+    public CleanupServiceTests() => Directory.CreateDirectory(_root);
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_root)) Directory.Delete(_root, true);
+    }
+
+    private string Make(string relative, int bytes, TimeSpan age)
+    {
+        string path = Path.Combine(_root, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, new byte[bytes]);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow - age);
+        return path;
+    }
+
+    private MBExtreme.Core.Cleanup.CleanupCategory Category(TimeSpan? minAge) =>
+        new("t", "Teste", "d", new[] { _root }, minAge);
+
+    [Fact]
+    public void ScanCountsFilesAndRespectsMinimumAge()
+    {
+        Make("old.tmp", 100, TimeSpan.FromDays(3));
+        Make("sub/old2.tmp", 50, TimeSpan.FromDays(2));
+        Make("new.tmp", 999, TimeSpan.FromMinutes(5));
+
+        var item = MBExtreme.Core.Cleanup.CleanupService.Scan(Category(TimeSpan.FromDays(1)), DateTime.UtcNow);
+
+        Assert.Equal(2, item.Files);
+        Assert.Equal(150, item.Bytes);
+    }
+
+    [Fact]
+    public void CleanDeletesOnlyOldFilesAndRemovesEmptyFolders()
+    {
+        string old = Make("sub/deep/old.tmp", 10, TimeSpan.FromDays(3));
+        string recent = Make("keep.tmp", 10, TimeSpan.FromMinutes(1));
+
+        var result = MBExtreme.Core.Cleanup.CleanupService.Clean(Category(TimeSpan.FromDays(1)), DateTime.UtcNow);
+
+        Assert.Equal(1, result.FilesDeleted);
+        Assert.Equal(10, result.FreedBytes);
+        Assert.False(File.Exists(old));
+        Assert.True(File.Exists(recent));
+        Assert.False(Directory.Exists(Path.Combine(_root, "sub")));
+        Assert.True(Directory.Exists(_root));
+    }
+
+    [Fact]
+    public void MissingRootsAreIgnored()
+    {
+        var category = new MBExtreme.Core.Cleanup.CleanupCategory("x", "x", "x", new[] { Path.Combine(_root, "nao-existe") });
+        var item = MBExtreme.Core.Cleanup.CleanupService.Scan(category, DateTime.UtcNow);
+        Assert.Equal(0, item.Files);
+    }
+
+    [Fact]
+    public void CatalogHasUniqueIdsAndNeverTouchesCookiesOrHistory()
+    {
+        var all = MBExtreme.Core.Cleanup.CleanupCatalog.Create();
+        Assert.Equal(all.Count, all.Select(c => c.Id).Distinct().Count());
+        foreach (var root in all.SelectMany(c => c.Roots))
+        {
+            Assert.DoesNotContain("Cookies", root, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("History", root, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Login Data", root, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+}

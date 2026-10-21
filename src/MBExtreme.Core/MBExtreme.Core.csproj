@@ -7,4 +7,9 @@
     <RootNamespace>MBExtreme.Core</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Sensores de hardware (MPL 2.0). Veja THIRD-PARTY.md. -->
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+  </ItemGroup>
+
 </Project>

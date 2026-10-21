@@ -1,6 +1,6 @@
 # MB Extreme
 
-Software de otimização completa para Windows, da MB InfoArt. Visual preto e amarelo.
+Software de otimização completa para Windows, da MB InfoArt. Visual preto, com cartões arredondados e botões amarelos.
 
 ## Objetivo
 
@@ -46,14 +46,14 @@ O app pede privilégio de administrador (limpar a lista de espera da RAM e alter
 
 O build do Windows também roda no GitHub Actions (`.github/workflows/build.yml`) e publica o executável como artefato.
 
-## Estado atual (v0.2)
+## Estado atual (v0.3)
 
-- Janela com menu lateral organizado por grupos (Otimizar, Rede, Windows, Ferramentas), tema preto e amarelo e **janela de progresso padrão**.
-- **Motor de ajustes reversíveis**: cada ajuste guarda o valor original antes de mudar; risco baixo, médio ou alto; confirmação para risco alto.
-- **Ajustes**: Desempenho, Jogos e GPU, Otimizações de rede, Privacidade, Inicialização e boot, Periféricos (23 ajustes).
-- **Aplicativos**: remoção individual de apps do Windows, com ponto de restauração.
-- **Memória** e **DNS**, como na v0.1.
-- Demais abas aparecem como "Em desenvolvimento". Veja `docs/CATALOGO-AJUSTES.md` e `docs/ROADMAP.md`.
+- **Painel** (tela inicial): medidores de temperatura da CPU e da placa de vídeo, uso de memória e ping; gráficos de uso da internet e da CPU; ventoinhas e consumo de energia. Os sensores usam a biblioteca LibreHardwareMonitor (veja `THIRD-PARTY.md`); para ler a temperatura da CPU é preciso o driver PawnIO (o painel oferece instalar pelo winget).
+- **Menu por módulos** (Otimização, Rede, Windows, Ferramentas): ao clicar, aparecem atalhos com ícones; cada atalho abre a página com botão de voltar.
+- **Limpeza**: escaneia temporários, Prefetch, relatórios de erro, cache de navegadores, miniaturas e memória RAM; mostra o que foi encontrado e só apaga o que você marcar. Nunca toca em cookies, senhas, histórico ou documentos.
+- **Ajustes reversíveis** (23), remoção de aplicativos do Windows, Memória e DNS, como nas versões anteriores.
+- Visual: fundo preto, cartões arredondados e botões amarelos com texto preto. Janela de progresso padrão e instalador (.exe) com mini tutorial.
+- Páginas ainda em desenvolvimento: Armazenamento, Analisador de rede, Hardware e benchmarks, Drivers e programas, Central de ações.
 
 ## Política de desenvolvimento
 

@@ -114,8 +114,8 @@
                                         <TextBlock FontSize="11" FontWeight="Bold" Margin="0,0,0,10">
                                             <Run Text="MB " /><Run Text="EXTREME" Foreground="{StaticResource AccentBrush}" />
                                         </TextBlock>
-                                        <Border Style="{StaticResource MockPill}" Background="{StaticResource AccentBrush}">
-                                            <TextBlock Text="Início" FontSize="10" FontWeight="SemiBold" Foreground="#0B0B0B" VerticalAlignment="Center" />
+                                        <Border Style="{StaticResource MockPill}" Background="{StaticResource Surface2Brush}" BorderBrush="{StaticResource MutedBrush}" BorderThickness="1">
+                                            <TextBlock Text="Início" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" />
                                         </Border>
                                         <Border Style="{StaticResource MockPill}"><TextBlock Text="Desempenho" FontSize="10" VerticalAlignment="Center" /></Border>
                                         <Border Style="{StaticResource MockPill}"><TextBlock Text="Jogos e GPU" FontSize="10" VerticalAlignment="Center" /></Border>
@@ -163,7 +163,7 @@
                                             <TextBlock Text="risco médio" FontSize="10" HorizontalAlignment="Right" Foreground="{StaticResource WarnBrush}" />
                                         </Grid>
                                     </Border>
-                                    <Border Background="{StaticResource AccentBrush}" CornerRadius="6" Padding="14,6" HorizontalAlignment="Left" Margin="0,6,0,0">
+                                    <Border Background="{StaticResource ButtonBrush}" CornerRadius="6" Padding="14,6" HorizontalAlignment="Left" Margin="0,6,0,0">
                                         <TextBlock Text="Aplicar alterações" FontSize="11" FontWeight="SemiBold" Foreground="#0B0B0B" />
                                     </Border>
                                 </StackPanel>
@@ -195,8 +195,8 @@
                                     <TextBlock Text="Central de ações" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
                                     <Border Style="{StaticResource MockCard}"><TextBlock Text="✓  Ponto de restauração criado antes de remover aplicativos" FontSize="11" Foreground="{StaticResource OkBrush}" /></Border>
                                     <Border Style="{StaticResource MockCard}"><TextBlock Text="Valor original guardado para cada ajuste aplicado" FontSize="11" /></Border>
-                                    <Border BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="6" Padding="14,6" HorizontalAlignment="Left" Margin="0,6,0,0">
-                                        <TextBlock Text="Restaurar originais" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+                                    <Border BorderBrush="{StaticResource MutedBrush}" BorderThickness="1" CornerRadius="6" Padding="14,6" HorizontalAlignment="Left" Margin="0,6,0,0">
+                                        <TextBlock Text="Restaurar originais" FontSize="11" FontWeight="SemiBold" />
                                     </Border>
                                 </StackPanel>
                             </Grid>

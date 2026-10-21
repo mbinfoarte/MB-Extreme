@@ -1,0 +1,17 @@
+# Segredos
+.env
+.env.*
+*.pfx
+*.pem
+*.key
+
+# Build
+target/
+node_modules/
+dist/
+*.msi
+*.exe
+
+# IDE
+.vscode/
+.idea/

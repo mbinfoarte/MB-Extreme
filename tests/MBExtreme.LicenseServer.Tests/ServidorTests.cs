@@ -25,6 +25,8 @@ public sealed class ServerFixture : WebApplicationFactory<Program>
         builder.UseSetting("Payments:WebhookSecret", Secret);
         builder.UseSetting("Limits:Multiplier", "1000");
         builder.UseSetting("Remote:Technicians", "tecnico@exemplo.com");
+        builder.UseSetting("Admin:Emails", "admin@exemplo.com");
+        builder.UseSetting("Stripe:WebhookSecret", "whsec_segredo_de_teste");
     }
 
     protected override void Dispose(bool disposing)
@@ -162,11 +164,25 @@ public class ServidorTests : IClassFixture<ServerFixture>
     public async Task Conta_sem_assinatura_recebe_licenca_gratuita()
     {
         var (site, _) = await RegisterAsync();
-        var (license, deviceId) = await ActivateAsync(site);
+        string deviceId0 = DeviceId();
+        _ = _server.Server;
+        new Db(Path.Combine(_server.Dir, "licenses.db")).TryMarkTrial(RemoteRelay.Hash(deviceId0), 0);   // este PC já usou o teste grátis
+        var (license, deviceId) = await ActivateAsync(site, deviceId0);
         var status = LicenseVerifier.Evaluate(license, await PublicKeyAsync(), deviceId, DateTimeOffset.UtcNow);
         Assert.True(status.IsValid);
         Assert.Equal("free", status.Plan);
         Assert.False(FeaturePolicy.IsAllowed("record", status, enforce: true));
+    }
+
+    [Fact]
+    public async Task Primeira_ativacao_sem_assinatura_ganha_teste_gratis_pro()
+    {
+        var (site, _) = await RegisterAsync();
+        var (license, deviceId) = await ActivateAsync(site);
+        var status = LicenseVerifier.Evaluate(license, await PublicKeyAsync(), deviceId, DateTimeOffset.UtcNow);
+        Assert.Equal("pro", status.Plan);
+        Assert.Equal("trialing", status.Payload!.Status);
+        Assert.InRange(status.DaysLeft(DateTimeOffset.UtcNow) ?? -1, 6, 7);
     }
 
     [Fact]

@@ -87,3 +87,21 @@ Um programa .NET pode ser aberto e alterado: nenhum bloqueio local é invioláve
 O programa tem a página **Suporte > Suporte remoto**. O cliente clica em *Preparar o AnyDesk* (baixa da fonte oficial, confere a assinatura digital do fabricante e abre), copia o ID e o pedido de suporte (com o relatório do sistema, se quiser) e envia ao suporte. O técnico digita o ID em *Sou o técnico* e o AnyDesk pede ao cliente para aceitar a conexão. O acesso nunca começa sem o aceite do cliente, e o programa não configura acesso sem supervisão.
 
 Observações: o AnyDesk é de terceiros e proprietário; o atendimento comercial por quem presta o suporte exige licença do AnyDesk. Próxima etapa (depende do servidor no ar): enviar o pedido direto ao servidor, listar no painel do técnico os clientes disponíveis e registrar o histórico de atendimentos.
+
+## Teste grátis, planos, Stripe e chaves de ativação
+
+**Teste grátis.** Na primeira vez que uma conta sem assinatura aprova um computador, o servidor concede **7 dias de Pro** (`Billing:TrialDays`, 0 desliga). É um teste por computador (hash do identificador) e por conta; outra conta no mesmo PC não ganha de novo.
+
+**Planos e preços.** Mensal, trimestral (-10%), semestral (-15%) e anual (-25%); cada computador adicional custa 70% do primeiro (desconto de conta compartilhada). Preço base em `Billing:MonthlyCents` (padrão 2990, só vitrine; **os valores e descontos são uma sugestão inicial, a decisão é sua**). `GET /v1/plans` devolve tudo em JSON para o site. O valor cobrado de verdade é o dos preços cadastrados no Stripe.
+
+**Stripe.** Configure no servidor:
+```
+"Stripe": { "SecretKey": "sk_live_...", "WebhookSecret": "whsec_...",
+            "Prices": { "monthly": "price_...", "quarterly": "price_...", "semiannual": "price_...", "annual": "price_..." } }
+```
+- Em *Minha conta*, **Assinar** abre o Checkout hospedado do Stripe (quantidade = número de PCs) e **Gerenciar assinatura** abre o Portal do cliente.
+- No painel do Stripe, aponte o webhook para `/v1/webhooks/stripe` com os eventos `checkout.session.completed`, `customer.subscription.created|updated|deleted` e `invoice.payment_failed`. A assinatura (`Stripe-Signature`) é conferida, eventos repetidos são ignorados e a conta é achada pelo `user_id` dos metadados ou pelo cliente do Stripe.
+- Sem a configuração, o botão mostra "em breve" e o checkout responde 503; as chaves de ativação continuam funcionando.
+- **Não testado contra o Stripe real** (sem chaves aqui): testamos a assinatura, a tradução dos eventos e o formato do pedido com um servidor simulado. Teste em modo de teste do Stripe antes de vender.
+
+**Chaves de ativação** (venda fora do Stripe: Pix, revenda, balcão). Um administrador (`Admin:Emails`) chama `POST /v1/admin/keys` com a licença como Bearer e `{ "count": 10, "days": 365, "maxDevices": 2, "note": "revenda" }`; recebe chaves `MBX-XXXX-XXXX-XXXX-XXXX` (guardadas só como hash). O cliente resgata em *Minha conta*; cada chave vale uma vez e soma dias ao período atual.

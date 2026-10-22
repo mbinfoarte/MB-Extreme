@@ -32,11 +32,12 @@ public static class Pages
             """;
     }
 
-    public static string Home(bool devMode) => Page("Planos", $$"""
+    public static string Home(bool devMode, string pricing = "") => Page("Planos", $$"""
         <h1>MB Extreme</h1><p class="muted">Otimização e diagnóstico para Windows, feito por MB InfoArt.</p>
         <div class="card"><h2>Gratuito</h2><p>Painel, limpeza, inicialização, segurança, reparo do Windows e mais. Para sempre.</p></div>
         <div class="card"><h2>Pro</h2><p>Gravação e transmissão, benchmark 3D, teste de estresse, diagnóstico de latência, hardware e BIOS, ajustes avançados e ferramentas de arquivos.</p>
-        <p class="muted">Assinatura mensal, cancele quando quiser. Até 2 computadores.</p>
+        <p class="muted">Assinatura recorrente, cancele quando quiser. Teste grátis ao ativar o primeiro computador.</p>
+        {{pricing}}
         <a class="go" href="/account">Assinar</a></div>
         {{(devMode ? "<p class=\"warn\">Modo de teste ligado: não há cobrança real.</p>" : "")}}
         """);

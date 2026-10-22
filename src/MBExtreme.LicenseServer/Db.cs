@@ -26,6 +26,8 @@ public sealed class Db
             CREATE TABLE IF NOT EXISTS device_codes (code TEXT PRIMARY KEY, user_code TEXT NOT NULL UNIQUE, device_id TEXT NOT NULL, device_name TEXT NOT NULL, user_id INTEGER, state TEXT NOT NULL, expires_at TEXT NOT NULL, last_poll TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS webhook_events (id TEXT PRIMARY KEY, received_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS trials (device_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, started_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS activation_keys (key_hash TEXT PRIMARY KEY, plan TEXT NOT NULL, days INTEGER NOT NULL, max_devices INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, redeemed_by INTEGER, redeemed_at TEXT);
             CREATE TABLE IF NOT EXISTS remote_devices (id TEXT PRIMARY KEY, secret_hash TEXT NOT NULL, device_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, last_seen TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS remote_audit (id INTEGER PRIMARY KEY, client_id TEXT NOT NULL, technician TEXT NOT NULL, requested_at TEXT NOT NULL, accepted INTEGER NOT NULL DEFAULT 0, ended_at TEXT, bytes INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL DEFAULT '');
             """);
@@ -247,4 +249,46 @@ public sealed class Db
     public List<RemoteAuditRow> RemoteAudit(int count) =>
         QueryAll("SELECT id, client_id, technician, requested_at, accepted, ended_at, bytes, result FROM remote_audit ORDER BY id DESC LIMIT $n",
             r => new RemoteAuditRow(r.GetInt64(0), r.GetString(1), r.GetString(2), D(r.GetString(3)), r.GetInt32(4) == 1, r.IsDBNull(5) ? null : D(r.GetString(5)), r.GetInt64(6), r.GetString(7)), ("$n", count));
+
+    // ---- teste grátis e chaves de ativação
+
+    /// <summary>Marca o computador como já tendo usado o teste. Falso se ele já tinha usado (um teste por computador).</summary>
+    public bool TryMarkTrial(string deviceHash, long userId)
+    {
+        try
+        {
+            Run("INSERT INTO trials(device_hash, user_id, started_at) VALUES($d, $u, $t)", ("$d", deviceHash), ("$u", userId), ("$t", T(DateTimeOffset.UtcNow)));
+            return true;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return false;
+        }
+    }
+
+    public void AddActivationKey(string keyHash, string plan, int days, int maxDevices, string note) =>
+        Run("INSERT INTO activation_keys(key_hash, plan, days, max_devices, note, created_at) VALUES($h, $p, $d, $m, $n, $t)",
+            ("$h", keyHash), ("$p", plan), ("$d", days), ("$m", maxDevices), ("$n", note), ("$t", T(DateTimeOffset.UtcNow)));
+
+    public sealed record ActivationKey(string Plan, int Days, int MaxDevices, bool Redeemed);
+
+    public ActivationKey? ActivationKeyBy(string keyHash) =>
+        Query("SELECT plan, days, max_devices, redeemed_by FROM activation_keys WHERE key_hash = $h",
+            r => new ActivationKey(r.GetString(0), r.GetInt32(1), r.GetInt32(2), !r.IsDBNull(3)), ("$h", keyHash));
+
+    /// <summary>Resgata a chave de uma vez só (duas pessoas não resgatam a mesma).</summary>
+    public bool RedeemActivationKey(string keyHash, long userId)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "UPDATE activation_keys SET redeemed_by = $u, redeemed_at = $t WHERE key_hash = $h AND redeemed_by IS NULL";
+        cmd.Parameters.AddWithValue("$u", userId);
+        cmd.Parameters.AddWithValue("$t", T(DateTimeOffset.UtcNow));
+        cmd.Parameters.AddWithValue("$h", keyHash);
+        return cmd.ExecuteNonQuery() > 0;
+    }
+
+    public User? UserByProviderRef(string fragment) =>
+        Query("SELECT u.id, u.email, u.password_hash, u.name FROM users u JOIN subscriptions s ON s.user_id = u.id WHERE s.provider_ref LIKE $f LIMIT 1",
+            r => new User(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3)), ("$f", "%" + fragment + "%"));
 }

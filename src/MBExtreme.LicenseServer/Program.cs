@@ -2,6 +2,7 @@ using System.Text.Json;
 using MBExtreme.Core.Licensing;
 using MBExtreme.Core.Remote;
 using System.Net.WebSockets;
+using Microsoft.Extensions.DependencyInjection;
 using MBExtreme.LicenseServer;
 using static MBExtreme.LicenseServer.Pages;
 
@@ -23,6 +24,15 @@ var limiter = new RateLimiter();
 builder.Services.AddSingleton(db);
 builder.Services.AddSingleton(signing);
 builder.Services.AddSingleton(issuer);
+
+long monthlyCents = config.GetValue("Billing:MonthlyCents", 2990L);
+int trialDays = Math.Clamp(config.GetValue("Billing:TrialDays", 7), 0, 60);
+var adminEmails = new HashSet<string>((config["Admin:Emails"] ?? "").Split(new[] { ',', ';' }).Select(e => e.Trim().ToLowerInvariant()).Where(e => e.Length > 0));
+string stripeWebhookSecret = config["Stripe:WebhookSecret"] ?? "";
+var stripePrices = new Dictionary<string, string>();
+foreach (var option in PlanCatalog.Options)
+    if (config[$"Stripe:Prices:{option.Key}"] is { Length: > 0 } priceId) stripePrices[option.Key] = priceId;
+builder.Services.AddSingleton(sp => new StripeGateway(new HttpClient { Timeout = TimeSpan.FromSeconds(20) }, config["Stripe:SecretKey"] ?? "", stripePrices));
 
 var relay = new RemoteRelay(db, signing.PublicKey, (config["Remote:Technicians"] ?? "").Split(new[] { ',', ';' }),
     TimeSpan.FromMinutes(config.GetValue("Remote:MaxSessionMinutes", 240)));
@@ -65,9 +75,21 @@ string Csrf(string session) => $"<input type=\"hidden\" name=\"csrf\" value=\"{S
 
 string BaseUrl(HttpContext c) => (string.IsNullOrWhiteSpace(config["Site:BaseUrl"]) ? $"{c.Request.Scheme}://{c.Request.Host}" : config["Site:BaseUrl"]!).TrimEnd('/');
 
+string PricingTable()
+{
+    var rows = new System.Text.StringBuilder("<table>");
+    foreach (var option in PlanCatalog.Options)
+    {
+        var one = PlanCatalog.Offer(monthlyCents, option, 1);
+        string discount = option.DiscountPercent > 0 ? $" <span class=\"ok\">-{option.DiscountPercent}%</span>" : "";
+        rows.Append($"<tr><td>{E(option.Title)}{discount}</td><td>{PlanCatalog.Money(one.PerMonthCents)}/mês</td></tr>");
+    }
+    return rows.Append("</table>").ToString();
+}
+
 // ======================================================= site
 
-app.MapGet("/", (HttpContext c) => Html(Page("Planos", Home(devMode), CurrentUser(c)?.Email)));
+app.MapGet("/", (HttpContext c) => Html(Page("Planos", Home(devMode, PricingTable()), CurrentUser(c)?.Email)));
 app.MapGet("/health", () => Results.Text("ok"));
 
 app.MapGet("/register", (HttpContext c) => Html(Form("Criar conta", "/register", "Criar conta", true, null)));
@@ -114,6 +136,7 @@ app.MapGet("/account", (HttpContext c) =>
     var (resolvedPlan, status, maxDevices, _) = issuer.Resolve(db.SubscriptionOf(me.Value.UserId));
     var sub = db.SubscriptionOf(me.Value.UserId);
     var devices = db.DevicesOf(me.Value.UserId);
+    var stripe = app.Services.GetRequiredService<StripeGateway>();
 
     string planText = resolvedPlan == "pro"
         ? $"<span class=\"ok\">Pro</span> · renova em {sub!.PeriodEnd.LocalDateTime:dd/MM/yyyy}" + (status == "past_due" ? " · <span class=\"warn\">pagamento pendente</span>" : "")
@@ -122,13 +145,27 @@ app.MapGet("/account", (HttpContext c) =>
         <tr><td>{E(d.Name)}</td><td class="muted">{d.LastSeen.LocalDateTime:dd/MM/yyyy HH:mm}</td>
         <td><form method="post" action="/account/device/remove">{Csrf(me.Value.Session)}<input type="hidden" name="device" value="{E(d.DeviceId)}"><button class="link bad">Remover</button></form></td></tr>
         """));
+    string trialInfo = sub is { Provider: "teste-gratis" } ? $"<p class=\"warn\">Teste grátis até {sub.PeriodEnd.LocalDateTime:dd/MM/yyyy}.</p>" : "";
+    string offers = string.Concat(PlanCatalog.Options.Select(o =>
+    {
+        var one = PlanCatalog.Offer(monthlyCents, o, 1);
+        var two = PlanCatalog.Offer(monthlyCents, o, 2);
+        string buy = stripe.Configured && stripe.HasPrice(o.Key)
+            ? $"<form method=\"post\" action=\"/account/checkout\">{Csrf(me.Value.Session)}<input type=\"hidden\" name=\"period\" value=\"{o.Key}\"><select name=\"devices\"><option value=\"1\">1 PC</option><option value=\"2\">2 PCs</option><option value=\"3\">3 PCs</option></select> <button class=\"go\">Assinar</button></form>"
+            : "<span class=\"muted\">em breve</span>";
+        return $"<tr><td>{E(o.Title)}{(o.DiscountPercent > 0 ? $" <span class=\"ok\">-{o.DiscountPercent}%</span>" : "")}</td><td>{PlanCatalog.Money(one.PerMonthCents)}/mês</td><td class=\"muted\">2 PCs: {PlanCatalog.Money(two.PerMonthCents)}/mês</td><td>{buy}</td></tr>";
+    }));
+    string portal = sub is { Provider: "stripe" } ? $"<form method=\"post\" action=\"/account/billing\">{Csrf(me.Value.Session)}<button class=\"go\">Gerenciar assinatura e faturas</button></form>" : "";
+    string redeem = $"<form method=\"post\" action=\"/account/redeem\" class=\"card\">{Csrf(me.Value.Session)}<h2>Tenho uma chave de ativação</h2><input name=\"key\" placeholder=\"MBX-XXXX-XXXX-XXXX-XXXX\" maxlength=\"40\" required><button class=\"go\">Resgatar</button></form>";
     string devTool = devMode
         ? $"<form method=\"post\" action=\"/account/dev-subscribe\">{Csrf(me.Value.Session)}<button class=\"go\">Simular assinatura Pro (modo de teste)</button></form>"
         : "<a class=\"go\" href=\"/\">Assinar o plano Pro</a>";
 
     return Html(Page("Minha conta", $"""
         <h1>Minha conta</h1><p class="muted">{E(me.Value.Email)}</p>
-        <div class="card"><h2>Plano</h2><p>{planText}</p>{(resolvedPlan == "pro" ? "" : devTool)}</div>
+        <div class="card"><h2>Plano</h2><p>{planText}</p>{trialInfo}{portal}{(resolvedPlan == "pro" ? "" : devTool)}</div>
+        <div class="card"><h2>Planos</h2><table>{offers}</table></div>
+        {redeem}
         <div class="card"><h2>Computadores ({devices.Count} de {maxDevices})</h2>
         {(devices.Count == 0 ? "<p class=\"muted\">Nenhum computador ativado. No MB Extreme, abra Licença e clique em Entrar.</p>" : $"<table><tr><th>Nome</th><th>Último uso</th><th></th></tr>{rows}</table>")}</div>
         """, me.Value.Email));
@@ -194,8 +231,15 @@ app.MapPost("/activate", async (HttpContext c) =>
     if (devices.All(d => d.DeviceId != request.DeviceId) && devices.Count >= maxDevices)
         return Html(Message("Limite de computadores", $"Sua conta já usa {devices.Count} de {maxDevices} computadores. Remova um em Minha conta e tente de novo.", "bad"), 409);
 
+    string trialNote = "";
+    if (trialDays > 0 && db.SubscriptionOf(me.Value.UserId) is null && db.TryMarkTrial(RemoteRelay.Hash(request.DeviceId), me.Value.UserId))
+    {
+        db.SetSubscription(new Subscription(me.Value.UserId, "pro", "trialing", DateTimeOffset.UtcNow.AddDays(trialDays), 1, "teste-gratis", null));
+        trialNote = $" Você ganhou {trialDays} dias grátis do plano Pro neste computador.";
+    }
+
     db.SetDeviceCodeState(request.Code, "approved", me.Value.UserId);
-    return Html(Message("Computador ativado", "Pode voltar ao MB Extreme: a licença chega em alguns segundos.", "ok"));
+    return Html(Message("Computador ativado", "Pode voltar ao MB Extreme: a licença chega em alguns segundos." + trialNote, "ok"));
 });
 
 // ======================================================= API do aplicativo
@@ -280,6 +324,135 @@ app.MapPost("/v1/license/deactivate", async (HttpContext c) =>
     var auth = Authenticate(body, out var error);
     if (auth is null) return error!;
     db.RemoveDevice(auth.Value.User.Id, auth.Value.Device.DeviceId);
+    return Results.Json(new { ok = true });
+});
+
+// ======================================================= cobrança (Stripe), chaves de ativação e planos
+
+app.MapGet("/v1/plans", () => Results.Json(new
+{
+    currency = "BRL",
+    trialDays,
+    plans = PlanCatalog.Options.Select(o => new
+    {
+        o.Key, o.Title, o.Months, o.DiscountPercent,
+        offers = Enumerable.Range(1, 3).Select(d => PlanCatalog.Offer(monthlyCents, o, d)),
+    }),
+}));
+
+app.MapPost("/account/checkout", async (HttpContext c) =>
+{
+    var me = CurrentUser(c);
+    if (me is null) return Results.Redirect("/login?next=/account");
+    var form = await c.Request.ReadFormAsync();
+    if (!await CsrfOk(c, form, me.Value.Session)) return Html(Message("Pedido inválido", "Recarregue a página e tente de novo.", "bad"), 400);
+    var stripe = app.Services.GetRequiredService<StripeGateway>();
+    string period = form["period"].ToString();
+    if (!stripe.Configured || !stripe.HasPrice(period)) return Html(Message("Pagamento indisponível", "A cobrança ainda não está ligada. Use uma chave de ativação.", "warn"), 503);
+    int devices = int.TryParse(form["devices"], out int n) ? Math.Clamp(n, 1, 10) : 1;
+    try
+    {
+        string url = await stripe.CheckoutUrlAsync(me.Value.UserId, me.Value.Email, period, devices, BaseUrl(c) + "/account?paid=1", BaseUrl(c) + "/account", c.RequestAborted);
+        return Results.Redirect(url);
+    }
+    catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+    {
+        return Html(Message("Pagamento indisponível", "Não foi possível abrir a página de pagamento agora. Tente de novo em instantes.", "bad"), 502);
+    }
+});
+
+app.MapPost("/account/billing", async (HttpContext c) =>
+{
+    var me = CurrentUser(c);
+    if (me is null) return Results.Redirect("/login");
+    var form = await c.Request.ReadFormAsync();
+    if (!await CsrfOk(c, form, me.Value.Session)) return Html(Message("Pedido inválido", "Recarregue a página e tente de novo.", "bad"), 400);
+    var stripe = app.Services.GetRequiredService<StripeGateway>();
+    var parts = (db.SubscriptionOf(me.Value.UserId)?.ProviderRef ?? "").Split(':');
+    if (!stripe.Configured || parts.Length < 2 || parts[0] != "stripe" || parts[1].Length == 0) return Html(Message("Sem assinatura no cartão", "Sua assinatura não foi feita pelo site.", "warn"), 404);
+    try { return Results.Redirect(await stripe.PortalUrlAsync(parts[1], BaseUrl(c) + "/account", c.RequestAborted)); }
+    catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+    {
+        return Html(Message("Portal indisponível", "Tente de novo em instantes.", "bad"), 502);
+    }
+});
+
+app.MapPost("/account/redeem", async (HttpContext c) =>
+{
+    var me = CurrentUser(c);
+    if (me is null) return Results.Redirect("/login");
+    var form = await c.Request.ReadFormAsync();
+    if (!await CsrfOk(c, form, me.Value.Session)) return Html(Message("Pedido inválido", "Recarregue a página e tente de novo.", "bad"), 400);
+    if (!limiter.Allow("redeem|" + me.Value.UserId, 10 * limitScale, TimeSpan.FromMinutes(10))) return Html(Message("Muitas tentativas", "Aguarde alguns minutos.", "bad"), 429);
+    string raw = form["key"].ToString();
+    var key = ActivationKeys.LooksValid(raw) ? db.ActivationKeyBy(ActivationKeys.Hash(raw)) : null;
+    if (key is null || key.Redeemed) return Html(Message("Chave inválida", "Esta chave não existe ou já foi usada.", "bad"), 404);
+    if (!db.RedeemActivationKey(ActivationKeys.Hash(raw), me.Value.UserId)) return Html(Message("Chave inválida", "Esta chave não existe ou já foi usada.", "bad"), 409);
+
+    var current = db.SubscriptionOf(me.Value.UserId);
+    var start = current is not null && current.PeriodEnd > DateTimeOffset.UtcNow && current.Status is "active" or "trialing" ? current.PeriodEnd : DateTimeOffset.UtcNow;
+    db.SetSubscription(new Subscription(me.Value.UserId, key.Plan, "active", start.AddDays(key.Days), Math.Max(key.MaxDevices, current?.MaxDevices ?? 1), "chave", null));
+    return Html(Message("Chave resgatada", $"Plano {key.Plan.ToUpperInvariant()} ativo por mais {key.Days} dias.", "ok"));
+});
+
+string? AdminEmail(HttpContext c)
+{
+    string header = c.Request.Headers.Authorization.ToString();
+    string token = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header[7..].Trim() : "";
+    var payload = LicenseToken.Verify(token, signing.PublicKey);
+    return payload is not null && payload.ExpiresAt > DateTimeOffset.UtcNow && adminEmails.Contains(payload.Email.ToLowerInvariant()) ? payload.Email : null;
+}
+
+/// <summary>Gera chaves de ativação (quem as emite é um administrador listado em Admin:Emails). As chaves só aparecem nesta resposta.</summary>
+app.MapPost("/v1/admin/keys", async (HttpContext c) =>
+{
+    if (adminEmails.Count == 0) return Results.NotFound();
+    if (AdminEmail(c) is null) return Results.Json(new { message = "Não autorizado." }, statusCode: 403);
+    var body = await JsonSerializer.DeserializeAsync<JsonElement>(c.Request.Body, jsonOptions);
+    int count = body.TryGetProperty("count", out var cn) && cn.TryGetInt32(out int a) ? Math.Clamp(a, 1, 100) : 1;
+    int days = body.TryGetProperty("days", out var dn) && dn.TryGetInt32(out int b) ? Math.Clamp(b, 1, 3650) : 30;
+    int devices = body.TryGetProperty("maxDevices", out var mn) && mn.TryGetInt32(out int m) ? Math.Clamp(m, 1, 10) : 1;
+    string note = body.TryGetProperty("note", out var nn) ? (nn.GetString() ?? "") : "";
+    note = note.Length > 80 ? note[..80] : note;
+    var keys = new List<string>();
+    for (int i = 0; i < count; i++)
+    {
+        string key = ActivationKeys.Generate();
+        db.AddActivationKey(ActivationKeys.Hash(key), "pro", days, devices, note);
+        keys.Add(key);
+    }
+    return Results.Json(new { keys, days, maxDevices = devices });
+});
+
+app.MapPost("/v1/webhooks/stripe", async (HttpContext c) =>
+{
+    if (stripeWebhookSecret.Length < 8) return Results.NotFound();
+    using var reader = new StreamReader(c.Request.Body);
+    string raw = await reader.ReadToEndAsync();
+    if (!StripeGateway.VerifySignature(raw, c.Request.Headers["Stripe-Signature"].ToString(), stripeWebhookSecret, DateTimeOffset.UtcNow))
+        return Results.Json(new { message = "Assinatura inválida." }, statusCode: 400);
+
+    JsonElement ev;
+    try { ev = JsonSerializer.Deserialize<JsonElement>(raw); }
+    catch (JsonException) { return Results.BadRequest(); }
+    string eventId = ev.TryGetProperty("id", out var idp) ? idp.GetString() ?? "" : "";
+    if (eventId.Length == 0) return Results.BadRequest();
+    if (!db.RememberWebhook("stripe|" + eventId)) return Results.Json(new { ok = true, duplicate = true });
+
+    var update = StripeGateway.Translate(ev);
+    if (update is null) return Results.Json(new { ok = true, ignored = true });
+
+    User? user = update.UserId is { } uid && long.TryParse(uid, out long uidn) ? db.UserById(uidn)
+        : update.CustomerId is { Length: > 0 } cus ? db.UserByProviderRef(cus) : null;
+    if (user is null) return Results.Json(new { ok = false, message = "Conta não encontrada." }, statusCode: 202);
+
+    var current = db.SubscriptionOf(user.Id);
+    var oldRef = (current?.ProviderRef ?? "").Split(':');
+    string customer = update.CustomerId ?? (oldRef.Length > 1 ? oldRef[1] : "");
+    string subscription = update.SubscriptionId ?? (oldRef.Length > 2 ? oldRef[2] : "");
+    var periodEnd = update.PeriodEnd ?? (current is not null && current.PeriodEnd > DateTimeOffset.UtcNow ? current.PeriodEnd : DateTimeOffset.UtcNow.AddDays(31));
+    int maxDevices = update.Devices > 0 ? Math.Clamp(update.Devices, 1, 10) : current?.MaxDevices ?? 1;
+    db.SetSubscription(new Subscription(user.Id, "pro", update.Status, periodEnd, maxDevices, "stripe", $"stripe:{customer}:{subscription}"));
     return Results.Json(new { ok = true });
 });
 

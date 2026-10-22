@@ -48,5 +48,5 @@ Origem: pasta do Google Drive do dono do projeto (scripts `.bat` e `.reg` de oti
 
 ## Próximos passos
 
-- Ler o restante dos scripts (pastas 1, 6, 7, 10, 12 a 16, e o `Debloater.bat` de 18 KB) e completar a tabela.
+- ~~Ler o restante dos scripts~~ Feito. A análise completa, com decisão por item, está em `ANALISE-LOBO-ALPHA.md`.
 - Transformar a tabela em itens da `ESPECIFICACAO-FUNCIONAL.md` (ajustes de sistema) e no roadmap.

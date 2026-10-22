@@ -132,4 +132,6 @@ Planejado: agendar `chkdsk`, `DISM /RestoreHealth`, `sfc /scannow`, atualizar dr
 - Remover a Loja ou o Xbox sem confirmação reforçada.
 
 ## O que ainda não foi lido do pacote
+> Atualização: o pacote foi lido por inteiro. Veja `ANALISE-LOBO-ALPHA.md` (decisão por item) e a Etapa 8 do `PLANO-ETAPAS.md`. O texto abaixo é histórico.
+
 Os nomes e tamanhos de todas as pastas foram mapeados, mas o conteúdo de vários arquivos ainda não foi lido: scripts por jogo, navegadores, periféricos (`.reg`), RAM por quantidade, `Aumentar Prioridade de jogos` (51 KB), drivers de vídeo e as páginas seguintes de algumas pastas. A tabela acima será completada à medida que forem lidos.

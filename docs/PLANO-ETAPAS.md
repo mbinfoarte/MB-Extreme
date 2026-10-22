@@ -85,6 +85,18 @@ Sub-etapas:
 ## Etapa 7 · Qualidade e lançamento (M)
 Assinatura de código do instalador e do executável, ofuscação, testes de desempenho (o estúdio e o monitor de gargalos não podem pesar), revisão independente, política de privacidade e termos de uso.
 
+## Etapa 8 · Catálogo expandido a partir do estudo do Lobo Alpha (M)
+Base: `ANALISE-LOBO-ALPHA.md` (pacote lido por inteiro, nada executado). Entram só os itens marcados ADICIONAR e OPCIONAL, todos com backup do valor original, desfazer e aviso.
+1. **Armazenamento**: hibernação, TRIM, último acesso do NTFS, defrag só em HD, nomes 8.3 (opcional), limpar logs (opcional).
+2. **Jogos e GPU**: limpar cache de shaders (todas as marcas), MPO, ULPS/telemetria AMD, telemetria/ShadowPlay NVIDIA, Game DVR em tela cheia, `SystemResponsiveness`. Itens específicos de marca só aparecem se a GPU for daquela marca.
+3. **Rede**: RSS/RSC, TCP Nodelay/AckFrequency, energia do adaptador, limpar DNS/renovar IP. MTU e auto-tuning só por teste.
+4. **Periféricos**: resposta do teclado (com valores corretos). Fila de dados de mouse/teclado só depois de medir latência de entrada.
+5. **Navegadores** (página nova): políticas do Chrome, Brave, Opera e Edge, limpar cache, com reverter.
+6. **Reparo do Windows**: novas tarefas (antitrapaça, Bluetooth, áudio, Wi-Fi/modo avião, tela preta, desligamento, Xbox/Game Pass).
+7. **Rotina semanal** opcional (limpeza + SFC/DISM) por tarefa agendada.
+8. **Por jogo** (junto da Etapa 3): prioridade de CPU por executável (IFEO `PerfOptions`), criada e removida pelo app.
+9. **Fora do produto** (registrado): ativação de Windows/Office, desligar UAC, desligar Windows Update, MTU fixo, executáveis de terceiros.
+
 ## Decisões tomadas (22/10)
 - **AnyDesk**: sai da tela principal e fica como opção secundária.
 - **Discord**: item futuro, voltado à comunidade (câmera virtual).
@@ -102,7 +114,8 @@ Assinatura de código do instalador e do executável, ofuscação, testes de des
 2. Etapa 2 (estúdio) começando pela estrutura nova e pela pré-visualização.
 3. Etapas 3 e 4 juntas (biblioteca de jogos e monitor de gargalos compartilham a medição de FPS e o hardware).
 4. Etapa 5 em paralelo com a 6, porque as duas dependem do servidor no ar.
-5. Etapa 7 antes de abrir para clientes.
+5. Etapa 8 pode andar em paralelo com 2 a 4 (é trabalho de catálogo, independente da interface nova); o item 8 dela anda junto com a Etapa 3.
+6. Etapa 7 antes de abrir para clientes.
 
 ## Decisões que preciso de você
 1. **Acesso remoto**: começar com conexão pelo servidor (mais simples, gasta banda) e deixar a direta para depois? E onde o servidor vai ficar hospedado?

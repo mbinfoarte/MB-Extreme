@@ -269,7 +269,7 @@ public sealed class GameLibraryPage : ToolPageBase
         play.Margin = new Thickness(0, 0, 8, 6);
         buttons.Children.Add(play);
         bool optimized = settings.OptimizedAt is not null;
-        buttons.Children.Add(Tight(SmallButton(optimized ? "Reaplicar otimização" : "Otimizar para este jogo", async (_, _) => await OptimizeAsync(game, plan), !optimized)));
+        buttons.Children.Add(Tight(SmallButton(optimized ? "Reaplicar otimização" : "Otimizar para este jogo", async (_, _) => await OptimizeAsync(game, plan, profile), !optimized)));
         if (optimized) buttons.Children.Add(Tight(SmallButton("Desfazer otimização", async (_, _) => await UndoAsync(game))));
         if (game.ExeName is not null)
         {
@@ -290,6 +290,10 @@ public sealed class GameLibraryPage : ToolPageBase
         }));
         panel.Children.Add(Muted(profile.Description, 11));
 
+        var rows = await Task.Run(() => ReadRows(game, profile));
+        if (_selected?.Id != game.Id) return;
+        panel.Children.Add(BuildTable(rows));
+
         var tweakNames = plan.TweakIds.Select(id => AppServices.Tweaks.FirstOrDefault(t => t.Id == id)).Where(t => t is { Risk: MBExtreme.Core.Tweaks.TweakRisk.Low } t2 && t2.IsAvailable).Select(t => "• " + t!.Title).ToList();
         if (tweakNames.Count > 0) panel.Children.Add(new Expander { Header = $"O que será ajustado no Windows ({tweakNames.Count})", Content = Muted(string.Join("\n", tweakNames), 11), Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 0) });
         panel.Children.Add(new Expander { Header = "Dicas de configuração do jogo para o seu hardware", Content = Muted(string.Join("\n\n", plan.Advice), 11), Foreground = Brush("TextBrush"), IsExpanded = true });
@@ -302,6 +306,75 @@ public sealed class GameLibraryPage : ToolPageBase
         }
 
         _detail.Children.Add(CardOf(panel));
+    }
+
+    private IReadOnlyList<SettingRow> ReadRows(InstalledGame game, GameProfile profile)
+    {
+        var states = new Dictionary<string, bool?>();
+        var titles = new Dictionary<string, string>();
+        foreach (string id in profile.TweakIds)
+        {
+            var tweak = AppServices.Tweaks.FirstOrDefault(t => t.Id == id);
+            if (tweak is null || !tweak.IsAvailable) continue;
+            titles[id] = tweak.Title;
+            try { states[id] = tweak.IsApplied(); } catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException or InvalidOperationException) { states[id] = null; }
+        }
+
+        bool? high = null;
+        if (game.ExeName is not null)
+            try { high = AppServices.GamePriority.IsApplied(game.ExeName); } catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException) { }
+
+        string? exePath = GameFiles.FindExePath(game);
+        GpuPreferenceMode? gpu = exePath is null ? null : new RegistryGpuPreferenceStore().Get(exePath);
+        bool driver = _maker == GpuMaker.Nvidia && AppServices.NvidiaDriver.Available;
+        DriverValue? power = null, pre = null;
+        if (driver && game.ExeName is { } exe)
+        {
+            power = AppServices.NvidiaDriver.Read(exe, DriverSettingIds.PowerMode);
+            pre = AppServices.NvidiaDriver.Read(exe, DriverSettingIds.PreRenderLimit);
+        }
+        string? dlss = _maker == GpuMaker.Nvidia ? DlssInfo.Find(game.InstallPath) : null;
+        return GameCompare.Build(profile, _maker, new GameSnapshot(states, titles, high, gpu, driver, power, pre, dlss));
+    }
+
+    private UIElement BuildTable(IReadOnlyList<SettingRow> rows)
+    {
+        var box = new StackPanel { Margin = new Thickness(0, 6, 0, 4) };
+        int fix = rows.Count(r => r.CanFix || r.State == RowState.Different);
+        box.Children.Add(new TextBlock
+        {
+            Text = fix == 0 ? "Configuração atual × recomendada: tudo certo" : $"Configuração atual × recomendada: {fix} ponto(s) para ajustar",
+            FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4),
+        });
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.6, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        void Cell(string text, int row, int col, string brush, bool bold = false, string? tip = null)
+        {
+            var t = new TextBlock { Text = text, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 8, 2), Foreground = Brush(brush), FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal };
+            if (!string.IsNullOrEmpty(tip)) t.ToolTip = tip;
+            Grid.SetRow(t, row);
+            Grid.SetColumn(t, col);
+            grid.Children.Add(t);
+        }
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Cell("Configuração", 0, 0, "MutedBrush", true);
+        Cell("Agora", 0, 1, "MutedBrush", true);
+        Cell("Recomendado", 0, 2, "MutedBrush", true);
+        for (int i = 0; i < rows.Count; i++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var r = rows[i];
+            string now = r.State switch { RowState.Ok => "OkBrush", RowState.Different => "WarnBrush", _ => "TextBrush" };
+            Cell(r.Title, i + 1, 0, "TextBrush", false, r.Note);
+            Cell((r.State == RowState.Ok ? "✓ " : r.State == RowState.Different ? "▲ " : "") + r.Current, i + 1, 1, now, false, r.Note);
+            Cell(r.Recommended, i + 1, 2, "TextBrush", false, r.Note);
+        }
+        box.Children.Add(grid);
+        box.Children.Add(Muted("Passe o mouse sobre uma linha para ver a explicação. \"Otimizar\" liga o que está em amarelo; nada é aplicado sem você clicar, e o valor de antes fica guardado para desfazer.", 10.5));
+        return box;
     }
 
     private static Button Tight(Button b)
@@ -333,14 +406,34 @@ public sealed class GameLibraryPage : ToolPageBase
 
     // ------------------------------------------------------------ ações
 
-    private async Task OptimizeAsync(InstalledGame game, OptimizationPlan plan)
+    private async Task OptimizeAsync(InstalledGame game, OptimizationPlan plan, GameProfile profile)
     {
+        var driverPlan = DriverPlan.For(profile, _maker);
+        var pending = (await Task.Run(() => ReadRows(game, profile))).Where(r => r.CanFix && r.Group is "Driver NVIDIA" or "Placa de vídeo").ToList();
+        bool withDriver = false;
+        if (pending.Count > 0 && !driverPlan.IsEmpty)
+        {
+            var ask = MessageBox.Show(
+                "Além dos ajustes do Windows, posso mudar estas configurações só para " + game.Name + ":\n\n" +
+                string.Join("\n", pending.Select(r => $"• {r.Title}: {r.Current} → {r.Recommended}")) +
+                "\n\nO valor de antes fica guardado e \"Desfazer otimização\" devolve. Mudar agora?",
+                "Configurações do driver e da placa de vídeo", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            withDriver = ask == MessageBoxResult.Yes;
+        }
+
         SetStatus("Aplicando a otimização...");
         var result = await Task.Run(() => AppServices.GameOptimization.Apply(game.Id, game.ExeName, plan));
         var parts = new List<string>();
         if (result.Applied.Count > 0) parts.Add($"{result.Applied.Count} ajuste(s) ligado(s)");
         if (result.AlreadyOn.Count > 0) parts.Add($"{result.AlreadyOn.Count} já estava(m) ligado(s)");
         if (result.Failed.Count > 0) parts.Add($"{result.Failed.Count} falhou (execute como administrador)");
+        if (withDriver && game.ExeName is { } exeName)
+        {
+            string? exePath = await Task.Run(() => GameFiles.FindExePath(game));
+            var drv = await Task.Run(() => AppServices.GameDriver.Apply(game.Id, exeName, exePath, driverPlan));
+            if (drv.Applied.Count > 0) parts.Add($"{drv.Applied.Count} configuração(ões) de driver/placa");
+            if (drv.Failed.Count > 0) parts.Add("driver: " + string.Join("; ", drv.Failed));
+        }
         SetStatus((parts.Count == 0 ? "Nada a ajustar." : string.Join(" · ", parts) + ".") + " Alguns ajustes valem para o PC todo; \"Desfazer otimização\" volta ao que era.", result.Failed.Count > 0 ? "WarnBrush" : "OkBrush");
         RefreshCard(game);
         await RenderDetailAsync(game);
@@ -349,7 +442,8 @@ public sealed class GameLibraryPage : ToolPageBase
     private async Task UndoAsync(InstalledGame game)
     {
         var result = await Task.Run(() => AppServices.GameOptimization.Undo(game.Id));
-        SetStatus($"{result.Applied.Count} ajuste(s) desfeito(s)" + (result.AlreadyOn.Count > 0 ? $"; {result.AlreadyOn.Count} mantido(s) porque outro jogo ainda usa" : "") + ".", "OkBrush");
+        var drvUndo = await Task.Run(() => AppServices.GameDriver.Undo(game.Id));
+        SetStatus($"{result.Applied.Count + drvUndo.Applied.Count} ajuste(s) desfeito(s)" + (drvUndo.Failed.Count > 0 ? " (driver: " + string.Join("; ", drvUndo.Failed) + ")" : "") + (result.AlreadyOn.Count > 0 ? $"; {result.AlreadyOn.Count} mantido(s) porque outro jogo ainda usa" : "") + ".", "OkBrush");
         RefreshCard(game);
         await RenderDetailAsync(game);
     }

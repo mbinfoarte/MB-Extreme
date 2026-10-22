@@ -31,6 +31,9 @@ internal static class AppServices
     internal static MBExtreme.UI.Remote.RemoteSupportController RemoteSupport { get; } = new();
     public static GamePriorityService GamePriority { get; } = new(TweakStore);
     public static GameOptimizationService GameOptimization { get; } = new(Tweaks, GameLibrary);
+    public static NvApiDrs NvidiaDriver { get; } = new();
+    public static GameDriverService GameDriver { get; } = new(NvidiaDriver, new RegistryGpuPreferenceStore(),
+        System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "game-driver.json"));
 
     public static HotkeyManager Hotkeys { get; } = new();
 

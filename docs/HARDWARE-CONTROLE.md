@@ -22,3 +22,16 @@ Remove por completo o driver NVIDIA, AMD ou Intel com o `pnputil` do Windows (li
 
 ## Biblioteca de jogos
 Grade de capas (Steam: capas que a própria Steam guarda no PC, com download da loja só se faltar; outros: ícone do programa). Cada jogo tem **tipo** (Competitivo, Mundo aberto/AAA, Corrida e simulação, Leve, Programa), sugerido pelo executável e pelos gêneros/categorias da loja da Steam. A otimização liga só ajustes de **risco baixo** do catálogo e dá dicas de configuração do jogo para a **marca da placa** (NVIDIA: Reflex/DLSS; AMD: Anti-Lag/FSR; Intel: XeSS) e para o nível do hardware. "Desfazer otimização" reverte só o que ela ligou, poupando o que outro jogo ainda usa. Mostra os requisitos informados pela loja.
+
+## Biblioteca de jogos: configuração atual × recomendada (por jogo)
+
+Ao escolher um jogo, a tabela mostra cada ponto com o valor **agora** e o **recomendado** para o tipo de jogo (✓ certo, ▲ diferente):
+
+- **Windows**: os ajustes do pacote do tipo de jogo (gravação em segundo plano, prioridade de multimídia etc.) e a prioridade de CPU do jogo.
+- **Placa de vídeo usada pelo jogo**: a mesma opção de *Configurações do Windows > Tela > Elementos gráficos* (chave `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`).
+- **Driver NVIDIA** (só com placa GeForce): *Modo de gerenciamento de energia* e *Quadros pré-renderizados* (baixa latência), gravados no perfil do próprio jogo pela interface pública NVAPI (grupo DRS), a mesma que o Painel de Controle da NVIDIA usa. Se o jogo não tem perfil, o MB Extreme cria um chamado "MB Extreme - jogo.exe".
+- **DLSS**: lê a versão de `nvngx_dlss.dll` na pasta do jogo e diz se é antiga. **O MB Extreme não troca esse arquivo** (pode acionar antitrapaça); para atualizar use "Substituição do DLSS" da NVIDIA App.
+
+Nada é gravado sem você clicar em **Otimizar**; as mudanças de driver e de placa pedem confirmação listando "antes → depois". O valor de antes fica em `%AppData%\MBExtreme\game-driver.json` e **Desfazer otimização** devolve (ou remove a configuração do perfil, se ela não existia). Reflex/Anti-Lag continuam sendo opções dentro do jogo.
+
+**Validação pendente:** o acesso ao NVAPI foi escrito a partir da interface pública e não pôde ser testado sem uma placa NVIDIA. Em caso de falha o programa mostra o código de erro e não altera nada. Teste primeiro com um jogo sem importância.

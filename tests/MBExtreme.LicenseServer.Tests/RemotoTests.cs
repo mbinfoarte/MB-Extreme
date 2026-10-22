@@ -169,4 +169,83 @@ public class RemotoTests : IClassFixture<ServerFixture>
         _ = _server.Server;
         Assert.Equal(HttpStatusCode.Forbidden, (await _server.CreateClient().GetAsync("/v1/remote/audit")).StatusCode);
     }
+
+    private sealed class FakeScreen : IScreenSource
+    {
+        private int _n;
+        public FrameMessage? Capture() => new(1280, 720, new byte[] { 0xFF, 0xD8, (byte)(++_n % 250) });
+    }
+
+    private sealed class FakeInput : IInputSink
+    {
+        public List<MouseMessage> Mouse { get; } = new();
+        public List<KeyMessage> Keys { get; } = new();
+        void IInputSink.Mouse(MouseMessage message, int w, int h) { lock (Mouse) Mouse.Add(message); }
+        void IInputSink.Key(KeyMessage message) { lock (Keys) Keys.Add(message); }
+    }
+
+    private static async Task WaitFor(Func<bool> condition, int seconds = 10)
+    {
+        var end = DateTime.UtcNow.AddSeconds(seconds);
+        while (!condition() && DateTime.UtcNow < end) await Task.Delay(25);
+        Assert.True(condition(), "tempo esgotado");
+    }
+
+    [Fact]
+    public async Task AgenteETecnicoConversamDeVerdadePeloServidor()
+    {
+        var (id, secret) = await RegisterAsync("pc-agente-6666");
+        var input = new FakeInput();
+        string? asked = null;
+        var agent = new RemoteAgent(new FakeScreen(), input, tech => { asked = tech; return Task.FromResult(true); }, framesPerSecond: 20);
+        using var stopAll = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        using var clientSocket = await ConnectClient(id, secret);
+        var agentTask = agent.RunAsync(clientSocket, stopAll.Token);
+
+        using var techSocket = await ConnectTech(id, Token("tecnico@exemplo.com"));
+        using var technician = new RemoteTechnician();
+        int frames = 0;
+        technician.FrameReceived += f => { if (f.ScreenWidth == 1280) Interlocked.Increment(ref frames); };
+        var techTask = technician.RunAsync(techSocket, RemoteIds.FormatPassword(agent.Password), stopAll.Token);
+
+        await WaitFor(() => technician.Connected && Volatile.Read(ref frames) >= 3);
+        Assert.Equal("tecnico", asked);
+        Assert.True(agent.InSession);
+
+        await technician.SendAsync(new MouseMessage(MouseAction.Down, MouseButton.Left, 1000, 2000, 0));
+        await technician.SendAsync(new KeyMessage(0x41, true, false));
+        await technician.SendAsync(new KeyMessage(0x5B, true, false));   // tecla Windows: o cliente ignora
+        await technician.SendAsync(new ControlMessage(ControlCode.End));
+        await WaitFor(() => !agent.InSession);
+
+        lock (input.Mouse) Assert.Single(input.Mouse);
+        lock (input.Keys) Assert.Equal(new[] { 0x41 }, input.Keys.Select(k => k.VirtualKey).ToArray());
+        stopAll.Cancel();
+    }
+
+    [Fact]
+    public async Task SenhaErradaDoTecnicoEncerraASessaoSemMostrarATela()
+    {
+        var (id, secret) = await RegisterAsync("pc-senha-7777");
+        var input = new FakeInput();
+        var agent = new RemoteAgent(new FakeScreen(), input, _ => Task.FromResult(true), framesPerSecond: 20);
+        using var stopAll = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var clientSocket = await ConnectClient(id, secret);
+        var agentTask = agent.RunAsync(clientSocket, stopAll.Token);
+
+        using var techSocket = await ConnectTech(id, Token("tecnico@exemplo.com"));
+        using var technician = new RemoteTechnician();
+        int frames = 0;
+        technician.FrameReceived += _ => Interlocked.Increment(ref frames);
+        string? last = null;
+        technician.StateChanged += s => last = s;
+        await technician.RunAsync(techSocket, "SENHAERRADA", stopAll.Token);
+
+        Assert.Equal(0, frames);
+        Assert.False(technician.Connected);
+        Assert.Contains("senha", last, StringComparison.OrdinalIgnoreCase);
+        await WaitFor(() => !agent.InSession);
+        stopAll.Cancel();
+    }
 }

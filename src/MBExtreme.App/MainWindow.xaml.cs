@@ -207,6 +207,7 @@ public partial class MainWindow : Window
         "repair" => new RepairPage(),
         "license" => new LicensePage(),
         "support" => new SupportPage(),
+        "remote-console" => new RemoteConsolePage(),
         "processes" => new ProcessesPage(),
         "largefiles" => new LargeFilesPage(),
         "duplicates" => new DuplicatesPage(),

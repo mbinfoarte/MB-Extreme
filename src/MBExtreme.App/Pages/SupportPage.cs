@@ -21,6 +21,10 @@ public sealed class SupportPage : ToolPageBase
     private readonly CheckBox _withReport;
     private readonly Button _prepare;
     private readonly Button _close;
+    private readonly TextBlock _mbId = new() { FontFamily = new System.Windows.Media.FontFamily("Consolas"), FontSize = 28, FontWeight = FontWeights.Bold, Text = "— — —" };
+    private readonly TextBlock _mbPassword = new() { FontFamily = new System.Windows.Media.FontFamily("Consolas"), FontSize = 22, FontWeight = FontWeights.SemiBold };
+    private readonly TextBlock _mbState = new() { TextWrapping = TextWrapping.Wrap };
+    private Button? _mbToggle;
     private string? _currentId;
     private bool _busy;
 
@@ -30,6 +34,24 @@ public sealed class SupportPage : ToolPageBase
         _prepare = AddButton("Preparar o AnyDesk", async (_, _) => await PrepareAsync(), false);
         _close = AddButton("Fechar o AnyDesk", (_, _) => CloseAnyDesk(), false);
         _close.IsEnabled = false;
+
+        Body.Children.Add(Heading("Acesso remoto do MB Extreme"));
+        Body.Children.Add(Muted("Ligue, passe o ID e a senha ao técnico (por WhatsApp ou telefone) e aceite o pedido que aparece na tela. A conexão é cifrada de ponta a ponta com a senha, que só você e o técnico conhecem; a senha muda a cada sessão."));
+        var mb = new StackPanel();
+        mb.Children.Add(Muted("ID"));
+        mb.Children.Add(_mbId);
+        mb.Children.Add(Muted("Senha desta sessão"));
+        mb.Children.Add(_mbPassword);
+        _mbState.Margin = new Thickness(0, 8, 0, 0);
+        mb.Children.Add(_mbState);
+        Body.Children.Add(CardOf(mb));
+        var mbButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+        _mbToggle = SmallButton("Ligar o acesso remoto", async (_, _) => await ToggleRemoteAsync(), true);
+        _mbToggle.Margin = new Thickness(0);
+        mbButtons.Children.Add(_mbToggle);
+        mbButtons.Children.Add(SmallButton("Copiar ID e senha", (_, _) => CopyRemote()));
+        mbButtons.Children.Add(SmallButton("Gerar novo ID", (_, _) => { AppServices.RemoteSupport.ResetId(); RefreshRemote(); }));
+        Body.Children.Add(mbButtons);
 
         Body.Children.Add(Heading("O que você precisa?"));
         Body.Children.Add(Muted("Descreva o problema ou a manutenção que quer. O pedido já leva o seu ID."));
@@ -76,7 +98,48 @@ public sealed class SupportPage : ToolPageBase
         Body.Children.Add(connect);
 
         Body.Children.Add(Muted("O AnyDesk é um programa de terceiros (não vem com o MB Extreme). O uso pessoal é gratuito; o atendimento comercial por quem presta o suporte exige uma licença do AnyDesk, conforme os termos do fabricante."));
-        Loaded += (_, _) => Refresh();
+        Loaded += (_, _) =>
+        {
+            AppServices.RemoteSupport.Changed += OnRemoteChanged;
+            Refresh();
+            RefreshRemote();
+        };
+        Unloaded += (_, _) => AppServices.RemoteSupport.Changed -= OnRemoteChanged;
+    }
+
+    private void OnRemoteChanged(object? sender, EventArgs e) => RefreshRemote();
+
+    private void RefreshRemote()
+    {
+        var r = AppServices.RemoteSupport;
+        _mbId.Text = r.Id is { Length: 9 } id ? MBExtreme.Core.Remote.RemoteIds.FormatId(id) : "— — —";
+        _mbPassword.Text = r.Running && r.Password is { } p ? MBExtreme.Core.Remote.RemoteIds.FormatPassword(p) : "(ligue para gerar)";
+        _mbState.Text = r.State;
+        if (_mbToggle is not null) _mbToggle.Content = r.Running ? "Desligar o acesso remoto" : "Ligar o acesso remoto";
+    }
+
+    private async Task ToggleRemoteAsync()
+    {
+        var r = AppServices.RemoteSupport;
+        if (r.Running)
+        {
+            r.Stop();
+            SetStatus("Acesso remoto desligado.", "OkBrush");
+        }
+        else
+        {
+            var (ok, message) = await r.StartAsync();
+            SetStatus(message, ok ? "OkBrush" : "BadBrush");
+        }
+        RefreshRemote();
+    }
+
+    private void CopyRemote()
+    {
+        var r = AppServices.RemoteSupport;
+        if (!r.Running || r.Id is null || r.Password is null) { SetStatus("Ligue o acesso remoto primeiro.", "WarnBrush"); return; }
+        string text = $"Suporte MB Extreme\nID: {MBExtreme.Core.Remote.RemoteIds.FormatId(r.Id)}\nSenha: {MBExtreme.Core.Remote.RemoteIds.FormatPassword(r.Password)}";
+        if (TryCopy(text)) SetStatus("ID e senha copiados. Envie ao técnico.", "OkBrush");
     }
 
     private void Refresh()

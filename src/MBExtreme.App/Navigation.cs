@@ -76,6 +76,7 @@ internal static class NavigationMap
         new("sup", "Suporte", "Ajuda do suporte da MB InfoArt por acesso remoto.", "\uE8F2", new Tile[]
         {
             new("support", "Suporte remoto", "Peça ajuda: o técnico entra só depois que você aceitar.", "\uE8F2"),
+            new("remote-console", "Console do técnico", "Atenda clientes pelo ID (só contas de técnico).", "\uE8AF"),
         }),
         new("tools", "Ferramentas", "Processos, arquivos grandes e duplicados, e mais.", "\uE90F", new Tile[]
         {

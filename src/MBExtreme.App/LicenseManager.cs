@@ -27,6 +27,9 @@ internal sealed class LicenseManager
 
     public string DeviceId => _deviceId;
 
+    /// <summary>Licença assinada mais recente (usada pelo técnico para provar a conta no acesso remoto).</summary>
+    public string? CurrentToken => _tokens.FirstOrDefault();
+
     /// <summary>Mensagem do último contato com o servidor (renovação, erro de rede...).</summary>
     public string? LastNotice { get; private set; }
 

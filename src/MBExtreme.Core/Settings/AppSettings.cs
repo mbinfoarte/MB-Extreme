@@ -81,6 +81,11 @@ public sealed class AppSettings
     /// <summary>Chave de transmissão protegida pelo Windows (DPAPI, só este usuário neste PC). Nunca em texto puro.</summary>
     public string? StudioProtectedKey { get; set; }
 
+    /// <summary>ID de suporte remoto deste PC (9 dígitos) e o segredo que autentica a conexão, protegido pelo Windows.</summary>
+    public string? RemoteId { get; set; }
+
+    public string? RemoteProtectedSecret { get; set; }
+
     /// <summary>Enviar resumos anônimos das sessões de jogo (jogo, faixa de hardware e resultado). Desligado por padrão.</summary>
     public bool ShareAnonymousStats { get; set; }
 

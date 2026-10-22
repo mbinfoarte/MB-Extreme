@@ -27,6 +27,7 @@ internal static class AppServices
     public static BoostController Boost { get; } = new();
     public static GameLibraryStore GameLibrary { get; } = new();
     public static BottleneckController Bottleneck { get; } = new();
+    internal static MBExtreme.UI.Remote.RemoteSupportController RemoteSupport { get; } = new();
     public static GamePriorityService GamePriority { get; } = new(TweakStore);
 
     public static HotkeyManager Hotkeys { get; } = new();
@@ -73,6 +74,7 @@ internal static class AppServices
         AutoMemory.Shutdown();
         Studio.Shutdown();
         Hotkeys.Shutdown();
+        RemoteSupport.Stop();
         Bottleneck.Shutdown();
         Overlay.Shutdown();
         Boost.Shutdown();

@@ -107,13 +107,15 @@ public class FerramentasTests : IDisposable
     [Fact]
     public void Pastas_protegidas_e_raizes_nao_podem_ser_mexidas()
     {
-        var roots = new[] { "/windows", "/program files" };
-        Assert.True(PathGuard.IsProtected("/windows/system32/x.dll", roots));
-        Assert.True(PathGuard.IsProtected("/windows", roots));
-        Assert.True(PathGuard.IsProtected("/", roots));
+        // caminhos montados a partir de uma pasta temporária, para valer igual no Windows e no Linux
+        string windows = Path.Combine(_root, "windows");
+        var roots = new[] { windows, Path.Combine(_root, "program files") };
+        Assert.True(PathGuard.IsProtected(Path.Combine(windows, "system32", "x.dll"), roots));
+        Assert.True(PathGuard.IsProtected(windows, roots));
+        Assert.True(PathGuard.IsProtected(Path.GetPathRoot(_root)!, roots));
         Assert.True(PathGuard.IsProtected("", roots));
-        Assert.False(PathGuard.IsProtected("/home/user/arquivo.txt", roots));
-        Assert.False(PathGuard.IsProtected("/windowsapps/x", roots));
+        Assert.False(PathGuard.IsProtected(Path.Combine(_root, "usuario", "arquivo.txt"), roots));
+        Assert.False(PathGuard.IsProtected(Path.Combine(_root, "windowsapps", "x"), roots));
     }
 
     [Fact]

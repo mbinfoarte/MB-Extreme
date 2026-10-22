@@ -63,6 +63,7 @@ internal static class NavigationMap
             new("debloat", "Aplicativos", "Remova apps do Windows que você não usa.", "\uE74D"),
             new("boot", "Inicialização e boot", "Como o Windows liga e desliga.", "\uE7E8"),
             new("periph", "Periféricos", "Mouse e teclado.", "\uE765"),
+            new("repair", "Reparo do Windows", "SFC, DISM, CHKDSK e correções de Windows Update, loja e rede.", "\uE90F"),
         }),
         new("drv", "Drivers e programas", "Atualizações por fontes oficiais.", "\uE896", new Tile[]
         {

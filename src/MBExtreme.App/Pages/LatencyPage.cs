@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using MBExtreme.Core.Latency;
+using MBExtreme.Core.Tweaks;
+using MBExtreme.Core.Windows;
 
 namespace MBExtreme.UI.Pages;
 
@@ -12,11 +14,27 @@ public sealed class LatencyPage : ToolPageBase
     private readonly Button _start;
     private readonly TextBlock _live = new() { Margin = new Thickness(0, 10, 0, 0) };
     private readonly StackPanel _results = new();
+    private readonly StackPanel _settings = new();
+    private readonly GameSettingsService _gameSettings = new(AppServices.TweakStore);
+
+    private static readonly string[] LatencyTweaks =
+    {
+        "power-min-cpu", "power-core-parking", "power-pcie-aspm", "power-usb-suspend",
+        "game-dvr", "game-mmcss", "perf-priority-separation", "net-throttling", "periph-mouse-accel",
+    };
+
+    private sealed record TweakState(Tweak Tweak, bool? Applied);
+    private sealed record SettingsSnapshot(string? PlanName, bool GameMode, bool? Hags, IReadOnlyList<TweakState> Tweaks, bool? VbsOff);
 
     public LatencyPage() : base("Diagnóstico de latência",
         "Micro-travadas, áudio estourando e quedas de quadro quase sempre vêm de um driver que ocupa a CPU por tempo demais (rotinas DPC/ISR). Esta página mede o sistema por alguns minutos e mostra qual driver é o pior. Só leitura: nada é alterado. Enquanto mede, use o PC normalmente ou jogue.")
     {
         _start = AddButton("Iniciar medição", async (_, _) => await RunAsync());
+        AddButton("Atualizar configurações", (_, _) => _ = LoadSettingsAsync(), false);
+        Body.Children.Add(Heading("Configurações que afetam a latência"));
+        Body.Children.Add(Muted("Estado atual de cada ajuste do Windows que influencia a latência. Os que o MB Extreme altera guardam o valor original e podem ser desfeitos aqui mesmo."));
+        Body.Children.Add(_settings);
+        Body.Children.Add(Heading("Medição"));
         Body.Children.Add(Heading("Duração"));
         Body.Children.Add(Choice(Seconds.Select(s => s < 60 ? s + " s" : s / 60 + " min").ToList(), _secondsIndex, i => _secondsIndex = i));
         Body.Children.Add(_live);
@@ -26,6 +44,95 @@ public sealed class LatencyPage : ToolPageBase
         if (timer is { } t)
             Body.Children.Add(Row("Resolução do temporizador do Windows",
                 $"{t:0.0##} ms agora. Programas e jogos podem pedir uma resolução mais fina (até 0,5 ms) e isso aumenta o consumo de energia. O MB Extreme não altera este valor: testes e a documentação da Microsoft não mostram ganho comprovado em mexer nisso."));
+
+        Loaded += (_, _) => _ = LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        _settings.Children.Clear();
+        _settings.Children.Add(Muted("Lendo as configurações..."));
+        try
+        {
+            var snapshot = await Task.Run(ReadSettings);
+            ShowSettings(snapshot);
+        }
+        catch (Exception ex)
+        {
+            _settings.Children.Clear();
+            _settings.Children.Add(Row("Não foi possível ler as configurações", ex.Message, null, "BadBrush"));
+        }
+    }
+
+    private SettingsSnapshot ReadSettings()
+    {
+        string? plan = null;
+        try { plan = _gameSettings.PowerPlans().FirstOrDefault(p => p.Active)?.Name; } catch { }
+
+        var states = new List<TweakState>();
+        foreach (string id in LatencyTweaks)
+        {
+            var tweak = AppServices.Tweaks.FirstOrDefault(t => t.Id == id);
+            if (tweak is null) continue;
+            bool? applied = null;
+            try { applied = tweak.IsApplied(); } catch { }
+            states.Add(new TweakState(tweak, applied));
+        }
+
+        bool? vbsOff = null;
+        var vbs = AppServices.Tweaks.FirstOrDefault(t => t.Id == "perf-vbs-off");
+        if (vbs is not null) { try { vbsOff = vbs.IsApplied(); } catch { } }
+
+        return new SettingsSnapshot(plan, _gameSettings.GameModeEnabled(), _gameSettings.HagsEnabled(), states, vbsOff);
+    }
+
+    private void ShowSettings(SettingsSnapshot s)
+    {
+        _settings.Children.Clear();
+
+        _settings.Children.Add(Row($"Plano de energia: {s.PlanName ?? "não identificado"}",
+            "Planos econômicos reduzem o clock da CPU e adiam a resposta a cada ação. Para jogar, use Alto desempenho ou Desempenho máximo.",
+            SmallButton("Abrir Jogos e energia", (_, _) => MainWindow.Current?.Go("gamesettings"))));
+
+        _settings.Children.Add(Row($"Modo de Jogo: {(s.GameMode ? "ligado" : "desligado")}",
+            "Faz o Windows priorizar o jogo e adiar tarefas em segundo plano. Recomendado: ligado.",
+            SmallButton(s.GameMode ? "Desligar" : "Ligar", (_, _) => ApplySetting(() => _gameSettings.SetGameMode(!s.GameMode))),
+            s.GameMode ? "OkBrush" : "WarnBrush"));
+
+        string hags = s.Hags switch { true => "ligado", false => "desligado", null => "padrão do Windows" };
+        _settings.Children.Add(Row($"Agendamento de GPU acelerado (HAGS): {hags}",
+            "Pode reduzir a latência de quadro em GPUs recentes (com Frame Generation exige ligado) e piorar em outras. Exige reiniciar o PC. Teste e compare com o Antes e depois.",
+            SmallButton(s.Hags == true ? "Desligar" : "Ligar", (_, _) => ApplySetting(() => _gameSettings.SetHags(s.Hags != true)))));
+
+        foreach (var state in s.Tweaks)
+        {
+            var tweak = state.Tweak;
+            bool on = state.Applied == true;
+            string label = state.Applied switch { true => "aplicado", false => "não aplicado", null => "indisponível" };
+            string detail = tweak.Description + (string.IsNullOrWhiteSpace(tweak.Effect) ? "" : "\n" + tweak.Effect);
+            UIElement? button = state.Applied is null ? null
+                : SmallButton(on ? "Desfazer" : "Aplicar", (_, _) => ApplySetting(() => { if (on) tweak.Revert(); else tweak.Apply(); }));
+            _settings.Children.Add(Row($"{tweak.Title}: {label}", detail, button, on ? "OkBrush" : "MutedBrush"));
+        }
+
+        if (s.VbsOff is not null)
+            _settings.Children.Add(Row($"Integridade de memória (VBS): {(s.VbsOff == true ? "desligada" : "ligada")}",
+                "Pode custar de 5% a 10% de desempenho em jogos, mas protege contra malware em nível de kernel. Por ser risco alto, a alteração fica em Ajustes de desempenho.",
+                SmallButton("Ver ajuste", (_, _) => MainWindow.Current?.Go("tweaks-perf")), "WarnBrush"));
+    }
+
+    private void ApplySetting(Action change)
+    {
+        try
+        {
+            change();
+            SetStatus("Configuração alterada. Alguns ajustes só valem depois de reiniciar.", "OkBrush");
+        }
+        catch (Exception ex)
+        {
+            SetStatus("Não foi possível alterar: " + ex.Message, "BadBrush");
+        }
+        _ = LoadSettingsAsync();
     }
 
     private async Task RunAsync()

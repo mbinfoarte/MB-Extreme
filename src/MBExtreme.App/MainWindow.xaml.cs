@@ -136,6 +136,7 @@ public partial class MainWindow : Window
         "compare" => new ComparePage(),
         "profiles" => new ProfilesPage(),
         "startup" => new StartupPage(),
+        "repair" => new RepairPage(),
         "latency" => new LatencyPage(),
         "gameboost" => new GameBoostPage(),
         "gameadvisor" => new GameAdvisorPage(),

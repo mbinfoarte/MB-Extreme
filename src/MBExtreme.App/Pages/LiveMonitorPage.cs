@@ -13,6 +13,14 @@ public sealed class LiveMonitorPage : ToolPageBase
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Dictionary<string, TextBlock> _cells = new();
     private readonly StackPanel _summary = new();
+    private readonly TextBox _filter = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 6) };
+    private readonly Dictionary<string, UIElement> _rowsById = new();
+    private readonly Dictionary<UIElement, (string Name, string Group)> _rowNames = new();
+    private SensorTools.CsvLog? _log;
+    private string? _logFile;
+    private Button? _logButton;
+    private StackPanel? _tools;
+    private DateTime _lastAlert = DateTime.MinValue;
     private IReadOnlyList<SensorGroup> _last = Array.Empty<SensorGroup>();
     private bool _busy;
     private bool _built;
@@ -26,7 +34,39 @@ public sealed class LiveMonitorPage : ToolPageBase
             else _timer.Start();
         }, false);
         AddButton("Exportar CSV", (_, _) => Export(), false);
+        _logButton = AddButton("Gravar em arquivo (CSV)", (_, _) => ToggleLog(), false);
         Body.Children.Add(_summary);
+
+        // alerta de temperatura e busca de sensores (como nos monitores de hardware completos)
+        var tools = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+        tools.Children.Add(Muted("Alerta de temperatura (aviso na tela e um som quando algum sensor passar do limite):", 11));
+        int[] limits = { 0, 80, 85, 90, 95 };
+        var chips = new WrapPanel();
+        var buttons = new List<Button>();
+        void Paint()
+        {
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                buttons[i].Style = (Style)FindResource(limits[i] == AppServices.Settings.TemperatureAlertC ? "PrimaryButton" : "GhostButton");
+                buttons[i].Padding = new Thickness(11, 4, 11, 4);
+                buttons[i].FontSize = 12;
+            }
+        }
+        foreach (int limit in limits)
+        {
+            int l = limit;
+            var b = new Button { Content = l == 0 ? "Desligado" : $"{l} °C", Margin = new Thickness(0, 0, 6, 6) };
+            b.Click += (_, _) => { AppServices.Settings.TemperatureAlertC = l; AppServices.Settings.Save(); Paint(); };
+            buttons.Add(b);
+            chips.Children.Add(b);
+        }
+        Paint();
+        tools.Children.Add(chips);
+        tools.Children.Add(Muted("Buscar sensor:", 11));
+        _filter.TextChanged += (_, _) => ApplyFilter();
+        tools.Children.Add(_filter);
+        _tools = tools;
+        Body.Children.Add(tools);
 
         _timer.Tick += async (_, _) => await TickAsync();
         Loaded += async (_, _) =>
@@ -35,7 +75,11 @@ public sealed class LiveMonitorPage : ToolPageBase
             _timer.Start();
             await TickAsync();
         };
-        Unloaded += (_, _) => _timer.Stop();
+        Unloaded += (_, _) =>
+        {
+            _timer.Stop();
+            StopLog();
+        };
     }
 
     private async Task FillSummaryAsync()
@@ -89,11 +133,13 @@ public sealed class LiveMonitorPage : ToolPageBase
     {
         _built = true;
         for (int i = Body.Children.Count - 1; i >= 0; i--)
-            if (!ReferenceEquals(Body.Children[i], _summary)) Body.Children.RemoveAt(i);
+            if (!ReferenceEquals(Body.Children[i], _summary) && !ReferenceEquals(Body.Children[i], _tools)) Body.Children.RemoveAt(i);
 
         foreach (var group in groups)
         {
-            Body.Children.Add(Heading(group.Name));
+            var groupTitle = Heading(group.Name);
+            Body.Children.Add(groupTitle);
+            _rowNames[groupTitle] = (group.Name, group.Name);
             var panel = new StackPanel();
             foreach (var kind in group.Sensors.GroupBy(s => s.Kind).OrderBy(k => HardwareMonitorService.KindOrder(k.Key)))
             {
@@ -118,6 +164,8 @@ public sealed class LiveMonitorPage : ToolPageBase
                     grid.Children.Add(value);
                     grid.Children.Add(range);
                     panel.Children.Add(grid);
+                    _rowsById[sensor.Id] = grid;
+                    _rowNames[grid] = (sensor.Name, group.Name);
                     _cells[sensor.Id + "#v"] = value;
                     _cells[sensor.Id + "#r"] = range;
                 }
@@ -139,7 +187,58 @@ public sealed class LiveMonitorPage : ToolPageBase
             }
         }
 
-        SetStatus($"{groups.Sum(g => g.Sensors.Count)} sensores · atualizado às {DateTime.Now:HH:mm:ss}");
+        SetStatus($"{groups.Sum(g => g.Sensors.Count)} sensores · atualizado às {DateTime.Now:HH:mm:ss}" + (_logFile is null ? "" : " · gravando"));
+
+        if (_log is not null && _logFile is not null)
+        {
+            try { File.AppendAllText(_logFile, _log.Row(DateTime.Now, groups) + Environment.NewLine, System.Text.Encoding.UTF8); }
+            catch (IOException) { StopLog(); SetStatus("A gravação parou: não foi possível escrever no arquivo.", "WarnBrush"); }
+        }
+
+        int limit = AppServices.Settings.TemperatureAlertC;
+        if (limit > 0 && DateTime.Now - _lastAlert > TimeSpan.FromSeconds(30) && SensorTools.HotSensors(groups, limit) is { Count: > 0 } hot)
+        {
+            _lastAlert = DateTime.Now;
+            System.Media.SystemSounds.Exclamation.Play();
+            SetStatus($"⚠ {hot[0].Sensor} ({hot[0].Component}) está em {hot[0].Value:0} °C, acima do limite de {limit} °C.", "BadBrush");
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        string text = _filter.Text.Trim();
+        foreach (var (element, info) in _rowNames)
+            element.Visibility = text.Length == 0 || info.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || info.Group.Contains(text, StringComparison.OrdinalIgnoreCase)
+                ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ToggleLog()
+    {
+        if (_log is not null) { StopLog(); SetStatus("Gravação encerrada. O arquivo está em Documentos\\MB Extreme.", "OkBrush"); return; }
+        if (_last.Count == 0) { SetStatus("Aguarde a primeira leitura dos sensores.", "WarnBrush"); return; }
+        try
+        {
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MB Extreme");
+            Directory.CreateDirectory(dir);
+            _logFile = Path.Combine(dir, $"registro-sensores-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+            _log = new SensorTools.CsvLog(_last);
+            File.WriteAllText(_logFile, _log.Header, System.Text.Encoding.UTF8);
+            if (_logButton is not null) _logButton.Content = "Parar a gravação";
+            SetStatus("Gravando um registro por segundo em " + _logFile, "OkBrush");
+        }
+        catch (IOException ex)
+        {
+            _log = null;
+            _logFile = null;
+            SetStatus("Não foi possível criar o arquivo: " + ex.Message, "BadBrush");
+        }
+    }
+
+    private void StopLog()
+    {
+        _log = null;
+        _logFile = null;
+        if (_logButton is not null) _logButton.Content = "Gravar em arquivo (CSV)";
     }
 
     private void Export()

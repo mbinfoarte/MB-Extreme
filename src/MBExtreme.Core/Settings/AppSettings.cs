@@ -96,6 +96,12 @@ public sealed class AppSettings
 
     public List<RemoteRecentEntry> RemoteRecent { get; set; } = new();
 
+    /// <summary>Caminho do OpenRGB.exe (iluminação RGB). Vazio: procura nos lugares comuns.</summary>
+    public string OpenRgbPath { get; set; } = "";
+
+    /// <summary>Alerta de temperatura no Monitor em tempo real (°C). 0 = desligado.</summary>
+    public int TemperatureAlertC { get; set; }
+
     /// <summary>Enviar resumos anônimos das sessões de jogo (jogo, faixa de hardware e resultado). Desligado por padrão.</summary>
     public bool ShareAnonymousStats { get; set; }
 

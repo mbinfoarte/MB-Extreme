@@ -47,6 +47,8 @@ internal static class NavigationMap
             new("bench", "Benchmark", "CPU, memória, disco e GPU em 3D.", "\uE9D9"),
             new("compare", "Antes e depois", "Mede o efeito real de cada mudança.", "\uE9D9"),
             new("stress", "Teste de estresse", "Carga no hardware, por núcleo ou geral.", "\uE7BA"),
+            new("fans", "Ventoinhas e refrigeração", "Velocidade das ventoinhas, bomba e cooler, com curva por temperatura.", "\uE9CA"),
+            new("rgb", "Iluminação RGB", "Cores dos LEDs RGB e ARGB do PC (via OpenRGB).", "\uE790"),
         }),
         new("hw", "Hardware e BIOS", "Leitura das peças, BIOS e PBO.", "\uE950", new Tile[]
         {

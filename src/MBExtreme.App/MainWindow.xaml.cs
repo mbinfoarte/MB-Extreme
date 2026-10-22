@@ -31,6 +31,7 @@ public partial class MainWindow : Window
         AppServices.License.Start();
         // disponível para suporte enquanto o programa estiver aberto (cada acesso exige o aceite do usuário)
         if (AppServices.Settings.RemoteAutoListen && AppServices.License.Config.ServerUrl.Length > 0) _ = AppServices.RemoteSupport.StartAsync();
+        _ = AppServices.Fans.StartIfConfiguredAsync();
         UpdateFooter();
     }
 
@@ -239,6 +240,8 @@ public partial class MainWindow : Window
             "Ajustes para jogar melhor: prioridade, gravação em segundo plano, energia na tomada e agendamento de GPU. Cada ajuste mostra o risco e pode ser desfeito.",
             TweakCategory.Gaming),
         "weekly" => new WeeklyPage(),
+        "fans" => new FansPage(),
+        "rgb" => new RgbPage(),
         "driver-removal" => new DriverRemovalPage(),
         "tweaks-storage" => new TweaksPage("Ajustes de armazenamento",
             "TRIM do SSD, hibernação, último acesso e nomes curtos do NTFS. Cada ajuste mostra o risco e pode ser desfeito.",

@@ -70,7 +70,7 @@
                     <TextBlock Text="Beta · by MB InfoArt" FontSize="11" Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
 
-                <TextBlock DockPanel.Dock="Bottom" Text="Beta 01" FontSize="11" Margin="24,14"
+                <TextBlock x:Name="FooterText" DockPanel.Dock="Bottom" Text="Beta 01" FontSize="11" Margin="24,14"
                            Foreground="{StaticResource MutedBrush}" />
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

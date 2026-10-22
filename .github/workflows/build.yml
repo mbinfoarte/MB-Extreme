@@ -20,6 +20,9 @@ jobs:
       - name: Testes
         run: dotnet test tests/MBExtreme.Core.Tests/MBExtreme.Core.Tests.csproj -c Release
 
+      - name: Testes do servidor de licenças
+        run: dotnet test tests/MBExtreme.LicenseServer.Tests/MBExtreme.LicenseServer.Tests.csproj -c Release
+
       - name: Publicar app (Windows x64)
         run: dotnet publish src/MBExtreme.App/MBExtreme.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
 

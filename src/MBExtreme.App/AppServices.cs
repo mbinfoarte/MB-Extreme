@@ -29,6 +29,8 @@ internal static class AppServices
 
     public static MemoryAutoCleaner AutoMemory { get; } = new();
 
+    public static LicenseManager License { get; } = new();
+
     public static StudioController Studio { get; } = new();
 
     public static ScreenRecorder Recorder { get; } = new();
@@ -63,6 +65,7 @@ internal static class AppServices
 
     public static void Shutdown()
     {
+        License.Shutdown();
         AutoMemory.Shutdown();
         Studio.Shutdown();
         Hotkeys.Shutdown();

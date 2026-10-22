@@ -22,3 +22,10 @@ obj/
 *.user
 .vs/
 out/
+
+# Servidor de licenças: banco de dados e chave de assinatura (nunca vão para o repositório)
+src/MBExtreme.LicenseServer/data/
+src/MBExtreme.LicenseServer/bin/
+src/MBExtreme.LicenseServer/obj/
+**/signing-key.pem
+**/licenses.db*

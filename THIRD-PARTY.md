@@ -22,6 +22,10 @@ Ideias e técnicas de outros projetos usados apenas como referência de estudo e
 - Uso: benchmark 3D da GPU em Direct3D 11.
 - Licença: MIT. https://github.com/amerkoleci/Vortice.Windows
 
+## Microsoft.Data.Sqlite (servidor de licenças)
+- Uso: banco de dados do servidor de licenças de modelo (`src/MBExtreme.LicenseServer`). Não faz parte do aplicativo instalado.
+- Licença: MIT.
+
 ## NAudio (NAudio.Core, NAudio.Wasapi)
 - Uso: captura do som do PC e do microfone (WASAPI) e mixagem para a gravação e a transmissão.
 - Licença: MIT. https://github.com/naudio/NAudio

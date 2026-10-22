@@ -80,6 +80,10 @@ internal static class NavigationMap
             new("shredder", "Destruir arquivos", "Apaga de forma definitiva, sem recuperação.", "\uE74D"),
             new("autoshutdown", "Desligamento automático", "Desliga ou reinicia o PC no horário.", "\uE7E8"),
         }),
+        new("lic", "Licença", "Plano, ativação e conta.", "\uE8D7", new Tile[]
+        {
+            new("license", "Licença e conta", "Entre com a conta do site para ativar o plano Pro.", "\uE8D7"),
+        }),
         new("drv", "Drivers e programas", "Atualizações por fontes oficiais.", "\uE896", new Tile[]
         {
             new("drivers", "Drivers", "Placa de vídeo (NVIDIA, AMD, Intel) e Windows Update.", "\uE950"),

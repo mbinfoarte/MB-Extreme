@@ -207,3 +207,70 @@ public class LicencaTests
         Assert.False(LicenseConfig.From(new MBExtreme.Core.Settings.AppSettings()).Configured);
     }
 }
+
+public class FluxoDeLoginTests
+{
+    private sealed class Script(params Func<HttpRequestMessage, HttpResponseMessage>[] steps) : HttpMessageHandler
+    {
+        private int _i;
+        public int Calls => _i;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var step = steps[Math.Min(_i++, steps.Length - 1)];
+            return Task.FromResult(step(request));
+        }
+    }
+
+    private static HttpResponseMessage J(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+    private const string Code = "{\"deviceCode\":\"dc\",\"userCode\":\"ABCD-1234\",\"verificationUri\":\"http://x\",\"intervalSeconds\":2,\"expiresInSeconds\":600}";
+
+    private static Task NoWait(TimeSpan span, CancellationToken token) => Task.CompletedTask;
+
+    [Fact]
+    public async Task Espera_a_aprovacao_e_devolve_a_licenca()
+    {
+        var handler = new Script(_ => J(Code), _ => J("{\"status\":\"pending\"}"), _ => J("{\"status\":\"slow_down\"}"), _ => J("{\"status\":\"approved\",\"license\":\"mbx1.a.b\"}"));
+        string? shown = null;
+        var result = await LicenseFlow.LoginAsync(new LicenseClient(new HttpClient(handler), "http://s"), "dev", "PC", c => shown = c.UserCode, CancellationToken.None, NoWait);
+        Assert.Equal(PollState.Approved, result.State);
+        Assert.Equal("mbx1.a.b", result.License);
+        Assert.Equal("ABCD-1234", shown);
+        Assert.Equal(4, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Acesso_negado_encerra_o_fluxo()
+    {
+        var handler = new Script(_ => J(Code), _ => J("{\"status\":\"denied\"}"));
+        var result = await LicenseFlow.LoginAsync(new LicenseClient(new HttpClient(handler), "http://s"), "dev", "PC", _ => { }, CancellationToken.None, NoWait);
+        Assert.Equal(PollState.Denied, result.State);
+    }
+
+    [Fact]
+    public async Task Quedas_curtas_de_internet_nao_derrubam_o_login()
+    {
+        var handler = new Script(_ => J(Code), _ => throw new HttpRequestException("rede"), _ => throw new HttpRequestException("rede"), _ => J("{\"status\":\"approved\",\"license\":\"mbx1.x.y\"}"));
+        var result = await LicenseFlow.LoginAsync(new LicenseClient(new HttpClient(handler), "http://s"), "dev", "PC", _ => { }, CancellationToken.None, NoWait);
+        Assert.Equal(PollState.Approved, result.State);
+    }
+
+    [Fact]
+    public async Task Rede_fora_por_muito_tempo_vira_erro()
+    {
+        var handler = new Script(_ => J(Code), _ => throw new HttpRequestException("rede"));
+        await Assert.ThrowsAsync<LicenseNetworkException>(() =>
+            LicenseFlow.LoginAsync(new LicenseClient(new HttpClient(handler), "http://s"), "dev", "PC", _ => { }, CancellationToken.None, NoWait));
+    }
+
+    [Fact]
+    public async Task Codigo_vencido_pelo_relogio_devolve_expirado()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var handler = new Script(_ => J(Code), _ => J("{\"status\":\"pending\"}"));
+        var result = await LicenseFlow.LoginAsync(new LicenseClient(new HttpClient(handler), "http://s"), "dev", "PC", _ => { }, CancellationToken.None,
+            (span, _) => { now += TimeSpan.FromMinutes(5); return Task.CompletedTask; }, () => now);
+        Assert.Equal(PollState.Expired, result.State);
+    }
+}

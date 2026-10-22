@@ -56,7 +56,7 @@ Task<bool> CsrfOk(HttpContext c, IFormCollection form, string session) => Task.F
 
 string Csrf(string session) => $"<input type=\"hidden\" name=\"csrf\" value=\"{Security.CsrfToken(session, csrfSecret)}\">";
 
-string BaseUrl(HttpContext c) => (config["Site:BaseUrl"] ?? $"{c.Request.Scheme}://{c.Request.Host}").TrimEnd('/');
+string BaseUrl(HttpContext c) => (string.IsNullOrWhiteSpace(config["Site:BaseUrl"]) ? $"{c.Request.Scheme}://{c.Request.Host}" : config["Site:BaseUrl"]!).TrimEnd('/');
 
 // ======================================================= site
 

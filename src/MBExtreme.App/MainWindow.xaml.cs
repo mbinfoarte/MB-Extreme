@@ -25,6 +25,9 @@ public partial class MainWindow : Window
         Go("home");
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
+        AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateFooter));
+        AppServices.License.Start();
+        UpdateFooter();
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -108,8 +111,17 @@ public partial class MainWindow : Window
         if (sender is RadioButton { Tag: string key }) ShowPage(key);
     }
 
+    private void UpdateFooter() => FooterText.Text = "Beta 01 · " + AppServices.License.Summary;
+
     private void ShowPage(string key)
     {
+        // recurso do plano Pro sem licença válida: mostra o aviso no lugar da página (nunca com a aplicação desligada)
+        if (!AppServices.License.IsAllowed(key))
+        {
+            ContentHost.Content = new UpgradePage(NavigationMap.TileOf(key)?.Title ?? "Plano Pro", key);
+            return;
+        }
+
         if (!_pages.TryGetValue(key, out var page))
         {
             page = Create(key);
@@ -159,6 +171,7 @@ public partial class MainWindow : Window
         "profiles" => new ProfilesPage(),
         "startup" => new StartupPage(),
         "repair" => new RepairPage(),
+        "license" => new LicensePage(),
         "processes" => new ProcessesPage(),
         "largefiles" => new LargeFilesPage(),
         "duplicates" => new DuplicatesPage(),

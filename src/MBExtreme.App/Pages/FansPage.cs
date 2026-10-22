@@ -18,6 +18,7 @@ public sealed class FansPage : ToolPageBase
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly StackPanel _list = new();
     private readonly List<Row> _rows = new();
+    private readonly StackPanel _gpuLimits = new();
     private IReadOnlyList<TemperatureSource> _temps = Array.Empty<TemperatureSource>();
     private bool _busy;
 
@@ -40,12 +41,14 @@ public sealed class FansPage : ToolPageBase
             Text = "Segurança: o controle vale enquanto o MB Extreme estiver aberto; ao fechar, as ventoinhas voltam ao automático. Por proteção, a bomba de líquido nunca fica abaixo de 60%, temperaturas acima de 80 °C forçam 80% e acima de 90 °C forçam 100%, e se a temperatura de referência não puder ser lida a ventoinha vai a 100%. Se o programa for encerrado à força, a velocidade pode ficar fixa até você reiniciar o PC.",
         }));
         Body.Children.Add(_list);
+        Body.Children.Add(_gpuLimits);
         Body.Children.Add(Muted("Dica: para a placa-mãe aceitar o controle, deixe o conector da ventoinha em modo PWM (ou \"Auto\") na BIOS e desligue o modo \"Full Speed\". Alguns chips (principalmente de placas recentes) bloqueiam o controle por programas; nesse caso a ventoinha fica só para leitura. O ajuste da curva de clock da placa de vídeo (overclock/undervolt) não faz parte desta versão.", 11));
 
         _timer.Tick += async (_, _) => await RefreshLiveAsync();
         Loaded += async (_, _) =>
         {
             await LoadAsync();
+            _ = LoadGpuLimitsAsync();
             _timer.Start();
         };
         Unloaded += (_, _) => _timer.Stop();
@@ -75,6 +78,89 @@ public sealed class FansPage : ToolPageBase
         }
 
         foreach (var channel in channels.OrderBy(c => c.HardwareName).ThenBy(c => c.Name)) _list.Children.Add(BuildChannel(channel));
+    }
+
+    // ---- limites da placa NVIDIA (potência e clock máximo)
+
+    private async Task LoadGpuLimitsAsync()
+    {
+        _gpuLimits.Children.Clear();
+        string? exe = await Task.Run(NvidiaSmi.Locate);
+        if (exe is null) return;   // sem placa NVIDIA ou sem o nvidia-smi do driver
+        var gpus = await Task.Run(() => NvidiaSmi.Query(exe));
+        if (gpus.Count == 0) return;
+
+        _gpuLimits.Children.Add(Heading("Placa NVIDIA: limites de potência e clock"));
+        _gpuLimits.Children.Add(Muted("Reduz o calor e o consumo limitando a potência e o clock máximo. Não faz overclock: os limites nunca passam do padrão da placa. Volta ao padrão ao reiniciar o PC ou em \"Restaurar padrão\". Exige administrador.", 11));
+        foreach (var gpu in gpus) _gpuLimits.Children.Add(await BuildGpuLimitAsync(exe, gpu));
+    }
+
+    private async Task<UIElement> BuildGpuLimitAsync(string exe, GpuLimits gpu)
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = gpu.Name, FontSize = 14, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(Muted($"Potência atual {gpu.PowerLimitW?.ToString("0") ?? "—"} W (padrão {gpu.PowerDefaultW?.ToString("0") ?? "—"} W) · clock máximo {gpu.MaxGraphicsClockMhz?.ToString("0") ?? "—"} MHz · {gpu.TemperatureC?.ToString("0") ?? "—"} °C", 11));
+
+        double? chosenPower = null;
+        if (NvidiaSmi.PowerRange(gpu) is { } range)
+        {
+            var label = new TextBlock { Text = $"{gpu.PowerLimitW ?? range.Max:0} W", Width = 60, VerticalAlignment = VerticalAlignment.Center };
+            var slider = new Slider { Minimum = range.Min, Maximum = range.Max, Value = Math.Clamp(gpu.PowerLimitW ?? range.Max, range.Min, range.Max), Width = 240, IsSnapToTickEnabled = true, TickFrequency = 5, VerticalAlignment = VerticalAlignment.Center };
+            slider.ValueChanged += (_, e) => { label.Text = $"{e.NewValue:0} W"; chosenPower = e.NewValue; };
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            line.Children.Add(new TextBlock { Text = "Limite de potência", Width = 130, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
+            line.Children.Add(slider);
+            line.Children.Add(label);
+            panel.Children.Add(line);
+        }
+        else panel.Children.Add(Muted("Esta placa não permite alterar o limite de potência.", 11));
+
+        int? chosenClock = null;
+        var clocks = await Task.Run(() => NvidiaSmi.SupportedClocks(exe, gpu.Index));
+        if (clocks.Count > 1)
+        {
+            int current = clocks.OrderBy(c => Math.Abs(c - (gpu.MaxGraphicsClockMhz ?? clocks[^1]))).First();
+            var label = new TextBlock { Text = $"{current} MHz", Width = 70, VerticalAlignment = VerticalAlignment.Center };
+            var slider = new Slider { Minimum = 0, Maximum = clocks.Count - 1, Value = clocks.ToList().IndexOf(current), Width = 240, IsSnapToTickEnabled = true, TickFrequency = 1, VerticalAlignment = VerticalAlignment.Center };
+            slider.ValueChanged += (_, e) => { chosenClock = clocks[(int)e.NewValue]; label.Text = $"{chosenClock} MHz"; };
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+            line.Children.Add(new TextBlock { Text = "Clock máximo", Width = 130, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
+            line.Children.Add(slider);
+            line.Children.Add(label);
+            panel.Children.Add(line);
+        }
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+        var apply = SmallButton("Aplicar limites", async (_, _) =>
+        {
+            var messages = new List<string>();
+            bool ok = true;
+            if (chosenPower is { } w && NvidiaSmi.PowerRange(gpu) is { } r && w >= r.Min && w <= r.Max)
+            {
+                var (code, output) = await Task.Run(() => NvidiaSmi.Run(exe, NvidiaSmi.PowerArguments(gpu.Index, w)));
+                ok &= code == 0;
+                messages.Add(code == 0 ? $"potência {w:0} W" : "potência: " + output);
+            }
+            if (chosenClock is { } c)
+            {
+                var (code, output) = await Task.Run(() => NvidiaSmi.Run(exe, NvidiaSmi.ClockArguments(gpu.Index, clocks[0], c)));
+                ok &= code == 0;
+                messages.Add(code == 0 ? $"clock máx. {c} MHz" : "clock: " + output);
+            }
+            SetStatus(messages.Count == 0 ? "Nada a alterar." : (ok ? "Aplicado: " : "Falhou (execute como administrador): ") + string.Join(" · ", messages), ok ? "OkBrush" : "BadBrush");
+        }, true);
+        apply.Margin = new Thickness(0, 0, 8, 0);
+        buttons.Children.Add(apply);
+        buttons.Children.Add(SmallButton("Restaurar padrão", async (_, _) =>
+        {
+            var (c1, o1) = await Task.Run(() => NvidiaSmi.Run(exe, NvidiaSmi.ResetClockArguments(gpu.Index)));
+            int ok2 = 0;
+            if (gpu.PowerDefaultW is { } def) { var (c2, _) = await Task.Run(() => NvidiaSmi.Run(exe, NvidiaSmi.PowerArguments(gpu.Index, def))); ok2 = c2; }
+            SetStatus(c1 == 0 && ok2 == 0 ? "Padrão restaurado." : "Não foi possível restaurar tudo (execute como administrador). " + o1, c1 == 0 && ok2 == 0 ? "OkBrush" : "BadBrush");
+            await LoadGpuLimitsAsync();
+        }));
+        panel.Children.Add(buttons);
+        return CardOf(panel);
     }
 
     private UIElement BuildChannel(FanChannel channel)

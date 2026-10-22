@@ -176,3 +176,36 @@ public class VentoinhasTests
     [InlineData("Motherboard", "CPU Fan Control", FanChannelKind.Cpu)]
     public void AdivinhaOTipoDaVentoinha(string hardware, string name, FanChannelKind expected) => Assert.Equal(expected, FanControlService.GuessKind(hardware, name));
 }
+
+public class NvidiaSmiTests
+{
+    [Fact]
+    public void LeLimitesDePotenciaEClock()
+    {
+        string csv = "0, NVIDIA GeForce RTX 3060 Ti, 200.00, 200.00, 100.00, 220.00, 2100, 47\r\n1, NVIDIA GeForce GT 1030, [N/A], [N/A], [N/A], [N/A], 1700, 40";
+        var gpus = NvidiaSmi.ParseLimits(csv);
+        Assert.Equal(2, gpus.Count);
+        Assert.Equal("NVIDIA GeForce RTX 3060 Ti", gpus[0].Name);
+        Assert.Equal((200, 200, 100, 220), (gpus[0].PowerLimitW, gpus[0].PowerDefaultW, gpus[0].PowerMinW, gpus[0].PowerMaxW));
+        Assert.Equal(2100, gpus[0].MaxGraphicsClockMhz);
+        Assert.Null(gpus[1].PowerLimitW);                 // placa que não deixa mexer na potência
+        Assert.Null(NvidiaSmi.PowerRange(gpus[1]));
+        Assert.Equal((100, 200), NvidiaSmi.PowerRange(gpus[0]));   // nunca acima do padrão
+    }
+
+    [Fact]
+    public void LeClocksSemRepetirEIgnoraLixo()
+    {
+        Assert.Equal(new[] { 210, 1500, 2100 }, NvidiaSmi.ParseClocks("2100\n2100\n1500\n210\n[N/A]\n\n99999").ToArray());
+    }
+
+    [Fact]
+    public void ArgumentosSaoValidadosParaNaoVirarComando()
+    {
+        Assert.Equal(new[] { "-i", "0", "-pl", "180" }, NvidiaSmi.PowerArguments(0, 180.4));
+        Assert.Equal(new[] { "-i", "1", "-lgc", "210,1800" }, NvidiaSmi.ClockArguments(1, 210, 1800));
+        Assert.Throws<ArgumentException>(() => NvidiaSmi.ClockArguments(0, 1800, 210));
+        Assert.Throws<ArgumentException>(() => NvidiaSmi.ClockArguments(0, 210, 90000));
+        Assert.Equal(new[] { "-i", "0", "-rgc" }, NvidiaSmi.ResetClockArguments(0));
+    }
+}

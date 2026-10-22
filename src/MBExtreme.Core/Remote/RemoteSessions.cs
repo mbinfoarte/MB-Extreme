@@ -79,15 +79,27 @@ public sealed class RemoteAgent
     private readonly IInputSink _input;
     private readonly Func<string, Task<bool>> _askAccept;
     private readonly int _fps;
+    private readonly Func<IAudioSource?>? _audioFactory;
+    private readonly SemaphoreSlim _sendGate = new(1, 1);
 
-    public RemoteAgent(IScreenSource screen, IInputSink input, Func<string, Task<bool>> askAccept, int framesPerSecond = 8)
+    /// <param name="audioFactory">Cria a captura de som a cada sessão (nulo = sem áudio).</param>
+    public RemoteAgent(IScreenSource screen, IInputSink input, Func<string, Task<bool>> askAccept, int framesPerSecond = 8, Func<IAudioSource?>? audioFactory = null)
     {
         _screen = screen;
         _input = input;
         _askAccept = askAccept;
         _fps = Math.Clamp(framesPerSecond, 1, 30);
+        _audioFactory = audioFactory;
         Password = RemoteIds.NewPassword();
     }
+
+    /// <summary>Exigir também a senha da sessão. Desligado: basta o ID e o aceite, e os dois lados conferem o código de segurança.</summary>
+    public bool RequirePassword { get; set; }
+
+    /// <summary>Código de segurança da sessão atual (aparece nos dois lados).</summary>
+    public string? SecurityCode { get; private set; }
+
+    public event Action<string>? SecurityCodeReady;
 
     /// <summary>Senha da sessão atual. Muda sozinha ao fim de cada sessão (uso único).</summary>
     public string Password { get; private set; }
@@ -135,9 +147,10 @@ public sealed class RemoteAgent
         using var end = CancellationTokenSource.CreateLinkedTokenSource(stop);
         RemoteHandshake? handshake = null;
         SecureChannel? channel = null;
+        IAudioSource? audio = null;
         try
         {
-            handshake = new RemoteHandshake(RemoteRole.Client, Password);
+            handshake = new RemoteHandshake(RemoteRole.Client, RequirePassword ? Password : null);
             await socket.SendAsync(handshake.CreateHello(), WebSocketMessageType.Binary, true, end.Token);
 
             var hello = await WebSocketHelpers.ReceiveAsync(socket, end.Token);
@@ -150,8 +163,11 @@ public sealed class RemoteAgent
                 return;
             }
 
+            SecurityCode = channel.SecurityCode;
+            SecurityCodeReady?.Invoke(channel.SecurityCode);
             StateChanged?.Invoke($"{Technician} está acessando o seu computador.");
             var sender = SendFramesAsync(socket, channel, end.Token);
+            audio = StartAudio(socket, channel, end.Token);
             int lastW = 1, lastH = 1;
             while (socket.State == WebSocketState.Open && !end.IsCancellationRequested)
             {
@@ -191,10 +207,12 @@ public sealed class RemoteAgent
         }
         finally
         {
+            audio?.Dispose();
             channel?.Dispose();
             handshake?.Dispose();
             InSession = false;
             Technician = null;
+            SecurityCode = null;
             Password = RemoteIds.NewPassword();
             StateChanged?.Invoke("Sessão encerrada. Aguardando o técnico.");
             SessionEnded?.Invoke();
@@ -202,6 +220,51 @@ public sealed class RemoteAgent
     }
 
     private (int Width, int Height) _lastScreen = (1, 1);
+
+    /// <summary>Cifra e envia. O WebSocket não aceita dois envios ao mesmo tempo, e o contador da cifra precisa seguir a ordem de envio.</summary>
+    private async Task SendSecureAsync(WebSocket socket, SecureChannel channel, byte[] plain, CancellationToken stop)
+    {
+        await _sendGate.WaitAsync(stop);
+        try
+        {
+            if (socket.State != WebSocketState.Open) return;
+            byte[] sealedMessage = channel.Seal(plain);
+            await socket.SendAsync(sealedMessage, WebSocketMessageType.Binary, true, stop);
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
+    }
+
+    private IAudioSource? StartAudio(WebSocket socket, SecureChannel channel, CancellationToken stop)
+    {
+        IAudioSource? source = null;
+        try
+        {
+            source = _audioFactory?.Invoke();
+            if (source is null) return null;
+            source.Chunk += pcm =>
+            {
+                if (stop.IsCancellationRequested || pcm.Length == 0) return;
+                for (int offset = 0; offset < pcm.Length; offset += 8192)
+                {
+                    int n = Math.Min(8192, pcm.Length - offset);
+                    n -= n % 2;
+                    if (n <= 0) break;
+                    var part = pcm.AsSpan(offset, n).ToArray();
+                    _ = SendSecureAsync(socket, channel, RemoteMessages.Encode(new AudioMessage(AudioConverter.TargetRate, part)), stop).ContinueWith(t => { _ = t.Exception; });
+                }
+            };
+            source.Start();
+            return source;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException or ArgumentException)
+        {
+            source?.Dispose();
+            return null;   // sem placa de som: a sessão segue só com imagem
+        }
+    }
 
     private async Task SendFramesAsync(WebSocket socket, SecureChannel channel, CancellationToken stop)
     {
@@ -220,9 +283,7 @@ public sealed class RemoteAgent
                 {
                     previous = frame.Jpeg;
                     lastSent = DateTime.UtcNow;
-                    byte[] sealedFrame;
-                    lock (channel) sealedFrame = channel.Seal(RemoteMessages.Encode(frame));
-                    await socket.SendAsync(sealedFrame, WebSocketMessageType.Binary, true, stop);
+                    await SendSecureAsync(socket, channel, RemoteMessages.Encode(frame), stop);
                 }
             }
 
@@ -235,7 +296,7 @@ public sealed class RemoteAgent
 /// <summary>Lado do técnico: pede acesso, aguarda o aceite do cliente, confere a senha e recebe a tela.</summary>
 public sealed class RemoteTechnician : IDisposable
 {
-    private readonly object _sendLock = new();
+    private readonly SemaphoreSlim _sendGate = new(1, 1);
     private WebSocket? _socket;
     private SecureChannel? _channel;
 
@@ -243,10 +304,15 @@ public sealed class RemoteTechnician : IDisposable
 
     public event Action<FrameMessage>? FrameReceived;
 
+    public event Action<AudioMessage>? AudioReceived;
+
+    /// <summary>Código de segurança da sessão (igual ao que o cliente vê).</summary>
+    public string? SecurityCode { get; private set; }
+
     public bool Connected => _channel is not null;
 
     /// <summary>Roda a sessão inteira. Devolve quando o cliente recusa, a senha falha ou a conexão acaba.</summary>
-    public async Task RunAsync(WebSocket socket, string password, CancellationToken stop)
+    public async Task RunAsync(WebSocket socket, string? password, CancellationToken stop)
     {
         _socket = socket;
         using var handshake = new RemoteHandshake(RemoteRole.Technician, password);
@@ -285,6 +351,7 @@ public sealed class RemoteTechnician : IDisposable
                         StateChanged?.Invoke(ex.Message + " Confira a senha com o cliente.");
                         return;
                     }
+                    SecurityCode = _channel.SecurityCode;
                     StateChanged?.Invoke("Conectado.");
                     continue;
                 }
@@ -292,7 +359,11 @@ public sealed class RemoteTechnician : IDisposable
                 byte[] plain;
                 try { plain = _channel.Open(data); }
                 catch (CryptographicException) { continue; }
-                if (RemoteMessages.Decode(plain) is FrameMessage frame) FrameReceived?.Invoke(frame);
+                switch (RemoteMessages.Decode(plain))
+                {
+                    case FrameMessage frame: FrameReceived?.Invoke(frame); break;
+                    case AudioMessage sound: AudioReceived?.Invoke(sound); break;
+                }
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or WebSocketException) { }
@@ -300,14 +371,15 @@ public sealed class RemoteTechnician : IDisposable
         {
             _channel?.Dispose();
             _channel = null;
+            SecurityCode = null;
         }
     }
 
-    public Task SendAsync(object message, CancellationToken stop = default)
+    public async Task SendAsync(object message, CancellationToken stop = default)
     {
         var socket = _socket;
         var channel = _channel;
-        if (socket is not { State: WebSocketState.Open } || channel is null) return Task.CompletedTask;
+        if (socket is not { State: WebSocketState.Open } || channel is null) return;
         byte[] plain = message switch
         {
             MouseMessage m => RemoteMessages.Encode(m),
@@ -315,9 +387,17 @@ public sealed class RemoteTechnician : IDisposable
             ControlMessage c => RemoteMessages.Encode(c),
             _ => throw new ArgumentException("Mensagem não suportada."),
         };
-        byte[] sealedMessage;
-        lock (_sendLock) sealedMessage = channel.Seal(plain);
-        return socket.SendAsync(sealedMessage, WebSocketMessageType.Binary, true, stop);
+        // um envio por vez: o WebSocket não aceita envios simultâneos e o contador da cifra segue a ordem
+        await _sendGate.WaitAsync(stop);
+        try
+        {
+            if (socket.State != WebSocketState.Open) return;
+            await socket.SendAsync(channel.Seal(plain), WebSocketMessageType.Binary, true, stop);
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
     }
 
     public void Dispose() => _channel?.Dispose();

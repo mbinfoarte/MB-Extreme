@@ -114,7 +114,7 @@ public class RemotoTests : IClassFixture<ServerFixture>
         using var tech = await ConnectTech(id, Token("tecnico@exemplo.com"));
         var request = await ReadText(client);
         Assert.Equal("request", request.GetProperty("type").GetString());
-        Assert.Equal("tecnico", request.GetProperty("technician").GetString());
+        Assert.Equal("T", request.GetProperty("technician").GetString());
         await SendText(client, """{"type":"reject"}""");
         Assert.Equal("waiting", (await ReadText(tech)).GetProperty("type").GetString());
         Assert.Equal("rejected", (await ReadText(tech)).GetProperty("type").GetString());
@@ -155,7 +155,7 @@ public class RemotoTests : IClassFixture<ServerFixture>
 
         // auditoria
         var audit = await _server.CreateClient().SendAsync(new HttpRequestMessage(HttpMethod.Get, "/v1/remote/audit")
-        { Headers = { { "Authorization", "Bearer " + Token("tecnico@exemplo.com") } } });
+        { Headers = { { "Authorization", "Bearer " + Token("admin@exemplo.com") } } });
         audit.EnsureSuccessStatusCode();
         var rows = await audit.Content.ReadFromJsonAsync<JsonElement>();
         var mine = rows.EnumerateArray().First(r => r.GetProperty("clientId").GetString() == id);
@@ -174,6 +174,14 @@ public class RemotoTests : IClassFixture<ServerFixture>
     {
         private int _n;
         public FrameMessage? Capture() => new(1280, 720, new byte[] { 0xFF, 0xD8, (byte)(++_n % 250) });
+    }
+
+    private sealed class FakeAudio : IAudioSource
+    {
+        public event Action<byte[]>? Chunk;
+        private Timer? _timer;
+        public void Start() => _timer = new Timer(_ => Chunk?.Invoke(new byte[882]), null, 0, 20);
+        public void Dispose() => _timer?.Dispose();
     }
 
     private sealed class FakeInput : IInputSink
@@ -197,7 +205,7 @@ public class RemotoTests : IClassFixture<ServerFixture>
         var (id, secret) = await RegisterAsync("pc-agente-6666");
         var input = new FakeInput();
         string? asked = null;
-        var agent = new RemoteAgent(new FakeScreen(), input, tech => { asked = tech; return Task.FromResult(true); }, framesPerSecond: 20);
+        var agent = new RemoteAgent(new FakeScreen(), input, tech => { asked = tech; return Task.FromResult(true); }, framesPerSecond: 20) { RequirePassword = true };
         using var stopAll = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         using var clientSocket = await ConnectClient(id, secret);
@@ -210,7 +218,7 @@ public class RemotoTests : IClassFixture<ServerFixture>
         var techTask = technician.RunAsync(techSocket, RemoteIds.FormatPassword(agent.Password), stopAll.Token);
 
         await WaitFor(() => technician.Connected && Volatile.Read(ref frames) >= 3);
-        Assert.Equal("tecnico", asked);
+        Assert.Equal("T", asked);
         Assert.True(agent.InSession);
 
         await technician.SendAsync(new MouseMessage(MouseAction.Down, MouseButton.Left, 1000, 2000, 0));
@@ -229,7 +237,7 @@ public class RemotoTests : IClassFixture<ServerFixture>
     {
         var (id, secret) = await RegisterAsync("pc-senha-7777");
         var input = new FakeInput();
-        var agent = new RemoteAgent(new FakeScreen(), input, _ => Task.FromResult(true), framesPerSecond: 20);
+        var agent = new RemoteAgent(new FakeScreen(), input, _ => Task.FromResult(true), framesPerSecond: 20) { RequirePassword = true };
         using var stopAll = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var clientSocket = await ConnectClient(id, secret);
         var agentTask = agent.RunAsync(clientSocket, stopAll.Token);
@@ -247,5 +255,51 @@ public class RemotoTests : IClassFixture<ServerFixture>
         Assert.Contains("senha", last, StringComparison.OrdinalIgnoreCase);
         await WaitFor(() => !agent.InSession);
         stopAll.Cancel();
+    }
+
+    [Fact]
+    public async Task SoComIdSemSenhaOsDoisLadosVeemOMesmoCodigoERecebemAudio()
+    {
+        var (id, secret) = await RegisterAsync("pc-soid-8888");
+        var agent = new RemoteAgent(new FakeScreen(), new FakeInput(), _ => Task.FromResult(true), framesPerSecond: 20, audioFactory: () => new FakeAudio());
+        using var stopAll = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var clientSocket = await ConnectClient(id, secret);
+        _ = agent.RunAsync(clientSocket, stopAll.Token);
+
+        using var techSocket = await ConnectTech(id, Token("tecnico@exemplo.com"));
+        using var technician = new RemoteTechnician();
+        int audioChunks = 0, frames = 0;
+        technician.AudioReceived += a => { if (a.SampleRate == 22050) Interlocked.Increment(ref audioChunks); };
+        technician.FrameReceived += _ => Interlocked.Increment(ref frames);
+        _ = technician.RunAsync(techSocket, null, stopAll.Token);
+
+        await WaitFor(() => technician.Connected && Volatile.Read(ref audioChunks) >= 3 && Volatile.Read(ref frames) >= 2);
+        Assert.NotNull(technician.SecurityCode);
+        Assert.Equal(agent.SecurityCode, technician.SecurityCode);
+        Assert.Matches(@"^\d{3} \d{3}$", technician.SecurityCode!);
+        stopAll.Cancel();
+    }
+
+    [Fact]
+    public void SemListaDeTecnicosQualquerContaComLicencaValidaPodeConectar()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "mbx-relay-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var key = new SigningKey(Path.Combine(dir, "k.pem"));
+            var db = new Db(Path.Combine(dir, "d.db"));
+            var open = new RemoteRelay(db, key.PublicKey, Array.Empty<string>());
+            var restricted = new RemoteRelay(db, key.PublicKey, new[] { "so@este.com" });
+            string Sign(string email, string name, DateTimeOffset exp) => LicenseToken.Sign(new LicensePayload { Subject = "1", Email = email, Name = name, Plan = "free", Device = "x", IssuedAt = DateTimeOffset.UtcNow, ExpiresAt = exp }, key.Key);
+
+            var ok = open.Technician("Bearer " + Sign("maria@x.com", "Maria Silva", DateTimeOffset.UtcNow.AddDays(1)));
+            Assert.Equal(("maria@x.com", "Maria Silva"), ok);
+            Assert.Equal("joao", open.Technician(Sign("joao@x.com", "", DateTimeOffset.UtcNow.AddDays(1)))!.Value.Name);
+            Assert.Null(open.Technician(Sign("maria@x.com", "M", DateTimeOffset.UtcNow.AddDays(-1))));   // vencida
+            Assert.Null(open.Technician("mbx1.falso.falso"));
+            Assert.Null(open.Technician(null));
+            Assert.Null(restricted.Technician(Sign("maria@x.com", "M", DateTimeOffset.UtcNow.AddDays(1))));
+        }
+        finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
     }
 }

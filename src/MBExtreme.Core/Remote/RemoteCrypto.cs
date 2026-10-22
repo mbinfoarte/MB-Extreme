@@ -15,6 +15,8 @@ public sealed class RemoteHandshakeException : Exception
 /// Acordo de chave entre o computador do cliente e o técnico, por cima do servidor de retransmissão.
 /// Cada lado envia sua chave pública ECDH (P-256) autenticada por HMAC com a senha da sessão, que só o cliente e o técnico conhecem.
 /// Assim o servidor não consegue se colocar no meio sem saber a senha. A chave da sessão sai do ECDH misturado com a senha.
+/// Sem senha (modo "só o ID"), o HMAC não autentica nada: nesse modo a proteção é o <see cref="SecureChannel.SecurityCode"/>, um código de 6 dígitos
+/// igual nos dois lados que os dois conferem de voz. Se o servidor estivesse no meio, os códigos seriam diferentes.
 /// Limite conhecido: um servidor malicioso poderia tentar adivinhar a senha offline a partir do HMAC; a senha tem ~49 bits e o custo do PBKDF2 é alto.
 /// Evolução prevista: trocar por um PAKE (SPAKE2/OPAQUE).
 /// </summary>
@@ -32,11 +34,13 @@ public sealed class RemoteHandshake : IDisposable
     private readonly byte[] _nonce = RandomNumberGenerator.GetBytes(NonceLength);
     private byte[]? _publicKey;
 
-    public RemoteHandshake(RemoteRole role, string password)
+    public RemoteHandshake(RemoteRole role, string? password = null)
     {
-        if (string.IsNullOrEmpty(password)) throw new ArgumentException("Senha vazia.", nameof(password));
         _role = role;
-        _passwordKey = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(RemoteIds.NormalizePassword(password)), PasswordSalt, PasswordIterations, HashAlgorithmName.SHA256, 32);
+        string normalized = RemoteIds.NormalizePassword(password);
+        _passwordKey = normalized.Length == 0
+            ? SHA256.HashData(Encoding.UTF8.GetBytes("mbx-remote-no-password-v1"))
+            : Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(normalized), PasswordSalt, PasswordIterations, HashAlgorithmName.SHA256, 32);
     }
 
     /// <summary>Mensagem a enviar ao outro lado: tipo, nonce, chave pública e HMAC.</summary>
@@ -85,7 +89,15 @@ public sealed class RemoteHandshake : IDisposable
         byte[] info = Encoding.UTF8.GetBytes("mbx-remote-v1").Concat(clientNonce).Concat(techNonce).ToArray();
         byte[] key = HKDF.DeriveKey(HashAlgorithmName.SHA256, secret, 32, _passwordKey, info);
         CryptographicOperations.ZeroMemory(secret);
-        return new SecureChannel(key, _role);
+        return new SecureChannel(key, _role, SecurityCodeOf(key));
+    }
+
+    /// <summary>Código de 6 dígitos derivado da chave da sessão, igual nos dois lados.</summary>
+    internal static string SecurityCodeOf(byte[] sessionKey)
+    {
+        byte[] bytes = HKDF.DeriveKey(HashAlgorithmName.SHA256, sessionKey, 4, null, Encoding.UTF8.GetBytes("mbx-remote-sas-v1"));
+        uint value = BinaryPrimitives.ReadUInt32BigEndian(bytes) % 1_000_000;
+        return value.ToString("000000").Insert(3, " ");
     }
 
     private static byte[] Mac(byte[] key, RemoteRole role, byte[] nonce, byte[] publicKey)
@@ -114,11 +126,15 @@ public sealed class SecureChannel : IDisposable
     private ulong _lastReceived;
     private bool _anyReceived;
 
-    internal SecureChannel(byte[] key, RemoteRole role)
+    internal SecureChannel(byte[] key, RemoteRole role, string securityCode)
     {
         _aes = new AesGcm(key, 16);
         _role = role;
+        SecurityCode = securityCode;
     }
+
+    /// <summary>Ex.: "482 913". Os dois lados veem o mesmo; se diferir, há alguém no meio.</summary>
+    public string SecurityCode { get; }
 
     public const int Overhead = 8 + 16;
 

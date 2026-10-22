@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace MBExtreme.Core.Remote;
 
-public enum RemoteMessageType : byte { Frame = 1, Mouse = 2, Key = 3, Control = 4 }
+public enum RemoteMessageType : byte { Frame = 1, Mouse = 2, Key = 3, Control = 4, Audio = 5 }
 
 public enum MouseAction : byte { Move = 0, Down = 1, Up = 2, Wheel = 3 }
 
@@ -19,6 +19,9 @@ public sealed record MouseMessage(MouseAction Action, MouseButton Button, int X,
 public sealed record KeyMessage(int VirtualKey, bool Down, bool Extended);
 
 public sealed record ControlMessage(ControlCode Code);
+
+/// <summary>Trecho do som do computador do cliente: PCM de 16 bits, mono, na taxa indicada.</summary>
+public sealed record AudioMessage(int SampleRate, byte[] Pcm);
 
 /// <summary>Formato das mensagens dentro do canal cifrado. A leitura recusa qualquer coisa fora do esperado.</summary>
 public static class RemoteMessages
@@ -58,6 +61,18 @@ public static class RemoteMessages
         return data;
     }
 
+    public const int MaxAudioBytes = 32 * 1024;
+
+    public static byte[] Encode(AudioMessage m)
+    {
+        if (m.Pcm.Length == 0 || m.Pcm.Length > MaxAudioBytes || m.Pcm.Length % 2 != 0) throw new ArgumentException("Trecho de áudio fora do tamanho permitido.");
+        var data = new byte[3 + m.Pcm.Length];
+        data[0] = (byte)RemoteMessageType.Audio;
+        BinaryPrimitives.WriteUInt16BigEndian(data.AsSpan(1), (ushort)Math.Clamp(m.SampleRate, 8000, ushort.MaxValue));
+        m.Pcm.CopyTo(data, 3);
+        return data;
+    }
+
     public static byte[] Encode(ControlMessage m) => new[] { (byte)RemoteMessageType.Control, (byte)m.Code };
 
     /// <summary>Lê uma mensagem; devolve nulo se o formato for inválido.</summary>
@@ -77,6 +92,12 @@ public static class RemoteMessages
                 if (data.Length != 5 || data[3] > 1 || data[4] > 1) return null;
                 int vk = BinaryPrimitives.ReadUInt16BigEndian(data[1..]);
                 return vk is > 0 and <= 255 ? new KeyMessage(vk, data[3] == 1, data[4] == 1) : null;
+            case RemoteMessageType.Audio:
+            {
+                if (data.Length <= 3 || data.Length > 3 + MaxAudioBytes || (data.Length - 3) % 2 != 0) return null;
+                int rate = BinaryPrimitives.ReadUInt16BigEndian(data[1..]);
+                return rate >= 8000 ? new AudioMessage(rate, data[3..].ToArray()) : null;
+            }
             case RemoteMessageType.Control:
                 return data.Length == 2 && data[1] is >= 1 and <= 3 ? new ControlMessage((ControlCode)data[1]) : null;
             default:

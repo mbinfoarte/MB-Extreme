@@ -77,8 +77,8 @@ internal static class NavigationMap
         }),
         new("sup", "Suporte", "Ajuda do suporte da MB InfoArt por acesso remoto.", "\uE8F2", new Tile[]
         {
-            new("support", "Suporte remoto", "Peça ajuda: o técnico entra só depois que você aceitar.", "\uE8F2"),
-            new("remote-console", "Console do técnico", "Atenda clientes pelo ID (só contas de técnico).", "\uE8AF"),
+            new("remote", "Acesso remoto", "Seu ID, conexão com outro PC (tela, mouse, teclado e som).", "\uE8AF"),
+            new("support", "Pedir suporte", "Descreva o problema e envie o relatório do PC; AnyDesk como alternativa.", "\uE8F2"),
         }),
         new("tools", "Ferramentas", "Processos, arquivos grandes e duplicados, e mais.", "\uE90F", new Tile[]
         {

@@ -29,6 +29,8 @@ public partial class MainWindow : Window
         AppServices.AutoMemory.StartIfEnabled();
         AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateFooter));
         AppServices.License.Start();
+        // disponível para suporte enquanto o programa estiver aberto (cada acesso exige o aceite do usuário)
+        if (AppServices.Settings.RemoteAutoListen && AppServices.License.Config.ServerUrl.Length > 0) _ = AppServices.RemoteSupport.StartAsync();
         UpdateFooter();
     }
 
@@ -207,7 +209,7 @@ public partial class MainWindow : Window
         "repair" => new RepairPage(),
         "license" => new LicensePage(),
         "support" => new SupportPage(),
-        "remote-console" => new RemoteConsolePage(),
+        "remote" or "remote-console" => new RemoteAccessPage(),
         "processes" => new ProcessesPage(),
         "largefiles" => new LargeFilesPage(),
         "duplicates" => new DuplicatesPage(),

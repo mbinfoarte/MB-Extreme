@@ -149,3 +149,85 @@ public class AcessoRemotoTests
         Assert.True(RemoteMessages.IsKeyAllowed(0x41));
     }
 }
+
+public class AcessoRemotoV2Tests
+{
+    [Fact]
+    public void SemSenhaOsDoisLadosFecham_ComOMesmoCodigoDeSeguranca()
+    {
+        using var client = new RemoteHandshake(RemoteRole.Client);
+        using var tech = new RemoteHandshake(RemoteRole.Technician);
+        using var c = client.Complete(tech.CreateHello());
+        using var t = tech.Complete(client.CreateHello());
+        Assert.Equal(c.SecurityCode, t.SecurityCode);
+        Assert.Matches(@"^\d{3} \d{3}$", c.SecurityCode);
+        Assert.Equal(new byte[] { 5 }, t.Open(c.Seal(new byte[] { 5 })));
+    }
+
+    [Fact]
+    public void ServidorNoMeioSemSenhaGeraCodigosDiferentes()
+    {
+        // o servidor faz um acordo separado com cada lado: os códigos não batem
+        using var client = new RemoteHandshake(RemoteRole.Client);
+        using var tech = new RemoteHandshake(RemoteRole.Technician);
+        using var evilToClient = new RemoteHandshake(RemoteRole.Technician);
+        using var evilToTech = new RemoteHandshake(RemoteRole.Client);
+        using var c = client.Complete(evilToClient.CreateHello());
+        using var t = tech.Complete(evilToTech.CreateHello());
+        Assert.NotEqual(c.SecurityCode, t.SecurityCode);
+    }
+
+    [Fact]
+    public void ClienteExigeSenhaMasTecnicoNaoInformou()
+    {
+        using var client = new RemoteHandshake(RemoteRole.Client, "ABCDEFGHJK");
+        using var tech = new RemoteHandshake(RemoteRole.Technician);
+        Assert.Throws<RemoteHandshakeException>(() => client.Complete(tech.CreateHello()));
+    }
+
+    [Fact]
+    public void MensagemDeAudioIdaEVolta()
+    {
+        var pcm = new byte[] { 1, 0, 2, 0, 3, 0 };
+        var m = Assert.IsType<AudioMessage>(RemoteMessages.Decode(RemoteMessages.Encode(new AudioMessage(22050, pcm))));
+        Assert.Equal(22050, m.SampleRate);
+        Assert.Equal(pcm, m.Pcm);
+        Assert.Null(RemoteMessages.Decode(new byte[] { 5, 0x56, 0x22, 1 }));              // tamanho ímpar
+        Assert.Null(RemoteMessages.Decode(new byte[] { 5, 0, 10, 1, 0 }));                // taxa absurda
+        Assert.Throws<ArgumentException>(() => RemoteMessages.Encode(new AudioMessage(22050, Array.Empty<byte>())));
+    }
+
+    [Fact]
+    public void ConversorReduzParaMono22kEMantemADuracao()
+    {
+        // 1 segundo de 48 kHz estéreo float (seno 440 Hz) -> ~22050 amostras de 16 bits
+        var conv = new AudioConverter(48000, 2, 32, true);
+        var input = new byte[48000 * 2 * 4];
+        for (int i = 0; i < 48000; i++)
+        {
+            float v = (float)Math.Sin(2 * Math.PI * 440 * i / 48000.0) * 0.5f;
+            BitConverter.GetBytes(v).CopyTo(input, i * 8);
+            BitConverter.GetBytes(v).CopyTo(input, i * 8 + 4);
+        }
+        var output = new List<byte>();
+        for (int offset = 0; offset < input.Length; offset += 8192 * 8)   // em blocos, como a captura entrega
+            output.AddRange(conv.Convert(input.AsSpan(offset, Math.Min(8192 * 8, input.Length - offset))));
+        int samples = output.Count / 2;
+        Assert.InRange(samples, 22050 - 40, 22050 + 40);
+        short peak = 0;
+        for (int i = 0; i < samples; i++) peak = Math.Max(peak, Math.Abs(BitConverter.ToInt16(output.ToArray(), i * 2)));
+        Assert.InRange(peak, 14000, 17000);   // 0,5 de amplitude ≈ 16384
+    }
+
+    [Fact]
+    public void ConversorAceitaPcm16EBlocosPequenos()
+    {
+        var conv = new AudioConverter(22050, 1, 16, false);
+        var input = new byte[22050 * 2];
+        var output = new List<byte>();
+        for (int offset = 0; offset < input.Length; offset += 480) output.AddRange(conv.Convert(input.AsSpan(offset, Math.Min(480, input.Length - offset))));
+        Assert.InRange(output.Count / 2, 22050 - 4, 22050 + 4);
+        Assert.Empty(conv.Convert(new byte[1]));
+        Assert.Throws<ArgumentException>(() => new AudioConverter(48000, 2, 24, false));
+    }
+}

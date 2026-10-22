@@ -1,11 +1,13 @@
 # Acesso remoto próprio do MB Extreme
 
+> **Versão 2 (estilo AnyDesk).** Página única **Acesso remoto**: "Este computador" (seu ID, copiar, permitir/bloquear acesso) e "Outro computador" (digite o ID e *Conectar*), com **tela, mouse, teclado e som**, e lista de conexões recentes. **Qualquer usuário do app** pode conectar a outro PC (precisa estar com a conta ativa em *Licença e conta*; a conta grátis serve); o outro lado **sempre aceita** na tela. Por padrão **basta o ID**: os dois lados veem um código de segurança de 6 dígitos que devem conferir (se diferirem, encerre). Opcionalmente o dono do PC liga *Exigir senha* (mais seguro). O som do PC do cliente chega ao técnico (PCM 16 bits mono 22 kHz). O texto abaixo da versão 1 vale com essas diferenças.
+
 Permite que o técnico (conta autorizada) atenda o computador de um cliente pelo próprio MB Extreme, com ID numérico, sem programa de terceiros. O AnyDesk continua como opção secundária na página Suporte remoto.
 
 ## Como funciona
 
 1. **Cliente**: Suporte remoto > *Ligar o acesso remoto*. O app registra o PC no servidor (`POST /v1/remote/register`) e recebe um **ID de 9 dígitos** e um **segredo** que fica protegido pelo Windows (DPAPI). Mostra o ID e uma **senha de uso único** (10 caracteres, muda a cada sessão).
-2. **Técnico**: Console do técnico > informa ID e senha > *Conectar*. A conexão exige uma licença assinada de uma conta listada em `Remote:Technicians` no servidor.
+2. **Quem conecta**: Acesso remoto > digita o ID > *Conectar* (senha só se o dono pediu). Exige uma licença assinada do servidor (conta com login). Se `Remote:Technicians` estiver preenchido no servidor, só essas contas conectam; vazio, qualquer conta. `Admin:Emails` vê a auditoria.
 3. O servidor avisa o cliente (“o técnico X quer acessar”). O cliente **aceita ou recusa** numa janela. Sem resposta em 60 s, cancela.
 4. Se aceito, os dois lados trocam chaves (ECDH P-256 autenticado por HMAC com a senha) e abrem um canal **AES-256-GCM** com contador (repetição e reordenação são recusadas).
 5. O cliente envia a tela (JPEG, até 1280 px, 8 quadros/s, só quando muda) e aplica mouse/teclado vindos do técnico. Aparece uma **faixa vermelha “Sessão remota ativa”** com botão Encerrar.

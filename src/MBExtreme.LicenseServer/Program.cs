@@ -493,22 +493,20 @@ app.Map("/v1/remote/ws/client", async (HttpContext c) =>
 
 app.Map("/v1/remote/ws/tech", async (HttpContext c) =>
 {
-    if (!relay.RemoteEnabled) return Results.NotFound();
     if (!c.WebSockets.IsWebSocketRequest) return Results.BadRequest();
     if (!limiter.Allow("remote-tech|" + Ip(c), 30 * limitScale, TimeSpan.FromMinutes(10))) return Results.Json(new { message = "Muitas tentativas." }, statusCode: 429);
-    string? technician = relay.Technician(c.Request.Headers.Authorization.ToString());
-    if (technician is null) return Results.Json(new { message = "Conta de técnico não autorizada." }, statusCode: 403);
+    var technician = relay.Technician(c.Request.Headers.Authorization.ToString());
+    if (technician is null) return Results.Json(new { message = "Entre com a sua conta (Licença e conta) para conectar a outro computador." }, statusCode: 403);
     string? id = RemoteIds.ParseId(c.Request.Query["id"]);
     if (id is null) return Results.BadRequest(new { message = "ID inválido." });
     using var socket = await c.WebSockets.AcceptWebSocketAsync();
-    await relay.RunTechnicianAsync(socket, id, technician, c.RequestAborted);
+    await relay.RunTechnicianAsync(socket, id, technician.Value.Email, technician.Value.Name, c.RequestAborted);
     return Results.Empty;
 });
 
 app.MapGet("/v1/remote/audit", (HttpContext c) =>
 {
-    if (!relay.RemoteEnabled) return Results.NotFound();
-    if (relay.Technician(c.Request.Headers.Authorization.ToString()) is null) return Results.Json(new { message = "Não autorizado." }, statusCode: 403);
+    if (AdminEmail(c) is null) return Results.Json(new { message = "Não autorizado." }, statusCode: 403);
     return Results.Json(db.RemoteAudit(50).Select(a => new { a.Id, a.ClientId, a.Technician, a.RequestedAt, a.Accepted, a.EndedAt, a.Bytes, a.Result }));
 });
 

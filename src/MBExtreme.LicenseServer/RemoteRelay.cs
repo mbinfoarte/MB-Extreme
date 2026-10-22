@@ -53,21 +53,24 @@ public sealed class RemoteRelay
         _maxSession = maxSession ?? TimeSpan.FromHours(4);
     }
 
-    public bool RemoteEnabled => _technicians.Count > 0;
+    /// <summary>Com lista de técnicos preenchida, só eles conectam a outros PCs. Vazia, qualquer conta com licença assinada pelo servidor pode (a pessoa aceita no PC de destino).</summary>
+    public bool RemoteEnabled => true;
 
     public static string Hash(string secret) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(secret)));
 
     public bool IsOnline(string id) => _clients.TryGetValue(id, out var c) && c.Socket.State == WebSocketState.Open;
 
-    /// <summary>E-mail do técnico se o token de licença é válido e a conta está autorizada; senão nulo.</summary>
-    public string? Technician(string? bearer)
+    /// <summary>Conta (e-mail e nome) de quem quer conectar, se o token de licença é válido e a conta pode; senão nulo.</summary>
+    public (string Email, string Name)? Technician(string? bearer)
     {
         if (string.IsNullOrWhiteSpace(bearer)) return null;
         string token = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? bearer[7..].Trim() : bearer.Trim();
         var payload = LicenseToken.Verify(token, _publicKey);
         if (payload is null || payload.ExpiresAt < DateTimeOffset.UtcNow) return null;
         string email = payload.Email.ToLowerInvariant();
-        return _technicians.Contains(email) ? email : null;
+        if (_technicians.Count > 0 && !_technicians.Contains(email)) return null;
+        string name = string.IsNullOrWhiteSpace(payload.Name) ? email.Split('@')[0] : payload.Name.Trim();
+        return (email, name.Length > 40 ? name[..40] : name);
     }
 
     // ------------------------------------------------------------ cliente (computador que pede suporte)
@@ -114,7 +117,7 @@ public sealed class RemoteRelay
 
     // ------------------------------------------------------------ técnico
 
-    public async Task RunTechnicianAsync(WebSocket tech, string id, string technician, CancellationToken stop)
+    public async Task RunTechnicianAsync(WebSocket tech, string id, string technician, string displayName, CancellationToken stop)
     {
         long audit = _db.StartRemoteAudit(id, technician);
         ClientConnection? client = null;
@@ -137,7 +140,7 @@ public sealed class RemoteRelay
             }
 
             var pending = client.Pending = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            await client.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { type = "request", technician = DisplayName(technician) }), WebSocketMessageType.Text, stop);
+            await client.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { type = "request", technician = displayName }), WebSocketMessageType.Text, stop);
             await SendTextAsync(tech, new { type = "waiting" }, stop);
 
             var winner = await Task.WhenAny(pending.Task, Task.Delay(AcceptTimeout, stop));
@@ -182,8 +185,6 @@ public sealed class RemoteRelay
             await CloseQuietly(tech, "fim");
         }
     }
-
-    private static string DisplayName(string email) => email.Split('@')[0];
 
     private static async Task PumpToClient(WebSocket from, ClientConnection to, CancellationToken stop)
     {

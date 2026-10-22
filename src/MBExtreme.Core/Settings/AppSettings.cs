@@ -86,6 +86,16 @@ public sealed class AppSettings
 
     public string? RemoteProtectedSecret { get; set; }
 
+    /// <summary>Ficar disponível para suporte sempre que o MB Extreme estiver aberto (cada acesso ainda exige o seu aceite).</summary>
+    public bool RemoteAutoListen { get; set; } = true;
+
+    /// <summary>Exigir também a senha da sessão (mais seguro). Desligado: basta o ID, o aceite e a conferência do código de segurança.</summary>
+    public bool RemoteRequirePassword { get; set; }
+
+    public bool RemoteShareAudio { get; set; } = true;
+
+    public List<RemoteRecentEntry> RemoteRecent { get; set; } = new();
+
     /// <summary>Enviar resumos anônimos das sessões de jogo (jogo, faixa de hardware e resultado). Desligado por padrão.</summary>
     public bool ShareAnonymousStats { get; set; }
 
@@ -124,4 +134,10 @@ public sealed class AppSettings
             // Sem permissão para gravar: as configurações valem só nesta sessão.
         }
     }
+}
+
+public sealed class RemoteRecentEntry
+{
+    public string Id { get; set; } = "";
+    public DateTime LastUsed { get; set; }
 }

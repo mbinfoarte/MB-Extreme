@@ -29,8 +29,8 @@ public sealed record LicenseConfig(bool Enforce, string ServerUrl, string Public
 
     public static LicenseConfig From(Settings.AppSettings settings)
     {
-        string url = Environment.GetEnvironmentVariable("MBX_LICENSE_URL") ?? settings.LicenseServerUrl;
-        string key = Environment.GetEnvironmentVariable("MBX_LICENSE_PUBLIC_KEY") ?? settings.LicensePublicKey;
+        string url = Environment.GetEnvironmentVariable("MBX_LICENSE_URL") ?? (settings.LicenseServerUrl.Length > 0 ? settings.LicenseServerUrl : AppInfo.DefaultServerUrl);
+        string key = Environment.GetEnvironmentVariable("MBX_LICENSE_PUBLIC_KEY") ?? (settings.LicensePublicKey.Length > 0 ? settings.LicensePublicKey : AppInfo.DefaultPublicKey);
         return new LicenseConfig(settings.LicenseEnforce, url.Trim().TrimEnd('/'), key.Trim());
     }
 }

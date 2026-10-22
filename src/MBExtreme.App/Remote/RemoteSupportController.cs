@@ -19,6 +19,17 @@ internal sealed class RemoteSupportController
     public bool Running => _cts is not null;
     public string? Id => AppServices.Settings.RemoteId;
     public string? Password => _agent?.Password;
+    public bool RequirePassword
+    {
+        get => AppServices.Settings.RemoteRequirePassword;
+        set
+        {
+            AppServices.Settings.RemoteRequirePassword = value;
+            AppServices.Settings.Save();
+            if (_agent is not null) _agent.RequirePassword = value;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
     public string State { get; private set; } = "Desligado";
     public event EventHandler? Changed;
 
@@ -28,11 +39,11 @@ internal sealed class RemoteSupportController
         Application.Current?.Dispatcher.BeginInvoke(new Action(() => Changed?.Invoke(this, EventArgs.Empty)));
     }
 
-    public async Task<(bool Ok, string Message)> StartAsync()
+    /// <summary>Garante que este PC tem um ID (cria no servidor na primeira vez).</summary>
+    public async Task<(bool Ok, string Message, string? Secret)> EnsureRegisteredAsync()
     {
-        if (Running) return (true, "Já está ligado.");
         var config = AppServices.License.Config;
-        if (config.ServerUrl.Length == 0) return (false, "O endereço do servidor não está configurado (Licença e conta).");
+        if (config.ServerUrl.Length == 0) return (false, "O endereço do servidor não está configurado (Licença e conta).", null);
 
         var settings = AppServices.Settings;
         string? secret = SecretStore.Unprotect(settings.RemoteProtectedSecret);
@@ -41,7 +52,7 @@ internal sealed class RemoteSupportController
             if (string.IsNullOrEmpty(settings.RemoteId) || string.IsNullOrEmpty(secret))
             {
                 var response = await Http.PostAsJsonAsync(config.ServerUrl + "/v1/remote/register", new { deviceId = DeviceIdentity.Current() });
-                if (!response.IsSuccessStatusCode) return (false, "O servidor não criou o ID de suporte agora. Tente mais tarde.");
+                if (!response.IsSuccessStatusCode) return (false, "O servidor não criou o ID de suporte agora. Tente mais tarde.", null);
                 var body = await response.Content.ReadFromJsonAsync<JsonElement>();
                 settings.RemoteId = body.GetProperty("id").GetString();
                 secret = body.GetProperty("secret").GetString();
@@ -51,16 +62,31 @@ internal sealed class RemoteSupportController
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException)
         {
-            return (false, "Sem conexão com o servidor de suporte: " + ex.Message);
+            return (false, "Sem conexão com o servidor de suporte: " + ex.Message, null);
         }
 
-        _agent = new RemoteAgent(new ScreenGrabber(), new InputInjector(), AskAcceptAsync);
+        Application.Current?.Dispatcher.BeginInvoke(new Action(() => Changed?.Invoke(this, EventArgs.Empty)));
+        return (true, "", secret);
+    }
+
+    public async Task<(bool Ok, string Message)> StartAsync()
+    {
+        if (Running) return (true, "Já está ligado.");
+        var (ok, message, secret) = await EnsureRegisteredAsync();
+        if (!ok) return (false, message);
+        var config = AppServices.License.Config;
+        var settings = AppServices.Settings;
+
+        _agent = new RemoteAgent(new ScreenGrabber(), new InputInjector(), AskAcceptAsync,
+            audioFactory: () => AppServices.Settings.RemoteShareAudio ? new LoopbackAudioSource() : null)
+        { RequirePassword = settings.RemoteRequirePassword };
+        _agent.SecurityCodeReady += code => Application.Current?.Dispatcher.BeginInvoke(new Action(() => ShowCode(code)));
         _agent.StateChanged += Set;
         _agent.SessionEnded += () => Application.Current?.Dispatcher.BeginInvoke(new Action(CloseBanner));
         _cts = new CancellationTokenSource();
         _ = RunLoopAsync(config.ServerUrl, settings.RemoteId!, secret!, _cts.Token);
         Set("Conectando...");
-        return (true, "Pronto. Passe o ID e a senha ao técnico.");
+        return (true, "Pronto. Passe o seu ID a quem vai atender.");
     }
 
     private async Task RunLoopAsync(string serverUrl, string id, string secret, CancellationToken stop)
@@ -95,7 +121,7 @@ internal sealed class RemoteSupportController
         Application.Current.Dispatcher.Invoke(() =>
         {
             var answer = MessageBox.Show(
-                $"O técnico \"{technician}\" da MB InfoArt quer acessar o seu computador.\n\nVocê verá tudo o que ele fizer e pode encerrar a qualquer momento. Só aceite se foi você quem pediu suporte.\n\nPermitir?",
+                $"\"{technician}\" quer ver e controlar o seu computador (tela, mouse, teclado e som).\n\nVocê verá tudo o que ele fizer e pode encerrar a qualquer momento. Só aceite se foi você quem pediu ajuda.\n\nPermitir?",
                 "Pedido de acesso remoto", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
             if (answer == MessageBoxResult.Yes) ShowBanner(technician);
             tcs.SetResult(answer == MessageBoxResult.Yes);
@@ -103,17 +129,27 @@ internal sealed class RemoteSupportController
         return await tcs.Task;
     }
 
+    private System.Windows.Controls.TextBlock? _bannerText;
+    private string _bannerName = "";
+
+    private void ShowCode(string code)
+    {
+        if (_bannerText is not null) _bannerText.Text = $"● Sessão remota ativa: {_bannerName} no seu computador · código de segurança {code}";
+    }
+
     private void ShowBanner(string technician)
     {
         CloseBanner();
+        _bannerName = technician;
         var button = new System.Windows.Controls.Button { Content = "Encerrar", Padding = new Thickness(14, 4, 14, 4), Margin = new Thickness(12, 0, 0, 0) };
         button.Click += (_, _) => Stop();
         var panel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new Thickness(14, 8, 14, 8) };
-        panel.Children.Add(new System.Windows.Controls.TextBlock
+        _bannerText = new System.Windows.Controls.TextBlock
         {
             Text = $"● Sessão remota ativa: {technician} está no seu computador",
             Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
-        });
+        };
+        panel.Children.Add(_bannerText);
         panel.Children.Add(button);
         _banner = new Window
         {
@@ -129,6 +165,7 @@ internal sealed class RemoteSupportController
     {
         _banner?.Close();
         _banner = null;
+        _bannerText = null;
     }
 
     public void Stop()

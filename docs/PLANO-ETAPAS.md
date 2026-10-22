@@ -10,7 +10,7 @@ Organização do pedido de 22/10 em etapas, na ordem sugerida de execução. Tam
    - Memória: medidor de uso + linha do histórico.
    - Internet: medidor de ping + linha do ping (e a rede continua no cartão grande de download/envio).
 3. Botão da limpeza automática da memória: **só o ícone de vassoura**, sem texto (tooltip explica). Corrige também o defeito visto na captura: o texto "Auto" aparecia como quadradinhos porque a fonte de ícones era aplicada ao texto todo.
-4. Suporte: tirar a abertura do AnyDesk da tela (ver Etapa 4). Até o acesso remoto próprio existir, a página fica só com **Pedir suporte** (texto pronto com nome, versão e relatório do sistema para enviar ao suporte).
+4. Suporte: o AnyDesk deixa de ser a tela principal. A página passa a ter **Pedir suporte** em destaque (texto pronto com nome, versão e relatório do sistema) e o AnyDesk vira uma opção **secundária** ("Outras opções de acesso remoto"), sem abrir sozinho. Quando o módulo próprio da Etapa 5 existir, ele passa a ser o principal.
 
 ## Etapa 2 · Estúdio de gravação e transmissão redesenhado (G)
 Referência: a tela do ShadowPlay/GeForce Experience (poucos botões grandes, o resto escondido em configurações).
@@ -84,6 +84,18 @@ Sub-etapas:
 
 ## Etapa 7 · Qualidade e lançamento (M)
 Assinatura de código do instalador e do executável, ofuscação, testes de desempenho (o estúdio e o monitor de gargalos não podem pesar), revisão independente, política de privacidade e termos de uso.
+
+## Decisões tomadas (22/10)
+- **AnyDesk**: sai da tela principal e fica como opção secundária.
+- **Discord**: item futuro, voltado à comunidade (câmera virtual).
+- **Jogos**: começar com perfis por faixa de hardware; buscar dados de testes da comunidade por API/site e **aprender com o que roda nas máquinas** dos próprios clientes (ver abaixo).
+- **Execução**: nada é aplicado ainda; primeiro o plano é completado.
+
+## Dados de jogos: comunidade e aprendizado local (acréscimo à Etapa 3)
+1. **Metadados e requisitos**: fontes públicas candidatas (a verificar termos de uso e limites): Steam (requisitos e dados da loja), PCGamingWiki (ajustes e notas por jogo, licença aberta com atribuição), IGDB (metadados). Sites de benchmark sem API pública ou que proíbem coleta automática não entram.
+2. **Aprendizado dentro do MB Extreme (com permissão do cliente)**: o monitor de gargalos (Etapa 4) grava, para cada jogo e configuração, o hardware (faixa, sem identificar a pessoa), as opções gráficas usadas e o resultado (FPS médio, mínimos, gargalo). Esses dados voltam ao servidor, onde viram recomendações do tipo "máquinas parecidas com a sua rodam este jogo a 90 fps com estas opções".
+3. **Aprendizado local**: o programa guarda as últimas sessões do jogo no próprio PC e sugere a configuração que deu o melhor resultado ali.
+4. **Privacidade**: envio opcional e desligado por padrão, dados anônimos e agregados, texto claro na política de privacidade (LGPD).
 
 ## Ordem sugerida
 1. Etapa 1 (rápida, melhora o que você vê agora).

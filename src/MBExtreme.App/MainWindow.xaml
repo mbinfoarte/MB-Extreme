@@ -88,7 +88,7 @@
                 </Border>
 
                 <!-- Sistema: logo arredondado, nome e versão -->
-                <Grid DockPanel.Dock="Bottom" Margin="16,8,16,14">
+                <Grid DockPanel.Dock="Bottom" Margin="18,8,12,24">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -99,8 +99,8 @@
                         </Border.Background>
                     </Border>
                     <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                        <TextBlock FontSize="14" FontWeight="Bold" Text="MB EXTREME" />
-                        <TextBlock x:Name="FooterText" Text="Beta 01 · by MB InfoArt" FontSize="10" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock FontSize="14" FontWeight="Bold" Text="MB EXTREME" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="FooterText" Text="Beta 01 · by MB InfoArt" FontSize="10" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </Grid>
 

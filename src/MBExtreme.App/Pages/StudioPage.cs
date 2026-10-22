@@ -85,17 +85,17 @@ public sealed class StudioPage : ToolPageBase
         _saveReplay = AddButton("Salvar replay (Ctrl+Shift+F9)", async (_, _) => await _studio.SaveReplayAsync(), false);
         AddButton("Abrir pasta", (_, _) => OpenFolder(), false);
 
-        _displays = new PickList(this, 160);
-        _windows = new PickList(this, 220);
-        _mics = new PickList(this, 140);
-        _outputs = new PickList(this, 140);
+        _displays = new PickList(this, 110);
+        _windows = new PickList(this, 130);
+        _mics = new PickList(this, 110);
+        _outputs = new PickList(this, 110);
         _remember = new CheckBox { Content = "Lembrar a chave neste PC (protegida pelo Windows, só este usuário lê)", Foreground = Brush("TextBrush"), Margin = new Thickness(0, 8, 0, 0) };
 
         Body.Children.Add(_live);
         BuildLive();
         Body.Children.Add(_config);
-        BuildTiles();
         BuildSource();
+        BuildTiles();
         BuildSettings();
         BuildEngine();
         BuildVideo();
@@ -105,7 +105,9 @@ public sealed class StudioPage : ToolPageBase
         BuildShortcuts();
         BuildCompat();
 
-        Body.Children.Add(Heading("Gravações e replays"));
+        var filesTitle = Heading("Gravações e replays");
+        filesTitle.FontSize = 13;
+        Body.Children.Add(filesTitle);
         Body.Children.Add(_files);
 
         _studio.Notice += OnNotice;
@@ -145,11 +147,34 @@ public sealed class StudioPage : ToolPageBase
         _warnings.Margin = new Thickness(0, 6, 0, 0);
     }
 
+    /// <summary>Botões de escolha única, pequenos e que quebram de linha (o estúdio tem muitas opções).</summary>
+    private WrapPanel Chips(IReadOnlyList<string> options, int selected, Action<int> onChange)
+    {
+        var panel = new WrapPanel { Margin = new Thickness(0, 4, 0, 2) };
+        var buttons = new List<Button>();
+        void Paint(int index)
+        {
+            for (int i = 0; i < buttons.Count; i++) buttons[i].Style = (Style)FindResource(i == index ? "PrimaryButton" : "GhostButton");
+            foreach (var b in buttons) { b.Padding = new Thickness(11, 4, 11, 4); b.FontSize = 12; }
+        }
+
+        for (int i = 0; i < options.Count; i++)
+        {
+            int index = i;
+            var button = new Button { Content = options[i], Margin = new Thickness(0, 0, 6, 6) };
+            button.Click += (_, _) => { Paint(index); onChange(index); };
+            buttons.Add(button);
+            panel.Children.Add(button);
+        }
+        Paint(selected);
+        return panel;
+    }
+
     // ---- três blocos grandes: Replay, Gravar, Transmitir
 
     private void BuildTiles()
     {
-        var grid = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 6) };
+        var grid = new UniformGrid { Columns = 3, Margin = new Thickness(0, 10, 0, 2) };
         grid.Children.Add(MakeTile(_tileReplay, _tileReplayState, "Replay instantâneo", "Guarda os últimos segundos", () => { _outReplay = !_outReplay; }));
         grid.Children.Add(MakeTile(_tileRecord, _tileRecordState, "Gravar", "Salva em Vídeos\\MB Extreme", () => { _outRecord = !_outRecord; }));
         grid.Children.Add(MakeTile(_tileStream, _tileStreamState, "Transmitir ao vivo", "Twitch, YouTube, Facebook ou RTMP", () => { _outStream = !_outStream; }));
@@ -161,14 +186,14 @@ public sealed class StudioPage : ToolPageBase
     {
         tile.Style = (Style)FindResource("Card");
         tile.Margin = new Thickness(0, 0, 8, 0);
-        tile.Padding = new Thickness(18, 16, 18, 16);
+        tile.Padding = new Thickness(14, 9, 14, 9);
         tile.Cursor = System.Windows.Input.Cursors.Hand;
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = title, FontSize = 17, FontWeight = FontWeights.SemiBold });
-        panel.Children.Add(Muted(hint));
-        state.FontSize = 13;
+        panel.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(Muted(hint, 11));
+        state.FontSize = 12;
         state.FontWeight = FontWeights.SemiBold;
-        state.Margin = new Thickness(0, 10, 0, 0);
+        state.Margin = new Thickness(0, 4, 0, 0);
         panel.Children.Add(state);
         tile.Child = panel;
         tile.MouseLeftButtonUp += (_, _) =>
@@ -199,8 +224,25 @@ public sealed class StudioPage : ToolPageBase
 
     private void BuildSource()
     {
-        _config.Children.Add(Heading("O que capturar"));
-        _config.Children.Add(Choice(new[] { "Tela inteira", "Janela de um programa" }, _sourceTab, i =>
+        // pré-visualização no alto, com a escolha do que capturar ao lado
+        var layout = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        _preview.MaxHeight = 250;
+        var box = new StackPanel();
+        box.Children.Add(_preview);
+        _previewNote.Foreground = Brush("MutedBrush");
+        _previewNote.FontSize = 11;
+        box.Children.Add(_previewNote);
+        var previewCard = CardOf(box);
+        previewCard.Padding = new Thickness(10, 8, 10, 8);
+        previewCard.Margin = new Thickness(0, 0, 8, 0);
+        layout.Children.Add(previewCard);
+
+        var side = new StackPanel();
+        side.Children.Add(new TextBlock { Text = "O que capturar", FontSize = 13, FontWeight = FontWeights.SemiBold });
+        side.Children.Add(Chips(new[] { "Tela inteira", "Janela de um programa" }, _sourceTab, i =>
         {
             _sourceTab = i;
             _displayPanel.Visibility = Vis(i == 0);
@@ -210,26 +252,24 @@ public sealed class StudioPage : ToolPageBase
 
         _displayPanel.Children.Add(_displays);
         _displayPanel.Visibility = Vis(_sourceTab == 0);
-        _config.Children.Add(_displayPanel);
+        side.Children.Add(_displayPanel);
 
         _windowPanel.Visibility = Vis(_sourceTab == 1);
-        _windowPanel.Children.Add(Muted("Abra o jogo ou programa antes e atualize a lista. Só a janela escolhida vai para a gravação e para a transmissão."));
         _windowPanel.Children.Add(_windows);
-        var windowButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        windowButtons.Children.Add(SmallButton("Atualizar a lista de janelas", (_, _) => RefreshWindows()));
-        windowButtons.Children[0].SetValue(FrameworkElement.MarginProperty, new Thickness(0));
+        var windowButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+        var refresh = SmallButton("Atualizar lista", (_, _) => RefreshWindows());
+        refresh.Margin = new Thickness(0, 0, 8, 0);
+        refresh.Padding = new Thickness(11, 4, 11, 4);
+        refresh.FontSize = 12;
+        windowButtons.Children.Add(refresh);
         _windowPanel.Children.Add(windowButtons);
-        _windowPanel.Children.Add(Muted("Como capturar a janela:"));
-        _windowPanel.Children.Add(Choice(new[] { "Recorte da tela (jogos, recomendado)", "Conteúdo da janela (programas comuns)" }, _windowMode, i => _windowMode = i));
-        _config.Children.Add(_windowPanel);
+        _windowPanel.Children.Add(Muted("Modo de captura:", 11));
+        _windowPanel.Children.Add(Chips(new[] { "Recorte da tela (jogos)", "Conteúdo da janela" }, _windowMode, i => _windowMode = i));
+        side.Children.Add(_windowPanel);
+        Grid.SetColumn(side, 1);
+        layout.Children.Add(side);
 
-        _config.Children.Add(Heading("Pré-visualização"));
-        var box = new StackPanel();
-        box.Children.Add(_preview);
-        _previewNote.Foreground = Brush("MutedBrush");
-        box.Children.Add(_previewNote);
-        _config.Children.Add(CardOf(box));
-
+        _config.Children.Add(layout);
         RefreshDisplays();
     }
 
@@ -284,9 +324,10 @@ public sealed class StudioPage : ToolPageBase
 
     private void BuildSettings()
     {
-        _config.Children.Add(Heading("Configurações"));
+        var title = new TextBlock { Text = "Configurações", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) };
+        _config.Children.Add(title);
         var tabs = new[] { _tabVideo, _tabAudio, _tabStream, _tabReplay, _tabShortcuts, _tabAdvanced };
-        _config.Children.Add(Choice(new[] { "Vídeo", "Áudio", "Transmissão", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
+        _config.Children.Add(Chips(new[] { "Vídeo", "Áudio", "Transmissão", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
         {
             _settingsTab = i;
             for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == i);
@@ -311,13 +352,13 @@ public sealed class StudioPage : ToolPageBase
     private void BuildVideo()
     {
         _tabVideo.Children.Clear();
-        _tabVideo.Children.Add(Muted("Escolha uma predefinição ou ajuste cada item."));
         int tier = _tier;
         var suggested = StudioPresets.ForTier(tier);
         var names = StudioPresets.All.Select(p => p.Name + (p == suggested ? " (sugerida)" : "")).ToList();
         int current = StudioPresets.All.ToList().FindIndex(p =>
             Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height == p.ResolutionHeight && _s.StudioFps == p.Fps);
-        _tabVideo.Children.Add(Choice(names, current, i =>
+        _tabVideo.Children.Add(Muted("Predefinição:", 11));
+        _tabVideo.Children.Add(Chips(names, current, i =>
         {
             var preset = StudioPresets.All[i];
             _s.StudioResolution = Math.Max(0, Array.FindIndex(Resolutions, r => r.Height == preset.ResolutionHeight));
@@ -325,19 +366,22 @@ public sealed class StudioPage : ToolPageBase
             _s.StudioBitrateMbps = preset.BitrateMbps;
             BuildVideo();
         }));
-        if (current >= 0) _tabVideo.Children.Add(Muted(StudioPresets.All[current].Description));
+        if (current >= 0) _tabVideo.Children.Add(Muted(StudioPresets.All[current].Description, 11));
 
-        _tabVideo.Children.Add(Muted("Resolução do vídeo (a proporção é mantida):"));
-        _tabVideo.Children.Add(Choice(Resolutions.Select(r => r.Name).ToList(), Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1), i => _s.StudioResolution = i));
-        _tabVideo.Children.Add(Muted("Quadros por segundo:"));
-        _tabVideo.Children.Add(Choice(FpsOptions.Select(f => f + " fps").ToList(), Math.Max(0, Array.IndexOf(FpsOptions, _s.StudioFps)), i => _s.StudioFps = FpsOptions[i]));
-        _tabVideo.Children.Add(Muted("Taxa de vídeo (qualidade da imagem):"));
-        _tabVideo.Children.Add(Choice(BitrateOptions.Select(b => b == 0 ? "Automática" : b + " Mbps").ToList(),
+        var fine = new StackPanel();
+        fine.Children.Add(Muted("Resolução (a proporção é mantida):", 11));
+        fine.Children.Add(Chips(Resolutions.Select(r => r.Name).ToList(), Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1), i => _s.StudioResolution = i));
+        fine.Children.Add(Muted("Quadros por segundo:", 11));
+        fine.Children.Add(Chips(FpsOptions.Select(f => f + " fps").ToList(), Math.Max(0, Array.IndexOf(FpsOptions, _s.StudioFps)), i => _s.StudioFps = FpsOptions[i]));
+        fine.Children.Add(Muted("Taxa de vídeo:", 11));
+        fine.Children.Add(Chips(BitrateOptions.Select(b => b == 0 ? "Auto" : b + " Mbps").ToList(),
             Math.Max(0, Array.IndexOf(BitrateOptions, _s.StudioBitrateMbps)), i => _s.StudioBitrateMbps = BitrateOptions[i]));
-        _tabVideo.Children.Add(Muted("Ao transmitir, a gravação e o replay usam a mesma imagem enviada ao vivo: no máximo 8 Mbps. Para gravar com qualidade máxima, grave sem transmitir."));
-        _tabVideo.Children.Add(Muted("Formato do arquivo:"));
-        _tabVideo.Children.Add(Choice(new[] { "MKV (mais seguro se o PC travar)", "MP4" }, _s.StudioMp4 ? 1 : 0, i => _s.StudioMp4 = i == 1));
-        _tabVideo.Children.Add(Muted("Codificador da placa de vídeo:"));
+        fine.Children.Add(Muted("Ao transmitir, a taxa é limitada a 8 Mbps (também na gravação e no replay).", 11));
+        _tabVideo.Children.Add(new Expander { Header = "Ajustes finos (resolução, fps e taxa)", Content = fine, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 4) });
+
+        _tabVideo.Children.Add(Muted("Formato do arquivo:", 11));
+        _tabVideo.Children.Add(Chips(new[] { "MKV (mais seguro)", "MP4" }, _s.StudioMp4 ? 1 : 0, i => _s.StudioMp4 = i == 1));
+        _tabVideo.Children.Add(Muted("Codificador da placa de vídeo:", 11));
         _tabVideo.Children.Add(_qualityEncoder);
         if (_encoders.Count > 0) BuildEncoderChoice();
     }
@@ -348,7 +392,7 @@ public sealed class StudioPage : ToolPageBase
         system.IsChecked = _s.StudioSystemAudio;
         system.Click += (_, _) => _s.StudioSystemAudio = system.IsChecked == true;
         _tabAudio.Children.Add(system);
-        _tabAudio.Children.Add(Choice(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioSystemVolume), i => _s.StudioSystemVolume = Volumes[i].Value));
+        _tabAudio.Children.Add(Chips(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioSystemVolume), i => _s.StudioSystemVolume = Volumes[i].Value));
         _tabAudio.Children.Add(Muted("Saída de som:"));
         _tabAudio.Children.Add(_outputs);
 
@@ -357,7 +401,7 @@ public sealed class StudioPage : ToolPageBase
         mic.Margin = new Thickness(0, 10, 0, 0);
         mic.Click += (_, _) => _s.StudioMicAudio = mic.IsChecked == true;
         _tabAudio.Children.Add(mic);
-        _tabAudio.Children.Add(Choice(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioMicVolume), i => _s.StudioMicVolume = Volumes[i].Value));
+        _tabAudio.Children.Add(Chips(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioMicVolume), i => _s.StudioMicVolume = Volumes[i].Value));
         _tabAudio.Children.Add(Muted("Microfone:"));
         _tabAudio.Children.Add(_mics);
         _tabAudio.Children.Add(Muted("Se desmarcar os dois, o vídeo sai sem áudio."));
@@ -370,7 +414,7 @@ public sealed class StudioPage : ToolPageBase
     {
         _tabStream.Children.Add(Muted("Para transmitir, ligue o bloco \"Transmitir ao vivo\" no alto da tela. A codificação é feita na placa de vídeo, por isso pesa pouco no jogo."));
         int selected = Math.Max(0, Array.IndexOf(ServiceOrder, (StreamService)Math.Clamp(_s.StudioStreamService, 0, 3)));
-        _tabStream.Children.Add(Choice(new[] { "Twitch", "YouTube", "Facebook", "Outro servidor (RTMP)" }, selected, i =>
+        _tabStream.Children.Add(Chips(new[] { "Twitch", "YouTube", "Facebook", "Outro servidor (RTMP)" }, selected, i =>
         {
             _s.StudioStreamService = (int)ServiceOrder[i];
             _customUrl.Visibility = Vis(ServiceOrder[i] == StreamService.Custom);
@@ -392,7 +436,7 @@ public sealed class StudioPage : ToolPageBase
     private void BuildReplaySettings()
     {
         _tabReplay.Children.Add(Muted("Quanto tempo guardar:"));
-        _tabReplay.Children.Add(Choice(ReplayOptions.Select(r => r < 60 ? r + " s" : r / 60 + " min").ToList(),
+        _tabReplay.Children.Add(Chips(ReplayOptions.Select(r => r < 60 ? r + " s" : r / 60 + " min").ToList(),
             Math.Max(0, Array.IndexOf(ReplayOptions, _s.StudioReplaySeconds)), i => _s.StudioReplaySeconds = ReplayOptions[i]));
         var beep = new CheckBox { Content = "Tocar um aviso sonoro quando o clipe for salvo", IsChecked = _s.StudioReplayBeep, Foreground = Brush("TextBrush") };
         beep.Click += (_, _) => _s.StudioReplayBeep = beep.IsChecked == true;
@@ -409,8 +453,8 @@ public sealed class StudioPage : ToolPageBase
     {
         _tabAdvanced.Children.Add(Heading("Modo compatível (sem FFmpeg)"));
         _tabAdvanced.Children.Add(Muted("Grava a tela inteira em AVI sem instalar nada e sem áudio. Mais pesado e limitado; use só se o modo principal não funcionar no seu PC."));
-        _tabAdvanced.Children.Add(Choice(AviRates.Select(r => r + " fps").ToList(), _aviRate, i => _aviRate = i));
-        _tabAdvanced.Children.Add(Choice(AviScales.Select(s => $"{s:0%}").ToList(), _aviScale, i => _aviScale = i));
+        _tabAdvanced.Children.Add(Chips(AviRates.Select(r => r + " fps").ToList(), _aviRate, i => _aviRate = i));
+        _tabAdvanced.Children.Add(Chips(AviScales.Select(s => $"{s:0%}").ToList(), _aviScale, i => _aviScale = i));
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         var aviStart = SmallButton("Gravar em modo compatível", (_, _) => ToggleAvi(), false);
         aviStart.Margin = new Thickness(0);
@@ -493,7 +537,7 @@ public sealed class StudioPage : ToolPageBase
         if (_encoders.Count == 0) return;
         _engineStatus.Text = "Pronto: FFmpeg e codificadores encontrados.";
         _encoderIndex = Math.Min(_encoderIndex, _encoders.Count - 1);
-        _qualityEncoder.Children.Add(Choice(_encoders.Select(e => e.Title).ToList(), _encoderIndex, i => _encoderIndex = i));
+        _qualityEncoder.Children.Add(Chips(_encoders.Select(e => e.Title).ToList(), _encoderIndex, i => _encoderIndex = i));
     }
 
     private void RefreshDisplays()
@@ -787,11 +831,33 @@ public sealed class StudioPage : ToolPageBase
         {
             var info = new FileInfo(file);
             bool clip = info.Name.StartsWith("Replay_", StringComparison.OrdinalIgnoreCase);
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-            buttons.Children.Add(SmallButton("Abrir", (_, _) => Open(file), true));
-            buttons.Children.Add(SmallButton("Excluir", (_, _) => Delete(file)));
-            _files.Children.Add(Row((clip ? "🎬 " : "") + info.Name, $"{info.Length / 1_048_576.0:0.0} MB · {info.CreationTime:dd/MM/yyyy HH:mm}", buttons));
+            _files.Children.Add(FileRow(file, info, clip));
         }
+    }
+
+    /// <summary>Linha enxuta: nome, tamanho e data numa linha só, com botões pequenos.</summary>
+    private Border FileRow(string file, FileInfo info, bool clip)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var text = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, FontSize = 12 };
+        text.Inlines.Add(new System.Windows.Documents.Run((clip ? "🎬 " : "") + info.Name) { FontWeight = FontWeights.SemiBold });
+        text.Inlines.Add(new System.Windows.Documents.Run($"   {info.Length / 1_048_576.0:0.0} MB · {info.CreationTime:dd/MM/yyyy HH:mm}") { Foreground = Brush("MutedBrush") });
+        grid.Children.Add(text);
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var (label, action, primary) in new (string, Action, bool)[] { ("Abrir", () => Open(file), true), ("Excluir", () => Delete(file), false) })
+        {
+            var button = new Button { Content = label, Style = (Style)FindResource(primary ? "PrimaryButton" : "GhostButton"), Padding = new Thickness(10, 3, 10, 3), FontSize = 11, Margin = new Thickness(6, 0, 0, 0) };
+            var act = action;
+            button.Click += (_, _) => act();
+            buttons.Children.Add(button);
+        }
+        Grid.SetColumn(buttons, 1);
+        grid.Children.Add(buttons);
+
+        return new Border { Style = (Style)FindResource("Card"), Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 0, 4), Child = grid };
     }
 
     private void Delete(string file)
@@ -843,7 +909,9 @@ public sealed class StudioPage : ToolPageBase
                 {
                     Content = new TextBlock { Text = names[i], TextTrimming = TextTrimming.CharacterEllipsis },
                     HorizontalContentAlignment = HorizontalAlignment.Left,
-                    Margin = new Thickness(0, 0, 0, 4),
+                    Margin = new Thickness(0, 0, 0, 3),
+                    Padding = new Thickness(10, 4, 10, 4),
+                    FontSize = 12,
                 };
                 button.Click += (_, _) => Select(index, true);
                 _buttons.Add(button);

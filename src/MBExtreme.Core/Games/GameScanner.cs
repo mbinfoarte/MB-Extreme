@@ -49,6 +49,14 @@ public static class GameScanner
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
+    /// <summary>Pasta de instalação da Steam (para achar as capas já guardadas por ela).</summary>
+    public static string SteamPath()
+    {
+        string? steam = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string;
+        if (string.IsNullOrWhiteSpace(steam)) steam = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam");
+        return steam.Replace('/', '\\');
+    }
+
     private static IEnumerable<InstalledGame> SteamGames()
     {
         string? steam = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string;

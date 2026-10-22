@@ -6,7 +6,7 @@ namespace MBExtreme.Core.Games;
 public enum GameLauncher { Steam, Epic, Gog, Manual }
 
 /// <summary>Um jogo encontrado no PC. <see cref="ExeName"/> é o nome do processo (ex.: cs2.exe), usado para vigiar e priorizar.</summary>
-public sealed record InstalledGame(string Id, string Name, GameLauncher Launcher, string InstallPath, string? ExeName, string? LaunchTarget)
+public sealed record InstalledGame(string Id, string Name, GameLauncher Launcher, string InstallPath, string? ExeName, string? LaunchTarget, string? SteamAppId = null)
 {
     public string LauncherName => Launcher switch
     {
@@ -112,7 +112,7 @@ public static class GameParsers
         if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(dir)) return null;
         if (SteamNonGames.Contains(id) || name.StartsWith("Steamworks", StringComparison.OrdinalIgnoreCase)
             || name.StartsWith("Steam Linux Runtime", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Proton", StringComparison.OrdinalIgnoreCase)) return null;
-        return new InstalledGame("steam:" + id, name, GameLauncher.Steam, Path.Combine(libraryPath, "steamapps", "common", dir), null, "steam://rungameid/" + id);
+        return new InstalledGame("steam:" + id, name, GameLauncher.Steam, Path.Combine(libraryPath, "steamapps", "common", dir), null, "steam://rungameid/" + id, id);
     }
 
     /// <summary>Jogo a partir de um manifesto .item da Epic Games (JSON).</summary>
@@ -174,6 +174,14 @@ public sealed class GameSettings
     public double MinutesPlayed { get; set; }
     public DateTime? LastPlayed { get; set; }
     public string? ExeName { get; set; }
+
+    /// <summary>Tipo escolhido pelo usuário ou sugerido (competitive, openworld, racing, light, app).</summary>
+    public string? ProfileKey { get; set; }
+
+    /// <summary>Ajustes que a otimização deste jogo ligou (só os que não estavam ligados antes), para desfazer depois.</summary>
+    public List<string> AppliedTweaks { get; set; } = new();
+
+    public DateTime? OptimizedAt { get; set; }
 }
 
 public sealed class ManualGame
@@ -248,6 +256,12 @@ public sealed class GameLibraryStore
             Save();
             return true;
         }
+    }
+
+    /// <summary>Quais outros jogos também dependem de um ajuste (para não desfazer o que outro jogo ainda usa).</summary>
+    public bool UsedByOthers(string tweakId, string exceptGameId)
+    {
+        lock (_lock) return _data.Settings.Any(kv => kv.Key != exceptGameId && kv.Value.AppliedTweaks.Contains(tweakId));
     }
 
     public IReadOnlyList<ManualGame> ManualGames()

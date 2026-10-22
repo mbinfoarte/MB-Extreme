@@ -29,6 +29,7 @@ internal static class AppServices
     public static BottleneckController Bottleneck { get; } = new();
     internal static MBExtreme.UI.Remote.RemoteSupportController RemoteSupport { get; } = new();
     public static GamePriorityService GamePriority { get; } = new(TweakStore);
+    public static GameOptimizationService GameOptimization { get; } = new(Tweaks, GameLibrary);
 
     public static HotkeyManager Hotkeys { get; } = new();
 

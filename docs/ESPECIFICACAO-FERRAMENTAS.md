@@ -6,7 +6,7 @@ Funções inspiradas em CPU-Z/GPU-Z/AIDA, OCCT, MSI Afterburner, LatencyMon e re
 | Módulo | Páginas |
 |---|---|
 | Otimização | Perfis, Limpeza, Inicialização, Desempenho, Efeitos visuais, Memória, Armazenamento |
-| Jogos | Modo Jogo, Jogos e energia, Ajustes para jogos, Diagnóstico de latência, Assistente de jogo, Monitor de FPS, Gravação de tela |
+| Jogos | Modo Jogo, Jogos e energia, Ajustes para jogos, Diagnóstico de latência, Assistente de jogo, Monitor de FPS, Gravação e transmissão |
 | Testes | Informações do sistema, Monitor em tempo real, Benchmark, Antes e depois, Teste de estresse |
 | Hardware e BIOS | Meu hardware, BIOS e atualizações, Receita de BIOS |
 | Dispositivos | Dispositivos conectados, Cache de portas USB |
@@ -33,10 +33,11 @@ Funções inspiradas em CPU-Z/GPU-Z/AIDA, OCCT, MSI Afterburner, LatencyMon e re
 - **Modo Jogo** (`GameBoostService` + `GameWatcher`): lista de jogos, vigia a abertura; troca o plano de energia para alto desempenho/Desempenho Máximo, pede para fechar (sem forçar) os programas escolhidos, sobe a prioridade e tira o jogo do modo de eficiência (EcoQoS, `SetProcessInformation`), libera RAM opcionalmente; ao fechar o jogo restaura o plano de energia.
 - **Jogos e energia**: Modo de Jogo do Windows, HAGS (risco médio, reinício) e planos de energia, com backup.
 - **Ajustes para jogos**: prioridade, Game DVR, MMCSS, HAGS, bloqueio de drivers no Windows Update e opções de energia na tomada (processador em 100%, núcleos sem estacionar, PCI Express sem ASPM, USB sem suspensão seletiva).
-- **Diagnóstico de latência** (`LatencyMonitor`): sessão ETW do kernel (DPC, ISR, imagens carregadas) agrupada por driver, com picos, médias e dica por tipo de driver; mostra a resolução do temporizador do Windows (somente leitura).
+- **Diagnóstico de latência** (`LatencyMonitor`): sessão ETW do kernel (DPC, ISR, imagens carregadas) agrupada por driver, com picos, médias e dica por tipo de driver; mostra a resolução do temporizador do Windows (somente leitura). No topo da página lista as **configurações que afetam a latência** (plano de energia, Modo de Jogo, agendamento de GPU, estacionamento de núcleos, economia do PCIe e do USB, Game DVR, MMCSS, separação de prioridade, limitação de rede, aceleração do mouse e Integridade de memória) com o estado atual e aplicar/desfazer.
 - **Assistente de jogo** (`GameAdvisor`): nível do PC pela VRAM e RAM, alvo de resolução/predefinição, upscaler (DLSS/FSR/XeSS), limite de quadros conforme a taxa da tela, Reflex/Anti-Lag.
 - **Monitor de FPS**: sessão ETW com o provedor Microsoft-Windows-DXGI (Present), por processo. FPS, tempo de quadro e "1% pior". Overlay transparente, sempre no topo e sem captura de mouse; atalho global Ctrl+Shift+F10. Limite: jogo em tela cheia exclusiva pode esconder o overlay.
-- **Gravação de tela**: pela placa de vídeo com FFmpeg (instalado sob demanda pelo winget): captura `ddagrab` e codificadores NVENC/AMF/Quick Sync em H.264, H.265 e AV1, 1080p/1440p/2160p ou resolução da tela, 30 ou 60 fps, MKV ou MP4. O app testa quais codificadores realmente funcionam na placa. Resolução diferente da tela redimensiona pela CPU. Modo compatível: AVI Motion JPEG próprio, sem programas externos. Sem som.
+- **Gravação e transmissão** (`StudioSession`, `StudioCommand`): uma captura e uma codificação pelo FFmpeg (instalado sob demanda pelo winget) enviadas por `tee` para até três saídas ao mesmo tempo: arquivo (MKV, ou MP4 fragmentado), transmissão RTMP/RTMPS (Twitch, YouTube ou servidor próprio; H.264, no máximo 8 Mbps, `onfail=ignore` para uma queda da rede não derrubar a gravação) e replay (pedaços de 4 s em anel). Origem: tela inteira (`ddagrab`), área da janela (`ddagrab` recortado, quadros ficam na GPU) ou conteúdo da janela (`gdigrab`). Janelas listadas por `EnumWindows` (sem janelas minimizadas, ocultas, de ferramenta ou da barra de tarefas). Áudio: som do PC (WASAPI loopback) e microfone, mixados no app (`AudioMixer`, 48 kHz estéreo, volume por fonte, medidor) e entregues ao FFmpeg por um canal nomeado. Replay: Ctrl + Shift + F9 junta os últimos 30 s, 1 min ou 2 min em um MP4 sem recodificar (`concat`), na pasta `Clipes`. A chave de transmissão só é guardada se o usuário pedir, protegida por DPAPI, e é mascarada em qualquer mensagem. Modo compatível: AVI Motion JPEG próprio, sem programas externos nem áudio.
+- **Reparo do Windows** (`RepairCatalog`, `RepairRunner`): SFC (reparar e só verificar), DISM (CheckHealth, ScanHealth, RestoreHealth, StartComponentCleanup), CHKDSK (verificação online e reparo profundo agendado para o reinício), reinício do Windows Update, reparo da loja, WMI, pilha de rede e cache de ícones, mais o reparo completo recomendado (DISM, SFC, CHKDSK). A saída aparece ao vivo (UTF-16 do SFC e página de código do console tratadas), com barra de progresso, cancelamento (encerra a árvore de processos), ponto de restauração opcional, tradução dos códigos de saída em frases, os comandos equivalentes para copiar e relatórios em `%AppData%\MBExtreme\logs`.
 
 ## Otimização
 - **Perfis**: Jogo, Competitivo (na tomada) e PC fraco; só ajustes de risco baixo, restaurar tudo.
@@ -53,6 +54,7 @@ Funções inspiradas em CPU-Z/GPU-Z/AIDA, OCCT, MSI Afterburner, LatencyMon e re
 
 ## Limites conhecidos
 - Sem busca automática da "BIOS mais nova" por fabricante (não há API pública); o app orienta e abre a busca no site oficial.
-- Ainda não há áudio na gravação de tela.
+- Ao transmitir, a gravação e o replay usam a mesma imagem enviada ao vivo (no máximo 8 Mbps). A janela em modo recorte grava a área da tela onde ela está: se outra janela ficar por cima, aparece no vídeo.
+- A linha de comando do FFmpeg, que contém a chave de transmissão, fica visível para outros programas do mesmo PC enquanto transmite (limitação do próprio FFmpeg, que não aceita a chave por outro caminho).
 - A consulta ao catálogo da NVIDIA, o benchmark 3D, o ETW e a gravação com FFmpeg dependem do hardware e do Windows; falhas aparecem como mensagem na página e o restante do app segue funcionando.
 - Temperatura de CPU e algumas tensões dependem do driver PawnIO.

@@ -52,12 +52,12 @@ Detalhes em `docs/ESPECIFICACAO-FERRAMENTAS.md`; a base das recomendações (tes
 
 - **Painel**: medidores de temperatura da CPU e da GPU, memória e ping; gráficos de internet e CPU. Sensores via LibreHardwareMonitor (`THIRD-PARTY.md`); para temperatura da CPU é preciso o driver PawnIO (o painel oferece instalar pelo winget).
 - **Otimização**: Perfis (Jogo, Competitivo, PC fraco), Limpeza segura, Inicialização (liga/desliga programas), Desempenho, Efeitos visuais, Memória e Armazenamento (saúde e otimização de SSD/HD).
-- **Jogos**: Modo Jogo automático, energia e agendamento de GPU, Diagnóstico de latência (driver que causa micro-travadas), Assistente de jogo, Monitor de FPS com overlay e Gravação de tela pela placa de vídeo (1080p, 1440p e 4K, 30 ou 60 fps).
+- **Jogos**: Modo Jogo automático, energia e agendamento de GPU, Diagnóstico de latência (mostra as configurações do Windows que afetam a latência, com liga/desliga, e mede qual driver causa micro-travadas), Assistente de jogo, Monitor de FPS com overlay e **Gravação e transmissão**: grava a tela inteira ou só a janela do jogo, transmite ao vivo (Twitch, YouTube ou outro servidor RTMP) e guarda os melhores momentos com o **replay** (Ctrl + Shift + F9), com som do PC e microfone, pela placa de vídeo (1080p, 1440p e 4K, 30 ou 60 fps).
 - **Testes**: Informações do sistema, Monitor em tempo real (clock e uso por núcleo, tensões, temperaturas), Benchmark (CPU, memória com latência, disco e GPU em 3D), Antes e depois e Teste de estresse (geral e por núcleo).
 - **Hardware e BIOS**: leitura das peças com alertas (XMP/EXPO, canal único, Windows 24H2, BIOS antiga, microcódigo Intel, chipset AMD), página de BIOS e Receita de BIOS/PBO. O app orienta; nunca atualiza BIOS sozinho.
 - **Dispositivos**: lista de USB e do hardware, cache de portas USB.
 - **Rede**: DNS, ajustes, Analisador de rede (Ping, TCPing, MTR, jitter) e Wi-Fi.
-- **Windows**: privacidade, remoção de aplicativos, boot e periféricos.
+- **Windows**: privacidade, remoção de aplicativos, boot, periféricos e **Reparo do Windows** (SFC, DISM, CHKDSK, Windows Update, loja, WMI, rede e cache de ícones, com a saída dos comandos ao vivo).
 - **Drivers e programas**: driver da NVIDIA direto do servidor oficial, AMD/Intel pelo Windows Update, programas pelo winget.
 - Todo ajuste mostra o risco, guarda o valor original e pode ser restaurado. Visual preto com cartões arredondados e botões amarelos; janela de progresso padrão e instalador (.exe) com mini tutorial.
 

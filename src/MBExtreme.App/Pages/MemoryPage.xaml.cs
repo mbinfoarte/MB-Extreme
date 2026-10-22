@@ -12,7 +12,7 @@ public partial class MemoryPage : UserControl
 {
     private const double BytesPerGb = 1024.0 * 1024 * 1024;
 
-    private readonly AppSettings _settings = AppSettings.Load();
+    private readonly AppSettings _settings = AppServices.Settings;
     private CancellationTokenSource? _cts;
 
     public MemoryPage()

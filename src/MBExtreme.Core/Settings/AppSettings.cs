@@ -21,6 +21,43 @@ public sealed class AppSettings
 
     public bool BoostCleanMemory { get; set; }
 
+    // ---- Estúdio de gravação e transmissão
+    public int StudioFps { get; set; } = 60;
+
+    /// <summary>0 = tamanho original, 1 = 1080p, 2 = 1440p, 3 = 2160p, 4 = 720p.</summary>
+    public int StudioResolution { get; set; }
+
+    /// <summary>Taxa de vídeo em Mbps; 0 = automática.</summary>
+    public int StudioBitrateMbps { get; set; }
+
+    public int StudioReplaySeconds { get; set; } = 60;
+
+    public bool StudioReplayBeep { get; set; } = true;
+
+    public bool StudioMp4 { get; set; }
+
+    public bool StudioSystemAudio { get; set; } = true;
+
+    public bool StudioMicAudio { get; set; }
+
+    public double StudioSystemVolume { get; set; } = 1.0;
+
+    public double StudioMicVolume { get; set; } = 1.0;
+
+    public string? StudioMicId { get; set; }
+
+    public string? StudioOutputId { get; set; }
+
+    /// <summary>0 = Twitch, 1 = YouTube, 2 = servidor próprio.</summary>
+    public int StudioStreamService { get; set; }
+
+    public string StudioCustomUrl { get; set; } = "rtmp://";
+
+    public bool StudioRememberKey { get; set; }
+
+    /// <summary>Chave de transmissão protegida pelo Windows (DPAPI, só este usuário neste PC). Nunca em texto puro.</summary>
+    public string? StudioProtectedKey { get; set; }
+
     private static string FolderPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme");
 

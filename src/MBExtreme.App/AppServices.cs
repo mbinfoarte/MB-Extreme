@@ -16,15 +16,23 @@ internal static class AppServices
 
     public static IReadOnlyList<Tweak> Tweaks { get; } = TweakCatalog.Create(TweakStore);
 
+    /// <summary>Configurações do usuário: uma única cópia, para um salvamento não apagar o do outro.</summary>
+    public static MBExtreme.Core.Settings.AppSettings Settings { get; } = MBExtreme.Core.Settings.AppSettings.Load();
+
     public static NetworkMonitor Network { get; } = new();
 
     public static OverlayController Overlay { get; } = new();
 
     public static BoostController Boost { get; } = new();
 
+    public static HotkeyManager Hotkeys { get; } = new();
+
+    public static StudioController Studio { get; } = new();
+
     public static ScreenRecorder Recorder { get; } = new();
 
-    public static FfmpegRecorder GpuRecorder { get; } = new();
+    /// <summary>Codificadores de GPU já testados nesta sessão (o teste leva alguns segundos).</summary>
+    public static IReadOnlyList<EncoderOption>? CachedEncoders { get; set; }
 
     // Abrir os sensores carrega um driver e pode demorar: é feito em segundo plano, uma única vez.
     private static readonly Lazy<Task<SensorService>> SensorsLazy = new(() => Task.Run(() => new SensorService()));
@@ -53,10 +61,11 @@ internal static class AppServices
 
     public static void Shutdown()
     {
+        Studio.Shutdown();
+        Hotkeys.Shutdown();
         Overlay.Shutdown();
         Boost.Shutdown();
         if (Recorder.IsRecording) Recorder.Stop();
-        if (GpuRecorder.IsRecording) GpuRecorder.Stop();
         try
         {
             if (MonitorLazy.IsValueCreated && MonitorLazy.Value.IsCompletedSuccessfully)

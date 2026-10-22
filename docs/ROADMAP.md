@@ -17,7 +17,8 @@
 - [x] **Diagnóstico de latência** (DPC/ISR por driver)
 - [x] **Modo Jogo** automático e **Assistente de jogo**
 - [x] **Monitor de FPS** com overlay
-- [x] **Gravação de tela** pela placa de vídeo (NVENC, AMF, Quick Sync; 1080p/1440p/4K; 30/60 fps) e modo compatível
+- [x] **Gravação e transmissão** pela placa de vídeo (NVENC, AMF, Quick Sync; 1080p/1440p/4K; 30/60 fps): tela ou janela, áudio do PC e microfone, transmissão RTMP (Twitch, YouTube, outro servidor) e replay dos melhores momentos; modo compatível AVI
+- [x] **Reparo do Windows** (SFC, DISM, CHKDSK, Windows Update, loja, WMI, rede, cache de ícones) com saída ao vivo
 - [x] Dispositivos, cache de portas USB, armazenamento e saúde dos discos
 - [x] Analisador de rede (Ping, TCPing, MTR, jitter) e diagnóstico de Wi-Fi
 - [x] Drivers (NVIDIA direto do servidor oficial, AMD e Intel pelo Windows Update) e programas (winget)
@@ -25,11 +26,10 @@
 
 ## Próximos passos
 - [ ] Assinatura de código do instalador (evita o aviso do SmartScreen)
-- [ ] Áudio (sistema e microfone) na gravação de tela
+- [ ] Estúdio: cenas e sobreposições (webcam, texto), gravação e transmissão em qualidades diferentes, atalhos configuráveis
 - [ ] Central de ações (histórico geral e desfazer tudo)
 - [ ] Base de versões recomendadas de BIOS ampliada (outras plataformas e fabricantes)
 - [ ] Ajustes planejados do `CATALOGO-AJUSTES.md` (TCP, bcdedit com medição, armazenamento)
-- [ ] Ferramenta de Reparo do Windows (chkdsk, DISM, sfc)
 - [ ] Ping por região de jogo e catálogo de servidores; relays e seleção automática de rota
 - [ ] Coleta de métricas (opt-in) e motor de recomendação
 - [ ] Atualização automática, licenciamento, site e suporte

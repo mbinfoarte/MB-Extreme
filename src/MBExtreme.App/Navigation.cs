@@ -29,7 +29,7 @@ internal static class NavigationMap
             new("latency", "Diagnóstico de latência", "Acha o driver que causa micro-travadas.", "\uE9D9"),
             new("gameadvisor", "Assistente de jogo", "Configurações ideais para o seu hardware.", "\uE770"),
             new("fps", "Monitor de FPS", "Overlay com FPS, temperatura e uso.", "\uE9D9"),
-            new("record", "Gravação de tela", "Full HD, 2K e 4K pela placa de vídeo.", "\uE714"),
+            new("record", "Gravação e transmissão", "Grave, transmita ao vivo e salve replays, com áudio e escolha de janela.", "\uE714"),
         }),
         new("test", "Testes", "Informações, sensores, benchmark e estresse.", "\uE9D9", new Tile[]
         {

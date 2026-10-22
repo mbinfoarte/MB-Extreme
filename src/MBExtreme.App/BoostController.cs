@@ -19,7 +19,7 @@ internal sealed class BoostController
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await StopAsync()));
     }
 
-    public AppSettings Settings { get; } = AppSettings.Load();
+    public AppSettings Settings => AppServices.Settings;
     public bool IsActive => _service.IsActive;
     public string? ActiveGame => _service.ActiveGame;
     public BoostReport? LastReport { get; private set; }

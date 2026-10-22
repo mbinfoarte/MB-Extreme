@@ -16,7 +16,11 @@ public partial class MainWindow : Window
         InitializeComponent();
         BuildMenu();
         Current = this;
-        Loaded += (_, _) => AppServices.Overlay.AttachHotkey(this);
+        Loaded += (_, _) =>
+        {
+            AppServices.Overlay.AttachHotkey(this);
+            AppServices.Hotkeys.Attach(this);
+        };
         Go("home");
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
     }
@@ -121,7 +125,7 @@ public partial class MainWindow : Window
         "bench" => new BenchmarkPage(),
         "stress" => new StressPage(),
         "fps" => new FpsPage(),
-        "record" => new RecordPage(),
+        "record" => new StudioPage(),
         "storage" => new StoragePage(),
         "netanalyzer" => new NetAnalyzerPage(),
         "devices" => new DevicesPage(),

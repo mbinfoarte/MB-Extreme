@@ -22,6 +22,14 @@ Ideias e técnicas de outros projetos usados apenas como referência de estudo e
 - Uso: benchmark 3D da GPU em Direct3D 11.
 - Licença: MIT. https://github.com/amerkoleci/Vortice.Windows
 
+## NAudio (NAudio.Core, NAudio.Wasapi)
+- Uso: captura do som do PC e do microfone (WASAPI) e mixagem para a gravação e a transmissão.
+- Licença: MIT. https://github.com/naudio/NAudio
+
+## System.Security.Cryptography.ProtectedData
+- Uso: guardar a chave de transmissão protegida pelo Windows (DPAPI), se o usuário pedir para lembrar.
+- Licença: MIT.
+
 ## FFmpeg (não incluído)
-- Uso: gravação de tela acelerada pela placa de vídeo. O MB Extreme **não distribui** o FFmpeg: ele é instalado pelo usuário (winget, pacote Gyan.FFmpeg) e o aplicativo apenas executa o programa.
+- Uso: captura, codificação, transmissão e replay acelerados pela placa de vídeo. O MB Extreme **não distribui** o FFmpeg: ele é instalado pelo usuário (winget, pacote Gyan.FFmpeg) e o aplicativo apenas executa o programa.
 - Licença: LGPL/GPL conforme a compilação instalada. https://ffmpeg.org

@@ -23,12 +23,14 @@
 - [x] Páginas de **Processador**, **Placa de vídeo**, **Memória** (limpeza automática), **Discos** e **Pendrives e HDs externos** (remoção segura)
 - [x] **Segurança** (antivírus, firewall, UAC), **Programas recomendados** e **Ferramentas** (processos, arquivos grandes e duplicados, pastas vazias e atalhos inválidos, destruir arquivos, desligamento automático)
 - [x] **Licenciamento**: módulo no app (login por código, licença assinada, duas últimas guardadas, renovação, plano Pro), servidor e site de modelo, testes de ponta a ponta (`docs/LICENCIAMENTO.md`)
+- [x] Janela arredondada, menu compacto com cartão do cliente (foto, nome, plano e dias restantes), correções automáticas de segurança e limpeza automática da memória no painel, **Suporte remoto** com AnyDesk
 - [x] Dispositivos, cache de portas USB, armazenamento e saúde dos discos
 - [x] Analisador de rede (Ping, TCPing, MTR, jitter) e diagnóstico de Wi-Fi
 - [x] Drivers (NVIDIA direto do servidor oficial, AMD e Intel pelo Windows Update) e programas (winget)
 - [x] Instalador (.exe) com barra de progresso, mini tutorial, atalhos e desinstalação
 
 ## Próximos passos
+- [ ] Suporte: pedido enviado ao servidor com o ID do AnyDesk, painel do técnico com clientes disponíveis e histórico de atendimentos
 - [ ] Colocar o licenciamento em produção: hospedagem, gateway de pagamento, e-mails, painel administrativo e termos (checklist em `docs/LICENCIAMENTO.md`)
 - [ ] Gerenciador de menu de contexto e de programas padrão
 - [ ] Assinatura de código do instalador (evita o aviso do SmartScreen)

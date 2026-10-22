@@ -34,6 +34,9 @@ Ideias e técnicas de outros projetos usados apenas como referência de estudo e
 - Uso: guardar a chave de transmissão protegida pelo Windows (DPAPI), se o usuário pedir para lembrar.
 - Licença: MIT.
 
+## AnyDesk (não incluído)
+- Uso: suporte remoto. O MB Extreme **não distribui** o AnyDesk: ele é baixado do site oficial (download.anydesk.com) só quando o cliente pede, tem a assinatura digital conferida e é aberto pelo próprio cliente. Programa proprietário, sujeito aos termos do fabricante (uso pessoal gratuito; atendimento comercial exige licença do AnyDesk). https://anydesk.com
+
 ## FFmpeg (não incluído)
 - Uso: captura, codificação, transmissão e replay acelerados pela placa de vídeo. O MB Extreme **não distribui** o FFmpeg: ele é instalado pelo usuário (winget, pacote Gyan.FFmpeg) e o aplicativo apenas executa o programa.
 - Licença: LGPL/GPL conforme a compilação instalada. https://ffmpeg.org

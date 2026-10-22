@@ -24,7 +24,7 @@ Site (conta + plano) ──► Pagamento (assinatura recorrente)
 Apenas as **duas últimas licenças** (a atual e a anterior), em `%AppData%\MBExtreme\license.dat`, cada uma protegida pelo Windows. Se a mais recente não valer, o programa usa a anterior. Licenças mais antigas são descartadas.
 
 ### Formato da licença
-`mbx1.<conteúdo>.<assinatura>` (base64url). O conteúdo traz: conta, e-mail, plano, recursos avulsos, limite de computadores, identificador do PC, emissão, vencimento e situação da assinatura. O identificador do PC é um hash de um GUID do Windows com um sal; não contém nome, usuário nem dados de componentes.
+`mbx1.<conteúdo>.<assinatura>` (base64url). O conteúdo traz: conta, nome e e-mail, plano, recursos avulsos, limite de computadores, identificador do PC, emissão, vencimento da licença, **fim do período pago** (é o que o cartão do cliente mostra como "dias restantes") e situação da assinatura. O identificador do PC é um hash de um GUID do Windows com um sal; não contém nome, usuário nem dados de componentes.
 
 ### Proteções
 - Licença adulterada, de outra chave ou de outro PC é recusada.
@@ -82,3 +82,8 @@ Eventos: `subscription.activated`, `subscription.renewed`, `subscription.trialin
 
 ### Limite honesto da proteção
 Um programa .NET pode ser aberto e alterado: nenhum bloqueio local é inviolável. O que protege de verdade é manter valor no servidor (atualizações, catálogos e bases só para quem tem licença) e ter um preço e um processo de compra justos.
+
+## Suporte remoto (AnyDesk)
+O programa tem a página **Suporte > Suporte remoto**. O cliente clica em *Preparar o AnyDesk* (baixa da fonte oficial, confere a assinatura digital do fabricante e abre), copia o ID e o pedido de suporte (com o relatório do sistema, se quiser) e envia ao suporte. O técnico digita o ID em *Sou o técnico* e o AnyDesk pede ao cliente para aceitar a conexão. O acesso nunca começa sem o aceite do cliente, e o programa não configura acesso sem supervisão.
+
+Observações: o AnyDesk é de terceiros e proprietário; o atendimento comercial por quem presta o suporte exige licença do AnyDesk. Próxima etapa (depende do servidor no ar): enviar o pedido direto ao servidor, listar no painel do técnico os clientes disponíveis e registrar o histórico de atendimentos.

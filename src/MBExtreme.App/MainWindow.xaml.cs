@@ -206,6 +206,7 @@ public partial class MainWindow : Window
         "startup" => new StartupPage(),
         "repair" => new RepairPage(),
         "license" => new LicensePage(),
+        "support" => new SupportPage(),
         "processes" => new ProcessesPage(),
         "largefiles" => new LargeFilesPage(),
         "duplicates" => new DuplicatesPage(),

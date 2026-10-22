@@ -58,6 +58,7 @@ Detalhes em `docs/ESPECIFICACAO-FERRAMENTAS.md`; a base das recomendações (tes
 - **Dispositivos**: lista de USB e do hardware, cache de portas USB.
 - **Rede**: DNS, ajustes, Analisador de rede (Ping, TCPing, MTR, jitter) e Wi-Fi.
 - **Ferramentas**: Processos, Arquivos grandes, Arquivos duplicados, Pastas vazias e atalhos inválidos, Destruir arquivos e Desligamento automático.
+- **Suporte**: Suporte remoto com o AnyDesk (o cliente prepara, passa o ID e aceita a conexão; o técnico conecta pelo ID).
 - **Licença**: ativação por conta do site (plano gratuito e Pro) com licença assinada, renovação automática e uso offline; ver `docs/LICENCIAMENTO.md`. Desligada por padrão no beta aberto.
 - **Windows**: Segurança (antivírus, firewall, UAC), privacidade, remoção de aplicativos, boot, periféricos e **Reparo do Windows** (SFC, DISM, CHKDSK, Windows Update, loja, WMI, rede e cache de ícones, com a saída dos comandos ao vivo).
 - **Drivers e programas**: driver da NVIDIA direto do servidor oficial, AMD/Intel pelo Windows Update, programas pelo winget.

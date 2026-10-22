@@ -71,6 +71,10 @@ internal static class NavigationMap
             new("security", "Segurança", "Antivírus, firewall e controle de contas.", "\uE72E"),
             new("repair", "Reparo do Windows", "SFC, DISM, CHKDSK e correções de Windows Update, loja e rede.", "\uE90F"),
         }),
+        new("sup", "Suporte", "Ajuda do suporte da MB InfoArt por acesso remoto.", "\uE8F2", new Tile[]
+        {
+            new("support", "Suporte remoto", "Peça ajuda: o técnico entra só depois que você aceitar.", "\uE8F2"),
+        }),
         new("tools", "Ferramentas", "Processos, arquivos grandes e duplicados, e mais.", "\uE90F", new Tile[]
         {
             new("processes", "Processos", "Quem usa memória e processador, com encerramento seguro.", "\uE9D9"),

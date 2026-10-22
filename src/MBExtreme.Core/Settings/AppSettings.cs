@@ -81,6 +81,12 @@ public sealed class AppSettings
     /// <summary>Chave de transmissão protegida pelo Windows (DPAPI, só este usuário neste PC). Nunca em texto puro.</summary>
     public string? StudioProtectedKey { get; set; }
 
+    /// <summary>Enviar resumos anônimos das sessões de jogo (jogo, faixa de hardware e resultado). Desligado por padrão.</summary>
+    public bool ShareAnonymousStats { get; set; }
+
+    /// <summary>Meta de FPS usada no relatório de gargalos.</summary>
+    public int BottleneckTargetFps { get; set; } = 60;
+
     private static string FolderPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme");
 

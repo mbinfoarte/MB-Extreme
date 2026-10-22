@@ -29,6 +29,7 @@ internal static class NavigationMap
             new("tweaks-game", "Ajustes para jogos", "Prioridade, gravação em segundo plano, energia e mais.", "\uE9D9"),
             new("latency", "Diagnóstico de latência", "Acha o driver que causa micro-travadas.", "\uE9D9"),
             new("gameadvisor", "Assistente de jogo", "Configurações ideais para o seu hardware.", "\uE770"),
+            new("bottleneck", "Monitor de gargalos", "O que limita o seu FPS: placa, processador, memória, disco ou calor.", "\uE9D9"),
             new("fps", "Monitor de FPS", "Overlay com FPS, temperatura e uso.", "\uE9D9"),
             new("record", "Gravação e transmissão", "Grave, transmita ao vivo e salve replays, com áudio e escolha de janela.", "\uE714"),
         }),

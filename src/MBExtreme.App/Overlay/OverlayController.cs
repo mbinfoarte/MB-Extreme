@@ -126,6 +126,7 @@ internal sealed class OverlayController
                 // sem sensores: mostra só o FPS
             }
 
+            if (AppServices.Bottleneck.IsRecording && AppServices.Bottleneck.CurrentLabel is { } label) parts.Add(label);
             _window.SetText(fps, string.Join("\n", parts));
         }
 

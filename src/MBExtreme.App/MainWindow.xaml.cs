@@ -223,6 +223,7 @@ public partial class MainWindow : Window
         "latency" => new LatencyPage(),
         "gameboost" => new GameBoostPage(),
         "gamelibrary" => new GameLibraryPage(),
+        "bottleneck" => new BottleneckPage(),
         "gameadvisor" => new GameAdvisorPage(),
         "wifi" => new WifiPage(),
         "visual" => new TweaksPage("Efeitos visuais",

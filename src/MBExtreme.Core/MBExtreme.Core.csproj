@@ -10,6 +10,7 @@
   <ItemGroup>
     <!-- Sensores de hardware (MPL 2.0). Veja THIRD-PARTY.md. -->
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.0" />
     <!-- Consultas WMI (informações do sistema, dispositivos, drivers). MIT. -->
     <PackageReference Include="System.Management" Version="10.0.2" />
     <!-- Eventos de apresentação de quadros (ETW) para o monitor de FPS. MIT. -->

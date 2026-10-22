@@ -21,6 +21,18 @@ public sealed class AppSettings
 
     public bool BoostCleanMemory { get; set; }
 
+    // ---- Licenciamento (ver docs/LICENCIAMENTO.md)
+    /// <summary>Quando verdadeiro, as páginas do plano Pro exigem licença válida. Desligado no beta aberto.</summary>
+    public bool LicenseEnforce { get; set; }
+
+    public string LicenseServerUrl { get; set; } = "";
+
+    /// <summary>Chave pública do servidor (SubjectPublicKeyInfo em base64), usada só para conferir a assinatura das licenças.</summary>
+    public string LicensePublicKey { get; set; } = "";
+
+    /// <summary>Último momento em que o app rodou (detecta relógio voltado para trás).</summary>
+    public long LicenseLastSeenUtcTicks { get; set; }
+
     // ---- Desligamento programado pelo MB Extreme (para o app lembrar depois de fechar)
     public long ScheduledShutdownUtcTicks { get; set; }
 

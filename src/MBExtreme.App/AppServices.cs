@@ -3,6 +3,7 @@ using MBExtreme.Core.Network;
 using MBExtreme.Core.Recording;
 using MBExtreme.Core.Sensors;
 using MBExtreme.Core.Sensors;
+using MBExtreme.Core.Games;
 using MBExtreme.Core.Tweaks;
 using MBExtreme.UI.Overlay;
 using MBExtreme.UI.Recording;
@@ -24,6 +25,8 @@ internal static class AppServices
     public static OverlayController Overlay { get; } = new();
 
     public static BoostController Boost { get; } = new();
+    public static GameLibraryStore GameLibrary { get; } = new();
+    public static GamePriorityService GamePriority { get; } = new(TweakStore);
 
     public static HotkeyManager Hotkeys { get; } = new();
 

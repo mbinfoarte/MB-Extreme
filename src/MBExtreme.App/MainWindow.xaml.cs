@@ -222,6 +222,7 @@ public partial class MainWindow : Window
         "removable" => new RemovablePage(),
         "latency" => new LatencyPage(),
         "gameboost" => new GameBoostPage(),
+        "gamelibrary" => new GameLibraryPage(),
         "gameadvisor" => new GameAdvisorPage(),
         "wifi" => new WifiPage(),
         "visual" => new TweaksPage("Efeitos visuais",

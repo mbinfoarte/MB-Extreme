@@ -23,6 +23,7 @@ internal static class NavigationMap
         }),
         new("games", "Jogos", "Windows, GPU, energia e latência para jogar melhor.", "\uE7FC", new Tile[]
         {
+            new("gamelibrary", "Biblioteca de jogos", "Seus jogos instalados, com Modo Jogo e prioridade por jogo.", "\uE7FC"),
             new("gameboost", "Modo Jogo", "Prepara o PC quando um jogo abre.", "\uE7FC"),
             new("gamesettings", "Jogos e energia", "Modo de Jogo do Windows, agendamento de GPU e plano de energia.", "\uE713"),
             new("tweaks-game", "Ajustes para jogos", "Prioridade, gravação em segundo plano, energia e mais.", "\uE9D9"),

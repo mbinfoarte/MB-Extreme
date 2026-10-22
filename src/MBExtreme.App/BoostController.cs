@@ -9,14 +9,22 @@ internal sealed class BoostController
 {
     private readonly GameBoostService _service = new();
     private readonly GameWatcher _watcher = new();
+    private DateTime? _startedAt;
     private volatile string[] _games = Array.Empty<string>();
 
     public BoostController()
     {
         _watcher.GameStarted += (name, pid) =>
+        {
+            _startedAt = DateTime.Now;
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await StartAsync(name, pid)));
-        _watcher.GameStopped += _ =>
+        };
+        _watcher.GameStopped += name =>
+        {
+            if (_startedAt is { } start) AppServices.GameLibrary.AddPlaytime(name, (DateTime.Now - start).TotalMinutes, DateTime.Now);
+            _startedAt = null;
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await StopAsync()));
+        };
     }
 
     public AppSettings Settings => AppServices.Settings;

@@ -28,6 +28,8 @@ public static class RepairInterpreter
             return (true, "Nenhum problema encontrado nos arquivos do sistema.");
         if (text.Contains("com exito") || text.Contains("com sucesso") || text.Contains("successfully repaired"))
             return (true, "Havia arquivos corrompidos e foram reparados. Reinicie o PC e, se quiser, rode o SFC mais uma vez.");
+        if (text.Contains("violacoes de integridade") || text.Contains("found integrity violations"))
+            return (false, $"Foram encontradas violações de integridade. Rode \"Verificar e reparar arquivos do sistema (SFC)\" depois do reparo da imagem (DISM). Detalhes: {CbsLog}");
         if (text.Contains("reinicializacao") || text.Contains("reiniciar") || text.Contains("pending") || text.Contains("reboot"))
             return (false, "Há um reparo pendente que exige reiniciar o PC. Reinicie e rode o SFC de novo.");
         return exitCode == 0
@@ -74,7 +76,7 @@ public static class RepairInterpreter
     };
 
     private static (bool, string) ChkdskSchedule(string text) =>
-        text.Contains("reinici") || text.Contains("restart") || text.Contains("proxima vez") || text.Contains("next time")
+        text.Contains("sera verificado") || text.Contains("will be checked") || text.Contains("scheduled to be checked")
             ? (true, "Verificação agendada. Ela roda na próxima vez que o PC reiniciar; não desligue durante a verificação.")
             : (false, "Não foi possível confirmar o agendamento. Abra o terminal como administrador e rode o comando mostrado abaixo.");
 

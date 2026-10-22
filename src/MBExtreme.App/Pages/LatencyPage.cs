@@ -48,14 +48,17 @@ public sealed class LatencyPage : ToolPageBase
         Loaded += (_, _) => _ = LoadSettingsAsync();
     }
 
+    private int _generation;
+
     private async Task LoadSettingsAsync()
     {
+        int generation = ++_generation;
         _settings.Children.Clear();
         _settings.Children.Add(Muted("Lendo as configurações..."));
         try
         {
             var snapshot = await Task.Run(ReadSettings);
-            ShowSettings(snapshot);
+            if (generation == _generation) ShowSettings(snapshot);
         }
         catch (Exception ex)
         {

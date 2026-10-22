@@ -160,6 +160,48 @@ public class ReparoTests
         Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
     }
 
+    [Fact]
+    public void Sfc_com_violacoes_nao_vira_concluido()
+    {
+        Assert.False(RepairInterpreter.Interpret(StepKind.Sfc, 0, "Windows Resource Protection found integrity violations.").Ok);
+        Assert.False(RepairInterpreter.Interpret(StepKind.Sfc, 0, "A Proteção de Recursos do Windows encontrou violações de integridade.").Ok);
+    }
+
+    [Fact]
+    public void Chkdsk_agendado_nao_confunde_a_pergunta_com_a_confirmacao()
+    {
+        Assert.False(RepairInterpreter.Interpret(StepKind.ChkdskSchedule, 0, "Deseja agendar a verificação na próxima reinicialização (S/N)?").Ok);
+        Assert.True(RepairInterpreter.Interpret(StepKind.ChkdskSchedule, 0, "Este volume será verificado na próxima reinicialização do sistema.").Ok);
+    }
+
+    [Fact]
+    public void Reinicio_de_rede_avisa_que_apaga_ip_fixo() =>
+        Assert.Contains("IP fixo", RepairCatalog.Create("C:", "pt").First(t => t.Id == "net-reset").Caution);
+
+    [Fact]
+    public void Wu_reset_religa_os_servicos_mesmo_se_renomear_falhar()
+    {
+        var task = RepairCatalog.Create("C:", "pt").First(t => t.Id == "wu-reset");
+        Assert.All(task.Steps.Where(st => st.Arguments.StartsWith("start ")), st => Assert.True(st.AlwaysRun));
+    }
+
+    [Fact]
+    public async Task Passos_obrigatorios_rodam_depois_de_uma_falha()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var task = new RepairTask("t", "g", "T", "", "1 s", new[]
+        {
+            new RepairStep("falha", "/bin/sh", "-c \"exit 3\""),
+            new RepairStep("pula", "/bin/sh", "-c \"echo pulado\""),
+            new RepairStep("religa", "/bin/sh", "-c \"echo religado\"", StepKind.Generic, true, null, true),
+        });
+        var lines = new List<RepairUpdate>();
+        var result = await new RepairRunner().RunAsync(task, new SyncProgress(lines.Add), CancellationToken.None);
+        Assert.False(result.Success);
+        Assert.Contains(lines, l => l.Message == "religado");
+        Assert.DoesNotContain(lines, l => l.Message == "pulado");
+    }
+
     private sealed class SyncProgress(Action<RepairUpdate> onReport) : IProgress<RepairUpdate>
     {
         public void Report(RepairUpdate value) => onReport(value);

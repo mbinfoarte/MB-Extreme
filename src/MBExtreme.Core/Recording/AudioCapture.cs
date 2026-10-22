@@ -133,10 +133,11 @@ public sealed class AudioPipe : IDisposable
     /// <summary>Começa a esperar o FFmpeg se conectar (chame antes de iniciar o FFmpeg).</summary>
     public void BeginWait() => _connection = _server.WaitForConnectionAsync();
 
-    public async Task<bool> WaitConnectedAsync(TimeSpan timeout)
+    /// <param name="abortWhen">Tarefa que, ao terminar, interrompe a espera (o FFmpeg fechou).</param>
+    public async Task<bool> WaitConnectedAsync(TimeSpan timeout, Task? abortWhen = null)
     {
         if (_connection is null) BeginWait();
-        var finished = await Task.WhenAny(_connection!, Task.Delay(timeout)).ConfigureAwait(false);
+        var finished = await Task.WhenAny(_connection!, abortWhen ?? Task.Delay(Timeout.Infinite), Task.Delay(timeout)).ConfigureAwait(false);
         return finished == _connection && _server.IsConnected;
     }
 

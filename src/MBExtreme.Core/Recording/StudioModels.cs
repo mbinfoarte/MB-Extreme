@@ -54,6 +54,17 @@ public sealed class StreamTarget
 
     public string FullUrl => Service == StreamService.Custom && Key.Length == 0 ? BaseUrl : BaseUrl + "/" + Key;
 
+    /// <summary>Servidor próprio: a parte do caminho depois do primeiro segmento costuma ser a chave quando o usuário cola tudo no endereço.</summary>
+    public string? PathSecret
+    {
+        get
+        {
+            if (!Uri.TryCreate(CustomUrl, UriKind.Absolute, out var uri)) return null;
+            var parts = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length > 1 ? string.Join("/", parts.Skip(1)) : null;
+        }
+    }
+
     public string DisplayName => Service switch { StreamService.Twitch => "Twitch", StreamService.YouTube => "YouTube", _ => "servidor próprio" };
 
     public override string ToString() => DisplayName;

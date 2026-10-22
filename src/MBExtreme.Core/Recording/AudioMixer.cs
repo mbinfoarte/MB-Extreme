@@ -59,7 +59,7 @@ public sealed class AudioMixer
 
     public AudioInput AddInput(string name, WaveFormat format, float volume = 1f)
     {
-        var input = new AudioInput(name, format, volume);
+        var input = new AudioInput(name, (format as WaveFormatExtensible)?.ToStandardWaveFormat() ?? format, volume);
         lock (_mix)
         {
             _inputs.Add(input);

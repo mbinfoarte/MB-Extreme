@@ -136,6 +136,15 @@ public class EstudioTests
         Assert.DoesNotContain("segredo", StudioCommand.MaskSecrets("Failed to open rtmp://live.twitch.tv/app/live_123_segredo", stream));
     }
 
+    [Fact]
+    public void Chave_colada_no_endereco_do_servidor_tambem_e_escondida()
+    {
+        var stream = new StreamTarget(StreamService.Custom, "rtmp://host/app/ch4v3-s3cr3t", "");
+        Assert.Equal("ch4v3-s3cr3t", stream.PathSecret);
+        string masked = StudioCommand.MaskSecrets("Slave 'rtmp://host/app/ch4v3-s3cr3t': error opening", stream);
+        Assert.DoesNotContain("ch4v3", masked);
+    }
+
     [Theory]
     [InlineData(2560, 1440, 1080, 1920, 1080)]
     [InlineData(1920, 1080, 0, 1920, 1080)]

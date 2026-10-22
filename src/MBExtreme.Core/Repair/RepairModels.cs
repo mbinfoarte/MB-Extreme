@@ -18,7 +18,8 @@ public sealed record RepairStep(
     string Arguments,
     StepKind Kind = StepKind.Generic,
     bool ContinueOnError = false,
-    string? Input = null)
+    string? Input = null,
+    bool AlwaysRun = false)
 {
     /// <summary>O comando como seria digitado no terminal.</summary>
     public string CommandLine => Arguments.Length == 0 ? File : File + " " + Arguments;
@@ -34,7 +35,8 @@ public sealed record RepairTask(
     IReadOnlyList<RepairStep> Steps,
     bool NeedsRestart = false,
     bool AdvisesRestorePoint = false,
-    bool NeedsInternet = false)
+    bool NeedsInternet = false,
+    string? Caution = null)
 {
     public string ManualCommands => string.Join(Environment.NewLine, Steps.Select(s => s.CommandLine));
 }

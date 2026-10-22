@@ -54,6 +54,7 @@ Funções inspiradas em CPU-Z/GPU-Z/AIDA, OCCT, MSI Afterburner, LatencyMon e re
 
 ## Limites conhecidos
 - Sem busca automática da "BIOS mais nova" por fabricante (não há API pública); o app orienta e abre a busca no site oficial.
+- Se a rede de transmissão travar (em vez de cair), o FFmpeg pode atrasar também a gravação até o tempo limite da conexão; o `onfail=ignore` cobre quedas, não travamentos.
 - Ao transmitir, a gravação e o replay usam a mesma imagem enviada ao vivo (no máximo 8 Mbps). A janela em modo recorte grava a área da tela onde ela está: se outra janela ficar por cima, aparece no vídeo.
 - A linha de comando do FFmpeg, que contém a chave de transmissão, fica visível para outros programas do mesmo PC enquanto transmite (limitação do próprio FFmpeg, que não aceita a chave por outro caminho).
 - A consulta ao catálogo da NVIDIA, o benchmark 3D, o ETW e a gravação com FFmpeg dependem do hardware e do Windows; falhas aparecem como mensagem na página e o restante do app segue funcionando.

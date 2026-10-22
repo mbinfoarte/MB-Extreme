@@ -94,12 +94,13 @@ public static class ReplayBuffer
             var info = new ProcessStartInfo(ffmpeg) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
             foreach (string a in ConcatArguments(list, output)) info.ArgumentList.Add(a);
             using var process = Process.Start(info) ?? throw new InvalidOperationException("Não foi possível iniciar o FFmpeg.");
-            string error = process.StandardError.ReadToEnd();
+            var errorText = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(60_000))
             {
                 try { process.Kill(true); } catch (InvalidOperationException) { }
                 throw new InvalidOperationException("O FFmpeg demorou demais para montar o clipe.");
             }
+            string error = errorText.Wait(5000) ? errorText.Result : "";
             if (process.ExitCode != 0 || !File.Exists(output))
                 throw new InvalidOperationException("Não foi possível montar o clipe: " + error.Trim());
             return output;

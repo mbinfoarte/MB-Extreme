@@ -23,44 +23,50 @@ public sealed class RepairRunner
             if (isLog) log?.WriteLine(message);
         }
 
+        bool aborted = false;
+        var ran = new List<(RepairStep Step, StepResult Result)>();
         for (int i = 0; i < task.Steps.Count; i++)
         {
             var step = task.Steps[i];
             double Overall(double stepPercent) => 100.0 * (i + stepPercent / 100.0) / task.Steps.Count;
 
-            if (token.IsCancellationRequested) { cancelled = true; break; }
+            if (!aborted && token.IsCancellationRequested) { cancelled = true; aborted = true; }
+            if (aborted && !step.AlwaysRun) continue;
+
+            // Passos que devolvem o sistema ao normal (religar serviços) rodam mesmo depois de uma falha ou de cancelar.
+            var stepToken = aborted ? CancellationToken.None : token;
             Write($"▶ {step.Title}", Overall(0), true);
             Write($"  {step.CommandLine}", Overall(0), true);
 
             StepResult result;
             try
             {
-                result = await RunStepAsync(step, Overall, Write, token).ConfigureAwait(false);
+                result = await RunStepAsync(step, Overall, Write, stepToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 cancelled = true;
+                aborted = true;
                 Write("  Interrompido.", Overall(0), true);
-                break;
+                continue;
             }
             catch (Exception ex)
             {
                 result = new StepResult(step.Title, -1, false, "Não foi possível executar: " + ex.Message);
             }
 
+            ran.Add((step, result));
             results.Add(result);
             Write($"  {(result.Ok ? "✔" : "✖")} {result.Verdict}", Overall(100), true);
 
-            if (!result.Ok && !step.ContinueOnError && step.Kind is StepKind.Generic)
+            if (!aborted && !result.Ok && !step.ContinueOnError && step.Kind is StepKind.Generic)
             {
-                Write("  Etapa falhou; os próximos comandos desta tarefa não foram executados.", Overall(100), true);
-                break;
+                Write("  Etapa falhou; os próximos comandos desta tarefa não foram executados (exceto os que restauram serviços).", Overall(100), true);
+                aborted = true;
             }
         }
 
-        bool success = !cancelled && results.Count == task.Steps.Count;
-        for (int k = 0; success && k < results.Count; k++)
-            if (!results[k].Ok && !task.Steps[k].ContinueOnError) success = false;
+        bool success = !cancelled && !aborted && ran.Count == task.Steps.Count && ran.All(r => r.Result.Ok || r.Step.ContinueOnError);
         string summary = RepairInterpreter.Summarize(task, results, cancelled);
         Write(summary, 100, true);
         return new RepairResult(success, cancelled, success && task.NeedsRestart, summary, results);

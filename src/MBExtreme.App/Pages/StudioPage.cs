@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Security.Cryptography;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -69,7 +70,7 @@ public sealed class StudioPage : ToolPageBase
         "Estúdio completo: grave a tela inteira ou só a janela do jogo, transmita ao vivo (Twitch, YouTube ou outro servidor) e guarde os melhores momentos com o replay. A captura e a codificação usam a placa de vídeo (NVIDIA, AMD ou Intel) e o som do PC e do microfone entram na mesma gravação. Os vídeos ficam em Vídeos\\MB Extreme.")
     {
         _start = AddButton("Iniciar", async (_, _) => await BeginAsync());
-        _stop = AddButton("Parar", (_, _) => End(), false);
+        _stop = AddButton("Parar", async (_, _) => await EndAsync(), false);
         _saveReplay = AddButton("Salvar replay (Ctrl+Shift+F9)", async (_, _) => await _studio.SaveReplayAsync(), false);
         AddButton("Abrir pasta", (_, _) => OpenFolder(), false);
 
@@ -443,7 +444,8 @@ public sealed class StudioPage : ToolPageBase
             encoder = h264;
 
             target = new StreamTarget((StreamService)Math.Clamp(_s.StudioStreamService, 0, 2), _customUrl.Text, _key.Password);
-            _s.StudioCustomUrl = target.CustomUrl;
+            // se a chave foi colada dentro do endereço, o endereço não é gravado
+            if (target.PathSecret is null) _s.StudioCustomUrl = target.CustomUrl;
             if (MessageBox.Show($"Começar a transmitir ao vivo para {target.DisplayName}?\n\nQuem estiver assistindo verá exatamente o que está sendo capturado.",
                     "Transmissão ao vivo", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         }
@@ -459,7 +461,15 @@ public sealed class StudioPage : ToolPageBase
         }
 
         _s.StudioRememberKey = _remember.IsChecked == true;
-        _s.StudioProtectedKey = _s.StudioRememberKey && _key.Password.Length > 0 ? SecretStore.Protect(_key.Password) : null;
+        try
+        {
+            _s.StudioProtectedKey = _s.StudioRememberKey && _key.Password.Length > 0 ? SecretStore.Protect(_key.Password) : null;
+        }
+        catch (CryptographicException)
+        {
+            _s.StudioProtectedKey = null;
+            SetStatus("Não foi possível guardar a chave com segurança; ela não será lembrada.", "WarnBrush");
+        }
         _s.Save();
 
         var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
@@ -484,8 +494,9 @@ public sealed class StudioPage : ToolPageBase
         RefreshState();
     }
 
-    private void End()
+    private async Task EndAsync()
     {
+        _stop.IsEnabled = false;
         if (AppServices.Recorder.IsRecording)
         {
             string? avi = AppServices.Recorder.Stop();
@@ -493,7 +504,8 @@ public sealed class StudioPage : ToolPageBase
         }
         else
         {
-            string? file = _studio.Stop();
+            SetStatus("Finalizando o arquivo...");
+            string? file = await Task.Run(_studio.Stop);
             SetStatus(file is null ? "Estúdio encerrado." : "Gravação salva em " + file, "OkBrush");
         }
 
@@ -505,7 +517,7 @@ public sealed class StudioPage : ToolPageBase
     {
         try
         {
-            if (AppServices.Recorder.IsRecording) { End(); return; }
+            if (AppServices.Recorder.IsRecording) { _ = EndAsync(); return; }
             if (_studio.IsRunning) { SetStatus("Pare o estúdio antes de usar o modo compatível.", "WarnBrush"); return; }
             string file = AppServices.Recorder.Start("tela", AviRates[_aviRate], AviScales[_aviScale]);
             SetStatus("Gravando em " + file);

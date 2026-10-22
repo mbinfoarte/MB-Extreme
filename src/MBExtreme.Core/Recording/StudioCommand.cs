@@ -46,8 +46,11 @@ public static class StudioCommand
     /// <summary>Troca a chave de transmissão por pontos em qualquer texto (mensagens de erro do FFmpeg, por exemplo).</summary>
     public static string MaskSecrets(string text, StreamTarget? target)
     {
-        if (target is null || target.Key.Length < 4) return text;
-        return text.Replace(target.Key, "••••");
+        if (target is null) return text;
+        if (target.FullUrl.Length > 0) text = text.Replace(target.FullUrl, "••••");
+        if (target.Service == StreamService.Custom && target.PathSecret is { Length: > 0 } secret) text = text.Replace(secret, "••••");
+        if (target.Key.Length >= 4) text = text.Replace(target.Key, "••••");
+        return text;
     }
 
     public static IReadOnlyList<string> Build(StudioRequest r)

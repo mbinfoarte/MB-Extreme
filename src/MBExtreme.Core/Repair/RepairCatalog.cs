@@ -93,11 +93,11 @@ public static class RepairCatalog
                     new RepairStep("Parando transferência em segundo plano", "net.exe", "stop bits", StepKind.Generic, true),
                     new RepairStep("Parando instalador do Windows", "net.exe", "stop msiserver", StepKind.Generic, true),
                     Ps("Renomeando as pastas de cache",
-                        "$s=Get-Date -Format yyyyMMddHHmmss; foreach($p in 'SoftwareDistribution','System32\\catroot2'){ $path=Join-Path $env:SystemRoot $p; if(Test-Path $path){ Rename-Item -LiteralPath $path -NewName ((Split-Path $path -Leaf)+'.old-'+$s) -ErrorAction Stop; 'Renomeada: '+$path } else { 'Não existe: '+$path } }"),
-                    new RepairStep("Ligando Windows Update", "net.exe", "start wuauserv", StepKind.Generic, true),
-                    new RepairStep("Ligando serviços de criptografia", "net.exe", "start cryptSvc", StepKind.Generic, true),
-                    new RepairStep("Ligando transferência em segundo plano", "net.exe", "start bits", StepKind.Generic, true),
-                    new RepairStep("Ligando instalador do Windows", "net.exe", "start msiserver", StepKind.Generic, true),
+                        "$s=Get-Date -Format yyyyMMddHHmmss; foreach($p in 'SoftwareDistribution','System32\\catroot2'){ $path=Join-Path $env:SystemRoot $p; if(Test-Path $path){ Rename-Item -LiteralPath $path -NewName ((Split-Path $path -Leaf)+'.old-'+$s) -ErrorAction Stop; 'Renomeada: '+$path } else { 'Não existe: '+$path } }", true),
+                    new RepairStep("Ligando Windows Update", "net.exe", "start wuauserv", StepKind.Generic, true, null, true),
+                    new RepairStep("Ligando serviços de criptografia", "net.exe", "start cryptSvc", StepKind.Generic, true, null, true),
+                    new RepairStep("Ligando transferência em segundo plano", "net.exe", "start bits", StepKind.Generic, true, null, true),
+                    new RepairStep("Ligando instalador do Windows", "net.exe", "start msiserver", StepKind.Generic, true, null, true),
                 }, AdvisesRestorePoint: true),
 
             new("store", GroupUpdate, "Reparar a Microsoft Store",
@@ -121,14 +121,15 @@ public static class RepairCatalog
                 }),
 
             new("net-reset", GroupNetwork, "Reiniciar a pilha de rede",
-                "Limpa o cache de DNS e reinicia o Winsock e o TCP/IP. Resolve internet que conecta mas não navega e erros de rede depois de remover VPNs ou antivírus. Exige reiniciar o PC.",
+                "Limpa o cache de DNS e reinicia o Winsock e o TCP/IP. Resolve internet que conecta mas não navega e erros de rede depois de remover VPNs ou antivírus. Apaga IP fixo, DNS e gateway manuais. Exige reiniciar o PC.",
                 "Menos de 1 minuto",
                 new[]
                 {
                     new RepairStep("Limpando o cache de DNS", "ipconfig.exe", "/flushdns", StepKind.Generic, true),
                     new RepairStep("Reiniciando o Winsock", "netsh.exe", "winsock reset"),
                     new RepairStep("Reiniciando o TCP/IP", "netsh.exe", "int ip reset", StepKind.Generic, true),
-                }, NeedsRestart: true, AdvisesRestorePoint: true),
+                }, NeedsRestart: true, AdvisesRestorePoint: true,
+                Caution: "O reinício do TCP/IP apaga IP fixo, DNS e gateway configurados manualmente (inclusive o DNS definido pelo MB Extreme). Anote-os antes se usar configuração fixa."),
 
             new("icons", GroupNetwork, "Reconstruir o cache de ícones",
                 "Apaga os arquivos de cache de ícones e miniaturas. O Windows recria na hora. Resolve ícones em branco ou trocados. A barra de tarefas pisca por alguns segundos.",

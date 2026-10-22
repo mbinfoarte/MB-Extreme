@@ -29,7 +29,9 @@ public sealed class RepairPage : ToolPageBase
     private readonly CheckBox _restorePoint;
     private readonly List<Button> _runButtons = new();
     private Button? _cancel;
-    private bool _running;
+    // o estado vale para o app todo: voltar à página durante um reparo não libera um segundo
+    private static bool s_running;
+    private static CancellationTokenSource? s_cts;
 
     public RepairPage() : base("Reparo do Windows",
         "Roda no próprio app os mesmos comandos que você digitaria no terminal (SFC, DISM, CHKDSK e outros) e mostra a saída ao vivo. Se não souber por onde começar, use o reparo completo recomendado.")
@@ -37,7 +39,7 @@ public sealed class RepairPage : ToolPageBase
         var full = RepairCatalog.All().First(t => t.Id == "full");
         var fullButton = AddButton("Reparo completo recomendado", async (_, _) => await RunAsync(full));
         _runButtons.Add(fullButton);
-        _cancel = AddButton("Cancelar", (_, _) => Cts?.Cancel(), false);
+        _cancel = AddButton("Cancelar", (_, _) => s_cts?.Cancel(), false);
         _cancel.Visibility = Visibility.Collapsed;
         AddButton("Abrir terminal", (_, _) => OpenTerminal(), false);
         AddButton("Abrir relatórios salvos", (_, _) => OpenLogs(), false);
@@ -50,6 +52,7 @@ public sealed class RepairPage : ToolPageBase
             Margin = new Thickness(0, 4, 0, 0),
         };
         Body.Children.Add(_restorePoint);
+        Loaded += (_, _) => SetRunning(s_running);
 
         Body.Children.Add(Heading("Andamento"));
         Body.Children.Add(_current);
@@ -102,20 +105,21 @@ public sealed class RepairPage : ToolPageBase
 
     private void SetRunning(bool running)
     {
-        _running = running;
+        s_running = running;
         foreach (var button in _runButtons) button.IsEnabled = !running;
         if (_cancel is not null) _cancel.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task RunAsync(RepairTask task)
     {
-        if (_running) return;
+        if (s_running) return;
 
-        if (task.NeedsRestart || task.Id is "icons")
+        if (task.NeedsRestart || task.Caution is not null || task.Id is "icons")
         {
             string warn = task.Id == "icons"
                 ? "A barra de tarefas e a área de trabalho vão piscar por alguns segundos."
                 : "Depois deste reparo será preciso reiniciar o PC.";
+            if (task.Caution is not null) warn += "\n\n" + task.Caution;
             if (MessageBox.Show($"{task.Title}\n\n{warn}\n\nContinuar?", "Reparo do Windows",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         }
@@ -124,8 +128,8 @@ public sealed class RepairPage : ToolPageBase
         _log.Clear();
         _bar.Value = 0;
         SetStatus($"Executando: {task.Title}", "MutedBrush");
-        Cts = new CancellationTokenSource();
-        var token = Cts.Token;
+        s_cts = new CancellationTokenSource();
+        var token = s_cts.Token;
 
         try
         {

@@ -26,12 +26,13 @@ public sealed class StudioSession : IDisposable
     private string _ffmpeg = "";
     private StudioRequest? _request;
     private bool _stopping;
+    private volatile bool _starting;
 
     public FfmpegProgress Progress { get; } = new();
 
     public bool IsRunning => _process is { HasExited: false };
 
-    public bool EndedUnexpectedly => _process is { HasExited: true } && !_stopping;
+    public bool EndedUnexpectedly => !_starting && _process is { HasExited: true } && !_stopping;
 
     public DateTime StartedAt { get; private set; }
 
@@ -59,6 +60,9 @@ public sealed class StudioSession : IDisposable
 
     public event EventHandler? WarningAdded;
 
+    /// <summary>O FFmpeg terminou sozinho (disco cheio, driver reiniciado...). Chamado em outra thread.</summary>
+    public event EventHandler? Ended;
+
     public async Task StartAsync(string ffmpeg, StudioRequest request, AudioConfig? audio)
     {
         if (IsRunning) throw new InvalidOperationException("O estúdio já está em andamento.");
@@ -73,14 +77,22 @@ public sealed class StudioSession : IDisposable
         if (request.ReplayFolder is { } replay) ReplayBuffer.ClearSegments(Path.Combine(request.WorkingDirectory, replay));
 
         bool withAudio = audio is { Any: true };
+        _starting = true;
         try
         {
-            await LaunchAsync(request, withAudio ? audio : null).ConfigureAwait(false);
+            try
+            {
+                await LaunchAsync(request, withAudio ? audio : null).ConfigureAwait(false);
+            }
+            catch (AudioUnavailableException ex)
+            {
+                AddWarning(ex.Message + " Gravando sem áudio.");
+                await LaunchAsync(request, null).ConfigureAwait(false);
+            }
         }
-        catch (AudioUnavailableException ex)
+        finally
         {
-            AddWarning(ex.Message + " Gravando sem áudio.");
-            await LaunchAsync(request, null).ConfigureAwait(false);
+            _starting = false;
         }
     }
 
@@ -122,8 +134,16 @@ public sealed class StudioSession : IDisposable
         };
         foreach (string a in StudioCommand.Build(effective)) info.ArgumentList.Add(a);
 
-        var process = Process.Start(info) ?? throw new InvalidOperationException("Não foi possível iniciar o FFmpeg.");
+        Process? process = null;
+        try
+        {
+        process = Process.Start(info) ?? throw new InvalidOperationException("Não foi possível iniciar o FFmpeg.");
         _process = process;
+        process.EnableRaisingEvents = true;
+        process.Exited += (_, _) =>
+        {
+            if (!_stopping && !_starting && ReferenceEquals(_process, process)) Ended?.Invoke(this, EventArgs.Empty);
+        };
         _request = effective;
         LastMessage = null;
         process.ErrorDataReceived += (_, e) => OnError(e.Data, effective.Stream);
@@ -133,11 +153,15 @@ public sealed class StudioSession : IDisposable
 
         if (_pipe is not null)
         {
-            bool connected = await _pipe.WaitConnectedAsync(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+            bool connected = await _pipe.WaitConnectedAsync(TimeSpan.FromSeconds(8), process.WaitForExitAsync()).ConfigureAwait(false);
             if (!connected)
             {
-                KillProcess();
-                StopAudio();
+                if (process.HasExited)
+                {
+                    await Task.Run(() => process.WaitForExit()).ConfigureAwait(false);
+                    throw new InvalidOperationException("O FFmpeg encerrou ao iniciar: " + (LastMessage ?? "configuração não suportada."));
+                }
+
                 throw new AudioUnavailableException("O FFmpeg não conseguiu abrir o canal de áudio.");
             }
 
@@ -153,12 +177,18 @@ public sealed class StudioSession : IDisposable
         {
             await Task.Run(() => process.WaitForExit()).ConfigureAwait(false);
             string message = LastMessage ?? "configuração não suportada nesta placa de vídeo.";
-            KillProcess();
-            StopAudio();
             throw new InvalidOperationException("O FFmpeg encerrou ao iniciar: " + message);
         }
 
         StartedAt = DateTime.Now;
+        }
+        catch
+        {
+            KillProcess();
+            StopAudio();
+            _request = null;
+            throw;
+        }
     }
 
     private void OnError(string? line, StreamTarget? target)

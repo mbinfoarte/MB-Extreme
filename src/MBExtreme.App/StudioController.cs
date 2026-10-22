@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using MBExtreme.Core.Recording;
@@ -30,6 +31,17 @@ internal sealed class StudioController
     private int _hotkeyId;
     private bool _saving;
     private string? _ffmpeg;
+
+    public StudioController() => Session.Ended += (_, _) =>
+        Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (Session.EndedUnexpectedly)
+            {
+                string? last = Session.LastMessage;
+                Stop();
+                Raise("O estúdio terminou sozinho" + (last is null ? "." : ": " + last), false);
+            }
+        }));
 
     public StudioSession Session { get; } = new();
 
@@ -74,6 +86,7 @@ internal sealed class StudioController
 
         if (config.Replay)
         {
+            AppServices.Hotkeys.Unregister(_hotkeyId);
             _hotkeyId = AppServices.Hotkeys.RegisterCtrlShift(VkF9, () => _ = SaveReplayAsync());
             if (_hotkeyId == 0) Notice?.Invoke("O atalho Ctrl + Shift + F9 está em uso por outro programa. Use o botão Salvar replay.", false);
         }
@@ -100,7 +113,7 @@ internal sealed class StudioController
             if (config.Beep) System.Media.SystemSounds.Asterisk.Play();
             return clip;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or Win32Exception)
         {
             Raise("Não foi possível salvar o replay: " + ex.Message, false);
             return null;

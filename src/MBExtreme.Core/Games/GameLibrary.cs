@@ -159,7 +159,7 @@ public static class ExeGuesser
     {
         var best = candidates
             .Where(c => IsValidExeName(FileNameOf(c.Path)))
-            .Where(c => !Ignored.Any(w => FileNameOf(c.Path).Contains(w, StringComparison.OrdinalIgnoreCase)))
+            .Where(c => !Ignored.Any(w => c.Path.Contains(w, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(c => c.Size)
             .FirstOrDefault();
         return best.Path is null ? null : FileNameOf(best.Path);

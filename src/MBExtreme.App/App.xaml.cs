@@ -30,6 +30,20 @@ public partial class App : Application
             return;
         }
 
+        // Tarefa agendada da limpeza semanal: roda sem janela e sai.
+        if (e.Args.Any(a => a.Equals(MBExtreme.Core.Cleanup.WeeklyRoutine.Argument, StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                string text = MBExtreme.Core.Cleanup.WeeklyRoutine.RunClean(DateTime.UtcNow);
+                Directory.CreateDirectory(Path.GetDirectoryName(MBExtreme.Core.Cleanup.WeeklyRoutine.LogPath)!);
+                File.AppendAllText(MBExtreme.Core.Cleanup.WeeklyRoutine.LogPath, text + Environment.NewLine);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            Shutdown(0);
+            return;
+        }
+
         base.OnStartup(e);
     }
 

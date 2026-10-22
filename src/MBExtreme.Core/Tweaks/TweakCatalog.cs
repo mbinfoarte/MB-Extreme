@@ -22,7 +22,7 @@ public static class TweakCatalog
         const string explorerAdvanced = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
         const string explorer = @"Software\Microsoft\Windows\CurrentVersion\Explorer";
 
-        return new Tweak[]
+        var tweaks = new Tweak[]
         {
             // ---------------------------------------------------------------- Desempenho
             new RegistryTweak(store, "perf-priority-separation", TweakCategory.Performance, TweakRisk.Low,
@@ -391,6 +391,171 @@ public static class TweakCatalog
                 Effect = "Resolve PC que não desliga direito e drivers que não reiniciam; o boot pode levar alguns segundos a mais.",
                 RequiresRestart = true,
             },
+
+            // ---------------------------------------------------------------- Etapa 8: estudo do pacote Lobo Alpha (ver docs/ANALISE-LOBO-ALPHA.md)
+            new RegistryTweak(store, "game-fse", TweakCategory.Gaming, TweakRisk.Low,
+                "Tela cheia sem a camada do Game Bar",
+                "Faz os jogos em tela cheia usarem o modo exclusivo, sem a camada de composição do Game DVR.",
+                new[]
+                {
+                    new RegistryValueSpec(Hkcu, @"System\GameConfigStore", "GameDVR_FSEBehaviorMode", 2),
+                    new RegistryValueSpec(Hkcu, @"System\GameConfigStore", "GameDVR_FSEBehavior", 2),
+                    new RegistryValueSpec(Hkcu, @"System\GameConfigStore", "GameDVR_HonorUserFSEBehaviorMode", 1),
+                    new RegistryValueSpec(Hkcu, @"System\GameConfigStore", "GameDVR_DXGIHonorFSEWindowsCompatible", 1),
+                })
+            {
+                Effect = "Pode reduzir a latência de entrada em jogos DirectX em tela cheia. O efeito varia por jogo.",
+                Warning = "Se um jogo piorar (alt+tab lento, tela preta), desfaça.",
+            },
+
+            new RegistryTweak(store, "game-sysresponsiveness", TweakCategory.Gaming, TweakRisk.Low,
+                "Menos tempo reservado a tarefas de fundo multimídia",
+                "Reduz a fatia de CPU que o agendador multimídia reserva para tarefas em segundo plano (padrão 20%).",
+                new[] { new RegistryValueSpec(Hklm, systemProfile, "SystemResponsiveness", 10) })
+            {
+                Effect = "Um pouco mais de CPU para o jogo; áudio e vídeo em segundo plano têm margem menor.",
+            },
+
+            new RegistryTweak(store, "game-mpo-off", TweakCategory.Gaming, TweakRisk.Medium,
+                "Desativar o Multiplane Overlay (MPO)",
+                "Desliga a composição por planos de sobreposição do gerenciador de janelas, que causa tela piscando e travadas em alguns drivers.",
+                new[] { new RegistryValueSpec(Hklm, @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode", 5) })
+            {
+                Effect = "Resolve piscadas, tela preta ao alternar janelas e travadas em algumas combinações de driver (NVIDIA, AMD e Intel).",
+                Warning = "Só use se você tem o problema; pode aumentar um pouco o uso de GPU na área de trabalho.",
+                RequiresRestart = true,
+            },
+
+            new SubKeyValueTweak(store, "game-amd-ulps-off", TweakCategory.Gaming, TweakRisk.Medium,
+                "AMD: desativar o ULPS",
+                "Impede o modo de energia ultrabaixa (ULPS) da placa de vídeo AMD, que causa quedas de clock e travadas em alguns PCs.",
+                Hklm, GpuClass.ClassPath, new (string, object, RegistryValueKind)[] { ("EnableUlps", 0, RegistryValueKind.DWord) },
+                key => GpuClass.IsVendorKey(key, "AMD", "Radeon"))
+            {
+                Effect = "Evita quedas de clock e piscadas em PCs com placa AMD (mais comum em notebooks e CrossFire).",
+                Warning = "A placa AMD fica sem esse modo de economia; mais consumo em repouso.",
+                RequiresRestart = true,
+                AppliesTo = GpuClass.Amd,
+            },
+
+            new RegistryTweak(store, "game-amd-telemetry-off", TweakCategory.Gaming, TweakRisk.Low,
+                "AMD: desligar conteúdo da web e atualização automática do painel",
+                "Desliga o conteúdo da web e a atualização automática do AMD Software.",
+                new[]
+                {
+                    new RegistryValueSpec(Hklm, @"SOFTWARE\AMD\CN", "AllowWebContent", 0),
+                    new RegistryValueSpec(Hklm, @"SOFTWARE\AMD\CN", "AutoUpdate", 0),
+                })
+            {
+                Effect = "Painel da AMD mais leve e sem consultas à internet.",
+                AppliesTo = GpuClass.Amd,
+            },
+
+            new ServiceTweak(store, "game-amd-crash-defender", TweakCategory.Gaming, TweakRisk.Medium,
+                "AMD: desativar o Crash Defender",
+                "Desativa o serviço de coleta de relatórios de falha do driver AMD.",
+                new[] { "AMD Crash Defender Service" }, 4)
+            {
+                Effect = "Um serviço a menos; o driver continua funcionando.",
+                Warning = "A AMD deixa de receber relatórios de falha do seu driver.",
+                AppliesTo = GpuClass.Amd,
+            },
+
+            new ServiceTweak(store, "game-nvidia-telemetry-off", TweakCategory.Gaming, TweakRisk.Medium,
+                "NVIDIA: desativar a telemetria",
+                "Desativa o serviço de telemetria da NVIDIA (NvTelemetryContainer), quando o driver o instala.",
+                new[] { "NvTelemetryContainer" }, 4)
+            {
+                Effect = "Menos atividade em segundo plano. O driver e o painel continuam funcionando.",
+                Warning = "O serviço principal (NVDisplay.ContainerLocalSystem) não é alterado, para o painel da NVIDIA continuar funcionando.",
+                AppliesTo = GpuClass.Nvidia,
+            },
+
+            new RegistryTweak(store, "storage-lastaccess-off", TweakCategory.Storage, TweakRisk.Low,
+                "Não gravar a data do último acesso aos arquivos",
+                "Desliga a atualização do \"último acesso\" do NTFS a cada leitura de arquivo.",
+                new[] { new RegistryValueSpec(Hklm, @"SYSTEM\CurrentControlSet\Control\FileSystem", "NtfsDisableLastAccessUpdate", unchecked((int)0x80000001)) })
+            {
+                Effect = "Menos escritas pequenas no disco, principalmente em HD e em pastas com muitos arquivos.",
+                Warning = "Programas de backup e de busca que usam o \"último acesso\" deixam de ter essa informação.",
+                RequiresRestart = true,
+                Recommended = true,
+            },
+
+            new RegistryTweak(store, "storage-8dot3-off", TweakCategory.Storage, TweakRisk.Medium,
+                "Não criar nomes curtos 8.3 nos arquivos",
+                "Desliga a criação de nomes de arquivo no formato antigo (ARQUIV~1.TXT) para arquivos novos.",
+                new[] { new RegistryValueSpec(Hklm, @"SYSTEM\CurrentControlSet\Control\FileSystem", "NtfsDisable8dot3NameCreation", 1) })
+            {
+                Effect = "Criar e listar arquivos em pastas muito grandes fica um pouco mais rápido.",
+                Warning = "Instaladores muito antigos (16 bits) podem falhar. Arquivos que já existem não mudam.",
+                RequiresRestart = true,
+            },
+
+            new SubKeyValueTweak(store, "net-tcp-nodelay", TweakCategory.Network, TweakRisk.Medium,
+                "TCP sem espera de confirmação (Nagle desligado)",
+                "Envia pacotes pequenos na hora, sem esperar juntar mais dados, em todas as conexões do PC.",
+                Hklm, @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces",
+                new (string, object, RegistryValueKind)[] { ("TcpAckFrequency", 1, RegistryValueKind.DWord), ("TCPNoDelay", 1, RegistryValueKind.DWord) },
+                _ => true)
+            {
+                Effect = "Pode baixar o ping em alguns jogos online que usam TCP.",
+                Warning = "Gasta mais banda com pacotes pequenos. Jogos modernos usam UDP, onde isso não muda nada. Meça o ping antes e depois.",
+                RequiresRestart = true,
+            },
+
+            new SubKeyValueTweak(store, "net-adapter-power-off", TweakCategory.Network, TweakRisk.Low,
+                "Placas de rede sem economia de energia",
+                "Impede o Windows de desligar a placa de rede para economizar energia.",
+                Hklm, @"SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}",
+                new (string, object, RegistryValueKind)[] { ("PnPCapabilities", 24, RegistryValueKind.DWord) },
+                key => key.GetValue("NetCfgInstanceId") is not null && key.GetValue("DriverDesc") is string d
+                    && !d.Contains("Virtual", StringComparison.OrdinalIgnoreCase) && !d.Contains("Miniport", StringComparison.OrdinalIgnoreCase)
+                    && !d.Contains("Bluetooth", StringComparison.OrdinalIgnoreCase))
+            {
+                Effect = "Evita quedas e atraso ao acordar a conexão (Wi-Fi e cabo).",
+                Warning = "Em notebook com bateria gasta um pouco mais de energia.",
+                RequiresRestart = true,
+                Recommended = true,
+            },
+
+            new RegistryTweak(store, "periph-keyboard-response", TweakCategory.Peripherals, TweakRisk.Low,
+                "Teclado com repetição rápida",
+                "Define o atraso mínimo e a velocidade máxima de repetição das teclas.",
+                new[]
+                {
+                    new RegistryValueSpec(Hkcu, @"Control Panel\Keyboard", "KeyboardDelay", "0", Str),
+                    new RegistryValueSpec(Hkcu, @"Control Panel\Keyboard", "KeyboardSpeed", "31", Str),
+                })
+            {
+                Effect = "Teclas repetem mais cedo e mais rápido (movimento contínuo em jogos e edição de texto).",
+                Warning = "Se você digita letras repetidas sem querer, volte ao padrão.",
+                RequiresRestart = true,
+            },
+
+            // ---------------------------------------------------------------- Navegadores (políticas; desfazer remove a política)
+            BrowserTweak(store, "browser-chrome", "Google Chrome", @"SOFTWARE\Policies\Google\Chrome"),
+            BrowserTweak(store, "browser-edge", "Microsoft Edge", @"SOFTWARE\Policies\Microsoft\Edge"),
+            BrowserTweak(store, "browser-brave", "Brave", @"SOFTWARE\Policies\BraveSoftware\Brave"),
         };
+
+        return tweaks.Concat(CommandTweaks.Create(store)).ToList();
     }
+
+    private static RegistryTweak BrowserTweak(TweakStore store, string id, string name, string policyPath) =>
+        new(store, id, TweakCategory.Privacy, TweakRisk.Low,
+            $"{name}: menos segundo plano e telemetria",
+            $"Define políticas do {name}: não continuar rodando em segundo plano ao fechar, sem pré-carregar páginas, sem sugestões de busca e sem relatórios de uso.",
+            new[]
+            {
+                new RegistryValueSpec(RegistryHive.LocalMachine, policyPath, "BackgroundModeEnabled", 0),
+                new RegistryValueSpec(RegistryHive.LocalMachine, policyPath, "NetworkPredictionOptions", 2),
+                new RegistryValueSpec(RegistryHive.LocalMachine, policyPath, "SearchSuggestEnabled", 0),
+                new RegistryValueSpec(RegistryHive.LocalMachine, policyPath, "MetricsReportingEnabled", 0),
+            })
+        {
+            Effect = "Menos processos, RAM e consultas em segundo plano.",
+            Warning = $"O {name} passa a mostrar \"gerenciado pela sua organização\" (é a política). Desfazer remove isso.",
+        };
+
 }

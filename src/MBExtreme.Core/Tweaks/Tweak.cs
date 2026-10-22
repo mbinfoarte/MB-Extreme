@@ -9,6 +9,7 @@ public enum TweakCategory
     Peripherals,
     Boot,
     Visual,
+    Storage,
 }
 
 public enum TweakRisk
@@ -49,6 +50,18 @@ public abstract class Tweak
     public bool Recommended { get; init; }
 
     public bool RequiresRestart { get; init; }
+
+    /// <summary>Quando definido, o ajuste só aparece se devolver true (ex.: só em PCs com placa de vídeo AMD).</summary>
+    public Func<bool>? AppliesTo { get; init; }
+
+    public bool IsAvailable
+    {
+        get
+        {
+            try { return AppliesTo?.Invoke() ?? true; }
+            catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or System.Security.SecurityException) { return false; }
+        }
+    }
 
     /// <summary>true = aplicado, false = não aplicado, null = não foi possível saber.</summary>
     public abstract bool? IsApplied();

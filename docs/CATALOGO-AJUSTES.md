@@ -5,6 +5,8 @@ Consolida o que foi estudado no pacote "Lobo Alpha — Ultimate Performance" (ve
 Legenda de estado: **Feito** (está no app), **Planejado** (decidido, falta implementar), **Não faremos**.
 Legenda de risco: **B** baixo, **M** médio, **A** alto. Ajustes M e A nunca entram em "Marcar recomendados".
 
+> **Atualização (Etapa 8).** Implementados: TRIM, último acesso, 8.3, hibernação, RSS, RSC, TCP Nodelay, energia dos adaptadores, FSE, SystemResponsiveness, MPO, ULPS/telemetria/Crash Defender (AMD), telemetria (NVIDIA), timer e hipervisor (bcdedit, risco alto), teclado, políticas de Chrome/Edge/Brave, limpeza de cache de shaders, limpeza semanal e novos reparos (áudio, Bluetooth, Wi-Fi, Explorer, Xbox, antitrapaça, desligamento, logs de eventos, DNS). As tabelas abaixo mantêm o texto original; o que está nesta nota vale mais.
+
 ## Princípios
 
 1. Antes de mudar um valor, o app **guarda o original** (`%AppData%\MBExtreme\tweak-backup.json`). "Restaurar originais" desfaz.

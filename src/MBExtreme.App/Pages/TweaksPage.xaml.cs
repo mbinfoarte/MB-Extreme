@@ -49,8 +49,9 @@ public partial class TweaksPage : UserControl
     {
         // Ler o estado de cada ajuste pode chamar o powercfg; isso roda fora da thread da interface.
         int version = ++_buildVersion;
-        var tweaks = AppServices.Tweaks.Where(t => _categories.Contains(t.Category)).ToList();
-        var states = await Task.Run(() => tweaks.Select(t => (Tweak: t, Applied: SafeIsApplied(t))).ToList());
+        var candidates = AppServices.Tweaks.Where(t => _categories.Contains(t.Category)).ToList();
+        // ajustes de uma marca de placa de vídeo só aparecem em PCs com essa marca
+        var states = await Task.Run(() => candidates.Where(t => t.IsAvailable).Select(t => (Tweak: t, Applied: SafeIsApplied(t))).ToList());
         if (version != _buildVersion) return;
 
         RowsHost.Children.Clear();

@@ -15,11 +15,13 @@ internal static class NavigationMap
         {
             new("profiles", "Perfis", "Jogo, Competitivo e PC fraco em um clique.", "\uE945"),
             new("cleanup", "Limpeza", "Procura lixo, temporários, cache e libera memória.", "\uE74D"),
+            new("weekly", "Limpeza semanal", "Limpeza automática todo domingo, sem abrir janela.", "\uE74D"),
             new("startup", "Inicialização", "Programas que abrem junto com o Windows.", "\uE7E8"),
             new("tweaks-perf", "Desempenho", "Prioridade de CPU, energia e serviços.", "\uE9D9"),
             new("visual", "Efeitos visuais", "Transparência e animações do Windows.", "\uE713"),
             new("memory", "Memória", "Limpe a RAM e proteja aplicativos.", "\uE950"),
             new("storage", "Armazenamento", "SSD, HD e saúde dos discos.", "\uEDA2"),
+            new("tweaks-storage", "Ajustes de armazenamento", "TRIM, hibernação, último acesso e nomes 8.3.", "\uEDA2"),
         }),
         new("games", "Jogos", "Windows, GPU, energia e latência para jogar melhor.", "\uE7FC", new Tile[]
         {

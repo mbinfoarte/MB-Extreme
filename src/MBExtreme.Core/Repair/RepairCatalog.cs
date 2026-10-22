@@ -9,6 +9,7 @@ public static class RepairCatalog
     public const string GroupDisk = "Disco";
     public const string GroupUpdate = "Windows Update e loja";
     public const string GroupNetwork = "Rede, ícones e outros";
+    public const string GroupDevices = "Áudio, Bluetooth, Wi-Fi e jogos";
 
     public static string SystemDrive =>
         Environment.GetEnvironmentVariable("SystemDrive") is { Length: > 0 } drive ? drive : "C:";
@@ -142,6 +143,105 @@ public static class RepairCatalog
                     Ps("Reabrindo o Explorador de Arquivos",
                         "Start-Sleep -Seconds 3; if(-not (Get-Process explorer -ErrorAction SilentlyContinue)){ Start-Process explorer.exe }; 'Explorador reaberto.'", true),
                 }),
+
+            // ---- Etapa 8: correções comuns (técnicas estudadas no pacote Lobo Alpha, reescritas como tarefas do app)
+            new("dns-renew", GroupNetwork, "Limpar o DNS e renovar o IP",
+                "Limpa o cache de DNS e pede um IP novo ao roteador. Mais leve que reiniciar a pilha de rede: não apaga configurações manuais nem exige reiniciar.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    new RepairStep("Limpando o cache de DNS", "ipconfig.exe", "/flushdns", StepKind.Generic, true),
+                    new RepairStep("Renovando o IP", "ipconfig.exe", "/renew", StepKind.Generic, true),
+                }),
+
+            new("audio", GroupDevices, "Reiniciar o áudio do Windows",
+                "Reinicia os serviços de áudio. Resolve som que sumiu, chiado, dispositivo que não aparece ou áudio travado depois de suspender o PC.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    new RepairStep("Parando o serviço de áudio", "net.exe", "stop Audiosrv /y", StepKind.Generic, true),
+                    new RepairStep("Parando o construtor de pontos de extremidade", "net.exe", "stop AudioEndpointBuilder /y", StepKind.Generic, true),
+                    new RepairStep("Ligando o construtor de pontos de extremidade", "net.exe", "start AudioEndpointBuilder", StepKind.Generic, true, null, true),
+                    new RepairStep("Ligando o serviço de áudio", "net.exe", "start Audiosrv", StepKind.Generic, true, null, true),
+                }),
+
+            new("bluetooth", GroupDevices, "Reiniciar o Bluetooth",
+                "Deixa o serviço de Bluetooth em modo manual (como o Windows instala) e o reinicia. Resolve fones e controles que não conectam ou o Bluetooth que sumiu.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    new RepairStep("Restaurando o tipo de início do serviço", "sc.exe", "config bthserv start= demand", StepKind.Generic, true),
+                    new RepairStep("Parando o serviço", "net.exe", "stop bthserv /y", StepKind.Generic, true),
+                    new RepairStep("Ligando o serviço", "net.exe", "start bthserv", StepKind.Generic, true, null, true),
+                }),
+
+            new("wifi", GroupDevices, "Reiniciar o Wi-Fi e o modo avião",
+                "Reinicia o serviço de Wi-Fi e o gerenciador de rádio. Resolve Wi-Fi que não aparece e notebook preso no modo avião.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    new RepairStep("Restaurando o serviço de rádio", "sc.exe", "config RmSvc start= auto", StepKind.Generic, true),
+                    new RepairStep("Restaurando o serviço de Wi-Fi", "sc.exe", "config WlanSvc start= auto", StepKind.Generic, true),
+                    new RepairStep("Parando o Wi-Fi", "net.exe", "stop WlanSvc /y", StepKind.Generic, true),
+                    new RepairStep("Ligando o gerenciador de rádio", "net.exe", "start RmSvc", StepKind.Generic, true, null, true),
+                    new RepairStep("Ligando o Wi-Fi", "net.exe", "start WlanSvc", StepKind.Generic, true, null, true),
+                }),
+
+            new("explorer", GroupDevices, "Reiniciar o Explorador, o menu Iniciar e a barra de tarefas",
+                "Fecha e reabre o Explorador de Arquivos. Resolve menu Iniciar que não abre, barra de tarefas travada e tela preta com cursor depois de entrar no Windows.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    new RepairStep("Fechando o Explorador de Arquivos", "taskkill.exe", "/F /IM explorer.exe", StepKind.Generic, true),
+                    Ps("Reabrindo o Explorador de Arquivos",
+                        "Start-Sleep -Seconds 2; if(-not (Get-Process explorer -ErrorAction SilentlyContinue)){ Start-Process explorer.exe }; 'Explorador reaberto.'", true),
+                }),
+
+            new("xbox", GroupDevices, "Reparar o Xbox e o Game Pass",
+                "Deixa os serviços do Xbox em modo manual, liga-os e registra de novo os aplicativos do Xbox. Resolve jogos do Game Pass que não instalam ou não abrem.",
+                "1 a 3 minutos",
+                new[]
+                {
+                    new RepairStep("Restaurando XblAuthManager", "sc.exe", "config XblAuthManager start= demand", StepKind.Generic, true),
+                    new RepairStep("Restaurando XblGameSave", "sc.exe", "config XblGameSave start= demand", StepKind.Generic, true),
+                    new RepairStep("Restaurando XboxNetApiSvc", "sc.exe", "config XboxNetApiSvc start= demand", StepKind.Generic, true),
+                    new RepairStep("Restaurando XboxGipSvc", "sc.exe", "config XboxGipSvc start= demand", StepKind.Generic, true),
+                    Ps("Registrando os aplicativos do Xbox",
+                        "Get-AppxPackage -AllUsers *Xbox* | ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register ($_.InstallLocation + '\\AppXManifest.xml') -ErrorAction SilentlyContinue }; 'Concluído.'", true),
+                    new RepairStep("Ligando XblAuthManager", "net.exe", "start XblAuthManager", StepKind.Generic, true, null, true),
+                    new RepairStep("Ligando XboxNetApiSvc", "net.exe", "start XboxNetApiSvc", StepKind.Generic, true, null, true),
+                }, AdvisesRestorePoint: true),
+
+            new("anticheat", GroupDevices, "Antitrapaça bloqueando o jogo",
+                "Remove ajustes de segurança desligados por outros programas de otimização (política que desliga o Defender e mitigações do BCD) e liga a proteção em tempo real. Antitrapaças como Vanguard, Easy Anti-Cheat e BattlEye exigem isso.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    new RepairStep("Removendo a política que desliga o Defender", "reg.exe", "delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\" /v DisableAntiSpyware /f", StepKind.Generic, true),
+                    new RepairStep("Removendo a política de proteção em tempo real", "reg.exe", "delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection\" /v DisableRealtimeMonitoring /f", StepKind.Generic, true),
+                    new RepairStep("Removendo mitigações desligadas no BCD", "bcdedit.exe", "/deletevalue nx", StepKind.Generic, true),
+                    Ps("Ligando a proteção em tempo real", "Set-MpPreference -DisableRealtimeMonitoring $false; 'Concluído.'", true),
+                }, NeedsRestart: true, AdvisesRestorePoint: true,
+                Caution: "Alguns antitrapaças também exigem Inicialização Segura (Secure Boot) e TPM ligados na BIOS, o que este reparo não altera."),
+
+            new("shutdown-fix", GroupDevices, "PC que não desliga (só fica encerrando)",
+                "Desativa a inicialização rápida, que costuma travar o desligamento, e confere o estado da hibernação. Exige reiniciar.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    new RepairStep("Desativando a inicialização rápida", "reg.exe",
+                        "add \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power\" /v HiberbootEnabled /t REG_DWORD /d 0 /f", StepKind.Generic, true),
+                }, NeedsRestart: true),
+
+            new("eventlogs", GroupFiles, "Limpar os logs de eventos do Windows",
+                "Apaga o conteúdo dos registros de eventos (Aplicativo, Sistema, Segurança...). Libera espaço e começa uma lista limpa para diagnosticar um problema novo.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    Ps("Limpando os registros de eventos",
+                        "wevtutil.exe el | ForEach-Object { wevtutil.exe cl $_ 2>$null }; 'Registros limpos.'", true),
+                },
+                Caution: "Apaga o histórico que ajuda a entender travamentos e telas azuis passadas. Só faça se não precisar investigar nada antigo."),
         };
     }
 

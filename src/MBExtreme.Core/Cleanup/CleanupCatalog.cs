@@ -53,6 +53,18 @@ public static class CleanupCatalog
                 Note: "As miniaturas são geradas de novo ao abrir as pastas.",
                 FilePattern: "thumbcache_*.db"),
 
+            new CleanupCategory("shader-cache", "Cache de shaders da placa de vídeo (NVIDIA, AMD e DirectX)",
+                "Shaders já compilados dos jogos. Limpar resolve travadas depois de trocar o driver da placa de vídeo.",
+                new[]
+                {
+                    Path.Combine(local, "NVIDIA", "DXCache"),
+                    Path.Combine(local, "NVIDIA", "GLCache"),
+                    Path.Combine(local, "AMD", "DxCache"),
+                    Path.Combine(local, "D3DSCache"),
+                },
+                DefaultSelected: false,
+                Note: "Os jogos recompilam os shaders na próxima abertura; a primeira partida pode ter travadas."),
+
             new CleanupCategory("windows-update", "Cache de download do Windows Update",
                 "Arquivos de atualização já baixados.",
                 new[] { Path.Combine(windows, "SoftwareDistribution", "Download") },

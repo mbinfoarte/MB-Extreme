@@ -1,5 +1,20 @@
 # Plano de etapas (próximas melhorias)
 
+## Situação em 22/10 (implementado localmente, ainda não publicado)
+
+| Etapa | Estado | O que falta |
+|---|---|---|
+| 1 Painel limpo | Feita | Conferir visualmente no Windows |
+| 2 Estúdio redesenhado | Feita (blocos, pré-visualização, abas, predefinições, Facebook, saúde da transmissão) | Cenas/webcam/sobreposições estilo OBS; câmera virtual (Discord); teste visual no Windows |
+| 3 Biblioteca de jogos | Feita (Steam, Epic, GOG, manual, Modo Jogo ao abrir, tempo jogado, prioridade por jogo) | Banco curado de jogos e edição de configs do jogo (Fase B); Xbox/EA/Ubisoft/Battle.net/Riot |
+| 4 Gargalos | Feita (regras, relatório, histórico local, linha no overlay) | Envio opcional ao servidor (cliente pronto, falta o endpoint); VRAM e falhas de página; teste em jogo real |
+| 5 Acesso remoto | Núcleo feito e testado ponta a ponta (cripto, servidor, agente, console) | 5.4 especiais, 5.5 serviço do Windows (UAC/login), 5.6 conexão direta/H.264/arquivos, 5.7 teste externo e 2FA; teste em duas máquinas Windows. Ver `ACESSO-REMOTO.md` |
+| 6 Licença/cobrança | Feita (teste 7 dias, planos, Stripe, chaves) | Testar o Stripe em modo de teste; fixar URL e chave pública; site do cliente |
+| 7 Qualidade/lançamento | Parcial (CI assina se houver certificado, textos legais em rascunho, lista) | Certificado, revisão jurídica, revisão de código independente. Ver `LANCAMENTO.md` |
+| 8 Catálogo expandido | Feita (≈30 ajustes e reparos novos, navegadores, limpeza semanal, shaders) | Itens "por teste" (fila de dados de mouse/teclado, RAM por quantidade) e teste em Windows real |
+
+(A "Etapa 9" citada no pedido não existe: o plano termina na 8.)
+
 Organização do pedido de 22/10 em etapas, na ordem sugerida de execução. Tamanhos: **P** (horas a 1 dia), **M** (alguns dias), **G** (semanas), **GG** (muitas semanas).
 
 ## Etapa 1 · Painel mais limpo (P)

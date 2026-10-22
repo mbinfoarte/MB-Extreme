@@ -207,3 +207,68 @@ public class ReparoTests
         public void Report(RepairUpdate value) => onReport(value);
     }
 }
+
+public class RedeStatusTests
+{
+    [Fact]
+    public void Ping_calcula_media_jitter_e_perda()
+    {
+        var w = new MBExtreme.Core.Network.PingWindow(10);
+        foreach (double? v in new double?[] { 10, 20, null, 10, 30 }) w.Add(v);
+        Assert.Equal(17.5, w.Average!.Value, 3);
+        Assert.Equal((10 + 10 + 20) / 3.0, w.Jitter!.Value, 3);
+        Assert.Equal(20, w.LossPercent, 3);
+        Assert.Equal(30, w.Last);
+    }
+
+    [Fact]
+    public void Ping_mantem_so_as_ultimas_medicoes()
+    {
+        var w = new MBExtreme.Core.Network.PingWindow(3);
+        for (int i = 1; i <= 10; i++) w.Add(i);
+        Assert.Equal(3, w.Count);
+        Assert.Equal(9, w.Average!.Value, 3);
+    }
+
+    [Fact]
+    public void Dns_conhecido_ganha_o_nome_do_provedor()
+    {
+        Assert.Equal("Cloudflare (1.1.1.1)", MBExtreme.Core.Network.NetworkStatus.DnsLabel("1.1.1.1"));
+        Assert.Equal("roteador (192.168.0.1)", MBExtreme.Core.Network.NetworkStatus.DnsLabel("192.168.0.1", "192.168.0.1"));
+        Assert.Equal("não identificado", MBExtreme.Core.Network.NetworkStatus.DescribeDns(Array.Empty<string>(), null));
+    }
+
+    private static MBExtreme.Core.Network.HopStats Hop(int n, string address, params double?[] samples)
+    {
+        var h = new MBExtreme.Core.Network.HopStats { Hop = n, Address = address };
+        foreach (var s in samples) h.Add(s);
+        return h;
+    }
+
+    [Fact]
+    public void Rota_estavel_e_reconhecida()
+    {
+        var report = MBExtreme.Core.Network.RouteSummary.Summarize(new[]
+        {
+            Hop(1, "192.168.0.1", 1, 1, 1), Hop(2, "10.0.0.1", 8, 9, 8), Hop(3, "1.1.1.1", 12, 11, 12),
+        });
+        Assert.True(report.Healthy);
+        Assert.Equal(3, report.Hops);
+    }
+
+    [Fact]
+    public void Rota_com_salto_grande_aponta_o_ponto()
+    {
+        var report = MBExtreme.Core.Network.RouteSummary.Summarize(new[]
+        {
+            Hop(1, "192.168.0.1", 1, 1, 1), Hop(2, "10.0.0.1", 8, 9, 8), Hop(3, "200.1.1.1", 90, 95, 92), Hop(4, "1.1.1.1", 95, 96, 94),
+        });
+        Assert.False(report.Healthy);
+        Assert.Equal(3, report.WorstJumpHop);
+        Assert.Contains("200.1.1.1", report.Text);
+    }
+
+    [Fact]
+    public void Rota_sem_resposta_nao_e_saudavel() =>
+        Assert.False(MBExtreme.Core.Network.RouteSummary.Summarize(new[] { Hop(1, "???", null, null, null) }).Healthy);
+}

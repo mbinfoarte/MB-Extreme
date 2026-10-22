@@ -16,6 +16,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         BuildMenu();
         Current = this;
+        StateChanged += (_, _) => UpdateMaximizeState();
         Loaded += (_, _) =>
         {
             AppServices.Overlay.AttachHotkey(this);
@@ -23,6 +24,22 @@ public partial class MainWindow : Window
         };
         Go("home");
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
+    }
+
+    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void Maximize_Click(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>Maximizada, a janela sem moldura ultrapassa a tela pela borda de redimensionamento: compensa com margem e troca o ícone.</summary>
+    private void UpdateMaximizeState()
+    {
+        bool maximized = WindowState == WindowState.Maximized;
+        RootGrid.Margin = maximized ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
+        MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
+        MaximizeButton.ToolTip = maximized ? "Restaurar" : "Maximizar";
     }
 
     /// <summary>Janela principal, para as páginas pedirem navegação (ex.: o painel abre a limpeza).</summary>

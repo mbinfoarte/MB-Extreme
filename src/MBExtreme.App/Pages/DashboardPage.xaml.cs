@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using MBExtreme.Core.Memory;
 using MBExtreme.Core.Network;
 using MBExtreme.Core.Sensors;
+using MBExtreme.UI.Controls;
 
 namespace MBExtreme.UI.Pages;
 
@@ -16,7 +17,12 @@ public partial class DashboardPage : UserControl
     private const double BytesPerGb = 1024.0 * 1024 * 1024;
 
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private readonly List<double> _netHistory = new();
+    private readonly List<double> _downHistory = new();
+    private readonly List<double> _upHistory = new();
+    private readonly LiveChart _netChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0xE8, 0xE8, 0xEC));
+    private readonly PingWindow _pings = new(20);
+    private ActiveAdapter? _adapter;
+    private double? _localPing;
     private readonly List<double> _cpuHistory = new();
     private int _tick;
     private bool _busy;
@@ -25,6 +31,8 @@ public partial class DashboardPage : UserControl
     public DashboardPage()
     {
         InitializeComponent();
+        _netChart.FormatMax = v => Rate(v * 125_000);
+        NetChartHost.Child = _netChart;
         _timer.Tick += async (_, _) => await UpdateAsync();
         Loaded += async (_, _) =>
         {
@@ -52,8 +60,16 @@ public partial class DashboardPage : UserControl
             var network = AppServices.Network.Sample();
             UpdateNetwork(network);
 
-            if (_tick++ % 3 == 0) _lastPing = await NetworkMonitor.PingAsync();
+            if (_tick % 15 == 0) _adapter = await Task.Run(NetworkStatus.Active);
+            if (_tick % 3 == 0)
+            {
+                _lastPing = await NetworkMonitor.PingAsync();
+                _pings.Add(_lastPing);
+                _localPing = _adapter?.Gateway is { } gateway ? await NetAnalyzer.PingAsync(gateway, 1000) : null;
+            }
+            _tick++;
             UpdatePing(_lastPing);
+            UpdateNetworkInfo();
 
             var sensors = await AppServices.Sensors;
             var snapshot = await Task.Run(sensors.Read);
@@ -89,14 +105,59 @@ public partial class DashboardPage : UserControl
     {
         DownloadText.Text = Rate(sample.DownloadBytesPerSecond);
         UploadText.Text = Rate(sample.UploadBytesPerSecond);
-        Push(_netHistory, sample.DownloadBytesPerSecond * 8 / 1_000_000);
-        NetChart.Values = _netHistory.ToList();
+        Push(_downHistory, sample.DownloadBytesPerSecond * 8 / 1_000_000);
+        Push(_upHistory, sample.UploadBytesPerSecond * 8 / 1_000_000);
+        _netChart.Update(_downHistory.ToList(), _upHistory.ToList());
     }
 
     private void UpdatePing(double? ping)
     {
         PingGauge.Value = ping;
         PingDetail.Text = ping is null ? "Sem resposta de 1.1.1.1" : "até 1.1.1.1";
+    }
+
+    private void UpdateNetworkInfo()
+    {
+        PingStat.Text = _lastPing is double p ? $"{p:0} ms" : "sem resposta";
+        JitterStat.Text = _pings.Average is double avg
+            ? $"média {avg:0} ms · oscilação {_pings.Jitter ?? 0:0.0} ms · perda {_pings.LossPercent:0}%"
+            : "—";
+        LocalPingStat.Text = _adapter?.Gateway is null
+            ? "roteador não identificado"
+            : _localPing is double lp ? $"{lp:0} ms ({_adapter.Gateway})" : $"sem resposta ({_adapter.Gateway})";
+        DnsStat.Text = _adapter is null ? "—" : NetworkStatus.DescribeDns(_adapter.Dns, _adapter.Gateway);
+    }
+
+    private async void AnalyzeRoute_Click(object sender, RoutedEventArgs e)
+    {
+        RouteButton.IsEnabled = false;
+        RouteStat.Text = "Analisando a rota (cerca de 10 segundos)...";
+        using var cts = new CancellationTokenSource();
+        IReadOnlyList<HopStats>? last = null;
+        int rounds = 0;
+        try
+        {
+            await NetAnalyzer.TraceAsync("1.1.1.1", 20, hops =>
+            {
+                last = hops;
+                if (++rounds >= 4) cts.Cancel();
+            }, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // as rodadas pedidas terminaram
+        }
+        catch (Exception ex) when (ex is System.Net.NetworkInformation.PingException or InvalidOperationException)
+        {
+            RouteStat.Text = "Não foi possível analisar: " + ex.Message;
+            RouteButton.IsEnabled = true;
+            return;
+        }
+
+        var report = last is null ? null : RouteSummary.Summarize(last);
+        RouteStat.Text = report?.Text ?? "Sem resultado.";
+        RouteStat.Foreground = (Brush)FindResource(report is { Healthy: true } ? "OkBrush" : "WarnBrush");
+        RouteButton.IsEnabled = true;
     }
 
     private void UpdateSensors(SensorSnapshot s)

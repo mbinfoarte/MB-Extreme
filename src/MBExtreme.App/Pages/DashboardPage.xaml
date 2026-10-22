@@ -15,6 +15,9 @@
                         HorizontalAlignment="Right" VerticalAlignment="Center" Click="ScanButton_Click" />
             </Grid>
 
+            <!-- Itens que precisam de atenção -->
+            <StackPanel x:Name="AttentionPanel" Margin="0,14,0,0" />
+
             <!-- Aviso: sensores da CPU -->
             <Border x:Name="SensorHint" Style="{StaticResource Card}" Margin="0,18,0,0" Padding="18,14" Visibility="Collapsed">
                 <Grid>

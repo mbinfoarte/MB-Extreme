@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -6,6 +7,8 @@ using System.Windows.Threading;
 using MBExtreme.Core.Memory;
 using MBExtreme.Core.Network;
 using MBExtreme.Core.Sensors;
+using MBExtreme.Core.Startup;
+using MBExtreme.Core.Windows;
 using MBExtreme.UI.Controls;
 
 namespace MBExtreme.UI.Pages;
@@ -23,6 +26,12 @@ public partial class DashboardPage : UserControl
     private readonly PingWindow _pings = new(20);
     private ActiveAdapter? _adapter;
     private double? _localPing;
+    private int _securityProblems;
+    private int _startupCount;
+    private double? _cpuTemperature;
+    private bool _securityLoading;
+    private double _memoryUsed;
+    private string _attentionKey = "";
     private readonly List<double> _cpuHistory = new();
     private int _tick;
     private bool _busy;
@@ -74,6 +83,7 @@ public partial class DashboardPage : UserControl
             _tick++;
             UpdatePing(_lastPing);
             UpdateNetworkInfo();
+            if (_tick % 10 == 1) await RefreshAttentionAsync();
 
             var sensors = await AppServices.Sensors;
             var snapshot = await Task.Run(sensors.Read);
@@ -94,15 +104,80 @@ public partial class DashboardPage : UserControl
         double used = 100 - memory.FreePercent;
         RamGauge.Value = memory.TotalBytes > 0 ? used : null;
         RamDetail.Text = $"{memory.UsedBytes / BytesPerGb:0.0} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";
+        _memoryUsed = used;
+    }
 
-        (string text, string brush) = memory.Level switch
+    private async Task RefreshAttentionAsync()
+    {
+        try
         {
-            MemoryLevel.Good => ("Seu PC está em boas condições.", "OkBrush"),
-            MemoryLevel.NeedsCleaning => ("A memória está ficando cheia. Vale a pena limpar.", "WarnBrush"),
-            _ => ("A memória está quase cheia. Faça uma limpeza.", "BadBrush"),
-        };
-        HealthText.Text = text;
-        HealthText.Foreground = (Brush)FindResource(brush);
+            _startupCount = await Task.Run(() => StartupService.List().Count(e => e.Enabled));
+            var drives = await Task.Run(() => DriveInfo.GetDrives()
+                .Where(d => d.DriveType == DriveType.Fixed && d.IsReady && d.TotalSize > 0)
+                .Select(d => (Name: d.Name.TrimEnd('\\'), Used: 100.0 * (d.TotalSize - d.AvailableFreeSpace) / d.TotalSize)).ToList());
+            var worst = drives.OrderByDescending(d => d.Used).FirstOrDefault();
+
+            if (_securityProblems < 0 || (_tick % 300 == 1 && !_securityLoading) || !_securityChecked)
+            {
+                _securityChecked = true;
+                _securityLoading = true;
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        var status = SecurityService.Read();
+                        _securityProblems = SecurityService.Evaluate(status, DateTime.Now).Count(i => i.Level == SecurityLevel.Bad);
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException) { }
+                    finally { _securityLoading = false; }
+                });
+            }
+
+            var items = AttentionAdvisor.Evaluate(new AttentionFacts(_memoryUsed, _startupCount, worst.Name is null ? null : worst.Used, worst.Name,
+                _securityProblems, _cpuTemperature));
+            ShowAttention(items);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or AggregateException or IOException)
+        {
+            // sem resumo desta vez
+        }
+    }
+
+    private bool _securityChecked;
+
+    private void ShowAttention(IReadOnlyList<AttentionItem> items)
+    {
+        HealthText.Text = AttentionAdvisor.Headline(items);
+        HealthText.Foreground = (Brush)FindResource(items.Count == 0 ? "OkBrush" : items.Any(i => i.Urgent) ? "BadBrush" : "WarnBrush");
+
+        string key = string.Join("|", items.Select(i => i.Title + i.Detail));
+        if (key == _attentionKey) return;
+        _attentionKey = key;
+
+        AttentionPanel.Children.Clear();
+        foreach (var item in items)
+        {
+            var target = item.TargetPage;
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Text = item.Title, FontWeight = FontWeights.SemiBold, FontSize = 14 });
+            text.Children.Add(new TextBlock { Text = item.Detail, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("MutedBrush") });
+            grid.Children.Add(text);
+            var button = new Button { Content = item.ActionText, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(14, 6, 14, 6), VerticalAlignment = VerticalAlignment.Center };
+            button.Click += (_, _) => MainWindow.Current?.Go(target);
+            Grid.SetColumn(button, 1);
+            grid.Children.Add(button);
+            AttentionPanel.Children.Add(new Border
+            {
+                Style = (Style)FindResource("Card"),
+                Padding = new Thickness(18, 12, 18, 12),
+                Margin = new Thickness(0, 0, 0, 8),
+                BorderBrush = (Brush)FindResource(item.Urgent ? "BadBrush" : "WarnBrush"),
+                Child = grid,
+            });
+        }
     }
 
     private void UpdateNetwork(NetworkSample sample)
@@ -169,6 +244,7 @@ public partial class DashboardPage : UserControl
         SensorHint.Visibility = s.Message is null ? Visibility.Collapsed : Visibility.Visible;
         SensorHintText.Text = s.Message ?? "";
 
+        _cpuTemperature = s.CpuTemperature;
         CpuGauge.Value = s.CpuTemperature;
         CpuDetail.Text = Join(
             s.CpuLoad is double cl ? $"Uso {cl:0}%" : null,

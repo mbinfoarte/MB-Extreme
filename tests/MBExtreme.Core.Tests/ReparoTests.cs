@@ -328,3 +328,57 @@ public class UnidadesTests
     public void Porcentagem_usada_da_unidade() =>
         Assert.Equal(60, Drive("E", "USB", "").UsedPercent, 3);
 }
+
+public class SegurancaTests
+{
+    private const string Good = "{\"Defender\":{\"Enabled\":true,\"RealTime\":true,\"SignatureAge\":1,\"QuickScan\":\"2026-01-01T10:00:00.0000000Z\"},\"Firewall\":[{\"Name\":\"Domain\",\"Enabled\":true},{\"Name\":\"Private\",\"Enabled\":true},{\"Name\":\"Public\",\"Enabled\":true}],\"Av\":[{\"Name\":\"Windows Defender\",\"State\":397568}],\"Uac\":1}";
+
+    [Fact]
+    public void Leitura_de_um_PC_protegido_nao_tem_avisos()
+    {
+        var status = MBExtreme.Core.Windows.SecurityService.Parse(Good);
+        Assert.True(status.RealTimeProtection);
+        Assert.Equal(1, status.SignatureAgeDays);
+        Assert.Empty(status.OtherAntivirus);
+        var items = MBExtreme.Core.Windows.SecurityService.Evaluate(status, new DateTime(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc));
+        Assert.All(items, i => Assert.Equal(MBExtreme.Core.Windows.SecurityLevel.Ok, i.Level));
+    }
+
+    [Fact]
+    public void Firewall_desligado_e_protecao_desligada_viram_problema()
+    {
+        var json = "{\"Defender\":{\"Enabled\":true,\"RealTime\":false,\"SignatureAge\":20},\"Firewall\":[{\"Name\":\"Public\",\"Enabled\":false},{\"Name\":\"Private\",\"Enabled\":true},{\"Name\":\"Domain\",\"Enabled\":true}],\"Av\":[],\"Uac\":0}";
+        var items = MBExtreme.Core.Windows.SecurityService.Evaluate(MBExtreme.Core.Windows.SecurityService.Parse(json), DateTime.UtcNow);
+        Assert.Contains(items, i => i.Title == "Antivírus" && i.Level == MBExtreme.Core.Windows.SecurityLevel.Bad);
+        Assert.Contains(items, i => i.Title == "Firewall do Windows" && i.Detail.Contains("rede pública"));
+        Assert.Contains(items, i => i.Title == "Definições de vírus" && i.Level == MBExtreme.Core.Windows.SecurityLevel.Warning);
+        Assert.Contains(items, i => i.Title.StartsWith("Controle de Conta") && i.Level == MBExtreme.Core.Windows.SecurityLevel.Bad);
+    }
+
+    [Fact]
+    public void Outro_antivirus_ativo_vale_como_protecao()
+    {
+        var json = "{\"Defender\":{\"Enabled\":false,\"RealTime\":false,\"SignatureAge\":3},\"Firewall\":[],\"Av\":[{\"Name\":\"Kaspersky\",\"State\":266240}],\"Uac\":1}";
+        var status = MBExtreme.Core.Windows.SecurityService.Parse(json);
+        Assert.Equal(new[] { "Kaspersky" }, status.OtherAntivirus);
+        var items = MBExtreme.Core.Windows.SecurityService.Evaluate(status, DateTime.UtcNow);
+        Assert.Equal(MBExtreme.Core.Windows.SecurityLevel.Ok, items.First(i => i.Title == "Antivírus").Level);
+    }
+
+    [Fact]
+    public void Json_vazio_nao_quebra() =>
+        Assert.NotEmpty(MBExtreme.Core.Windows.SecurityService.Evaluate(MBExtreme.Core.Windows.SecurityService.Parse(""), DateTime.UtcNow));
+
+    [Fact]
+    public void Painel_lista_so_o_que_precisa_de_atencao()
+    {
+        var none = MBExtreme.Core.Windows.AttentionAdvisor.Evaluate(new(50, 3, 40, "C:", 0, 60));
+        Assert.Empty(none);
+        Assert.Equal("Seu PC está em boas condições.", MBExtreme.Core.Windows.AttentionAdvisor.Headline(none));
+
+        var many = MBExtreme.Core.Windows.AttentionAdvisor.Evaluate(new(92, 12, 96, "C:", 2, 90));
+        Assert.Equal(5, many.Count);
+        Assert.Equal("security", many[0].TargetPage);
+        Assert.Equal("5 itens precisam de atenção.", MBExtreme.Core.Windows.AttentionAdvisor.Headline(many));
+    }
+}

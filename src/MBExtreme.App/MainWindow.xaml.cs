@@ -159,6 +159,8 @@ public partial class MainWindow : Window
         "profiles" => new ProfilesPage(),
         "startup" => new StartupPage(),
         "repair" => new RepairPage(),
+        "security" => new SecurityPage(),
+        "recommended" => new RecommendedPage(),
         "cpu-detail" => new ComponentMonitorPage(gpu: false),
         "gpu-detail" => new ComponentMonitorPage(gpu: true),
         "ram-detail" => new RamPage(),

@@ -68,11 +68,13 @@ internal static class NavigationMap
             new("debloat", "Aplicativos", "Remova apps do Windows que você não usa.", "\uE74D"),
             new("boot", "Inicialização e boot", "Como o Windows liga e desliga.", "\uE7E8"),
             new("periph", "Periféricos", "Mouse e teclado.", "\uE765"),
+            new("security", "Segurança", "Antivírus, firewall e controle de contas.", "\uE72E"),
             new("repair", "Reparo do Windows", "SFC, DISM, CHKDSK e correções de Windows Update, loja e rede.", "\uE90F"),
         }),
         new("drv", "Drivers e programas", "Atualizações por fontes oficiais.", "\uE896", new Tile[]
         {
             new("drivers", "Drivers", "Placa de vídeo (NVIDIA, AMD, Intel) e Windows Update.", "\uE950"),
+            new("recommended", "Programas recomendados", "Ferramentas gratuitas que combinam com o MB Extreme.", "\uE734"),
             new("programs", "Programas", "Atualize e instale ferramentas pelo winget.", "\uE896"),
         }),
     };

@@ -42,6 +42,21 @@ public static class WingetService
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { return false; }
     }
 
+    /// <summary>O programa aparece na lista de instalados do winget?</summary>
+    public static bool IsInstalled(string id)
+    {
+        if (!IsValidId(id)) return false;
+        try
+        {
+            var result = Shell.RunUtf8("winget.exe", "list", "--id", id, "-e", "--accept-source-agreements", "--disable-interactivity");
+            return result.ExitCode == 0 && result.Output.Contains(id, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
+    }
+
     public static IReadOnlyList<WingetApp> Upgradable()
     {
         var result = Shell.RunUtf8("winget.exe", "upgrade", "--accept-source-agreements", "--disable-interactivity");

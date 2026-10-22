@@ -27,7 +27,8 @@ public sealed record CaptureSource(
     string Description,
     string? WindowTitle = null);
 
-public enum StreamService { Twitch, YouTube, Custom }
+/// <summary>Os números gravados nas configurações não podem mudar: serviços novos entram no fim.</summary>
+public enum StreamService { Twitch, YouTube, Custom, Facebook }
 
 /// <summary>Destino da transmissão. A chave nunca deve ser gravada em log nem mostrada.</summary>
 public sealed class StreamTarget
@@ -49,6 +50,7 @@ public sealed class StreamTarget
     {
         StreamService.Twitch => "rtmp://live.twitch.tv/app",
         StreamService.YouTube => "rtmp://a.rtmp.youtube.com/live2",
+        StreamService.Facebook => "rtmps://live-api-s.facebook.com:443/rtmp",
         _ => CustomUrl.TrimEnd('/'),
     };
 
@@ -65,7 +67,7 @@ public sealed class StreamTarget
         }
     }
 
-    public string DisplayName => Service switch { StreamService.Twitch => "Twitch", StreamService.YouTube => "YouTube", _ => "servidor próprio" };
+    public string DisplayName => Service switch { StreamService.Twitch => "Twitch", StreamService.YouTube => "YouTube", StreamService.Facebook => "Facebook", _ => "servidor próprio" };
 
     public override string ToString() => DisplayName;
 }

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using MBExtreme.Core.Apps;
 using MBExtreme.Core.Progress;
@@ -32,6 +33,14 @@ public sealed class StudioPage : ToolPageBase
     private readonly Button _stop;
     private readonly Button _saveReplay;
     private readonly StackPanel _config = new();
+    private readonly StackPanel _tabVideo = new(), _tabAudio = new(), _tabStream = new(), _tabReplay = new(), _tabShortcuts = new(), _tabAdvanced = new();
+    private readonly Border _tileRecord = new(), _tileStream = new(), _tileReplay = new();
+    private readonly TextBlock _tileRecordState = new(), _tileStreamState = new(), _tileReplayState = new();
+    private readonly System.Windows.Controls.Image _preview = new() { Stretch = System.Windows.Media.Stretch.Uniform, MaxHeight = 220, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBlock _previewNote = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private bool _previewBusy;
+    private readonly TextBlock _health = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _engineStatus = new() { TextWrapping = TextWrapping.Wrap };
     private readonly StackPanel _qualityEncoder = new();
     private readonly StackPanel _displayPanel = new();
@@ -65,6 +74,8 @@ public sealed class StudioPage : ToolPageBase
     private int _windowMode;         // 0 = recorte da tela, 1 = conteúdo da janela (GDI)
     private int _encoderIndex;
     private int _aviRate = 1, _aviScale = 1;
+    private int _settingsTab;
+    private int _tier = 2;
 
     public StudioPage() : base("Gravação e transmissão",
         "Estúdio completo: grave a tela inteira ou só a janela do jogo, transmita ao vivo (Twitch, YouTube ou outro servidor) e guarde os melhores momentos com o replay. A captura e a codificação usam a placa de vídeo (NVIDIA, AMD ou Intel) e o som do PC e do microfone entram na mesma gravação. Os vídeos ficam em Vídeos\\MB Extreme.")
@@ -83,12 +94,15 @@ public sealed class StudioPage : ToolPageBase
         Body.Children.Add(_live);
         BuildLive();
         Body.Children.Add(_config);
-        BuildEngine();
-        BuildOutputs();
+        BuildTiles();
         BuildSource();
-        BuildQuality();
+        BuildSettings();
+        BuildEngine();
+        BuildVideo();
         BuildAudio();
         BuildStream();
+        BuildReplaySettings();
+        BuildShortcuts();
         BuildCompat();
 
         Body.Children.Add(Heading("Gravações e replays"));
@@ -96,9 +110,11 @@ public sealed class StudioPage : ToolPageBase
 
         _studio.Notice += OnNotice;
         _timer.Tick += (_, _) => Tick();
+        _previewTimer.Tick += async (_, _) => await UpdatePreviewAsync();
         Loaded += async (_, _) =>
         {
             _timer.Start();
+            _previewTimer.Start();
             RefreshFiles();
             RefreshState();
             await InitAsync();
@@ -106,6 +122,7 @@ public sealed class StudioPage : ToolPageBase
         Unloaded += (_, _) =>
         {
             _timer.Stop();
+            _previewTimer.Stop();
             _studio.Notice -= OnNotice;
         };
     }
@@ -118,6 +135,7 @@ public sealed class StudioPage : ToolPageBase
         var panel = new StackPanel();
         panel.Children.Add(_liveText);
         panel.Children.Add(_level);
+        panel.Children.Add(_health);
         panel.Children.Add(_replayText);
         panel.Children.Add(_warnings);
         _live.Children.Add(CardOf(panel));
@@ -127,50 +145,57 @@ public sealed class StudioPage : ToolPageBase
         _warnings.Margin = new Thickness(0, 6, 0, 0);
     }
 
-    private void BuildEngine()
+    // ---- três blocos grandes: Replay, Gravar, Transmitir
+
+    private void BuildTiles()
     {
-        _config.Children.Add(Heading("Programa de gravação"));
-        _config.Children.Add(CardOf(_engineStatus));
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        buttons.Children.Add(SmallButton("Instalar FFmpeg", async (_, _) => await InstallFfmpegAsync(), true));
-        buttons.Children.Add(SmallButton("Detectar codificadores da minha placa", async (_, _) => await DetectAsync()));
-        _config.Children.Add(buttons);
+        var grid = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 6) };
+        grid.Children.Add(MakeTile(_tileReplay, _tileReplayState, "Replay instantâneo", "Guarda os últimos segundos", () => { _outReplay = !_outReplay; }));
+        grid.Children.Add(MakeTile(_tileRecord, _tileRecordState, "Gravar", "Salva em Vídeos\\MB Extreme", () => { _outRecord = !_outRecord; }));
+        grid.Children.Add(MakeTile(_tileStream, _tileStreamState, "Transmitir ao vivo", "Twitch, YouTube, Facebook ou RTMP", () => { _outStream = !_outStream; }));
+        _config.Children.Add(grid);
+        RefreshTiles();
     }
 
-    private void BuildOutputs()
+    private Border MakeTile(Border tile, TextBlock state, string title, string hint, Action toggle)
     {
-        _config.Children.Add(Heading("O que fazer"));
-        _config.Children.Add(Muted("Marque o que você quer. Tudo sai de uma única captura, então ligar mais de uma saída pesa pouco."));
-
-        var record = Check("Gravar em arquivo", "Salva o vídeo em Vídeos\\MB Extreme.");
-        record.IsChecked = _outRecord;
-        record.Click += (_, _) => { _outRecord = record.IsChecked == true; _recordPanel.Visibility = Vis(_outRecord); };
-        _config.Children.Add(record);
-        _recordPanel.Visibility = Vis(_outRecord);
-        _recordPanel.Children.Add(Choice(new[] { "MKV (mais seguro se o PC travar)", "MP4" }, _s.StudioMp4 ? 1 : 0, i => _s.StudioMp4 = i == 1));
-        _config.Children.Add(_recordPanel);
-
-        var stream = Check("Transmitir ao vivo", "Envia para a Twitch, o YouTube ou outro servidor RTMP.");
-        stream.IsChecked = _outStream;
-        stream.Margin = new Thickness(0, 10, 0, 0);
-        stream.Click += (_, _) => { _outStream = stream.IsChecked == true; _streamPanel.Visibility = Vis(_outStream); };
-        _config.Children.Add(stream);
-
-        var replay = Check("Replay dos melhores momentos", "Guarda os últimos segundos do jogo. Aconteceu algo incrível? Aperte Ctrl + Shift + F9 e o clipe é salvo.");
-        replay.IsChecked = _outReplay;
-        replay.Margin = new Thickness(0, 10, 0, 0);
-        replay.Click += (_, _) => { _outReplay = replay.IsChecked == true; _replayPanel.Visibility = Vis(_outReplay); };
-        _config.Children.Add(replay);
-        _replayPanel.Visibility = Vis(_outReplay);
-        _replayPanel.Children.Add(Muted("Quanto tempo guardar:"));
-        _replayPanel.Children.Add(Choice(ReplayOptions.Select(r => r < 60 ? r + " s" : r / 60 + " min").ToList(),
-            Math.Max(0, Array.IndexOf(ReplayOptions, _s.StudioReplaySeconds)), i => _s.StudioReplaySeconds = ReplayOptions[i]));
-        var beep = new CheckBox { Content = "Tocar um aviso sonoro quando o clipe for salvo", IsChecked = _s.StudioReplayBeep, Foreground = Brush("TextBrush") };
-        beep.Click += (_, _) => _s.StudioReplayBeep = beep.IsChecked == true;
-        _replayPanel.Children.Add(beep);
-        _replayPanel.Children.Add(Muted("O replay fica só na memória do disco enquanto o estúdio está ligado: os pedaços são apagados quando você para."));
-        _config.Children.Add(_replayPanel);
+        tile.Style = (Style)FindResource("Card");
+        tile.Margin = new Thickness(0, 0, 8, 0);
+        tile.Padding = new Thickness(18, 16, 18, 16);
+        tile.Cursor = System.Windows.Input.Cursors.Hand;
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = title, FontSize = 17, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(Muted(hint));
+        state.FontSize = 13;
+        state.FontWeight = FontWeights.SemiBold;
+        state.Margin = new Thickness(0, 10, 0, 0);
+        panel.Children.Add(state);
+        tile.Child = panel;
+        tile.MouseLeftButtonUp += (_, _) =>
+        {
+            if (_studio.IsRunning || AppServices.Recorder.IsRecording) return;
+            toggle();
+            RefreshTiles();
+        };
+        return tile;
     }
+
+    private void RefreshTiles()
+    {
+        void Paint(Border tile, TextBlock state, bool on)
+        {
+            state.Text = on ? "● Ligado" : "Desligado";
+            state.Foreground = Brush(on ? "OkBrush" : "MutedBrush");
+            tile.BorderBrush = Brush(on ? "AccentBrush" : "BorderBrush");
+            tile.BorderThickness = new Thickness(on ? 2 : 1);
+        }
+
+        Paint(_tileRecord, _tileRecordState, _outRecord);
+        Paint(_tileStream, _tileStreamState, _outStream);
+        Paint(_tileReplay, _tileReplayState, _outReplay);
+    }
+
+    // ---- origem com pré-visualização
 
     private void BuildSource()
     {
@@ -188,93 +213,209 @@ public sealed class StudioPage : ToolPageBase
         _config.Children.Add(_displayPanel);
 
         _windowPanel.Visibility = Vis(_sourceTab == 1);
-        _windowPanel.Children.Add(Muted("Abra o jogo ou programa antes e clique em Atualizar a lista. Só a janela escolhida vai para a gravação e para a transmissão; o restante da tela (notificações, chat, outras janelas) fica de fora desde que não esteja sobre a janela."));
+        _windowPanel.Children.Add(Muted("Abra o jogo ou programa antes e atualize a lista. Só a janela escolhida vai para a gravação e para a transmissão."));
         _windowPanel.Children.Add(_windows);
         var windowButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         windowButtons.Children.Add(SmallButton("Atualizar a lista de janelas", (_, _) => RefreshWindows()));
         windowButtons.Children[0].SetValue(FrameworkElement.MarginProperty, new Thickness(0));
         _windowPanel.Children.Add(windowButtons);
-        _windowPanel.Children.Add(Heading("Como capturar a janela"));
+        _windowPanel.Children.Add(Muted("Como capturar a janela:"));
         _windowPanel.Children.Add(Choice(new[] { "Recorte da tela (jogos, recomendado)", "Conteúdo da janela (programas comuns)" }, _windowMode, i => _windowMode = i));
-        _windowPanel.Children.Add(Muted("Recorte da tela: grava a área onde a janela está, pela placa de vídeo; funciona com jogos em tela cheia ou sem borda. Se outra janela ficar por cima ou o jogo mudar de lugar, isso aparece no vídeo. Conteúdo da janela: acompanha a janela mesmo coberta, mas pesa mais no processador e jogos em DirectX costumam sair pretos."));
         _config.Children.Add(_windowPanel);
+
+        _config.Children.Add(Heading("Pré-visualização"));
+        var box = new StackPanel();
+        box.Children.Add(_preview);
+        _previewNote.Foreground = Brush("MutedBrush");
+        box.Children.Add(_previewNote);
+        _config.Children.Add(CardOf(box));
 
         RefreshDisplays();
     }
 
-    private void BuildQuality()
+    private async Task UpdatePreviewAsync()
     {
-        _config.Children.Add(Heading("Qualidade"));
-        _config.Children.Add(Muted("Resolução do vídeo (a proporção da janela ou da tela é mantida):"));
-        _config.Children.Add(Choice(Resolutions.Select(r => r.Name).ToList(), Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1), i => _s.StudioResolution = i));
-        _config.Children.Add(Muted("Quadros por segundo:"));
-        _config.Children.Add(Choice(FpsOptions.Select(f => f + " fps").ToList(), Math.Max(0, Array.IndexOf(FpsOptions, _s.StudioFps)), i => _s.StudioFps = FpsOptions[i]));
-        _config.Children.Add(Muted("Taxa de vídeo (qualidade da imagem):"));
-        _config.Children.Add(Choice(BitrateOptions.Select(b => b == 0 ? "Automática" : b + " Mbps").ToList(),
+        if (_previewBusy || _studio.IsRunning || AppServices.Recorder.IsRecording) return;
+        _previewBusy = true;
+        try
+        {
+            PixelRect area;
+            IntPtr? gdi = null;
+            if (_sourceTab == 0)
+            {
+                var displays = _displayList;
+                if (displays.Count == 0) area = new PixelRect(0, 0, ScreenInfo.Primary.Width, ScreenInfo.Primary.Height);
+                else area = displays[Math.Clamp(_displays.Selected, 0, displays.Count - 1)].Bounds;
+            }
+            else
+            {
+                if (_windows.Selected < 0 || _windows.Selected >= _windowList.Count)
+                {
+                    _preview.Source = null;
+                    _previewNote.Text = "Escolha uma janela para ver a pré-visualização.";
+                    return;
+                }
+                var w = _windowList[_windows.Selected];
+                area = w.Bounds;
+                if (_windowMode == 1) gdi = w.Handle;
+            }
+
+            var frame = await Task.Run(() => MBExtreme.UI.Recording.CapturePreview.Grab(area, gdi));
+            if (frame is null)
+            {
+                _preview.Source = null;
+                _previewNote.Text = "Não foi possível mostrar a pré-visualização desta origem.";
+                return;
+            }
+
+            _preview.Source = frame.Image;
+            _previewNote.Text = frame.MostlyBlack
+                ? "A imagem saiu preta. Em jogos, use \"Recorte da tela\"; em programas comuns, \"Conteúdo da janela\"."
+                : "É assim que o vídeo vai sair (imagem reduzida, atualizada várias vezes por segundo).";
+            _previewNote.Foreground = Brush(frame.MostlyBlack ? "WarnBrush" : "MutedBrush");
+        }
+        finally
+        {
+            _previewBusy = false;
+        }
+    }
+
+    // ---- configurações em abas
+
+    private void BuildSettings()
+    {
+        _config.Children.Add(Heading("Configurações"));
+        var tabs = new[] { _tabVideo, _tabAudio, _tabStream, _tabReplay, _tabShortcuts, _tabAdvanced };
+        _config.Children.Add(Choice(new[] { "Vídeo", "Áudio", "Transmissão", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
+        {
+            _settingsTab = i;
+            for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == i);
+        }));
+        for (int t = 0; t < tabs.Length; t++)
+        {
+            tabs[t].Visibility = Vis(t == _settingsTab);
+            _config.Children.Add(tabs[t]);
+        }
+    }
+
+    private void BuildEngine()
+    {
+        _tabAdvanced.Children.Add(Heading("Programa de gravação"));
+        _tabAdvanced.Children.Add(CardOf(_engineStatus));
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        buttons.Children.Add(SmallButton("Instalar FFmpeg", async (_, _) => await InstallFfmpegAsync(), true));
+        buttons.Children.Add(SmallButton("Detectar codificadores da minha placa", async (_, _) => await DetectAsync()));
+        _tabAdvanced.Children.Add(buttons);
+    }
+
+    private void BuildVideo()
+    {
+        _tabVideo.Children.Clear();
+        _tabVideo.Children.Add(Muted("Escolha uma predefinição ou ajuste cada item."));
+        int tier = _tier;
+        var suggested = StudioPresets.ForTier(tier);
+        var names = StudioPresets.All.Select(p => p.Name + (p == suggested ? " (sugerida)" : "")).ToList();
+        int current = StudioPresets.All.ToList().FindIndex(p =>
+            Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height == p.ResolutionHeight && _s.StudioFps == p.Fps);
+        _tabVideo.Children.Add(Choice(names, current, i =>
+        {
+            var preset = StudioPresets.All[i];
+            _s.StudioResolution = Math.Max(0, Array.FindIndex(Resolutions, r => r.Height == preset.ResolutionHeight));
+            _s.StudioFps = preset.Fps;
+            _s.StudioBitrateMbps = preset.BitrateMbps;
+            BuildVideo();
+        }));
+        if (current >= 0) _tabVideo.Children.Add(Muted(StudioPresets.All[current].Description));
+
+        _tabVideo.Children.Add(Muted("Resolução do vídeo (a proporção é mantida):"));
+        _tabVideo.Children.Add(Choice(Resolutions.Select(r => r.Name).ToList(), Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1), i => _s.StudioResolution = i));
+        _tabVideo.Children.Add(Muted("Quadros por segundo:"));
+        _tabVideo.Children.Add(Choice(FpsOptions.Select(f => f + " fps").ToList(), Math.Max(0, Array.IndexOf(FpsOptions, _s.StudioFps)), i => _s.StudioFps = FpsOptions[i]));
+        _tabVideo.Children.Add(Muted("Taxa de vídeo (qualidade da imagem):"));
+        _tabVideo.Children.Add(Choice(BitrateOptions.Select(b => b == 0 ? "Automática" : b + " Mbps").ToList(),
             Math.Max(0, Array.IndexOf(BitrateOptions, _s.StudioBitrateMbps)), i => _s.StudioBitrateMbps = BitrateOptions[i]));
-        _config.Children.Add(Muted("Ao transmitir, a gravação e o replay usam a mesma imagem enviada ao vivo: no máximo 8 Mbps. Para gravar com qualidade máxima, grave sem transmitir. Recomendado para transmitir: 1080p a 60 fps."));
-        _config.Children.Add(Muted("Codificador da placa de vídeo:"));
-        _config.Children.Add(_qualityEncoder);
+        _tabVideo.Children.Add(Muted("Ao transmitir, a gravação e o replay usam a mesma imagem enviada ao vivo: no máximo 8 Mbps. Para gravar com qualidade máxima, grave sem transmitir."));
+        _tabVideo.Children.Add(Muted("Formato do arquivo:"));
+        _tabVideo.Children.Add(Choice(new[] { "MKV (mais seguro se o PC travar)", "MP4" }, _s.StudioMp4 ? 1 : 0, i => _s.StudioMp4 = i == 1));
+        _tabVideo.Children.Add(Muted("Codificador da placa de vídeo:"));
+        _tabVideo.Children.Add(_qualityEncoder);
+        if (_encoders.Count > 0) BuildEncoderChoice();
     }
 
     private void BuildAudio()
     {
-        _config.Children.Add(Heading("Áudio"));
         var system = Check("Som do PC (jogo, música, Discord...)", "Captura tudo que toca nos alto-falantes ou fones.");
         system.IsChecked = _s.StudioSystemAudio;
         system.Click += (_, _) => _s.StudioSystemAudio = system.IsChecked == true;
-        _config.Children.Add(system);
-        _config.Children.Add(Choice(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioSystemVolume), i => _s.StudioSystemVolume = Volumes[i].Value));
-        _config.Children.Add(Muted("Saída de som:"));
-        _config.Children.Add(_outputs);
+        _tabAudio.Children.Add(system);
+        _tabAudio.Children.Add(Choice(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioSystemVolume), i => _s.StudioSystemVolume = Volumes[i].Value));
+        _tabAudio.Children.Add(Muted("Saída de som:"));
+        _tabAudio.Children.Add(_outputs);
 
         var mic = Check("Microfone", "Sua voz na gravação e na transmissão.");
         mic.IsChecked = _s.StudioMicAudio;
         mic.Margin = new Thickness(0, 10, 0, 0);
         mic.Click += (_, _) => _s.StudioMicAudio = mic.IsChecked == true;
-        _config.Children.Add(mic);
-        _config.Children.Add(Choice(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioMicVolume), i => _s.StudioMicVolume = Volumes[i].Value));
-        _config.Children.Add(Muted("Microfone:"));
-        _config.Children.Add(_mics);
-        _config.Children.Add(Muted("Se desmarcar os dois, o vídeo sai sem áudio."));
+        _tabAudio.Children.Add(mic);
+        _tabAudio.Children.Add(Choice(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioMicVolume), i => _s.StudioMicVolume = Volumes[i].Value));
+        _tabAudio.Children.Add(Muted("Microfone:"));
+        _tabAudio.Children.Add(_mics);
+        _tabAudio.Children.Add(Muted("Se desmarcar os dois, o vídeo sai sem áudio."));
         RefreshAudioDevices();
     }
 
+    private static readonly StreamService[] ServiceOrder = { StreamService.Twitch, StreamService.YouTube, StreamService.Facebook, StreamService.Custom };
+
     private void BuildStream()
     {
-        _streamPanel.Visibility = Vis(_outStream);
-        _config.Children.Add(_streamPanel);
-        _streamPanel.Children.Add(Heading("Transmissão"));
-        _streamPanel.Children.Add(Choice(new[] { "Twitch", "YouTube", "Outro servidor (RTMP)" }, Math.Clamp(_s.StudioStreamService, 0, 2), i =>
+        _tabStream.Children.Add(Muted("Para transmitir, ligue o bloco \"Transmitir ao vivo\" no alto da tela. A codificação é feita na placa de vídeo, por isso pesa pouco no jogo."));
+        int selected = Math.Max(0, Array.IndexOf(ServiceOrder, (StreamService)Math.Clamp(_s.StudioStreamService, 0, 3)));
+        _tabStream.Children.Add(Choice(new[] { "Twitch", "YouTube", "Facebook", "Outro servidor (RTMP)" }, selected, i =>
         {
-            _s.StudioStreamService = i;
-            _customUrl.Visibility = Vis(i == 2);
+            _s.StudioStreamService = (int)ServiceOrder[i];
+            _customUrl.Visibility = Vis(ServiceOrder[i] == StreamService.Custom);
         }));
         _customUrl.Text = _s.StudioCustomUrl;
-        _customUrl.Visibility = Vis(_s.StudioStreamService == 2);
-        _streamPanel.Children.Add(_customUrl);
-        _streamPanel.Children.Add(Muted("Chave de transmissão (Twitch: painel do criador > Configurações > Transmissão; YouTube: Transmitir ao vivo > Chave de transmissão). Quem tem a chave transmite no seu canal: não mostre nem compartilhe."));
+        _customUrl.Visibility = Vis((StreamService)Math.Clamp(_s.StudioStreamService, 0, 3) == StreamService.Custom);
+        _tabStream.Children.Add(_customUrl);
+        _tabStream.Children.Add(Muted("Chave de transmissão (Twitch: painel do criador > Configurações > Transmissão; YouTube: Transmitir ao vivo > Chave; Facebook: Produtor de transmissões ao vivo). Kick e outras: use \"Outro servidor\" com o endereço que a plataforma informa. Quem tem a chave transmite no seu canal: não mostre nem compartilhe."));
         if (SecretStore.Unprotect(_s.StudioProtectedKey) is { } saved)
         {
             _key.Password = saved;
             _remember.IsChecked = true;
         }
-        _streamPanel.Children.Add(_key);
-        _streamPanel.Children.Add(_remember);
-        _streamPanel.Children.Add(Muted("A transmissão usa H.264. A chave nunca aparece em mensagens nem em arquivos de relatório."));
+        _tabStream.Children.Add(_key);
+        _tabStream.Children.Add(_remember);
+        _tabStream.Children.Add(Muted("A transmissão usa H.264, taxa constante e quadro-chave a cada 2 s. A chave nunca aparece em mensagens nem em arquivos de relatório."));
+    }
+
+    private void BuildReplaySettings()
+    {
+        _tabReplay.Children.Add(Muted("Quanto tempo guardar:"));
+        _tabReplay.Children.Add(Choice(ReplayOptions.Select(r => r < 60 ? r + " s" : r / 60 + " min").ToList(),
+            Math.Max(0, Array.IndexOf(ReplayOptions, _s.StudioReplaySeconds)), i => _s.StudioReplaySeconds = ReplayOptions[i]));
+        var beep = new CheckBox { Content = "Tocar um aviso sonoro quando o clipe for salvo", IsChecked = _s.StudioReplayBeep, Foreground = Brush("TextBrush") };
+        beep.Click += (_, _) => _s.StudioReplayBeep = beep.IsChecked == true;
+        _tabReplay.Children.Add(beep);
+        _tabReplay.Children.Add(Muted("O replay fica só no disco enquanto o estúdio está ligado: os pedaços são apagados quando você para."));
+    }
+
+    private void BuildShortcuts()
+    {
+        _tabShortcuts.Children.Add(Row("Salvar replay", "Ctrl + Shift + F9 — salva os últimos segundos como um clipe, mesmo com o jogo em tela cheia."));
     }
 
     private void BuildCompat()
     {
-        _config.Children.Add(Heading("Modo compatível (sem FFmpeg)"));
-        _config.Children.Add(Muted("Grava a tela inteira em AVI sem instalar nada e sem áudio. Mais pesado e limitado; use só se o modo acima não funcionar no seu PC."));
-        _config.Children.Add(Choice(AviRates.Select(r => r + " fps").ToList(), _aviRate, i => _aviRate = i));
-        _config.Children.Add(Choice(AviScales.Select(s => $"{s:0%}").ToList(), _aviScale, i => _aviScale = i));
+        _tabAdvanced.Children.Add(Heading("Modo compatível (sem FFmpeg)"));
+        _tabAdvanced.Children.Add(Muted("Grava a tela inteira em AVI sem instalar nada e sem áudio. Mais pesado e limitado; use só se o modo principal não funcionar no seu PC."));
+        _tabAdvanced.Children.Add(Choice(AviRates.Select(r => r + " fps").ToList(), _aviRate, i => _aviRate = i));
+        _tabAdvanced.Children.Add(Choice(AviScales.Select(s => $"{s:0%}").ToList(), _aviScale, i => _aviScale = i));
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         var aviStart = SmallButton("Gravar em modo compatível", (_, _) => ToggleAvi(), false);
         aviStart.Margin = new Thickness(0);
         row.Children.Add(aviStart);
-        _config.Children.Add(row);
+        _tabAdvanced.Children.Add(row);
     }
 
     // ---------------------------------------------------------------- inicialização e dados
@@ -291,6 +432,13 @@ public sealed class StudioPage : ToolPageBase
 
     private async Task InitAsync()
     {
+        try
+        {
+            var hw = await AppServices.Hardware();
+            int tier = MBExtreme.Core.Games.GameAdvisor.Tier(hw);
+            if (tier != _tier) { _tier = tier; BuildVideo(); }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Management.ManagementException or AggregateException) { }
         _ffmpegPath = await Task.Run(FfmpegRecorder.Locate);
         if (_ffmpegPath is null)
         {
@@ -443,7 +591,7 @@ public sealed class StudioPage : ToolPageBase
             }
             encoder = h264;
 
-            target = new StreamTarget((StreamService)Math.Clamp(_s.StudioStreamService, 0, 2), _customUrl.Text, _key.Password);
+            target = new StreamTarget((StreamService)Math.Clamp(_s.StudioStreamService, 0, 3), _customUrl.Text, _key.Password);
             // se a chave foi colada dentro do endereço, o endereço não é gravado
             if (target.PathSecret is null) _s.StudioCustomUrl = target.CustomUrl;
             if (MessageBox.Show($"Começar a transmitir ao vivo para {target.DisplayName}?\n\nQuem estiver assistindo verá exatamente o que está sendo capturado.",
@@ -569,6 +717,14 @@ public sealed class StudioPage : ToolPageBase
             if (p.DroppedFrames > 0) text += $" · {p.DroppedFrames} quadros perdidos";
             if (session.Request?.Stream is { } stream) text = (session.StreamDropped ? "⚠ Transmissão com problema · " : $"● AO VIVO em {stream.DisplayName} · ") + text;
             _liveText.Text = text;
+            if (session.Request?.Stream is not null)
+            {
+                var health = StreamHealthRules.Evaluate(p.Fps, _studio.Config?.Fps ?? 0, p.BitrateKbps, (_studio.Config?.BitrateMbps ?? 0) * 1000.0, p.DroppedFrames, (long)(p.Fps * p.Elapsed.TotalSeconds) + p.DroppedFrames, session.StreamDropped);
+                _health.Text = health.Message;
+                _health.Foreground = Brush(health.Level switch { StreamHealthLevel.Good => "OkBrush", StreamHealthLevel.Warning => "WarnBrush", _ => "BadBrush" });
+                _health.Visibility = Visibility.Visible;
+            }
+            else _health.Visibility = Visibility.Collapsed;
             _liveText.Foreground = Brush(session.StreamDropped ? "WarnBrush" : "TextBrush");
             _level.Visibility = Vis(session.HasAudio);
             _level.Value = Math.Min(100, session.AudioPeak * 100);

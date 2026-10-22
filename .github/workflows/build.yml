@@ -10,6 +10,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # assinatura de código só acontece se o certificado estiver nos segredos do repositório (SIGN_PFX_BASE64 e SIGN_PFX_PASSWORD)
+      HAS_CERT: ${{ secrets.SIGN_PFX_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +29,18 @@ jobs:
       - name: Publicar app (Windows x64)
         run: dotnet publish src/MBExtreme.App/MBExtreme.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
 
+      - name: Assinar o aplicativo
+        if: env.HAS_CERT == 'true'
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:PFX_BASE64))
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+          & $signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 out\MBExtreme.exe
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao assinar o aplicativo" }
+
       - name: Compactar o aplicativo
         run: |
           Remove-Item out\*.pdb -ErrorAction SilentlyContinue
@@ -34,6 +49,16 @@ jobs:
 
       - name: Gerar o instalador (.exe)
         run: dotnet publish src/MBExtreme.Installer/MBExtreme.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:PayloadZip=${{ github.workspace }}\payload.zip" -o setup
+
+      - name: Assinar o instalador
+        if: env.HAS_CERT == 'true'
+        shell: pwsh
+        env:
+          PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+          & $signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 setup\MBExtreme-Beta-Setup.exe
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao assinar o instalador" }
 
       - uses: actions/upload-artifact@v4
         with:

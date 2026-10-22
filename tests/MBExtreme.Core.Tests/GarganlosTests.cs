@@ -94,3 +94,19 @@ public class GargalosTests
         Assert.DoesNotContain("user", json, StringComparison.OrdinalIgnoreCase);
     }
 }
+
+public class DesempenhoAnaliseTests
+{
+    [Fact]
+    public void AnaliseDeCemMilAmostrasEhRapida()
+    {
+        var rng = new Random(1);
+        var samples = Enumerable.Range(0, 100_000).Select(_ => new BottleneckSample(
+            60 + rng.NextDouble() * 60, 8, 50 + rng.NextDouble() * 50, 50, rng.NextDouble() * 100, 60, rng.NextDouble() * 100, 60, 50, 0)).ToList();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var report = BottleneckAnalyzer.Analyze("x", samples, 144);
+        watch.Stop();
+        Assert.True(watch.ElapsedMilliseconds < 2000, $"demorou {watch.ElapsedMilliseconds} ms");
+        Assert.Equal(100_000, report.Samples);
+    }
+}

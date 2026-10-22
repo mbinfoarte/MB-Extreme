@@ -25,23 +25,11 @@ public sealed class SupportPage : ToolPageBase
     private bool _busy;
 
     public SupportPage() : base("Suporte remoto",
-        "Peça ajuda do suporte da MB InfoArt. Você prepara o AnyDesk (programa de acesso remoto) com um clique, passa o seu ID e só quem você autorizar entra no seu computador, depois de você aceitar a conexão na tela.")
+        "Peça ajuda do suporte da MB InfoArt. Descreva o problema e copie o pedido com o relatório do sistema. Se o técnico precisar entrar no seu computador, use a opção de acesso remoto abaixo: só quem você autorizar entra, depois de você aceitar na tela.")
     {
-        _prepare = AddButton("Preparar o AnyDesk", async (_, _) => await PrepareAsync());
+        _prepare = AddButton("Preparar o AnyDesk", async (_, _) => await PrepareAsync(), false);
         _close = AddButton("Fechar o AnyDesk", (_, _) => CloseAnyDesk(), false);
         _close.IsEnabled = false;
-
-        Body.Children.Add(Heading("Seu ID"));
-        Body.Children.Add(CardOf(_id));
-        var idButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        var copyId = SmallButton("Copiar ID", (_, _) =>
-        {
-            if (_currentId is null) { SetStatus("Prepare o AnyDesk primeiro.", "WarnBrush"); return; }
-            if (TryCopy(AnyDeskRules.FormatId(_currentId))) SetStatus("ID copiado.", "OkBrush");
-        }, true);
-        copyId.Margin = new Thickness(0);
-        idButtons.Children.Add(copyId);
-        Body.Children.Add(idButtons);
 
         Body.Children.Add(Heading("O que você precisa?"));
         Body.Children.Add(Muted("Descreva o problema ou a manutenção que quer. O pedido já leva o seu ID."));
@@ -55,6 +43,20 @@ public sealed class SupportPage : ToolPageBase
         request.Children.Add(copyRequest);
         Body.Children.Add(request);
         Body.Children.Add(Muted("Envie o texto copiado ao suporte (WhatsApp, e-mail...). Quando o técnico conectar, o AnyDesk mostra um aviso: só clique em Aceitar se foi você quem pediu."));
+
+        Body.Children.Add(Heading("Outras opções de acesso remoto (AnyDesk)"));
+        Body.Children.Add(Muted("Enquanto o acesso remoto próprio do MB Extreme não chega, o técnico pode usar o AnyDesk. Prepare o programa, copie o ID e ele entra no pedido de suporte."));
+        Body.Children.Add(Heading("Seu ID"));
+        Body.Children.Add(CardOf(_id));
+        var idButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+        var copyId = SmallButton("Copiar ID", (_, _) =>
+        {
+            if (_currentId is null) { SetStatus("Prepare o AnyDesk primeiro.", "WarnBrush"); return; }
+            if (TryCopy(AnyDeskRules.FormatId(_currentId))) SetStatus("ID copiado.", "OkBrush");
+        }, true);
+        copyId.Margin = new Thickness(0);
+        idButtons.Children.Add(copyId);
+        Body.Children.Add(idButtons);
 
         Body.Children.Add(Heading("Segurança"));
         Body.Children.Add(CardOf(new TextBlock

@@ -34,6 +34,9 @@ public partial class DashboardPage : UserControl
     private double _memoryUsed;
     private string _attentionKey = "";
     private readonly List<double> _cpuHistory = new();
+    private readonly List<double> _gpuHistory = new();
+    private readonly List<double> _ramHistory = new();
+    private readonly List<double> _pingHistory = new();
     private int _tick;
     private bool _busy;
     private double? _lastPing;
@@ -107,6 +110,11 @@ public partial class DashboardPage : UserControl
         RamGauge.Value = memory.TotalBytes > 0 ? used : null;
         RamDetail.Text = $"{memory.UsedBytes / BytesPerGb:0.0} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";
         _memoryUsed = used;
+        if (memory.TotalBytes > 0)
+        {
+            Push(_ramHistory, used);
+            RamChart.Values = _ramHistory.ToList();
+        }
     }
 
     private async Task RefreshAttentionAsync()
@@ -308,6 +316,12 @@ public partial class DashboardPage : UserControl
     private void UpdatePing(double? ping)
     {
         PingGauge.Value = ping;
+        if (ping is double ms)
+        {
+            Push(_pingHistory, ms);
+            PingChart.Maximum = Math.Max(100, _pingHistory.Max() * 1.2);
+            PingChart.Values = _pingHistory.ToList();
+        }
         PingDetail.Text = ping is null ? "Sem resposta de 1.1.1.1" : "até 1.1.1.1";
     }
 
@@ -373,11 +387,15 @@ public partial class DashboardPage : UserControl
             s.GpuClockMhz is double gc ? $"{gc:0} MHz" : null,
             s.GpuPowerWatts is double gp ? $"{gp:0} W" : null);
 
-        CpuLoadText.Text = s.CpuLoad is double load ? $"{load:0}%" : "—";
         if (s.CpuLoad is double value)
         {
             Push(_cpuHistory, value);
-            CpuChart.Values = _cpuHistory.ToList();
+            CpuUseChart.Values = _cpuHistory.ToList();
+        }
+        if (s.GpuLoad is double gpuValue)
+        {
+            Push(_gpuHistory, gpuValue);
+            GpuUseChart.Values = _gpuHistory.ToList();
         }
 
         FansText.Text = s.Fans.Count == 0

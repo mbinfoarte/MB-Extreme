@@ -33,37 +33,41 @@
                 <Border x:Name="CpuCard" Cursor="Hand" Style="{StaticResource Card}" Margin="0,0,8,0">
                     <StackPanel>
                         <TextBlock Text="CPU" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Text="Temperatura" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="Temperatura · linha: uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                         <ctl:ArcGauge x:Name="CpuGauge" Height="150" Margin="0,8,0,0" Unit="°C" Maximum="110" WarnAt="75" BadAt="90" />
                         <TextBlock x:Name="CpuDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <ctl:AreaChart x:Name="CpuUseChart" Height="46" Margin="0,8,0,0" Maximum="100" />
                     </StackPanel>
                 </Border>
                 <Border x:Name="GpuCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,8,0">
                     <StackPanel>
                         <TextBlock Text="Placa de vídeo" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Text="Temperatura" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="Temperatura · linha: uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                         <ctl:ArcGauge x:Name="GpuGauge" Height="150" Margin="0,8,0,0" Unit="°C" Maximum="110" WarnAt="78" BadAt="88" />
                         <TextBlock x:Name="GpuDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <ctl:AreaChart x:Name="GpuUseChart" Height="46" Margin="0,8,0,0" Maximum="100" />
                     </StackPanel>
                 </Border>
                 <Border x:Name="RamCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,8,0">
                     <StackPanel>
                         <Grid>
                             <TextBlock Text="Memória" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <Button x:Name="RamAutoButton" Content="&#xE945; Auto" FontFamily="Segoe MDL2 Assets, Segoe UI" FontSize="11" Padding="9,3"
+                            <Button x:Name="RamAutoButton" Content="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="14" Padding="9,5"
                                     HorizontalAlignment="Right" Style="{StaticResource GhostButton}" Click="RamAuto_Click" />
                         </Grid>
                         <TextBlock Text="Em uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                         <ctl:ArcGauge x:Name="RamGauge" Height="150" Margin="0,8,0,0" Unit="%" Maximum="100" WarnAt="70" BadAt="85" />
                         <TextBlock x:Name="RamDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <ctl:AreaChart x:Name="RamChart" Height="46" Margin="0,8,0,0" Maximum="100" />
                     </StackPanel>
                 </Border>
                 <Border x:Name="NetCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,0,0">
                     <StackPanel>
                         <TextBlock Text="Internet" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Text="Ping" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="Ping · linha: histórico" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                         <ctl:ArcGauge x:Name="PingGauge" Height="150" Margin="0,8,0,0" Unit="ms" Maximum="200" WarnAt="60" BadAt="120" />
                         <TextBlock x:Name="PingDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <ctl:AreaChart x:Name="PingChart" Height="46" Margin="0,8,0,0" Maximum="100" />
                     </StackPanel>
                 </Border>
             </UniformGrid>
@@ -144,30 +148,6 @@
                     </StackPanel>
                 </Border>
             </Grid>
-
-            <!-- Uso da CPU -->
-            <Border Style="{StaticResource Card}" Margin="0,16,0,0">
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="Uso da CPU" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock x:Name="CpuLoadText" HorizontalAlignment="Right" FontSize="15" FontWeight="SemiBold" Text="—" />
-                    </Grid>
-                    <ctl:AreaChart x:Name="CpuChart" Height="90" Margin="0,10,0,0" Maximum="100" />
-                </StackPanel>
-            </Border>
-
-            <!-- Limpeza -->
-            <Border Style="{StaticResource Card}" Margin="0,16,0,0">
-                <Grid>
-                    <StackPanel VerticalAlignment="Center" Margin="0,0,220,0">
-                        <TextBlock Text="Limpeza do sistema" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
-                                   Text="Procura arquivos temporários, Prefetch, relatórios de erro, cache de navegadores e memória RAM. Você vê o que foi encontrado antes de apagar, e nada que comprometa o Windows é tocado." />
-                    </StackPanel>
-                    <Button Content="Escanear e limpar" Style="{StaticResource PrimaryButton}"
-                            HorizontalAlignment="Right" VerticalAlignment="Center" Click="ScanButton_Click" />
-                </Grid>
-            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -9,10 +9,26 @@ public sealed record ActiveAdapter(string Name, string? Gateway, IReadOnlyList<s
 /// <summary>Adaptador de rede em uso, gateway (roteador) e servidores DNS.</summary>
 public static class NetworkStatus
 {
+    /// <summary>Endereço local que o Windows usaria para sair para a internet (não envia pacotes).</summary>
+    private static System.Net.IPAddress? RouteAddress()
+    {
+        try
+        {
+            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Connect("1.1.1.1", 53);
+            return (socket.LocalEndPoint as System.Net.IPEndPoint)?.Address;
+        }
+        catch (SocketException)
+        {
+            return null;
+        }
+    }
+
     public static ActiveAdapter? Active()
     {
         try
         {
+            var route = RouteAddress();
             ActiveAdapter? fallback = null;
             foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
             {
@@ -25,8 +41,9 @@ public static class NetworkStatus
                     .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !a.Equals(System.Net.IPAddress.Any))?.ToString();
                 var dns = props.DnsAddresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork).Select(a => a.ToString()).ToList();
                 var found = new ActiveAdapter(adapter.Name, gateway, dns, adapter.Speed);
-                if (gateway is not null) return found;
-                fallback ??= found;
+                if (route is not null && props.UnicastAddresses.Any(u => u.Address.Equals(route))) return found;
+                if (gateway is not null) fallback ??= found;
+                continue;
             }
 
             return fallback;
@@ -103,19 +120,21 @@ public static class RouteSummary
         var answered = hops.Where(h => h.Received > 0).ToList();
         if (answered.Count == 0) return new RouteReport(hops.Count, null, null, 0, 100, false, "Nenhum salto respondeu. Verifique a conexão.");
 
-        double previous = 0, worstJump = 0;
+        // o salto só conta se a latência continua alta nos pontos seguintes (um roteador que responde devagar ao ping não é problema da rota)
+        double previous = answered[0].Average, worstJump = 0;
         HopStats? worstHop = null;
-        foreach (var hop in answered)
+        for (int i = 1; i < answered.Count; i++)
         {
-            double jump = hop.Average - previous;
-            if (jump > worstJump) { worstJump = jump; worstHop = hop; }
-            previous = Math.Max(previous, hop.Average);
+            double sustained = answered.Skip(i).Min(h => h.Average);
+            double jump = sustained - previous;
+            if (jump > worstJump) { worstJump = jump; worstHop = answered[i]; }
+            previous = Math.Max(previous, answered[i].Average);
         }
 
         var last = hops[^1];
         double endLoss = last.LossPercent;
         bool jumpBad = worstJump >= 40;
-        bool lossBad = endLoss >= 5 && last.Sent >= 3;
+        bool lossBad = endLoss >= 5 && last.Sent >= 3 && last.Sent - last.Received >= 2;
 
         string text;
         if (!jumpBad && !lossBad)

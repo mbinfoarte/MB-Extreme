@@ -10,6 +10,7 @@ internal sealed class MemoryAutoCleaner
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(5) };
     private DateTime? _lastCleanUtc;
     private bool _cleaning;
+    private TimeSpan _cooldown = MemoryAutoPolicy.DefaultCooldown;
 
     public MemoryAutoCleaner() => _timer.Tick += async (_, _) => await TickAsync();
 
@@ -53,7 +54,8 @@ internal sealed class MemoryAutoCleaner
         if (status.TotalBytes <= 0) return;
 
         double used = 100 - status.FreePercent;
-        if (!MemoryAutoPolicy.ShouldClean(used, AppServices.Settings.MemoryAutoCleanThreshold, _lastCleanUtc, DateTime.UtcNow)) return;
+        if (used < AppServices.Settings.MemoryAutoCleanThreshold) _cooldown = MemoryAutoPolicy.DefaultCooldown;
+        if (!MemoryAutoPolicy.ShouldClean(used, AppServices.Settings.MemoryAutoCleanThreshold, _lastCleanUtc, DateTime.UtcNow, _cooldown)) return;
 
         _cleaning = true;
         try
@@ -61,10 +63,16 @@ internal sealed class MemoryAutoCleaner
             var protectedNames = new HashSet<string>(AppServices.Settings.MemoryAllowlist, StringComparer.OrdinalIgnoreCase);
             foreach (string game in AppServices.Settings.GameProcesses) protectedNames.Add(game);
             if (ForegroundProcess.Name() is { } foreground) protectedNames.Add(foreground);
+            protectedNames.Add("ApplicationFrameHost"); // aplicativos da loja aparecem com este nome
 
             var result = await Task.Run(() => MemoryService.Clean(protectedNames));
             LastFreedBytes = result.FreedBytes;
             Cleanings++;
+
+            // se a limpeza liberou pouco e o uso continua alto, o que ocupa a memória são programas em uso: espera cada vez mais para tentar de novo
+            double after = 100 - MemoryService.GetStatus().FreePercent;
+            bool useless = result.FreedBytes < status.TotalBytes * 0.03 && after >= AppServices.Settings.MemoryAutoCleanThreshold;
+            _cooldown = useless ? TimeSpan.FromTicks(Math.Min(_cooldown.Ticks * 2, TimeSpan.FromMinutes(30).Ticks)) : MemoryAutoPolicy.DefaultCooldown;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {

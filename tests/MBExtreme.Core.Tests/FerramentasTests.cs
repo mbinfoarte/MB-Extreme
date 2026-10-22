@@ -117,6 +117,34 @@ public class FerramentasTests : IDisposable
     }
 
     [Fact]
+    public void Nomes_curtos_e_caminhos_de_rede_sao_tratados_como_protegidos()
+    {
+        var roots = new[] { "/windows" };
+        Assert.True(PathGuard.IsProtected(@"C:\PROGRA~1\x.dll", roots));
+        Assert.True(PathGuard.IsProtected(@"\\servidor\C$\Windows\x", roots));
+        Assert.True(PathGuard.IsProtected(@"\\?\C:\Windows\x", roots));
+    }
+
+    [Fact]
+    public void Triturar_recusa_atalho_simbolico_e_nao_toca_no_alvo()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        string target = Write("alvo.txt", System.Text.Encoding.UTF8.GetBytes("conteudo importante"));
+        string link = Path.Combine(_root, "link.txt");
+        File.CreateSymbolicLink(link, target);
+        Assert.Throws<InvalidOperationException>(() => Shredder.Shred(link));
+        Assert.Equal("conteudo importante", File.ReadAllText(target));
+    }
+
+    [Fact]
+    public void Duplicados_com_pastas_aninhadas_nao_contam_o_mesmo_arquivo_duas_vezes()
+    {
+        Write("docs/fotos/a.bin", Bytes(500, 4));
+        var groups = FileSearch.Duplicates(new[] { _root, Path.Combine(_root, "docs") }, 1, CancellationToken.None, null, NoSkip);
+        Assert.Empty(groups);
+    }
+
+    [Fact]
     public void Desligamento_programado_gera_os_argumentos_certos()
     {
         Assert.Equal(new[] { "/s", "/t", "600", "/c", "Programado pelo MB Extreme" }, PowerSchedule.ShutdownArguments(false, 600));

@@ -194,7 +194,7 @@ public sealed class DuplicatesPage : FileSearchPageBase
             var trash = SmallButton("Lixeira", (_, _) => { }, true);
             trash.Click += (_, _) =>
             {
-                if (remaining.Count <= 1) { SetStatus("Mantenha pelo menos uma cópia.", "WarnBrush"); return; }
+                if (remaining.Select(r => r.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count(File.Exists) <= 1) { SetStatus("Mantenha pelo menos uma cópia.", "WarnBrush"); return; }
                 if (!Recycle(f.Path, $"Enviar esta cópia para a Lixeira?\n\n{f.Path}")) return;
                 remaining.RemoveAll(r => r.Path == f.Path);
                 panel.Children.Remove(row);
@@ -252,7 +252,7 @@ public sealed class CleanExtrasPage : FileSearchPageBase
             Section("Pastas vazias", folders);
             Section("Atalhos inválidos", shortcuts);
             _clean.IsEnabled = _items.Count > 0;
-            SetStatus(_items.Count == 0 ? "Nada para limpar." : $"{_items.Count} itens encontrados.", _items.Count == 0 ? "MutedBrush" : "OkBrush");
+            SetStatus(_items.Count == 0 ? "Nada para limpar." : $"{_items.Count} itens encontrados. Marque o que quer limpar e clique em Limpar marcados.", _items.Count == 0 ? "MutedBrush" : "OkBrush");
         };
     }
 
@@ -261,7 +261,7 @@ public sealed class CleanExtrasPage : FileSearchPageBase
         Results.Children.Add(Heading($"{title} ({paths.Count})"));
         foreach (string path in paths.Take(300))
         {
-            var box = new CheckBox { Content = path, IsChecked = true, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 3, 0, 3) };
+            var box = new CheckBox { Content = path, IsChecked = false, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 3, 0, 3) };
             _items.Add((path, box));
             Results.Children.Add(box);
         }
@@ -279,6 +279,8 @@ public sealed class CleanExtrasPage : FileSearchPageBase
         {
             try
             {
+                // a pasta pode ter deixado de estar vazia desde a procura
+                if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any()) continue;
                 RecycleBin.Delete(path);
                 box.IsEnabled = false;
                 box.IsChecked = false;

@@ -67,7 +67,7 @@ public sealed class ProcessesPage : ToolPageBase
     {
         if (MessageBox.Show($"Encerrar {process.Name}?\n\nDados não salvos neste programa serão perdidos.", "Encerrar programa",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        var (ok, message) = ProcessList.Kill(process.Id);
+        var (ok, message) = ProcessList.Kill(process.Id, process.Name, process.StartTime);
         SetStatus(message, ok ? "OkBrush" : "WarnBrush");
         _ = RefreshAsync();
     }

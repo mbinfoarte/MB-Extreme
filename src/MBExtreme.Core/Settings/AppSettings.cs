@@ -21,6 +21,11 @@ public sealed class AppSettings
 
     public bool BoostCleanMemory { get; set; }
 
+    // ---- Desligamento programado pelo MB Extreme (para o app lembrar depois de fechar)
+    public long ScheduledShutdownUtcTicks { get; set; }
+
+    public bool ScheduledShutdownRestart { get; set; }
+
     // ---- Limpeza automática de memória
     public bool MemoryAutoClean { get; set; }
 

@@ -47,7 +47,7 @@ public sealed class ShredderPage : ToolPageBase
         foreach (string file in _files.ToList())
         {
             string path = file;
-            _list.Children.Add(Row(Path.GetFileName(path), Path.GetDirectoryName(path) ?? "", SmallButton("Tirar", (_, _) => { _files.Remove(path); Render(); })));
+            _list.Children.Add(Row(Path.GetFileName(path), Path.GetDirectoryName(path) ?? "", SmallButton("Tirar", (_, _) => { if (!_busy) { _files.Remove(path); Render(); } })));
         }
     }
 
@@ -59,27 +59,35 @@ public sealed class ShredderPage : ToolPageBase
         if (MessageBox.Show("Tem certeza? Esta é a última confirmação.", "Destruir arquivos", MessageBoxButton.YesNo, MessageBoxImage.Exclamation) != MessageBoxResult.Yes) return;
 
         _busy = true;
-        int passes = _passes == 0 ? 1 : 3;
-        var done = new List<string>();
-        var failed = new List<string>();
-        foreach (string file in _files.ToList())
+        try
         {
-            SetStatus($"Destruindo {Path.GetFileName(file)}...");
-            try
+            int passes = _passes == 0 ? 1 : 3;
+            var done = new List<string>();
+            var failed = new List<string>();
+            foreach (string file in _files.ToList())
             {
-                await Task.Run(() => Shredder.Shred(file, passes));
-                done.Add(file);
+                if (!_files.Contains(file)) continue;
+                SetStatus($"Destruindo {Path.GetFileName(file)}...");
+                try
+                {
+                    await Task.Run(() => Shredder.Shred(file, passes));
+                    done.Add(file);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+                    or NotSupportedException or ArgumentException or System.Security.SecurityException)
+                {
+                    failed.Add($"{Path.GetFileName(file)}: {ex.Message}");
+                }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-            {
-                failed.Add($"{Path.GetFileName(file)}: {ex.Message}");
-            }
-        }
 
-        foreach (string file in done) _files.Remove(file);
-        Render();
-        _busy = false;
-        SetStatus(failed.Count == 0 ? $"{done.Count} arquivo(s) destruído(s)." : $"{done.Count} destruído(s); falhou: {string.Join("; ", failed)}",
-            failed.Count == 0 ? "OkBrush" : "WarnBrush");
+            foreach (string file in done) _files.Remove(file);
+            Render();
+            SetStatus(failed.Count == 0 ? $"{done.Count} arquivo(s) destruído(s)." : $"{done.Count} destruído(s); falhou: {string.Join("; ", failed)}",
+                failed.Count == 0 ? "OkBrush" : "WarnBrush");
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }

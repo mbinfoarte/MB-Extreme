@@ -23,7 +23,33 @@ public sealed record DriveEntry(
 [SupportedOSPlatform("windows")]
 public static class DriveMap
 {
-    public static IReadOnlyList<DriveEntry> List()
+    private static string _cachedLetters = "";
+    private static Dictionary<string, (string Model, string Bus, string Media)> _cachedMap = new();
+
+    /// <summary>Letras das unidades prontas agora (leitura barata, sem PowerShell). Serve para saber quando algo foi conectado ou removido.</summary>
+    public static string LettersSignature() =>
+        string.Join(",", DriveInfo.GetDrives().Where(d => d.DriveType is DriveType.Fixed or DriveType.Removable && d.IsReady).Select(d => d.Name[..1]));
+
+    /// <param name="forceRefresh">Consulta de novo o modelo e o barramento dos discos (leva alguns segundos); sem isso só consulta quando as letras mudam.</param>
+    public static IReadOnlyList<DriveEntry> List(bool forceRefresh = false)
+    {
+        string letters = LettersSignature();
+        Dictionary<string, (string Model, string Bus, string Media)> map;
+        lock (typeof(DriveMap))
+        {
+            if (forceRefresh || letters != _cachedLetters || _cachedMap.Count == 0)
+            {
+                _cachedMap = QueryMap();
+                _cachedLetters = letters;
+            }
+
+            map = _cachedMap;
+        }
+
+        return Build(map);
+    }
+
+    private static Dictionary<string, (string Model, string Bus, string Media)> QueryMap()
     {
         const string script =
             "$disks = @{}; Get-Disk | ForEach-Object { $disks[[string]$_.Number] = $_ }; " +
@@ -34,7 +60,11 @@ public static class DriveMap
             "ConvertTo-Json -Compress";
 
         var result = Shell.PowerShellUtf8(script);
-        var map = result.ExitCode == 0 ? ParseMap(result.Output) : new Dictionary<string, (string, string, string)>();
+        return result.ExitCode == 0 ? ParseMap(result.Output) : new Dictionary<string, (string Model, string Bus, string Media)>();
+    }
+
+    private static IReadOnlyList<DriveEntry> Build(Dictionary<string, (string Model, string Bus, string Media)> map)
+    {
         string systemLetter = (Environment.GetEnvironmentVariable("SystemDrive") ?? "C:").TrimEnd(':', '\\').ToUpperInvariant();
 
         var list = new List<DriveEntry>();
@@ -43,9 +73,9 @@ public static class DriveMap
             if (drive.DriveType is not (DriveType.Fixed or DriveType.Removable) || !drive.IsReady) continue;
             string letter = drive.Name.TrimEnd(':', '\\').ToUpperInvariant();
             map.TryGetValue(letter, out var info);
-            string media = info.Item3 is { Length: > 0 } m ? m : drive.DriveType == DriveType.Removable ? "Removable" : "";
+            string media = info.Media is { Length: > 0 } m ? m : drive.DriveType == DriveType.Removable ? "Removable" : "";
             list.Add(new DriveEntry(letter, drive.VolumeLabel, drive.DriveFormat, drive.TotalSize, drive.AvailableFreeSpace,
-                info.Item1 ?? "", media, info.Item2 ?? "", letter == systemLetter));
+                info.Model ?? "", media, info.Bus ?? "", letter == systemLetter));
         }
 
         return list;
@@ -109,6 +139,12 @@ public static class DriveMap
         if (!CanEject(drive)) return (false, "Esta unidade não é externa; por segurança ela não é removida por aqui.");
         if (drive.Letter.Length != 1 || !char.IsLetter(drive.Letter[0])) return (false, "Unidade inválida.");
 
+        // a lista pode ter alguns segundos: confere de novo que a letra ainda é a mesma unidade externa
+        var fresh = List(forceRefresh: true).FirstOrDefault(d => d.Letter == drive.Letter);
+        if (fresh is null) return (false, "A unidade não está mais conectada.");
+        if (!CanEject(fresh) || !string.Equals(fresh.Model, drive.Model, StringComparison.OrdinalIgnoreCase))
+            return (false, "A unidade mudou desde que a lista foi montada. Atualize a lista e tente de novo.");
+
         using var handle = CreateFile($@"\\.\{drive.Letter}:", GenericRead | GenericWrite, ShareReadWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
         if (handle.IsInvalid)
             return (false, "Não foi possível abrir a unidade (acesso negado ou já removida).");
@@ -125,6 +161,6 @@ public static class DriveMap
 
         return (true, ejected
             ? $"{drive.Name} removida. Pode desconectar com segurança."
-            : $"{drive.Name} foi desmontada e os dados gravados. Pode desconectar com segurança.");
+            : $"{drive.Name} foi desmontada e os dados foram gravados. Pode desconectar; em HD externo, espere ele parar de girar. Se o Windows voltar a mostrar a unidade, repita antes de desconectar.");
     }
 }

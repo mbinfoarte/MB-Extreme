@@ -269,6 +269,26 @@ public class RedeStatusTests
     }
 
     [Fact]
+    public void Roteador_lento_no_meio_nao_e_problema_se_o_destino_responde_rapido()
+    {
+        var report = MBExtreme.Core.Network.RouteSummary.Summarize(new[]
+        {
+            Hop(1, "192.168.0.1", 1, 1, 1), Hop(2, "10.0.0.1", 8, 9, 8), Hop(3, "200.1.1.1", 90, 95, 92), Hop(4, "1.1.1.1", 12, 11, 12),
+        });
+        Assert.True(report.Healthy);
+    }
+
+    [Fact]
+    public void Uma_perda_isolada_nao_acusa_perda_no_destino()
+    {
+        var report = MBExtreme.Core.Network.RouteSummary.Summarize(new[]
+        {
+            Hop(1, "192.168.0.1", 1, 1, 1, 1), Hop(2, "1.1.1.1", 12, null, 12, 11),
+        });
+        Assert.True(report.Healthy);
+    }
+
+    [Fact]
     public void Rota_sem_resposta_nao_e_saudavel() =>
         Assert.False(MBExtreme.Core.Network.RouteSummary.Summarize(new[] { Hop(1, "???", null, null, null) }).Healthy);
 }
@@ -363,6 +383,13 @@ public class SegurancaTests
         Assert.Equal(new[] { "Kaspersky" }, status.OtherAntivirus);
         var items = MBExtreme.Core.Windows.SecurityService.Evaluate(status, DateTime.UtcNow);
         Assert.Equal(MBExtreme.Core.Windows.SecurityLevel.Ok, items.First(i => i.Title == "Antivírus").Level);
+    }
+
+    [Fact]
+    public void Antivirus_com_definicoes_vencidas_nao_conta_como_ativo()
+    {
+        var json = "{\"Defender\":{\"Enabled\":false,\"RealTime\":false,\"SignatureAge\":3},\"Firewall\":[],\"Av\":[{\"Name\":\"Antigo AV\",\"State\":12288}],\"Uac\":1}";
+        Assert.Empty(MBExtreme.Core.Windows.SecurityService.Parse(json).OtherAntivirus);
     }
 
     [Fact]

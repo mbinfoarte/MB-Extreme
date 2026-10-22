@@ -45,7 +45,7 @@ public sealed class SecurityPage : ToolPageBase
             SetStatus(problems == 0 ? "Tudo certo com a proteção do Windows." : $"{problems} {(problems == 1 ? "item precisa" : "itens precisam")} de atenção.",
                 problems == 0 ? "OkBrush" : "WarnBrush");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or AggregateException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is InvalidOperationException or AggregateException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception)
         {
             SetStatus("Não foi possível ler a proteção do Windows: " + ex.Message, "BadBrush");
         }
@@ -61,6 +61,10 @@ public sealed class SecurityPage : ToolPageBase
         {
             var (ok, message) = await Task.Run(action);
             SetStatus(message, ok ? "OkBrush" : "WarnBrush");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or AggregateException or System.ComponentModel.Win32Exception)
+        {
+            SetStatus("Não foi possível executar: " + ex.Message, "BadBrush");
         }
         finally
         {

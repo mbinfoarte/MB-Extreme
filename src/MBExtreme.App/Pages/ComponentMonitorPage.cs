@@ -14,6 +14,7 @@ namespace MBExtreme.UI.Pages;
 public sealed class ComponentMonitorPage : ToolPageBase
 {
     private static readonly Regex CoreName = new(@"^CPU Core #(\d+)$", RegexOptions.Compiled);
+    private static readonly Regex ClockName = new(@"^(?:CPU )?Core #(\d+)$", RegexOptions.Compiled);
 
     private readonly bool _gpu;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -128,7 +129,8 @@ public sealed class ComponentMonitorPage : ToolPageBase
         if (cpu is null) return;
 
         var loads = cpu.Sensors.Where(x => x.Kind == "Load" && CoreName.IsMatch(x.Name)).OrderBy(x => int.Parse(CoreName.Match(x.Name).Groups[1].Value)).ToList();
-        var clocks = cpu.Sensors.Where(x => x.Kind == "Clock" && CoreName.IsMatch(x.Name)).ToDictionary(x => x.Name, x => x.Value);
+        var clocks = cpu.Sensors.Where(x => x.Kind == "Clock" && ClockName.IsMatch(x.Name))
+            .GroupBy(x => int.Parse(ClockName.Match(x.Name).Groups[1].Value)).ToDictionary(g => g.Key, g => g.First().Value);
         if (loads.Count == 0) return;
 
         _extra.Children.Clear();
@@ -137,7 +139,7 @@ public sealed class ComponentMonitorPage : ToolPageBase
         foreach (var core in loads)
         {
             double percent = core.Value ?? 0;
-            string clock = clocks.TryGetValue(core.Name, out var mhz) && mhz is double m ? $" · {m / 1000:0.00} GHz" : "";
+            string clock = clocks.TryGetValue(int.Parse(CoreName.Match(core.Name).Groups[1].Value), out var mhz) && mhz is double m ? $" · {m / 1000:0.00} GHz" : "";
             var cell = new StackPanel { Margin = new Thickness(0, 0, 12, 10) };
             cell.Children.Add(new TextBlock { Text = $"Núcleo {CoreName.Match(core.Name).Groups[1].Value}{clock}", FontSize = 12 });
             cell.Children.Add(UsageBar.Thin(percent, Color.FromRgb(0xFF, 0xC4, 0x00)));

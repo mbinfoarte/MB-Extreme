@@ -45,11 +45,11 @@ public sealed class RamPage : ToolPageBase
         Body.Children.Add(_auto);
         Body.Children.Add(Muted("Quando a memória está cheia por causa de programas que você realmente usa, nenhuma limpeza resolve: o certo é fechar programas ou ter mais memória. A limpeza ajuda quando o uso está alto por programas parados em segundo plano."));
 
-        AppServices.AutoMemory.Changed += OnAutoChanged;
         _timer.Tick += (_, _) => UpdateUsage();
         Loaded += async (_, _) =>
         {
             _timer.Start();
+            AppServices.AutoMemory.Changed += OnAutoChanged;
             ShowAuto();
             UpdateUsage();
             await LoadModulesAsync();

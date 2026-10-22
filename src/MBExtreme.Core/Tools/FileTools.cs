@@ -30,6 +30,10 @@ public static class PathGuard
     public static bool IsProtected(string path, IReadOnlyList<string>? roots = null)
     {
         if (string.IsNullOrWhiteSpace(path)) return true;
+        // caminhos de rede, de dispositivo (\\?\) e nomes curtos 8.3 (PROGRA~1) escapam da comparação por texto: tratados como protegidos
+        if (path.StartsWith(@"\\") || path.StartsWith("//")) return true;
+        if (System.Text.RegularExpressions.Regex.IsMatch(path, @"~\d")) return true;
+
         string full;
         try { full = System.IO.Path.GetFullPath(path).TrimEnd('\\', '/'); }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return true; }
@@ -61,11 +65,12 @@ public static class FileSearch
         ReturnSpecialDirectories = false,
     };
 
-    private static IEnumerable<string> Files(string root, IReadOnlyList<string> skip)
+    private static IEnumerable<string> Files(string root, IReadOnlyList<string> skip, HashSet<string>? seen = null)
     {
         foreach (string file in Directory.EnumerateFiles(root, "*", Options))
         {
             if (PathGuard.IsProtected(file, skip)) continue;
+            if (seen is not null && !seen.Add(System.IO.Path.GetFullPath(file))) continue;
             yield return file;
         }
     }
@@ -99,9 +104,10 @@ public static class FileSearch
         skip ??= PathGuard.ProtectedRoots();
         var bySize = new Dictionary<long, List<FoundFile>>();
         onStep?.Invoke("Listando arquivos");
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string root in roots.Where(Directory.Exists))
         {
-            foreach (string path in Files(root, skip))
+            foreach (string path in Files(root, skip, seenPaths))
             {
                 token.ThrowIfCancellationRequested();
                 try
@@ -189,6 +195,8 @@ public static class Shredder
         if (PathGuard.IsProtected(path)) throw new InvalidOperationException("Este arquivo está em uma pasta protegida do Windows.");
         var info = new FileInfo(path);
         if (!info.Exists) throw new FileNotFoundException("Arquivo não encontrado.", path);
+        if (info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            throw new InvalidOperationException("Este item é um atalho simbólico ou ponto de junção. Escolha o arquivo real.");
 
         info.Attributes = FileAttributes.Normal;
         long length = info.Length;

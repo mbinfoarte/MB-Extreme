@@ -76,10 +76,13 @@ public static class UsageBar
     {
         percent = Math.Clamp(percent, 0, 100);
         var grid = new Grid { Height = 6, Margin = new Thickness(0, 4, 0, 0) };
-        grid.Children.Add(new Border { Background = new SolidColorBrush(Color.FromRgb(0x24, 0x24, 0x2A)), CornerRadius = new CornerRadius(3) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(percent, 0.001), GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(100 - percent, 0.001), GridUnitType.Star) });
+        var track = new Border { Background = new SolidColorBrush(Color.FromRgb(0x24, 0x24, 0x2A)), CornerRadius = new CornerRadius(3) };
+        Grid.SetColumnSpan(track, 2);
+        grid.Children.Add(track);
         var fill = new Border { Background = new SolidColorBrush(color), CornerRadius = new CornerRadius(3) };
+        Grid.SetColumn(fill, 0);
         grid.Children.Add(fill);
         return grid;
     }

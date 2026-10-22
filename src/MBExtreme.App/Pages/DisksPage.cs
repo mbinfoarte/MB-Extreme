@@ -23,6 +23,7 @@ public sealed class DisksPage : ToolPageBase
         public List<double> Read { get; } = new();
         public List<double> Write { get; } = new();
         public string Model { get; init; } = "";
+        public string Key { get; init; } = "";
     }
 
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -35,7 +36,7 @@ public sealed class DisksPage : ToolPageBase
     public DisksPage() : base("Discos",
         "HDs e SSDs: modelo, velocidade de leitura e gravação em tempo real e espaço de cada unidade. Na barra, verde é o espaço livre e a parte laranja ou vermelha é o espaço usado.")
     {
-        AddButton("Atualizar", async (_, _) => await ReloadDrivesAsync(), false);
+        AddButton("Atualizar", async (_, _) => await ReloadDrivesAsync(true), false);
         AddButton("Saúde dos discos", (_, _) => MainWindow.Current?.Go("storage"), false);
         Body.Children.Add(_cardHost);
 
@@ -49,19 +50,42 @@ public sealed class DisksPage : ToolPageBase
         Unloaded += (_, _) => _timer.Stop();
     }
 
-    private async Task ReloadDrivesAsync()
+    private async Task ReloadDrivesAsync(bool force = false)
     {
         try
         {
-            _drives = await Task.Run(DriveMap.List);
+            _drives = await Task.Run(() => DriveMap.List(force));
         }
         catch (Exception ex) when (ex is InvalidOperationException or AggregateException or System.IO.IOException)
         {
             SetStatus("Não foi possível ler as unidades: " + ex.Message, "WarnBrush");
         }
 
-        foreach (var card in _cards.Values) FillVolumes(card);
-        ShowOrphans();
+        RefreshVolumes();
+    }
+
+    /// <summary>Cada unidade vai para um único cartão: nome igual primeiro, e só depois nome parecido se houver um só candidato.</summary>
+    private void RefreshVolumes()
+    {
+        var owner = new Dictionary<string, string>();
+        foreach (var drive in _drives)
+        {
+            string a = Normalize(drive.Model);
+            var exact = _cards.Values.FirstOrDefault(c => a.Length > 0 && Normalize(c.Model) == a);
+            if (exact is not null) { owner[drive.Letter] = exact.Key; continue; }
+            var similar = _cards.Values.Where(c => a.Length > 0 && Normalize(c.Model).Length > 0 && (Normalize(c.Model).Contains(a) || a.Contains(Normalize(c.Model)))).ToList();
+            if (similar.Count == 1) owner[drive.Letter] = similar[0].Key;
+        }
+
+        foreach (var card in _cards.Values)
+        {
+            card.Volumes.Children.Clear();
+            var mine = _drives.Where(d => owner.TryGetValue(d.Letter, out var key) && key == card.Key).ToList();
+            if (mine.Count == 0) card.Volumes.Children.Add(Muted("Nenhuma letra de unidade encontrada neste disco."));
+            foreach (var d in mine) card.Volumes.Children.Add(VolumeRow(d));
+        }
+
+        ShowOrphans(_drives.Where(d => !owner.ContainsKey(d.Letter)).ToList());
     }
 
     private async Task TickAsync()
@@ -72,8 +96,17 @@ public sealed class DisksPage : ToolPageBase
         {
             var monitor = await AppServices.Monitor;
             var groups = await Task.Run(monitor.ReadAll);
-            foreach (var group in groups.Where(g => g.Type == "Storage")) Update(group);
-            if (++_tick % 15 == 0) await ReloadDrivesAsync();
+            bool created = false;
+            var seen = new Dictionary<string, int>();
+            foreach (var group in groups.Where(g => g.Type == "Storage"))
+            {
+                int n = seen.TryGetValue(group.Name, out var count) ? count : 0;
+                seen[group.Name] = n + 1;
+                created |= Update(group, $"{group.Name}#{n}");
+            }
+
+            if (created) RefreshVolumes();
+            else if (++_tick % 30 == 0) await ReloadDrivesAsync();
         }
         catch (Exception ex) when (ex is InvalidOperationException or AggregateException)
         {
@@ -85,14 +118,15 @@ public sealed class DisksPage : ToolPageBase
         }
     }
 
-    private void Update(SensorGroup group)
+    private bool Update(SensorGroup group, string key)
     {
-        if (!_cards.TryGetValue(group.Name, out var card))
+        bool created = false;
+        if (!_cards.TryGetValue(key, out var card))
         {
-            card = Build(group.Name);
-            _cards[group.Name] = card;
+            card = Build(group.Name, key);
+            _cards[key] = card;
             _cardHost.Children.Add(card.View);
-            FillVolumes(card);
+            created = true;
         }
 
         double? Value(string name) => group.Sensors.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Value;
@@ -106,9 +140,10 @@ public sealed class DisksPage : ToolPageBase
         if (Value("Total Activity") is double activity) parts.Add($"Atividade {activity:0}%");
         if (Value("Temperature") is double temp) parts.Add($"{temp:0} °C");
         card.Speed.Text = string.Join("  ·  ", parts);
+        return created;
     }
 
-    private DiskCard Build(string model)
+    private DiskCard Build(string model, string key)
     {
         var title = new TextBlock { Text = model, FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
         var speed = new TextBlock { FontSize = 12, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap };
@@ -128,31 +163,19 @@ public sealed class DisksPage : ToolPageBase
         stack.Children.Add(volumes);
         var view = CardOf(stack);
         view.Margin = new Thickness(0, 0, 0, 14);
-        return new DiskCard { View = view, Title = title, Speed = speed, Chart = chart, Volumes = volumes, Model = model };
+        return new DiskCard { View = view, Title = title, Speed = speed, Chart = chart, Volumes = volumes, Model = model, Key = key };
     }
 
     private static string Normalize(string text) => new string(text.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
 
-    private bool Belongs(DriveEntry drive, string model)
-    {
-        string a = Normalize(drive.Model), b = Normalize(model);
-        return a.Length > 0 && b.Length > 0 && (a == b || a.Contains(b) || b.Contains(a));
-    }
-
-    private void FillVolumes(DiskCard card)
-    {
-        card.Volumes.Children.Clear();
-        var mine = _drives.Where(d => Belongs(d, card.Model)).ToList();
-        if (mine.Count == 0) card.Volumes.Children.Add(Muted("Nenhuma letra de unidade encontrada neste disco."));
-        foreach (var d in mine) card.Volumes.Children.Add(VolumeRow(d));
-    }
-
     private StackPanel? _orphans;
 
-    private void ShowOrphans()
+    private Border? _orphanCard;
+
+    private void ShowOrphans(IReadOnlyList<DriveEntry> orphans)
     {
-        var orphans = _drives.Where(d => !_cards.Values.Any(c => Belongs(d, c.Model))).ToList();
-        if (_orphans is not null) _cardHost.Children.Remove(_orphans.Parent as UIElement ?? _orphans);
+        if (_orphanCard is not null) _cardHost.Children.Remove(_orphanCard);
+        _orphanCard = null;
         _orphans = null;
         if (orphans.Count == 0) return;
 
@@ -160,7 +183,8 @@ public sealed class DisksPage : ToolPageBase
         stack.Children.Add(new TextBlock { Text = "Outras unidades", FontSize = 15, FontWeight = FontWeights.SemiBold });
         foreach (var d in orphans) stack.Children.Add(VolumeRow(d));
         _orphans = stack;
-        _cardHost.Children.Add(CardOf(stack));
+        _orphanCard = CardOf(stack);
+        _cardHost.Children.Add(_orphanCard);
     }
 
     private UIElement VolumeRow(DriveEntry d)

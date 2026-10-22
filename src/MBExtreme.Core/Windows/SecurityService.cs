@@ -71,7 +71,7 @@ public static class SecurityService
         {
             string name = item.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() ?? "" : "";
             int state = item.TryGetProperty("State", out var s) && s.ValueKind == JsonValueKind.Number && s.TryGetInt32(out int v) ? v : 0;
-            bool on = (state & 0x1000) != 0;
+            bool on = (state & 0xF000) == 0x1000; // 0x3000 = ligado, porém com definições vencidas
             if (name.Length > 0 && on && !name.Contains("Windows Defender", StringComparison.OrdinalIgnoreCase)
                 && !name.Contains("Microsoft Defender", StringComparison.OrdinalIgnoreCase)) others.Add(name);
         }
@@ -84,8 +84,16 @@ public static class SecurityService
     {
         if (!root.TryGetProperty(name, out var e)) yield break;
         if (e.ValueKind == JsonValueKind.Array)
-            foreach (var item in e.EnumerateArray()) if (item.ValueKind == JsonValueKind.Object) yield return item;
-        else if (e.ValueKind == JsonValueKind.Object) yield return e;
+        {
+            foreach (var item in e.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.Object) yield return item;
+            }
+        }
+        else if (e.ValueKind == JsonValueKind.Object)
+        {
+            yield return e;
+        }
     }
 
     private static bool? Bool(JsonElement e, string name) =>

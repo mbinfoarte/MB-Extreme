@@ -14,6 +14,7 @@ public sealed class RemovablePage : ToolPageBase
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(4) };
     private readonly StackPanel _list = new();
     private string _signature = "";
+    private DateTime _lastBuild = DateTime.MinValue;
     private bool _busy;
 
     public RemovablePage() : base("Pendrives e HDs externos",
@@ -37,11 +38,14 @@ public sealed class RemovablePage : ToolPageBase
         _busy = true;
         try
         {
-            var all = await Task.Run(DriveMap.List);
+            // verificação barata: só consulta o PowerShell quando as letras das unidades mudam (conectou ou removeu algo)
+            string signature = DriveMap.LettersSignature();
+            bool stale = DateTime.Now - _lastBuild > TimeSpan.FromSeconds(30);
+            if (!force && signature == _signature && !stale) return;
+            var all = await Task.Run(() => DriveMap.List(force));
             var external = all.Where(d => d.IsExternal && !d.IsSystem).ToList();
-            string signature = string.Join("|", external.Select(d => d.Letter + d.FreeBytes / (1024 * 1024)));
-            if (!force && signature == _signature) return;
             _signature = signature;
+            _lastBuild = DateTime.Now;
             Show(external);
         }
         catch (Exception ex) when (ex is InvalidOperationException or AggregateException or System.IO.IOException)

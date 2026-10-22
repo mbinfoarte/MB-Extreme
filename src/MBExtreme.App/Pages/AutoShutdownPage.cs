@@ -12,6 +12,7 @@ public sealed class AutoShutdownPage : ToolPageBase
     private static readonly int[] Minutes = { 15, 30, 60, 120, 180, 300 };
     private static DateTime? s_when;
     private static bool s_restart;
+    private static bool s_loaded;
 
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly TextBlock _countdown = new() { FontSize = 22, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 0) };
@@ -33,7 +34,23 @@ public sealed class AutoShutdownPage : ToolPageBase
         Body.Children.Add(Muted("Antes de desligar, o Windows avisa e dá a chance de salvar. Programas com documentos abertos podem impedir o desligamento."));
 
         _timer.Tick += (_, _) => ShowCountdown();
-        Loaded += (_, _) => { _timer.Start(); ShowCountdown(); };
+        Loaded += (_, _) =>
+        {
+            if (!s_loaded)
+            {
+                s_loaded = true;
+                // lembra do que foi programado antes de fechar o MB Extreme (o desligamento continua valendo no Windows)
+                long ticks = AppServices.Settings.ScheduledShutdownUtcTicks;
+                if (ticks > 0 && new DateTime(ticks, DateTimeKind.Utc).ToLocalTime() > DateTime.Now)
+                {
+                    s_when = new DateTime(ticks, DateTimeKind.Utc).ToLocalTime();
+                    s_restart = AppServices.Settings.ScheduledShutdownRestart;
+                }
+            }
+
+            _timer.Start();
+            ShowCountdown();
+        };
         Unloaded += (_, _) => _timer.Stop();
     }
 
@@ -41,6 +58,7 @@ public sealed class AutoShutdownPage : ToolPageBase
     {
         if (s_when is not { } when || when <= DateTime.Now)
         {
+            if (s_when is not null) Remember(null, false);
             s_when = null;
             _countdown.Text = "Nada programado.";
             _countdown.Foreground = Brush("MutedBrush");
@@ -57,11 +75,12 @@ public sealed class AutoShutdownPage : ToolPageBase
         int seconds = Minutes[_time] * 60;
         try
         {
-            Run(PowerSchedule.CancelArguments); // troca a programação anterior, se houver
+            if (s_when is not null) Run(PowerSchedule.CancelArguments); // troca só a programação feita por aqui
             var (ok, message) = Run(PowerSchedule.ShutdownArguments(_mode == 1, seconds));
             if (!ok) { SetStatus("Não foi possível programar: " + message, "BadBrush"); return; }
             s_when = DateTime.Now.AddSeconds(seconds);
             s_restart = _mode == 1;
+            Remember(s_when, s_restart);
             SetStatus("Programado.", "OkBrush");
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -76,8 +95,15 @@ public sealed class AutoShutdownPage : ToolPageBase
     {
         try
         {
+            if (s_when is null)
+            {
+                SetStatus("O MB Extreme não programou nada. Desligamentos agendados por outros programas ou pelo Windows não são tocados.", "MutedBrush");
+                return;
+            }
+
             var (ok, message) = Run(PowerSchedule.CancelArguments);
             s_when = null;
+            Remember(null, false);
             SetStatus(ok ? "Programação cancelada." : "Nada estava programado." + (string.IsNullOrWhiteSpace(message) ? "" : " " + message), ok ? "OkBrush" : "MutedBrush");
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -86,6 +112,13 @@ public sealed class AutoShutdownPage : ToolPageBase
         }
 
         ShowCountdown();
+    }
+
+    private static void Remember(DateTime? when, bool restart)
+    {
+        AppServices.Settings.ScheduledShutdownUtcTicks = when?.ToUniversalTime().Ticks ?? 0;
+        AppServices.Settings.ScheduledShutdownRestart = restart;
+        AppServices.Settings.Save();
     }
 
     private static (bool Ok, string Message) Run(IReadOnlyList<string> arguments)

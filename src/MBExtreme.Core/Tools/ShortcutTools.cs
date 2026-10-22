@@ -11,7 +11,6 @@ public static class ShortcutTools
         Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
         Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
         Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu),
     }.Where(f => f.Length > 0 && Directory.Exists(f)).ToList();
 
     public static string? TargetOf(string lnkPath)
@@ -56,8 +55,15 @@ public static class ShortcutTools
                 token.ThrowIfCancellationRequested();
                 string? target = TargetOf(link);
                 if (target is null) continue;
-                bool looksLikePath = target.Length > 2 && (target[1] == ':' || target.StartsWith(@"\\"));
-                if (looksLikePath && !File.Exists(target) && !Directory.Exists(target)) broken.Add(link);
+                // só conta como quebrado quando a unidade do destino existe, é local e está pronta (HD externo desconectado ou rede offline não contam)
+                if (target.Length < 3 || target[1] != ':') continue;
+                try
+                {
+                    var drive = new DriveInfo(target[..1]);
+                    if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
+                }
+                catch (ArgumentException) { continue; }
+                if (!File.Exists(target) && !Directory.Exists(target)) broken.Add(link);
             }
         }
 

@@ -37,12 +37,12 @@ jobs:
           name: MBExtreme-Beta-instalador
           path: setup/MBExtreme-Beta-Setup.exe
 
-      - name: Publicar o MB Extreme Beta
+      - name: Publicar o MB Extreme (Beta 01)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >
           gh release create "beta-${{ github.run_number }}" setup/MBExtreme-Beta-Setup.exe MBExtreme-Beta-portatil-win-x64.zip
           --prerelease
           --target "${{ github.sha }}"
-          --title "MB Extreme Beta ${{ github.run_number }}"
-          --notes "MB Extreme Beta, compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador). MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes."
+          --title "MB Extreme (Beta 01) - compilação ${{ github.run_number }}"
+          --notes "MB Extreme (Beta 01), compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador). MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes."

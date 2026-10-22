@@ -43,7 +43,7 @@ public static class SystemInfoService
     public static string ToText(IEnumerable<InfoSection> sections)
     {
         var text = new StringBuilder();
-        text.AppendLine($"MB Extreme Beta - relatório do sistema ({DateTime.Now:dd/MM/yyyy HH:mm})");
+        text.AppendLine($"MB Extreme (Beta 01) - relatório do sistema ({DateTime.Now:dd/MM/yyyy HH:mm})");
         foreach (var section in sections)
         {
             text.AppendLine().AppendLine("== " + section.Title);

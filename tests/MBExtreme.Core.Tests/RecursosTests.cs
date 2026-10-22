@@ -672,7 +672,7 @@ public class AppIdentityTests
     [Fact]
     public void ProductIsCalledBeta()
     {
-        Assert.Equal("MB Extreme Beta", AppInfo.Name);
+        Assert.Equal("MB Extreme (Beta 01)", AppInfo.Name);
         Assert.Contains("Beta", AppInfo.DisplayVersion);
     }
 }

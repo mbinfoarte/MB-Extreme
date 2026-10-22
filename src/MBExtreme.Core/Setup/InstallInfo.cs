@@ -11,6 +11,7 @@ public static class InstallInfo
     /// <summary>Nome da pasta de instalação (mantido para atualizar instalações anteriores).</summary>
     public const string FolderName = "MB Extreme";
     private const string LegacyShortcutName = "MB Extreme";
+    private const string PreviousShortcutName = "MB Extreme Beta";
     public const string Publisher = "MB InfoArt";
     public const string Version = AppInfo.DisplayVersion;
     public const string ExecutableName = "MBExtreme.exe";
@@ -65,6 +66,7 @@ public static class InstallInfo
         {
             StartMenuShortcut, DesktopShortcut,
             Path.Combine(programs, LegacyShortcutName + ".lnk"), Path.Combine(desktop, LegacyShortcutName + ".lnk"),
+            Path.Combine(programs, PreviousShortcutName + ".lnk"), Path.Combine(desktop, PreviousShortcutName + ".lnk"),
         })
         {
             try { if (File.Exists(shortcut)) File.Delete(shortcut); }

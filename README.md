@@ -1,4 +1,4 @@
-# MB Extreme Beta
+# MB Extreme (Beta 01)
 
 Software de otimização completa para Windows, da MB InfoArt. Visual preto, com cartões arredondados e botões amarelos.
 
@@ -46,7 +46,7 @@ O app pede privilégio de administrador (limpar a lista de espera da RAM e alter
 
 O build do Windows também roda no GitHub Actions (`.github/workflows/build.yml`) e publica o executável como artefato.
 
-## O que o MB Extreme Beta faz
+## O que o MB Extreme (Beta 01) faz
 
 Detalhes em `docs/ESPECIFICACAO-FERRAMENTAS.md`; a base das recomendações (testes publicados e fontes) está em `docs/PESQUISA-OTIMIZACAO-GAMER.md`.
 

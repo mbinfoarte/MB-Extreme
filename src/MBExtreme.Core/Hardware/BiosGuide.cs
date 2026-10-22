@@ -167,7 +167,7 @@ public static class BiosGuide
     public static string RecipeToText(HardwareInventory hw)
     {
         var text = new StringBuilder();
-        text.AppendLine($"MB Extreme Beta - receita de BIOS para: {hw.Cpu.Name} / {hw.Board.Manufacturer} {hw.Board.Product}");
+        text.AppendLine($"MB Extreme (Beta 01) - receita de BIOS para: {hw.Cpu.Name} / {hw.Board.Manufacturer} {hw.Board.Product}");
         foreach (var section in BuildRecipe(hw))
         {
             text.AppendLine().AppendLine("== " + section.Title);

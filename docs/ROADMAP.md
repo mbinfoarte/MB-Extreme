@@ -1,6 +1,6 @@
 # Roadmap
 
-## No MB Extreme Beta
+## No MB Extreme (Beta 01)
 - [x] Tema preto e amarelo, menu lateral por módulos, janela de progresso padrão
 - [x] Painel com medidores (CPU, GPU, memória, ping), gráficos e limpeza segura
 - [x] Memória: status, limpeza e lista de protegidos

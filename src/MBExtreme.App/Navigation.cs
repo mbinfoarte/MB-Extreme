@@ -71,6 +71,15 @@ internal static class NavigationMap
             new("security", "Segurança", "Antivírus, firewall e controle de contas.", "\uE72E"),
             new("repair", "Reparo do Windows", "SFC, DISM, CHKDSK e correções de Windows Update, loja e rede.", "\uE90F"),
         }),
+        new("tools", "Ferramentas", "Processos, arquivos grandes e duplicados, e mais.", "\uE90F", new Tile[]
+        {
+            new("processes", "Processos", "Quem usa memória e processador, com encerramento seguro.", "\uE9D9"),
+            new("largefiles", "Arquivos grandes", "Ache o que está ocupando espaço.", "\uE8B7"),
+            new("duplicates", "Arquivos duplicados", "Cópias idênticas e espaço recuperável.", "\uE8C8"),
+            new("cleanextras", "Pastas vazias e atalhos inválidos", "Limpeza de lixo que sobra no perfil.", "\uE74D"),
+            new("shredder", "Destruir arquivos", "Apaga de forma definitiva, sem recuperação.", "\uE74D"),
+            new("autoshutdown", "Desligamento automático", "Desliga ou reinicia o PC no horário.", "\uE7E8"),
+        }),
         new("drv", "Drivers e programas", "Atualizações por fontes oficiais.", "\uE896", new Tile[]
         {
             new("drivers", "Drivers", "Placa de vídeo (NVIDIA, AMD, Intel) e Windows Update.", "\uE950"),

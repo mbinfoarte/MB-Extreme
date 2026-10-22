@@ -95,6 +95,7 @@ internal static class NavigationMap
         }),
         new("drv", "Drivers e programas", "Atualizações por fontes oficiais.", "\uE896", new Tile[]
         {
+            new("driver-removal", "Remover driver de vídeo", "Remoção completa do driver NVIDIA, AMD ou Intel para reinstalar limpo.", "\uE74D"),
             new("drivers", "Drivers", "Placa de vídeo (NVIDIA, AMD, Intel) e Windows Update.", "\uE950"),
             new("recommended", "Programas recomendados", "Ferramentas gratuitas que combinam com o MB Extreme.", "\uE734"),
             new("programs", "Programas", "Atualize e instale ferramentas pelo winget.", "\uE896"),

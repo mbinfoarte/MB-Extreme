@@ -27,6 +27,7 @@ public sealed class LicensePage : ToolPageBase
 
         Body.Children.Add(_state);
         Body.Children.Add(_code);
+        BuildPhoto();
         BuildAdvanced();
 
         Loaded += (_, _) => { _license.Changed += OnChanged; Render(); };
@@ -44,8 +45,8 @@ public sealed class LicensePage : ToolPageBase
 
         (string title, string detail, string brush) = (status.State, config.Configured) switch
         {
-            (LicenseState.Valid, _) => ($"Plano {(status.Plan == "pro" ? "Pro" : "gratuito")} ativo",
-                $"{status.Payload!.Email} · vale até {status.Payload.ExpiresAt.LocalDateTime:dd/MM/yyyy HH:mm} (renova sozinho). Computadores permitidos: {status.Payload.MaxDevices}.", "OkBrush"),
+            (LicenseState.Valid, _) => ($"Plano {(status.Plan == "pro" ? "Pro" : "gratuito")} ativo" + (status.Plan == "pro" && status.DaysLeft(DateTimeOffset.UtcNow) is int d ? $" · {d} dias restantes" : ""),
+                $"{status.Payload!.Email} · a licença se renova sozinha (vale até {status.Payload.ExpiresAt.LocalDateTime:dd/MM/yyyy HH:mm} sem internet). Computadores permitidos: {status.Payload.MaxDevices}.", "OkBrush"),
             (LicenseState.Expired, _) => ("Licença vencida", status.Message, "WarnBrush"),
             (LicenseState.ClockTampered, _) => ("Relógio incorreto", status.Message, "WarnBrush"),
             (LicenseState.WrongDevice, _) => ("Licença de outro computador", status.Message, "BadBrush"),
@@ -69,6 +70,32 @@ public sealed class LicensePage : ToolPageBase
         _login.IsEnabled = config.Configured && _loginCts is null;
         _refresh.IsEnabled = config.Configured && signedIn;
         _signOut.IsEnabled = signedIn;
+    }
+
+    private void BuildPhoto()
+    {
+        Body.Children.Add(Heading("Foto do perfil"));
+        Body.Children.Add(Muted("A foto aparece no menu e fica só neste computador."));
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        var choose = SmallButton("Escolher foto...", (_, _) =>
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Imagens|*.png;*.jpg;*.jpeg;*.bmp", Title = "Escolha sua foto" };
+            if (dialog.ShowDialog() != true) return;
+            try
+            {
+                ProfileStore.Save(dialog.FileName);
+                MainWindow.Current?.UpdateFooter();
+                SetStatus("Foto atualizada.", "OkBrush");
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or NotSupportedException or InvalidOperationException or UnauthorizedAccessException or ArgumentException)
+            {
+                SetStatus("Não foi possível usar esta imagem: " + ex.Message, "BadBrush");
+            }
+        }, true);
+        choose.Margin = new Thickness(0);
+        buttons.Children.Add(choose);
+        buttons.Children.Add(SmallButton("Remover foto", (_, _) => { ProfileStore.Remove(); MainWindow.Current?.UpdateFooter(); }));
+        Body.Children.Add(buttons);
     }
 
     private void BuildAdvanced()

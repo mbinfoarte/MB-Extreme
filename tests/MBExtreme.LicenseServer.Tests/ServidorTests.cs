@@ -108,6 +108,19 @@ public class ServidorTests : IClassFixture<ServerFixture>
     }
 
     [Fact]
+    public async Task Licenca_traz_o_nome_do_cliente_e_o_fim_da_assinatura()
+    {
+        var client = NewClient();
+        string email = $"n{Unique()}@exemplo.com";
+        await client.PostAsync("/register", Form(("name", "Maria Silva"), ("email", email), ("password", "senha-forte-123")));
+        await GrantProAsync(email, 20);
+        var (license, deviceId) = await ActivateAsync(client);
+        var status = LicenseVerifier.Evaluate(license, await PublicKeyAsync(), deviceId, DateTimeOffset.UtcNow);
+        Assert.Equal("Maria Silva", status.Payload!.Name);
+        Assert.Equal(20, status.DaysLeft(DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
     public async Task Cliente_real_do_app_fala_com_o_servidor()
     {
         var (site, email) = await RegisterAsync();

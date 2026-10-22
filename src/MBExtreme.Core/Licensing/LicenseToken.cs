@@ -15,6 +15,12 @@ public sealed record LicensePayload
 
     [JsonPropertyName("email")] public string Email { get; init; } = "";
 
+    /// <summary>Nome do cliente, como cadastrado no site (pode ser vazio).</summary>
+    [JsonPropertyName("name")] public string Name { get; init; } = "";
+
+    /// <summary>Fim do período pago (ou do teste). É o que o cliente vê como "dias restantes"; difere do vencimento da licença, que se renova sozinho.</summary>
+    [JsonPropertyName("pe")] public DateTimeOffset? PeriodEnd { get; init; }
+
     /// <summary>"free" ou "pro" (outros planos podem ser acrescentados no servidor).</summary>
     [JsonPropertyName("plan")] public string Plan { get; init; } = "free";
 

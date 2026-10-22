@@ -150,8 +150,9 @@ public sealed class LicenseIssuer
         var (plan, status, maxDevices, expires) = Resolve(sub);
         var payload = new LicensePayload
         {
-            Subject = user.Id.ToString(), Email = user.Email, Plan = plan, Status = status, MaxDevices = maxDevices,
+            Subject = user.Id.ToString(), Email = user.Email, Name = user.Name, Plan = plan, Status = status, MaxDevices = maxDevices,
             Device = deviceId, IssuedAt = _clock(), ExpiresAt = expires,
+            PeriodEnd = plan == "free" ? null : sub?.PeriodEnd,
         };
         return LicenseToken.Sign(payload, _key.Key);
     }

@@ -2,7 +2,7 @@ using Microsoft.Data.Sqlite;
 
 namespace MBExtreme.LicenseServer;
 
-public sealed record User(long Id, string Email, string PasswordHash);
+public sealed record User(long Id, string Email, string PasswordHash, string Name = "");
 
 public sealed record Subscription(long UserId, string Plan, string Status, DateTimeOffset PeriodEnd, int MaxDevices, string? Provider, string? ProviderRef);
 
@@ -20,13 +20,15 @@ public sealed class Db
         _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Cache = SqliteCacheMode.Shared }.ToString();
         using var c = Open();
         Exec(c, """
-            CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL, name TEXT NOT NULL DEFAULT '');
             CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER PRIMARY KEY, plan TEXT NOT NULL, status TEXT NOT NULL, period_end TEXT NOT NULL, max_devices INTEGER NOT NULL, provider TEXT, provider_ref TEXT);
             CREATE TABLE IF NOT EXISTS devices (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, device_id TEXT NOT NULL, name TEXT NOT NULL, activated_at TEXT NOT NULL, last_seen TEXT NOT NULL, UNIQUE(user_id, device_id));
             CREATE TABLE IF NOT EXISTS device_codes (code TEXT PRIMARY KEY, user_code TEXT NOT NULL UNIQUE, device_id TEXT NOT NULL, device_name TEXT NOT NULL, user_id INTEGER, state TEXT NOT NULL, expires_at TEXT NOT NULL, last_poll TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS webhook_events (id TEXT PRIMARY KEY, received_at TEXT NOT NULL);
             """);
+        try { Exec(c, "ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''"); } // bancos criados antes da coluna de nome
+        catch (SqliteException) { }
     }
 
     private SqliteConnection Open()
@@ -78,12 +80,12 @@ public sealed class Db
 
     // ---- usuários
 
-    public long? CreateUser(string email, string passwordHash)
+    public long? CreateUser(string email, string passwordHash, string name = "")
     {
         try
         {
             using var c = Open();
-            Exec(c, "INSERT INTO users(email, password_hash, created_at) VALUES($e, $p, $t)", ("$e", email), ("$p", passwordHash), ("$t", T(DateTimeOffset.UtcNow)));
+            Exec(c, "INSERT INTO users(email, password_hash, created_at, name) VALUES($e, $p, $t, $n)", ("$e", email), ("$p", passwordHash), ("$t", T(DateTimeOffset.UtcNow)), ("$n", name));
             using var cmd = c.CreateCommand();
             cmd.CommandText = "SELECT last_insert_rowid()";
             return (long)cmd.ExecuteScalar()!;
@@ -95,10 +97,10 @@ public sealed class Db
     }
 
     public User? UserByEmail(string email) =>
-        Query("SELECT id, email, password_hash FROM users WHERE email = $e", r => new User(r.GetInt64(0), r.GetString(1), r.GetString(2)), ("$e", email));
+        Query("SELECT id, email, password_hash, name FROM users WHERE email = $e", r => new User(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3)), ("$e", email));
 
     public User? UserById(long id) =>
-        Query("SELECT id, email, password_hash FROM users WHERE id = $i", r => new User(r.GetInt64(0), r.GetString(1), r.GetString(2)), ("$i", id));
+        Query("SELECT id, email, password_hash, name FROM users WHERE id = $i", r => new User(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3)), ("$i", id));
 
     // ---- assinatura
 

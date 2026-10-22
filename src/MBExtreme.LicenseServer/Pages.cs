@@ -52,6 +52,7 @@ public static class Pages
             {{(error is null ? "" : $"<p class=\"bad\">{E(error)}</p>")}}
             <form method="post" action="{{E(action)}}" class="card">
               {{hidden}}
+              {{(register ? "<label>Nome<input name=\"name\" maxlength=\"80\" autocomplete=\"name\"></label>" : "")}}
               <label>E-mail<input name="email" type="email" required autocomplete="email"></label>
               <label>Senha{{(register ? " (mínimo de 8 caracteres)" : "")}}<input name="password" type="password" required minlength="8" autocomplete="{{(register ? "new-password" : "current-password")}}"></label>
               <button class="go">{{E(button)}}</button>

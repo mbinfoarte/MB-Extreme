@@ -22,6 +22,14 @@ public sealed record LicenseStatus(LicenseState State, LicensePayload? Payload, 
 {
     public bool IsValid => State == LicenseState.Valid;
 
+    /// <summary>Dias até o fim do período pago (arredondado para cima). Sem data de assinatura, usa o vencimento da licença.</summary>
+    public int? DaysLeft(DateTimeOffset now)
+    {
+        var end = Payload?.PeriodEnd ?? Payload?.ExpiresAt;
+        if (end is null) return null;
+        return Math.Max(0, (int)Math.Ceiling((end.Value - now).TotalDays));
+    }
+
     public string Plan => IsValid && Payload is not null ? Payload.Plan : "free";
 
     /// <summary>Vale a pena pedir uma licença nova ao servidor (falta pouco para vencer ou já venceu).</summary>

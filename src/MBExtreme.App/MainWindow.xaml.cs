@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using MBExtreme.Core.Licensing;
 using MBExtreme.Core.Tweaks;
 using MBExtreme.UI.Pages;
 
@@ -41,7 +43,8 @@ public partial class MainWindow : Window
     private void UpdateMaximizeState()
     {
         bool maximized = WindowState == WindowState.Maximized;
-        RootGrid.Margin = maximized ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
+        WindowFrame.Margin = maximized ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
+        WindowFrame.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(22);
         MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
         MaximizeButton.ToolTip = maximized ? "Restaurar" : "Maximizar";
     }
@@ -68,7 +71,7 @@ public partial class MainWindow : Window
     private void BuildMenu()
     {
         AddNavItem("home", "Painel", "\uE80F", true);
-        foreach (var module in NavigationMap.Modules)
+        foreach (var module in NavigationMap.Modules.Where(m => m.Key != "lic")) // a licença fica no cartão do cliente
             AddNavItem(module.Key, module.Title, module.Icon, false);
     }
 
@@ -78,15 +81,16 @@ public partial class MainWindow : Window
         content.Children.Add(new TextBlock
         {
             FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-            FontSize = 18,
+            FontSize = 15,
             Text = glyph,
-            Width = 28,
+            Width = 22,
             VerticalAlignment = VerticalAlignment.Center,
         });
         content.Children.Add(new TextBlock
         {
             Text = title,
             FontWeight = FontWeights.SemiBold,
+            FontSize = 13,
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -111,7 +115,37 @@ public partial class MainWindow : Window
         if (sender is RadioButton { Tag: string key }) ShowPage(key);
     }
 
-    private void UpdateFooter() => FooterText.Text = "Beta 01 · " + AppServices.License.Summary;
+    /// <summary>Atualiza o cartão do cliente: foto, nome, plano, dias restantes e o botão de ativar ou renovar.</summary>
+    internal void UpdateFooter()
+    {
+        var license = AppServices.License;
+        var info = LicenseProfile.Describe(license.Status, license.Config, DateTimeOffset.UtcNow, Environment.UserName);
+        CustomerName.Text = info.Name;
+        CustomerPlan.Text = info.PlanText;
+        CustomerPlan.Foreground = (Brush)FindResource(info.Level switch
+        {
+            ProfileLevel.Ok => "OkBrush", ProfileLevel.Warn => "WarnBrush", ProfileLevel.Bad => "BadBrush", _ => "MutedBrush",
+        });
+        ActivateButton.Content = info.ActionText;
+        ActivateButton.Visibility = info.ShowAction ? Visibility.Visible : Visibility.Collapsed;
+
+        var photo = ProfileStore.Load();
+        if (photo is not null)
+        {
+            AvatarBorder.Background = new ImageBrush(photo) { Stretch = Stretch.UniformToFill };
+            AvatarInitials.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            AvatarBorder.Background = (Brush)FindResource("AccentBrush");
+            AvatarInitials.Text = info.Initials;
+            AvatarInitials.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void Profile_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => Go("license");
+
+    private void Activate_Click(object sender, RoutedEventArgs e) => Go("license");
 
     private void ShowPage(string key)
     {

@@ -71,7 +71,9 @@ app.MapPost("/register", async (HttpContext c) =>
     string email = form["email"].ToString().Trim().ToLowerInvariant(), password = form["password"].ToString();
     if (!Security.ValidEmail(email)) return Html(Form("Criar conta", "/register", "Criar conta", true, "E-mail inválido."), 400);
     if (password.Length < 8 || password.Length > 200) return Html(Form("Criar conta", "/register", "Criar conta", true, "A senha precisa ter de 8 a 200 caracteres."), 400);
-    long? id = db.CreateUser(email, Security.HashPassword(password));
+    string name = form["name"].ToString().Trim();
+    if (name.Length > 80) name = name[..80];
+    long? id = db.CreateUser(email, Security.HashPassword(password), name);
     if (id is null) return Html(Form("Criar conta", "/register", "Criar conta", true, "Este e-mail já tem conta. Entre com a senha."), 409);
     StartSession(c, id.Value);
     return Results.Redirect("/account");

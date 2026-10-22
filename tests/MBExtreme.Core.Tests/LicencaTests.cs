@@ -274,3 +274,79 @@ public class FluxoDeLoginTests
         Assert.Equal(PollState.Expired, result.State);
     }
 }
+
+public class PerfilDoClienteTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
+    private static readonly LicenseConfig Configured = new(true, "http://s", "k");
+
+    private static LicenseStatus Status(string plan, int periodDays, LicenseState state = LicenseState.Valid, string name = "Maria Silva") =>
+        new(state, new LicensePayload { Name = name, Email = "maria@exemplo.com", Plan = plan, PeriodEnd = Now.AddDays(periodDays), ExpiresAt = Now.AddDays(5) }, "", TimeSpan.FromDays(5));
+
+    [Fact]
+    public void Pro_mostra_os_dias_restantes_da_assinatura_e_nao_da_licenca()
+    {
+        var info = LicenseProfile.Describe(Status("pro", 23), Configured, Now, "pc");
+        Assert.Equal("Pro · 23 dias restantes", info.PlanText);
+        Assert.Equal(ProfileLevel.Ok, info.Level);
+        Assert.False(info.ShowAction);
+        Assert.Equal("Maria Silva", info.Name);
+        Assert.Equal("MS", info.Initials);
+    }
+
+    [Theory]
+    [InlineData(7, "Pro · 7 dias restantes")]
+    [InlineData(1, "Pro · 1 dia restante")]
+    [InlineData(0, "Pro · vence hoje")]
+    public void Perto_do_fim_avisa_e_oferece_renovar(int days, string text)
+    {
+        var info = LicenseProfile.Describe(Status("pro", days), Configured, Now, "pc");
+        Assert.Equal(text, info.PlanText);
+        Assert.Equal(ProfileLevel.Warn, info.Level);
+        Assert.True(info.ShowAction);
+        Assert.Equal("Renovar assinatura", info.ActionText);
+    }
+
+    [Fact]
+    public void Gratuito_e_sem_licenca_convidam_a_ativar_o_pro()
+    {
+        var free = LicenseProfile.Describe(Status("free", 0), Configured, Now, "pc");
+        Assert.Equal("Plano gratuito", free.PlanText);
+        Assert.Equal("Ativar o Pro", free.ActionText);
+
+        var none = LicenseProfile.Describe(new LicenseStatus(LicenseState.None, null, "", null), Configured, Now, "mbinfoarte");
+        Assert.Equal("mbinfoarte", none.Name);
+        Assert.True(none.ShowAction);
+        Assert.Equal("Beta aberto", LicenseProfile.Describe(new LicenseStatus(LicenseState.None, null, "", null), new LicenseConfig(false, "", ""), Now, "x").PlanText);
+    }
+
+    [Fact]
+    public void Licenca_vencida_ou_invalida_aparece_em_vermelho()
+    {
+        Assert.Equal(ProfileLevel.Bad, LicenseProfile.Describe(Status("pro", 5, LicenseState.Expired), Configured, Now, "pc").Level);
+        Assert.Equal("Licença de outro PC", LicenseProfile.Describe(Status("pro", 5, LicenseState.WrongDevice), Configured, Now, "pc").PlanText);
+    }
+
+    [Theory]
+    [InlineData("Maria Silva", "MS")]
+    [InlineData("joao", "J")]
+    [InlineData("ana.paula-souza", "AP")]
+    [InlineData("", "MB")]
+    public void Iniciais_do_avatar(string name, string expected) => Assert.Equal(expected, LicenseProfile.Initials(name));
+
+    [Fact]
+    public void Sem_nome_usa_o_inicio_do_email()
+    {
+        var info = LicenseProfile.Describe(Status("free", 0, name: ""), Configured, Now, "pc");
+        Assert.Equal("maria", info.Name);
+    }
+
+    [Fact]
+    public void Dias_restantes_arredondam_para_cima_e_nunca_ficam_negativos()
+    {
+        var s = new LicenseStatus(LicenseState.Valid, new LicensePayload { PeriodEnd = Now.AddHours(30) }, "", null);
+        Assert.Equal(2, s.DaysLeft(Now));
+        Assert.Equal(0, s.DaysLeft(Now.AddDays(10)));
+        Assert.Null(new LicenseStatus(LicenseState.None, null, "", null).DaysLeft(Now));
+    }
+}

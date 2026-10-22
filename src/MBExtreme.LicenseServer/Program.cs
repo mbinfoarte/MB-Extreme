@@ -1,5 +1,7 @@
 using System.Text.Json;
 using MBExtreme.Core.Licensing;
+using MBExtreme.Core.Remote;
+using System.Net.WebSockets;
 using MBExtreme.LicenseServer;
 using static MBExtreme.LicenseServer.Pages;
 
@@ -22,7 +24,12 @@ builder.Services.AddSingleton(db);
 builder.Services.AddSingleton(signing);
 builder.Services.AddSingleton(issuer);
 
+var relay = new RemoteRelay(db, signing.PublicKey, (config["Remote:Technicians"] ?? "").Split(new[] { ',', ';' }),
+    TimeSpan.FromMinutes(config.GetValue("Remote:MaxSessionMinutes", 240)));
+builder.Services.AddSingleton(relay);
+
 var app = builder.Build();
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 
 const string CookieName = "mbx_session";
 var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
@@ -274,6 +281,62 @@ app.MapPost("/v1/license/deactivate", async (HttpContext c) =>
     if (auth is null) return error!;
     db.RemoveDevice(auth.Value.User.Id, auth.Value.Device.DeviceId);
     return Results.Json(new { ok = true });
+});
+
+// ======================================================= acesso remoto (suporte)
+
+/// <summary>O computador do cliente pede um ID numérico. O segredo devolvido fica só no PC dele e autentica a conexão.</summary>
+app.MapPost("/v1/remote/register", async (HttpContext c) =>
+{
+    if (!limiter.Allow("remote-reg|" + Ip(c), 20 * limitScale, TimeSpan.FromHours(1))) return Results.Json(new { message = "Muitas tentativas." }, statusCode: 429);
+    JsonElement body;
+    try { body = await JsonSerializer.DeserializeAsync<JsonElement>(c.Request.Body, jsonOptions); }
+    catch (JsonException) { return Results.BadRequest(new { message = "Pedido inválido." }); }
+    string device = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("deviceId", out var d) ? d.GetString() ?? "" : "";
+    if (device.Length is < 8 or > 200) return Results.BadRequest(new { message = "Identificador do PC inválido." });
+
+    string secret = Security.RandomToken();
+    for (int attempt = 0; attempt < 10; attempt++)
+    {
+        string id = RemoteIds.NewId();
+        if (db.RegisterRemoteDevice(id, RemoteRelay.Hash(secret), RemoteRelay.Hash(device))) return Results.Json(new { id, secret });
+    }
+    return Results.Json(new { message = "Não foi possível criar o ID agora." }, statusCode: 503);
+});
+
+app.Map("/v1/remote/ws/client", async (HttpContext c) =>
+{
+    if (!c.WebSockets.IsWebSocketRequest) return Results.BadRequest();
+    string? id = RemoteIds.ParseId(c.Request.Query["id"]);
+    string secret = c.Request.Query["secret"].ToString();
+    var device = id is null ? null : db.RemoteDeviceById(id);
+    if (device is null || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(device.SecretHash), System.Text.Encoding.UTF8.GetBytes(RemoteRelay.Hash(secret))))
+        return Results.Json(new { message = "ID ou segredo inválido." }, statusCode: 401);
+    using var socket = await c.WebSockets.AcceptWebSocketAsync();
+    await relay.RunClientAsync(socket, id!, c.RequestAborted);
+    return Results.Empty;
+});
+
+app.Map("/v1/remote/ws/tech", async (HttpContext c) =>
+{
+    if (!relay.RemoteEnabled) return Results.NotFound();
+    if (!c.WebSockets.IsWebSocketRequest) return Results.BadRequest();
+    if (!limiter.Allow("remote-tech|" + Ip(c), 30 * limitScale, TimeSpan.FromMinutes(10))) return Results.Json(new { message = "Muitas tentativas." }, statusCode: 429);
+    string? technician = relay.Technician(c.Request.Headers.Authorization.ToString());
+    if (technician is null) return Results.Json(new { message = "Conta de técnico não autorizada." }, statusCode: 403);
+    string? id = RemoteIds.ParseId(c.Request.Query["id"]);
+    if (id is null) return Results.BadRequest(new { message = "ID inválido." });
+    using var socket = await c.WebSockets.AcceptWebSocketAsync();
+    await relay.RunTechnicianAsync(socket, id, technician, c.RequestAborted);
+    return Results.Empty;
+});
+
+app.MapGet("/v1/remote/audit", (HttpContext c) =>
+{
+    if (!relay.RemoteEnabled) return Results.NotFound();
+    if (relay.Technician(c.Request.Headers.Authorization.ToString()) is null) return Results.Json(new { message = "Não autorizado." }, statusCode: 403);
+    return Results.Json(db.RemoteAudit(50).Select(a => new { a.Id, a.ClientId, a.Technician, a.RequestedAt, a.Accepted, a.EndedAt, a.Bytes, a.Result }));
 });
 
 // ======================================================= pagamentos

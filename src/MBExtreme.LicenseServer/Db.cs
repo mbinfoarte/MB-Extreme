@@ -26,6 +26,8 @@ public sealed class Db
             CREATE TABLE IF NOT EXISTS device_codes (code TEXT PRIMARY KEY, user_code TEXT NOT NULL UNIQUE, device_id TEXT NOT NULL, device_name TEXT NOT NULL, user_id INTEGER, state TEXT NOT NULL, expires_at TEXT NOT NULL, last_poll TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS webhook_events (id TEXT PRIMARY KEY, received_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS remote_devices (id TEXT PRIMARY KEY, secret_hash TEXT NOT NULL, device_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, last_seen TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS remote_audit (id INTEGER PRIMARY KEY, client_id TEXT NOT NULL, technician TEXT NOT NULL, requested_at TEXT NOT NULL, accepted INTEGER NOT NULL DEFAULT 0, ended_at TEXT, bytes INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL DEFAULT '');
             """);
         try { Exec(c, "ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''"); } // bancos criados antes da coluna de nome
         catch (SqliteException) { }
@@ -198,4 +200,51 @@ public sealed class Db
     }
 
     public void DeleteSession(string token) => Run("DELETE FROM sessions WHERE token = $t", ("$t", token));
+
+    // ---- acesso remoto
+
+    public sealed record RemoteDevice(string Id, string SecretHash, string DeviceHash);
+
+    public sealed record RemoteAuditRow(long Id, string ClientId, string Technician, DateTimeOffset RequestedAt, bool Accepted, DateTimeOffset? EndedAt, long Bytes, string Result);
+
+    public RemoteDevice? RemoteDeviceById(string id) =>
+        Query("SELECT id, secret_hash, device_hash FROM remote_devices WHERE id = $i", r => new RemoteDevice(r.GetString(0), r.GetString(1), r.GetString(2)), ("$i", id));
+
+    public bool RemoteIdExists(string id) => RemoteDeviceById(id) is not null;
+
+    /// <summary>Cria (ou troca) o ID do computador. Um computador tem um ID de cada vez.</summary>
+    public bool RegisterRemoteDevice(string id, string secretHash, string deviceHash)
+    {
+        try
+        {
+            string now = T(DateTimeOffset.UtcNow);
+            using var c = Open();
+            Exec(c, "DELETE FROM remote_devices WHERE device_hash = $d", ("$d", deviceHash));
+            Exec(c, "INSERT INTO remote_devices(id, secret_hash, device_hash, created_at, last_seen) VALUES($i, $s, $d, $t, $t)", ("$i", id), ("$s", secretHash), ("$d", deviceHash), ("$t", now));
+            return true;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return false; // ID já usado: o chamador sorteia outro
+        }
+    }
+
+    public void TouchRemoteDevice(string id) => Run("UPDATE remote_devices SET last_seen = $t WHERE id = $i", ("$t", T(DateTimeOffset.UtcNow)), ("$i", id));
+
+    public long StartRemoteAudit(string clientId, string technician)
+    {
+        using var c = Open();
+        Exec(c, "INSERT INTO remote_audit(client_id, technician, requested_at) VALUES($c, $t, $r)", ("$c", clientId), ("$t", technician), ("$r", T(DateTimeOffset.UtcNow)));
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT last_insert_rowid()";
+        return (long)cmd.ExecuteScalar()!;
+    }
+
+    public void FinishRemoteAudit(long id, bool accepted, long bytes, string result) =>
+        Run("UPDATE remote_audit SET accepted = $a, ended_at = $e, bytes = $b, result = $r WHERE id = $i",
+            ("$a", accepted ? 1 : 0), ("$e", T(DateTimeOffset.UtcNow)), ("$b", bytes), ("$r", result), ("$i", id));
+
+    public List<RemoteAuditRow> RemoteAudit(int count) =>
+        QueryAll("SELECT id, client_id, technician, requested_at, accepted, ended_at, bytes, result FROM remote_audit ORDER BY id DESC LIMIT $n",
+            r => new RemoteAuditRow(r.GetInt64(0), r.GetString(1), r.GetString(2), D(r.GetString(3)), r.GetInt32(4) == 1, r.IsDBNull(5) ? null : D(r.GetString(5)), r.GetInt64(6), r.GetString(7)), ("$n", count));
 }

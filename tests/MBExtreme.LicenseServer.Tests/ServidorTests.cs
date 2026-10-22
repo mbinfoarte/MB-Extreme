@@ -24,6 +24,7 @@ public sealed class ServerFixture : WebApplicationFactory<Program>
         builder.UseSetting("Dev:Enabled", "true");
         builder.UseSetting("Payments:WebhookSecret", Secret);
         builder.UseSetting("Limits:Multiplier", "1000");
+        builder.UseSetting("Remote:Technicians", "tecnico@exemplo.com");
     }
 
     protected override void Dispose(bool disposing)

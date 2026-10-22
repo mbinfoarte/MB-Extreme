@@ -34,6 +34,11 @@ internal static class NavigationMap
         new("test", "Testes", "Informações, sensores, benchmark e estresse.", "\uE9D9", new Tile[]
         {
             new("sysinfo", "Informações do sistema", "Estilo CPU-Z, GPU-Z e AIDA.", "\uE770"),
+            new("cpu-detail", "Processador", "Uso, temperatura, velocidade e energia, por núcleo.", "\uE950"),
+            new("gpu-detail", "Placa de vídeo", "Uso, temperatura, velocidade, energia e memória de vídeo.", "\uE7F4"),
+            new("ram-detail", "Memória", "Pentes, uso em tempo real e limpeza automática.", "\uE950"),
+            new("disks", "Discos", "Modelo, velocidade e espaço livre e usado.", "\uEDA2"),
+            new("removable", "Pendrives e HDs externos", "Espaço e remoção segura.", "\uE88E"),
             new("monitor", "Monitor em tempo real", "Clock, uso, tensões e temperaturas.", "\uE9D9"),
             new("bench", "Benchmark", "CPU, memória, disco e GPU em 3D.", "\uE9D9"),
             new("compare", "Antes e depois", "Mede o efeito real de cada mudança.", "\uE9D9"),

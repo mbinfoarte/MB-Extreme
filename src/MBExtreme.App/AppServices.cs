@@ -27,6 +27,8 @@ internal static class AppServices
 
     public static HotkeyManager Hotkeys { get; } = new();
 
+    public static MemoryAutoCleaner AutoMemory { get; } = new();
+
     public static StudioController Studio { get; } = new();
 
     public static ScreenRecorder Recorder { get; } = new();
@@ -61,6 +63,7 @@ internal static class AppServices
 
     public static void Shutdown()
     {
+        AutoMemory.Shutdown();
         Studio.Shutdown();
         Hotkeys.Shutdown();
         Overlay.Shutdown();

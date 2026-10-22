@@ -31,6 +31,10 @@ public partial class DashboardPage : UserControl
     public DashboardPage()
     {
         InitializeComponent();
+        CpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("cpu-detail");
+        GpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("gpu-detail");
+        RamCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("ram-detail");
+        NetCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("netanalyzer");
         _netChart.FormatMax = v => Rate(v * 125_000);
         NetChartHost.Child = _netChart;
         _timer.Tick += async (_, _) => await UpdateAsync();

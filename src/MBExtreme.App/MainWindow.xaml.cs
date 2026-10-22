@@ -24,6 +24,7 @@ public partial class MainWindow : Window
         };
         Go("home");
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
+        AppServices.AutoMemory.StartIfEnabled();
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -158,6 +159,11 @@ public partial class MainWindow : Window
         "profiles" => new ProfilesPage(),
         "startup" => new StartupPage(),
         "repair" => new RepairPage(),
+        "cpu-detail" => new ComponentMonitorPage(gpu: false),
+        "gpu-detail" => new ComponentMonitorPage(gpu: true),
+        "ram-detail" => new RamPage(),
+        "disks" => new DisksPage(),
+        "removable" => new RemovablePage(),
         "latency" => new LatencyPage(),
         "gameboost" => new GameBoostPage(),
         "gameadvisor" => new GameAdvisorPage(),

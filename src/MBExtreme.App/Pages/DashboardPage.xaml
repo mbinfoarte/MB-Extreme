@@ -27,7 +27,7 @@
 
             <!-- Medidores -->
             <UniformGrid Columns="4" Margin="0,20,0,0">
-                <Border Style="{StaticResource Card}" Margin="0,0,8,0">
+                <Border x:Name="CpuCard" Cursor="Hand" Style="{StaticResource Card}" Margin="0,0,8,0">
                     <StackPanel>
                         <TextBlock Text="CPU" FontSize="15" FontWeight="SemiBold" />
                         <TextBlock Text="Temperatura" FontSize="12" Foreground="{StaticResource MutedBrush}" />
@@ -35,7 +35,7 @@
                         <TextBlock x:Name="CpuDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource Card}" Margin="8,0,8,0">
+                <Border x:Name="GpuCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,8,0">
                     <StackPanel>
                         <TextBlock Text="Placa de vídeo" FontSize="15" FontWeight="SemiBold" />
                         <TextBlock Text="Temperatura" FontSize="12" Foreground="{StaticResource MutedBrush}" />
@@ -43,7 +43,7 @@
                         <TextBlock x:Name="GpuDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource Card}" Margin="8,0,8,0">
+                <Border x:Name="RamCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,8,0">
                     <StackPanel>
                         <TextBlock Text="Memória" FontSize="15" FontWeight="SemiBold" />
                         <TextBlock Text="Em uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
@@ -51,7 +51,7 @@
                         <TextBlock x:Name="RamDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource Card}" Margin="8,0,0,0">
+                <Border x:Name="NetCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,0,0">
                     <StackPanel>
                         <TextBlock Text="Internet" FontSize="15" FontWeight="SemiBold" />
                         <TextBlock Text="Ping" FontSize="12" Foreground="{StaticResource MutedBrush}" />

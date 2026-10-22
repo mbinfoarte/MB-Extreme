@@ -21,6 +21,12 @@ public sealed class AppSettings
 
     public bool BoostCleanMemory { get; set; }
 
+    // ---- Limpeza automática de memória
+    public bool MemoryAutoClean { get; set; }
+
+    /// <summary>Uso da memória (%) a partir do qual a limpeza automática roda.</summary>
+    public int MemoryAutoCleanThreshold { get; set; } = 85;
+
     // ---- Estúdio de gravação e transmissão
     public int StudioFps { get; set; } = 60;
 

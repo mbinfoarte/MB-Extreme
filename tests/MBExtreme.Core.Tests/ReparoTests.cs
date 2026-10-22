@@ -272,3 +272,59 @@ public class RedeStatusTests
     public void Rota_sem_resposta_nao_e_saudavel() =>
         Assert.False(MBExtreme.Core.Network.RouteSummary.Summarize(new[] { Hop(1, "???", null, null, null) }).Healthy);
 }
+
+public class LimpezaAutomaticaTests
+{
+    private static readonly DateTime Now = new(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void Limpa_quando_passa_do_limite_e_nunca_limpou()
+    {
+        Assert.True(MBExtreme.Core.Memory.MemoryAutoPolicy.ShouldClean(90, 85, null, Now));
+        Assert.False(MBExtreme.Core.Memory.MemoryAutoPolicy.ShouldClean(80, 85, null, Now));
+    }
+
+    [Fact]
+    public void Respeita_o_intervalo_entre_limpezas()
+    {
+        Assert.False(MBExtreme.Core.Memory.MemoryAutoPolicy.ShouldClean(95, 85, Now.AddMinutes(-1), Now));
+        Assert.True(MBExtreme.Core.Memory.MemoryAutoPolicy.ShouldClean(95, 85, Now.AddMinutes(-4), Now));
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(99)]
+    public void Limite_fora_da_faixa_desliga_a_limpeza(int threshold) =>
+        Assert.False(MBExtreme.Core.Memory.MemoryAutoPolicy.ShouldClean(100, threshold, null, Now));
+}
+
+public class UnidadesTests
+{
+    [Fact]
+    public void Mapa_de_unidades_le_um_ou_varios_itens()
+    {
+        var one = MBExtreme.Core.Storage.DriveMap.ParseMap("{\"Letter\":\"E\",\"Model\":\"SanDisk Ultra\",\"Bus\":\"USB\",\"Media\":\"Unspecified\"}");
+        Assert.Equal("SanDisk Ultra", one["E"].Model);
+        var many = MBExtreme.Core.Storage.DriveMap.ParseMap("[{\"Letter\":\"C\",\"Model\":\"Samsung 980\",\"Bus\":\"NVMe\",\"Media\":\"SSD\"},{\"Letter\":\"D\",\"Model\":\"WD\",\"Bus\":\"SATA\",\"Media\":\"HDD\"}]");
+        Assert.Equal(2, many.Count);
+        Assert.Equal("NVMe", many["c"].Bus);
+        Assert.Empty(MBExtreme.Core.Storage.DriveMap.ParseMap("lixo"));
+        Assert.Empty(MBExtreme.Core.Storage.DriveMap.ParseMap(""));
+    }
+
+    private static MBExtreme.Core.Storage.DriveEntry Drive(string letter, string bus, string media, bool system = false) =>
+        new(letter, "x", "NTFS", 100, 40, "m", media, bus, system);
+
+    [Fact]
+    public void So_unidades_externas_podem_ser_removidas()
+    {
+        Assert.True(MBExtreme.Core.Storage.DriveMap.CanEject(Drive("E", "USB", "Unspecified")));
+        Assert.True(MBExtreme.Core.Storage.DriveMap.CanEject(Drive("F", "", "Removable")));
+        Assert.False(MBExtreme.Core.Storage.DriveMap.CanEject(Drive("D", "SATA", "HDD")));
+        Assert.False(MBExtreme.Core.Storage.DriveMap.CanEject(Drive("C", "USB", "SSD", system: true)));
+    }
+
+    [Fact]
+    public void Porcentagem_usada_da_unidade() =>
+        Assert.Equal(60, Drive("E", "USB", "").UsedPercent, 3);
+}

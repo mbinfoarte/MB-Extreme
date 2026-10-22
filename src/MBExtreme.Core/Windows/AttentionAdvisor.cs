@@ -7,9 +7,11 @@ public sealed record AttentionFacts(
     double? WorstDiskUsedPercent,
     string? WorstDiskName,
     int SecurityProblems,
-    double? CpuTemperature);
+    double? CpuTemperature,
+    bool MemoryAutoCleanEnabled = false);
 
-public sealed record AttentionItem(string Title, string Detail, string ActionText, string TargetPage, bool Urgent);
+/// <param name="FixKind">Correção automática disponível: "security", "memory", "cleanup" ou vazio.</param>
+public sealed record AttentionItem(string Title, string Detail, string ActionText, string TargetPage, bool Urgent, string FixKind = "", string FixText = "");
 
 /// <summary>Resumo do painel: o que merece atenção agora e para onde levar o usuário.</summary>
 public static class AttentionAdvisor
@@ -20,13 +22,14 @@ public static class AttentionAdvisor
 
         if (f.SecurityProblems > 0)
             items.Add(new AttentionItem("Proteção do Windows precisa de atenção",
-                $"{f.SecurityProblems} {(f.SecurityProblems == 1 ? "item" : "itens")} de segurança com problema.", "Ver segurança", "security", true));
+                $"{f.SecurityProblems} {(f.SecurityProblems == 1 ? "item" : "itens")} de segurança com problema.", "Ver detalhes", "security", true, "security", "Corrigir agora"));
 
         if (f.WorstDiskUsedPercent is double disk && f.WorstDiskName is not null && disk >= 90)
-            items.Add(new AttentionItem($"Disco {f.WorstDiskName} quase cheio", $"{disk:0}% usado. Pouco espaço livre deixa o Windows lento.", "Ver discos", "disks", disk >= 95));
+            items.Add(new AttentionItem($"Disco {f.WorstDiskName} quase cheio", $"{disk:0}% usado. Pouco espaço livre deixa o Windows lento.", "Ver discos", "disks", disk >= 95, "cleanup", "Limpar agora"));
 
         if (f.MemoryUsedPercent >= 80)
-            items.Add(new AttentionItem("Memória em uso alto", $"{f.MemoryUsedPercent:0}% da memória está em uso.", "Ver memória", "ram-detail", f.MemoryUsedPercent >= 90));
+            items.Add(new AttentionItem("Memória em uso alto", $"{f.MemoryUsedPercent:0}% da memória está em uso.", "Ver memória", "ram-detail", f.MemoryUsedPercent >= 90,
+                f.MemoryAutoCleanEnabled ? "" : "memory", f.MemoryAutoCleanEnabled ? "" : "Ligar limpeza automática"));
 
         if (f.CpuTemperature is double temp && temp >= 85)
             items.Add(new AttentionItem("Processador quente", $"{temp:0} °C. Verifique a refrigeração e a poeira.", "Ver processador", "cpu-detail", temp >= 92));

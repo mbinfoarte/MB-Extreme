@@ -48,7 +48,11 @@
                 </Border>
                 <Border x:Name="RamCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,8,0">
                     <StackPanel>
-                        <TextBlock Text="Memória" FontSize="15" FontWeight="SemiBold" />
+                        <Grid>
+                            <TextBlock Text="Memória" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button x:Name="RamAutoButton" Content="&#xE945; Auto" FontFamily="Segoe MDL2 Assets, Segoe UI" FontSize="11" Padding="9,3"
+                                    HorizontalAlignment="Right" Style="{StaticResource GhostButton}" Click="RamAuto_Click" />
+                        </Grid>
                         <TextBlock Text="Em uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                         <ctl:ArcGauge x:Name="RamGauge" Height="150" Margin="0,8,0,0" Unit="%" Maximum="100" WarnAt="70" BadAt="85" />
                         <TextBlock x:Name="RamDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />

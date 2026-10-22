@@ -409,3 +409,53 @@ public class SegurancaTests
         Assert.Equal("5 itens precisam de atenção.", MBExtreme.Core.Windows.AttentionAdvisor.Headline(many));
     }
 }
+
+public class CorrecaoDeSegurancaTests
+{
+    private static MBExtreme.Core.Windows.SecurityStatus Status(bool? defender = true, bool? rt = true, int? age = 1, bool? fw = true, bool? uac = true, params string[] others) =>
+        new(defender, rt, age, null, fw, fw, fw, uac, others);
+
+    [Fact]
+    public void PC_protegido_nao_tem_nada_para_corrigir() =>
+        Assert.Empty(MBExtreme.Core.Windows.SecurityFixer.Plan(Status()));
+
+    [Fact]
+    public void Plano_cobre_firewall_protecao_definicoes_e_uac()
+    {
+        var plan = MBExtreme.Core.Windows.SecurityFixer.Plan(Status(rt: false, age: 20, fw: false, uac: false));
+        Assert.Equal(new[] { "firewall", "defender", "signatures", "uac" }, plan.Select(p => p.Id));
+        Assert.True(plan.Single(p => p.Id == "uac").NeedsRestart);
+        Assert.All(plan, p => Assert.Contains("-ErrorAction Stop", p.Script));
+    }
+
+    [Fact]
+    public void Com_outro_antivirus_nao_mexe_na_protecao_do_defender()
+    {
+        var plan = MBExtreme.Core.Windows.SecurityFixer.Plan(Status(defender: false, rt: false, others: "Kaspersky"));
+        Assert.DoesNotContain(plan, p => p.Id == "defender");
+    }
+
+    [Fact]
+    public void Nunca_gera_correcao_que_desliga_algo()
+    {
+        var all = MBExtreme.Core.Windows.SecurityFixer.Plan(Status(rt: false, age: 30, fw: false, uac: false));
+        Assert.All(all, p =>
+        {
+            Assert.DoesNotContain("-Enabled False", p.Script);
+            Assert.DoesNotContain("DisableRealtimeMonitoring $true", p.Script);
+            Assert.DoesNotContain("EnableLUA -Value 0", p.Script);
+        });
+    }
+
+    [Fact]
+    public void Itens_de_atencao_trazem_a_correcao_certa()
+    {
+        var items = MBExtreme.Core.Windows.AttentionAdvisor.Evaluate(new(85, 3, 96, "C:", 2, 60));
+        Assert.Equal("security", items.First(i => i.TargetPage == "security").FixKind);
+        Assert.Equal("memory", items.First(i => i.TargetPage == "ram-detail").FixKind);
+        Assert.Equal("cleanup", items.First(i => i.TargetPage == "disks").FixKind);
+
+        var already = MBExtreme.Core.Windows.AttentionAdvisor.Evaluate(new(85, 3, 40, "C:", 0, 60, MemoryAutoCleanEnabled: true));
+        Assert.Equal("", already.Single().FixKind);
+    }
+}

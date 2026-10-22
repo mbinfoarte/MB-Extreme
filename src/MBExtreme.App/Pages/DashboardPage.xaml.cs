@@ -27,6 +27,7 @@ public partial class DashboardPage : UserControl
     private ActiveAdapter? _adapter;
     private double? _localPing;
     private int _securityProblems;
+    private SecurityStatus? _securityStatus;
     private int _startupCount;
     private double? _cpuTemperature;
     private bool _securityLoading;
@@ -44,6 +45,7 @@ public partial class DashboardPage : UserControl
         GpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("gpu-detail");
         RamCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("ram-detail");
         NetCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("netanalyzer");
+        UpdateRamAuto();
         _netChart.FormatMax = v => Rate(v * 125_000);
         NetChartHost.Child = _netChart;
         _timer.Tick += async (_, _) => await UpdateAsync();
@@ -126,6 +128,7 @@ public partial class DashboardPage : UserControl
                     try
                     {
                         var status = SecurityService.Read();
+                        _securityStatus = status;
                         _securityProblems = SecurityService.Evaluate(status, DateTime.Now).Count(i => i.Level == SecurityLevel.Bad);
                     }
                     catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException) { }
@@ -134,8 +137,9 @@ public partial class DashboardPage : UserControl
             }
 
             var items = AttentionAdvisor.Evaluate(new AttentionFacts(_memoryUsed, _startupCount, worst.Name is null ? null : worst.Used, worst.Name,
-                _securityProblems, _cpuTemperature));
+                _securityProblems, _cpuTemperature, AppServices.AutoMemory.Enabled));
             ShowAttention(items);
+            UpdateRamAuto();
         }
         catch (Exception ex) when (ex is InvalidOperationException or AggregateException or IOException)
         {
@@ -155,9 +159,24 @@ public partial class DashboardPage : UserControl
         _attentionKey = key;
 
         AttentionPanel.Children.Clear();
+        if (items.Count == 0) return;
+
+        // cabeçalho: corrigir tudo o que dá para corrigir sozinho, ou reparar o Windows
+        var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        if (items.Any(i => i.FixKind is "security" or "memory"))
+        {
+            var all = new Button { Content = "Corrigir tudo", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(18, 7, 18, 7) };
+            all.Click += async (_, _) => await FixAllAsync(items);
+            header.Children.Add(all);
+        }
+        var repair = new Button { Content = "Reparar o Windows (SFC e DISM)", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(8, 0, 0, 0) };
+        repair.Click += (_, _) => MainWindow.Current?.Go("repair");
+        header.Children.Add(repair);
+        AttentionPanel.Children.Add(header);
+
         foreach (var item in items)
         {
-            var target = item.TargetPage;
+            var current = item;
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition());
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -165,10 +184,20 @@ public partial class DashboardPage : UserControl
             text.Children.Add(new TextBlock { Text = item.Title, FontWeight = FontWeights.SemiBold, FontSize = 14 });
             text.Children.Add(new TextBlock { Text = item.Detail, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("MutedBrush") });
             grid.Children.Add(text);
-            var button = new Button { Content = item.ActionText, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(14, 6, 14, 6), VerticalAlignment = VerticalAlignment.Center };
-            button.Click += (_, _) => MainWindow.Current?.Go(target);
-            Grid.SetColumn(button, 1);
-            grid.Children.Add(button);
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            if (item.FixKind.Length > 0)
+            {
+                var fix = new Button { Content = item.FixText, Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+                fix.Click += async (_, _) => await FixAsync(current);
+                buttons.Children.Add(fix);
+            }
+            var details = new Button { Content = item.ActionText, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(14, 6, 14, 6) };
+            details.Click += (_, _) => MainWindow.Current?.Go(current.TargetPage);
+            buttons.Children.Add(details);
+            Grid.SetColumn(buttons, 1);
+            grid.Children.Add(buttons);
+
             AttentionPanel.Children.Add(new Border
             {
                 Style = (Style)FindResource("Card"),
@@ -178,6 +207,93 @@ public partial class DashboardPage : UserControl
                 Child = grid,
             });
         }
+    }
+
+    private async Task FixAsync(AttentionItem item)
+    {
+        switch (item.FixKind)
+        {
+            case "security":
+                await FixSecurityAsync(confirm: true);
+                break;
+            case "memory":
+                AppServices.AutoMemory.SetEnabled(true);
+                UpdateRamAuto();
+                _attentionKey = "";
+                await RefreshAttentionAsync();
+                MessageBox.Show("Limpeza automática da memória ligada. Ela libera memória de programas em segundo plano quando o uso passar do limite, sem mexer no programa em uso nem nos jogos da sua lista.",
+                    "Memória", MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+            case "cleanup":
+                MainWindow.Current?.Go("cleanup", autoStart: true);
+                break;
+        }
+    }
+
+    private async Task FixAllAsync(IReadOnlyList<AttentionItem> items)
+    {
+        var plan = _securityStatus is null ? Array.Empty<SecurityFix>() : SecurityFixer.Plan(_securityStatus);
+        bool memory = items.Any(i => i.FixKind == "memory");
+        var lines = plan.Select(p => "• " + p.Title).ToList();
+        if (memory) lines.Add("• Ligar a limpeza automática da memória");
+        if (lines.Count == 0) { MainWindow.Current?.Go("security"); return; }
+
+        if (MessageBox.Show("O MB Extreme vai fazer o seguinte:\n\n" + string.Join("\n", lines) + "\n\nContinuar?", "Corrigir tudo",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+        if (memory) AppServices.AutoMemory.SetEnabled(true);
+        if (plan.Count > 0) await FixSecurityAsync(confirm: false);
+        else await RefreshAfterFixAsync();
+    }
+
+    private async Task FixSecurityAsync(bool confirm)
+    {
+        var plan = _securityStatus is null ? Array.Empty<SecurityFix>() : SecurityFixer.Plan(_securityStatus);
+        if (plan.Count == 0) { MainWindow.Current?.Go("security"); return; }
+
+        if (confirm && MessageBox.Show("O MB Extreme vai fazer o seguinte:\n\n" + string.Join("\n", plan.Select(p => $"• {p.Title}\n   {p.Detail}")) + "\n\nContinuar?",
+                "Corrigir segurança", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+        HealthText.Text = "Corrigindo...";
+        var results = await Task.Run(() => SecurityFixer.Apply(plan));
+        await RefreshAfterFixAsync();
+
+        string summary = string.Join("\n", results.Select(r => $"{(r.Ok ? "✔" : "✖")} {r.Fix.Title}: {r.Message}"));
+        MessageBox.Show(summary, "Resultado", MessageBoxButton.OK, results.All(r => r.Ok) ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    private async Task RefreshAfterFixAsync()
+    {
+        try
+        {
+            var status = await Task.Run(SecurityService.Read);
+            _securityStatus = status;
+            _securityProblems = SecurityService.Evaluate(status, DateTime.Now).Count(i => i.Level == SecurityLevel.Bad);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception) { }
+
+        _attentionKey = "";
+        await RefreshAttentionAsync();
+        UpdateRamAuto();
+    }
+
+    // ---- limpeza automática da memória, direto no cartão
+
+    private void RamAuto_Click(object sender, RoutedEventArgs e)
+    {
+        AppServices.AutoMemory.SetEnabled(!AppServices.AutoMemory.Enabled);
+        UpdateRamAuto();
+        _attentionKey = "";
+        _ = RefreshAttentionAsync();
+    }
+
+    private void UpdateRamAuto()
+    {
+        bool on = AppServices.AutoMemory.Enabled;
+        RamAutoButton.Style = (Style)FindResource(on ? "PrimaryButton" : "GhostButton");
+        RamAutoButton.ToolTip = on
+            ? $"Limpeza automática ligada (acima de {AppServices.Settings.MemoryAutoCleanThreshold}%). Clique para desligar."
+            : "Clique para ligar a limpeza automática da memória.";
     }
 
     private void UpdateNetwork(NetworkSample sample)

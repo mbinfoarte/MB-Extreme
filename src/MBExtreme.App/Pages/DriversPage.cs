@@ -21,6 +21,7 @@ public sealed class DriversPage : ToolPageBase
     {
         AddButton("Procurar drivers no Windows Update", async (_, _) => await SearchAsync());
         AddButton("Instalar selecionados", async (_, _) => await InstallAsync());
+        AddSelectionButtons(() => _boxes.Values);
         Loaded += (_, _) => ShowGpu();
     }
 

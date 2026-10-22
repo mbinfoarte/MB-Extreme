@@ -52,6 +52,28 @@ public abstract class FileSearchPageBase : ToolPageBase
         }
     }
 
+    /// <summary>Linha de resultado com caixa de seleção à esquerda, texto e botões à direita.</summary>
+    protected Border CheckRow(CheckBox box, string title, string detail, params UIElement[] buttons)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(box);
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(new TextBlock { Text = detail, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Brush("MutedBrush") });
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var b in buttons) right.Children.Add(b);
+        Grid.SetColumn(right, 2);
+        grid.Children.Add(right);
+        return CardOf(grid);
+    }
+
     protected static string Size(long bytes) => bytes switch
     {
         >= 1_073_741_824 => $"{bytes / 1_073_741_824.0:0.0} GB",
@@ -92,13 +114,19 @@ public abstract class FileSearchPageBase : ToolPageBase
 public sealed class LargeFilesPage : FileSearchPageBase
 {
     private static readonly long[] MinSizes = { 100L << 20, 500L << 20, 1L << 30 };
+    private readonly List<(FoundFile File, CheckBox Box, Border Row)> _rows = new();
     private readonly List<(string Name, string Path)> _places = new();
+    private readonly Button _send;
     private int _place;
     private int _min = 1;
 
     public LargeFilesPage() : base("Arquivos grandes",
-        "Encontra os maiores arquivos de uma unidade ou pasta. Nada é apagado sozinho: você vê a lista, abre a pasta e escolhe o que enviar para a Lixeira. Arquivos do Windows e dos programas ficam de fora.")
+        "Encontra os maiores arquivos de uma unidade ou pasta. Nada é apagado sozinho: você vê a lista, marca o que quer (ou clica em Marcar todos) e envia para a Lixeira. Arquivos do Windows e dos programas ficam de fora.")
     {
+        _send = AddButton("Enviar marcados para a Lixeira", (_, _) => SendMarked(), false);
+        _send.IsEnabled = false;
+        AddSelectionButtons(() => _rows.Select(r => r.Box));
+
         foreach (var d in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
             _places.Add(($"Unidade {d.Name.TrimEnd('\\')}", d.Name));
         _places.Insert(0, ("Minha pasta de usuário", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)));
@@ -118,27 +146,56 @@ public sealed class LargeFilesPage : FileSearchPageBase
         return () =>
         {
             Results.Children.Clear();
+            _rows.Clear();
             SetStatus(found.Count == 0 ? "Nenhum arquivo desse tamanho." : $"{found.Count} arquivos grandes, somando {Size(found.Sum(f => f.Length))}.", found.Count == 0 ? "MutedBrush" : "OkBrush");
             foreach (var file in found)
             {
                 var f = file;
-                var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-                buttons.Children.Add(SmallButton("Mostrar", (_, _) => Reveal(f.Path)));
-                var row = Row(Path.GetFileName(f.Path), $"{Size(f.Length)} · {f.Modified:dd/MM/yyyy} · {Path.GetDirectoryName(f.Path)}", buttons);
-                buttons.Children.Add(SmallButton("Lixeira", (_, _) =>
-                {
-                    if (Recycle(f.Path, $"Enviar {Path.GetFileName(f.Path)} ({Size(f.Length)}) para a Lixeira?")) Results.Children.Remove(row);
-                }, true));
+                var box = new CheckBox { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+                var show = SmallButton("Mostrar", (_, _) => Reveal(f.Path));
+                var row = CheckRow(box, Path.GetFileName(f.Path), $"{Size(f.Length)} · {f.Modified:dd/MM/yyyy} · {Path.GetDirectoryName(f.Path)}", show);
+                _rows.Add((f, box, row));
                 Results.Children.Add(row);
             }
+
+            _send.IsEnabled = _rows.Count > 0;
         };
+    }
+
+    private void SendMarked()
+    {
+        var chosen = _rows.Where(r => r.Box.IsChecked == true).ToList();
+        if (chosen.Count == 0) { SetStatus("Marque os arquivos que quer enviar para a Lixeira.", "WarnBrush"); return; }
+        long total = chosen.Sum(r => r.File.Length);
+        if (MessageBox.Show($"Enviar {chosen.Count} arquivo(s), {Size(total)}, para a Lixeira?", "Enviar para a Lixeira", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+        int done = 0;
+        foreach (var r in chosen)
+        {
+            try
+            {
+                RecycleBin.Delete(r.File.Path);
+                Results.Children.Remove(r.Row);
+                _rows.Remove(r);
+                done++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or OperationCanceledException) { }
+        }
+
+        SetStatus($"{done} de {chosen.Count} arquivos enviados para a Lixeira.", done == chosen.Count ? "OkBrush" : "WarnBrush");
+        _send.IsEnabled = _rows.Count > 0;
     }
 }
 
-/// <summary>Arquivos duplicados: acha cópias idênticas (conteúdo conferido) e deixa escolher qual manter.</summary>
+/// <summary>Arquivos duplicados: acha cópias idênticas (conteúdo conferido) e deixa escolher quais enviar para a Lixeira.</summary>
 public sealed class DuplicatesPage : FileSearchPageBase
 {
     private static readonly long[] MinSizes = { 1L << 20, 10L << 20, 100L << 20 };
+    private sealed record Copy(FoundFile File, CheckBox Box, Border Row);
+    private sealed record Group(long Length, List<Copy> Copies, TextBlock Title, StackPanel Panel);
+
+    private readonly List<Group> _groups = new();
+    private readonly Button _send;
     private int _place;
     private int _min;
 
@@ -153,8 +210,13 @@ public sealed class DuplicatesPage : FileSearchPageBase
     };
 
     public DuplicatesPage() : base("Arquivos duplicados",
-        "Encontra cópias idênticas (o conteúdo é conferido por completo, não só o nome) e mostra quanto espaço dá para recuperar. Você escolhe o que enviar para a Lixeira; sempre fica pelo menos uma cópia.")
+        "Encontra cópias idênticas (o conteúdo é conferido por completo, não só o nome). Clique em Marcar cópias extras para marcar tudo menos a cópia mais antiga de cada grupo e envie para a Lixeira; sempre fica pelo menos uma cópia.")
     {
+        _send = AddButton("Enviar marcados para a Lixeira", (_, _) => SendMarked(), false);
+        _send.IsEnabled = false;
+        AddButton("Marcar cópias extras", (_, _) => MarkExtras(), false);
+        AddButton("Desmarcar todos", (_, _) => { foreach (var g in _groups) foreach (var c in g.Copies) c.Box.IsChecked = false; }, false);
+
         Body.Children.Add(Heading("Onde procurar"));
         Body.Children.Add(Choice(Places.Select(p => p.Name).ToList(), _place, i => _place = i));
         Body.Children.Add(Heading("Tamanho mínimo"));
@@ -170,44 +232,81 @@ public sealed class DuplicatesPage : FileSearchPageBase
         return () =>
         {
             Results.Children.Clear();
+            _groups.Clear();
             long wasted = groups.Sum(g => g.WastedBytes);
             SetStatus(groups.Count == 0 ? "Nenhum arquivo duplicado." : $"{groups.Count} grupos de cópias, {Size(wasted)} recuperáveis.", groups.Count == 0 ? "MutedBrush" : "OkBrush");
             foreach (var group in groups.Take(100)) Results.Children.Add(GroupCard(group));
+            _send.IsEnabled = _groups.Count > 0;
         };
     }
 
-    private UIElement GroupCard(DuplicateGroup group)
+    private UIElement GroupCard(DuplicateGroup source)
     {
         var panel = new StackPanel();
-        var remaining = new List<(string Path, Border Row)>();
-        var title = new TextBlock { Text = $"{Size(group.Length)} · {group.Files.Count} cópias", FontWeight = FontWeights.SemiBold, FontSize = 14 };
+        var title = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 14 };
         panel.Children.Add(title);
+        var group = new Group(source.Length, new List<Copy>(), title, panel);
 
-        void Update() => title.Text = $"{Size(group.Length)} · {remaining.Count} {(remaining.Count == 1 ? "cópia" : "cópias")}";
-
-        foreach (var file in group.Files)
+        foreach (var file in source.Files)
         {
             var f = file;
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-            buttons.Children.Add(SmallButton("Mostrar", (_, _) => Reveal(f.Path)));
-            var row = Row(Path.GetFileName(f.Path), $"{Path.GetDirectoryName(f.Path)} · {f.Modified:dd/MM/yyyy}", buttons);
-            var trash = SmallButton("Lixeira", (_, _) => { }, true);
-            trash.Click += (_, _) =>
-            {
-                if (remaining.Select(r => r.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count(File.Exists) <= 1) { SetStatus("Mantenha pelo menos uma cópia.", "WarnBrush"); return; }
-                if (!Recycle(f.Path, $"Enviar esta cópia para a Lixeira?\n\n{f.Path}")) return;
-                remaining.RemoveAll(r => r.Path == f.Path);
-                panel.Children.Remove(row);
-                Update();
-            };
-            buttons.Children.Add(trash);
-            remaining.Add((f.Path, row));
+            var box = new CheckBox { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+            var row = CheckRow(box, Path.GetFileName(f.Path), $"{Path.GetDirectoryName(f.Path)} · {f.Modified:dd/MM/yyyy}", SmallButton("Mostrar", (_, _) => Reveal(f.Path)));
+            group.Copies.Add(new Copy(f, box, row));
             panel.Children.Add(row);
         }
 
+        _groups.Add(group);
+        UpdateTitle(group);
         var card = CardOf(panel);
         card.Margin = new Thickness(0, 0, 0, 12);
         return card;
+    }
+
+    private void UpdateTitle(Group g) =>
+        g.Title.Text = $"{Size(g.Length)} · {g.Copies.Count} {(g.Copies.Count == 1 ? "cópia" : "cópias")}";
+
+    /// <summary>Marca todas as cópias de cada grupo, menos a mais antiga (a primeira da lista).</summary>
+    private void MarkExtras()
+    {
+        foreach (var g in _groups)
+            for (int i = 0; i < g.Copies.Count; i++) g.Copies[i].Box.IsChecked = i > 0;
+    }
+
+    private void SendMarked()
+    {
+        var chosen = _groups.SelectMany(g => g.Copies.Where(c => c.Box.IsChecked == true).Select(c => (Group: g, Copy: c))).ToList();
+        if (chosen.Count == 0) { SetStatus("Marque as cópias que quer enviar (ou clique em Marcar cópias extras).", "WarnBrush"); return; }
+
+        // nunca deixa um grupo sem nenhuma cópia
+        var allowed = new List<(Group Group, Copy Copy)>();
+        int skippedGroups = 0;
+        foreach (var byGroup in chosen.GroupBy(c => c.Group))
+        {
+            if (byGroup.Count() >= byGroup.Key.Copies.Count) { skippedGroups++; continue; }
+            allowed.AddRange(byGroup);
+        }
+
+        if (allowed.Count == 0) { SetStatus("Em cada grupo, deixe pelo menos uma cópia desmarcada.", "WarnBrush"); return; }
+        long total = allowed.Sum(c => c.Copy.File.Length);
+        if (MessageBox.Show($"Enviar {allowed.Count} cópia(s), {Size(total)}, para a Lixeira?" + (skippedGroups > 0 ? $"\n\n{skippedGroups} grupo(s) com todas as cópias marcadas foram ignorados." : ""),
+                "Enviar para a Lixeira", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+        int done = 0;
+        foreach (var (group, copy) in allowed)
+        {
+            try
+            {
+                RecycleBin.Delete(copy.File.Path);
+                group.Panel.Children.Remove(copy.Row);
+                group.Copies.Remove(copy);
+                UpdateTitle(group);
+                done++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or OperationCanceledException) { }
+        }
+
+        SetStatus($"{done} de {allowed.Count} cópias enviadas para a Lixeira.", done == allowed.Count ? "OkBrush" : "WarnBrush");
     }
 }
 
@@ -222,6 +321,7 @@ public sealed class CleanExtrasPage : FileSearchPageBase
     {
         _clean = AddButton("Limpar marcados", (_, _) => CleanSelected(), false);
         _clean.IsEnabled = false;
+        AddSelectionButtons(() => _items.Select(i => i.Box));
         Body.Children.Add(Results);
     }
 

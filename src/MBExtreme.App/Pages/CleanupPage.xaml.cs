@@ -77,6 +77,8 @@ public partial class CleanupPage : UserControl
         _boxes.Clear();
         _ramBox = null;
         CleanButton.Visibility = Visibility.Collapsed;
+        SelectAllButton.Visibility = Visibility.Collapsed;
+        SelectNoneButton.Visibility = Visibility.Collapsed;
         if (_items is null)
         {
             SummaryText.Text = "";
@@ -115,6 +117,8 @@ public partial class CleanupPage : UserControl
         }
 
         CleanButton.Visibility = Visibility.Visible;
+        SelectAllButton.Visibility = Visibility.Visible;
+        SelectNoneButton.Visibility = Visibility.Visible;
         UpdateSummary();
     }
 
@@ -163,6 +167,16 @@ public partial class CleanupPage : UserControl
         int count = _boxes.Count(p => p.Value.IsChecked == true);
         string ram = _ramBox?.IsChecked == true ? " e a memória RAM" : "";
         SummaryText.Text = $"Selecionado: {Format(bytes)} em {count} categoria(s){ram}.";
+    }
+
+    private void SelectAllButton_Click(object sender, RoutedEventArgs e) => SetAll(true);
+
+    private void SelectNoneButton_Click(object sender, RoutedEventArgs e) => SetAll(false);
+
+    private void SetAll(bool value)
+    {
+        foreach (var box in _boxes.Values.Where(b => b.IsEnabled)) box.IsChecked = value;
+        if (_ramBox is not null) _ramBox.IsChecked = value;
     }
 
     private async void CleanButton_Click(object sender, RoutedEventArgs e)

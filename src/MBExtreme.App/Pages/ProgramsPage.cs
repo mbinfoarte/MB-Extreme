@@ -17,6 +17,7 @@ public sealed class ProgramsPage : ToolPageBase
         AddButton("Procurar atualizações", async (_, _) => await SearchAsync());
         AddButton("Atualizar selecionados", async (_, _) => await RunAsync(_upgrades, "Atualizando programas", WingetService.Upgrade));
         AddButton("Instalar selecionados", async (_, _) => await RunAsync(_installs, "Instalando programas", WingetService.Install), false);
+        AddSelectionButtons(() => _upgrades.Values.Concat(_installs.Values));
         Loaded += (_, _) => { if (Body.Children.Count == 0) Render(Array.Empty<WingetApp>()); };
     }
 

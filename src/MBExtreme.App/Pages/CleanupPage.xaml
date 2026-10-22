@@ -13,6 +13,10 @@
                     <Button Content="Escanear" Style="{StaticResource PrimaryButton}" Click="ScanButton_Click" />
                     <Button x:Name="CleanButton" Content="Limpar selecionados" Style="{StaticResource PrimaryButton}"
                             Margin="12,0,0,0" Click="CleanButton_Click" Visibility="Collapsed" />
+                    <Button x:Name="SelectAllButton" Content="Marcar todos" Style="{StaticResource GhostButton}"
+                            Margin="12,0,0,0" Click="SelectAllButton_Click" Visibility="Collapsed" />
+                    <Button x:Name="SelectNoneButton" Content="Desmarcar todos" Style="{StaticResource GhostButton}"
+                            Margin="12,0,0,0" Click="SelectNoneButton_Click" Visibility="Collapsed" />
                 </StackPanel>
                 <TextBlock x:Name="SummaryText" Margin="0,14,0,0" FontSize="15" FontWeight="SemiBold" />
 

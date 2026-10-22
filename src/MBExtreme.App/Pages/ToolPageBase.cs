@@ -97,6 +97,14 @@ public abstract class ToolPageBase : UserControl
         return button;
     }
 
+    /// <summary>Botões "Marcar todos" e "Desmarcar todos" para qualquer lista de caixas de seleção (as desabilitadas ficam como estão).</summary>
+    protected (Button All, Button None) AddSelectionButtons(Func<IEnumerable<CheckBox>> boxes, string allText = "Marcar todos", string noneText = "Desmarcar todos")
+    {
+        var all = AddButton(allText, (_, _) => { foreach (var box in boxes().Where(b => b.IsEnabled)) box.IsChecked = true; }, false);
+        var none = AddButton(noneText, (_, _) => { foreach (var box in boxes().Where(b => b.IsEnabled)) box.IsChecked = false; }, false);
+        return (all, none);
+    }
+
     protected void SetStatus(string text, string brush = "MutedBrush")
     {
         _status.Text = text;

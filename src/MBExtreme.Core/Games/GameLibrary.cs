@@ -267,6 +267,14 @@ public sealed class GameLibraryStore
         lock (_lock) return _data.Settings.Any(kv => kv.Key != exceptGameId && kv.Value.AppliedTweaks.Contains(tweakId));
     }
 
+    /// <summary>Jogos que têm alguma otimização feita pelo MB Extreme (para desfazer tudo quando o plano Pro acaba).</summary>
+    public IReadOnlyList<(string Id, GameSettings Settings)> Optimized()
+    {
+        lock (_lock)
+            return _data.Settings.Where(kv => kv.Value.OptimizedAt is not null || kv.Value.QosApplied || kv.Value.HighPriority || kv.Value.AppliedTweaks.Count > 0)
+                .Select(kv => (kv.Key, kv.Value)).ToList();
+    }
+
     public IReadOnlyList<ManualGame> ManualGames()
     {
         lock (_lock) return _data.Manual.ToList();

@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         Go("home");
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
-        AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateFooter));
+        AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(() => { UpdateFooter(); _ = AppServices.ProLock.CheckAsync(); }));
         AppServices.License.Start();
         // disponível para suporte enquanto o programa estiver aberto (cada acesso exige o aceite do usuário)
         if (AppServices.Settings.RemoteAutoListen && AppServices.License.Config.ServerUrl.Length > 0) _ = AppServices.RemoteSupport.StartAsync();

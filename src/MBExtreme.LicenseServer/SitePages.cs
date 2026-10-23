@@ -127,7 +127,7 @@ public static class SitePages
             </div></section>
 
             <section><div class="wrap">
-              <div class="center"><h2>Veja o programa em ação</h2><p class="lead">Telas reais do MB Extreme.</p></div>
+              <div class="center"><h2>Veja o programa em ação</h2><p class="lead">Prévia das telas principais.</p></div>
               <div class="cards" style="margin-top:34px">
                 <div>{{Shot("shot-fps", MockFps(), "Comparação de FPS antes e depois")}}<h3 style="margin-top:12px">Prove o ganho</h3><p class="muted">Compare as suas próprias medições, sem promessas de número.</p></div>
                 <div>{{Shot("shot-route", MockRoute(), "Análise de rota até o servidor do jogo")}}<h3 style="margin-top:12px">Ache o lag</h3><p class="muted">Veja se o atraso vem do Wi-Fi, do provedor ou do caminho.</p></div>

@@ -92,7 +92,7 @@ public static class SiteLayout
         .bar{height:10px;background:#17171b;border:1px solid var(--line);border-radius:99px;overflow:hidden;margin:8px 0}
         .bar i{display:block;height:100%;background:linear-gradient(90deg,#ffb800,#ffe23d);box-shadow:0 0 14px rgba(255,196,0,.6)}
         .tier{display:inline-block;border-radius:99px;padding:2px 12px;font-weight:700;font-size:13px;color:#111}
-        .tiers{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:26px}
+        .tiers{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:40px}
         .tiers .card{text-align:center}.tiers .rate{font-size:34px;font-weight:800;color:var(--accent)}
         .copy{display:flex;gap:10px}.copy input{margin:0}
         /* maquetes do aplicativo */

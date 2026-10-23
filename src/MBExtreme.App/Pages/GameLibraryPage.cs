@@ -326,6 +326,7 @@ public sealed class GameLibraryPage : ToolPageBase
         var plan = GameOptimizer.Plan(profile, _maker, _tier, onHdd: false);
 
         var rows = await Task.Run(() => ReadRows(game, profile));
+        var netRows = await Task.Run(() => ReadNetworkRows(game));
         if (_selected?.Id != game.Id) return;
 
         // ---- topo fixo: capa, nome, botões principais e abas
@@ -401,6 +402,17 @@ public sealed class GameLibraryPage : ToolPageBase
         if (tweakNames.Count > 0) optimize.Children.Add(new Expander { Header = $"O que será ajustado no Windows ({tweakNames.Count})", Content = Muted(string.Join("\n", tweakNames), 11), Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 0) });
         optimize.Children.Add(new Expander { Header = "Dicas de configuração do jogo para o seu hardware", Content = Muted(string.Join("\n\n", plan.Advice), 11), Foreground = Brush("TextBrush") });
 
+        // ---- rede e rota do jogo
+        var netBox = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
+        netBox.Children.Add(new TextBlock { Text = "Rede e rota deste jogo", FontSize = 14, FontWeight = FontWeights.SemiBold });
+        netBox.Children.Add(Muted("Reduz o que atrapalha o ping dentro do seu PC. Para ver onde está o atraso no caminho até o servidor, use a aba Rede.", 11));
+        netBox.Children.Add(BuildTable(netRows, "Rede do jogo"));
+        var netButtons = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        netButtons.Children.Add(Tight(SmallButton("Otimizar rede deste jogo", async (_, _) => await OptimizeNetworkAsync(game, profile), netRows.Any(r => r.CanFix))));
+        netButtons.Children.Add(Tight(SmallButton("Analisar rota do jogo", (_, _) => { _tab = 3; _ = RenderDetailAsync(game); })));
+        netBox.Children.Add(netButtons);
+        optimize.Children.Add(netBox);
+
         var performance = new StackPanel();
         performance.Children.Add(BuildPerformance(game));
 
@@ -425,6 +437,50 @@ public sealed class GameLibraryPage : ToolPageBase
         }
         _sideTop.Children.Add(Chips(names, _tab, Show));
         Show(_tab);
+    }
+
+    private IReadOnlyList<SettingRow> ReadNetworkRows(InstalledGame game)
+    {
+        var states = new Dictionary<string, bool?>();
+        var titles = new Dictionary<string, string>();
+        foreach (string id in GameNetworkPlan.TweakIds)
+        {
+            var tweak = AppServices.Tweaks.FirstOrDefault(t => t.Id == id);
+            if (tweak is null || !tweak.IsAvailable) continue;
+            titles[id] = tweak.Title;
+            try { states[id] = tweak.IsApplied(); } catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException or InvalidOperationException) { states[id] = null; }
+        }
+        bool canQos = QosCommands.IsSafeExe(game.ExeName);
+        bool? qos = null;
+        if (canQos) try { qos = AppServices.GameQos.IsActive(game.ExeName!); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+        return GameNetworkPlan.Rows(states, titles, qos, canQos);
+    }
+
+    private async Task OptimizeNetworkAsync(InstalledGame game, GameProfile profile)
+    {
+        SetStatus("Otimizando a rede deste jogo...");
+        var plan = new OptimizationPlan(profile, GameNetworkPlan.TweakIds, Array.Empty<string>());
+        var result = await Task.Run(() => AppServices.GameOptimization.Apply(game.Id, game.ExeName, plan));
+        var parts = new List<string>();
+        if (result.Applied.Count > 0) parts.Add($"{result.Applied.Count} ajuste(s) de rede ligado(s)");
+        if (result.AlreadyOn.Count > 0) parts.Add($"{result.AlreadyOn.Count} já estava(m) ligado(s)");
+        if (result.Failed.Count > 0) parts.Add($"{result.Failed.Count} falhou (execute como administrador)");
+        if (QosCommands.IsSafeExe(game.ExeName))
+        {
+            try
+            {
+                await Task.Run(() => AppServices.GameQos.Apply(game.ExeName!));
+                AppServices.GameLibrary.Update(game.Id, s => s.QosApplied = true);
+                parts.Add("prioridade de rede do jogo ligada");
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                parts.Add("QoS: " + ex.Message);
+            }
+        }
+        SetStatus((parts.Count == 0 ? "Nada a ajustar." : string.Join(" · ", parts) + ".") + " \"Desfazer otimização\" volta ao que era. Não troca a rota dos pacotes: isso precisa de servidor.", result.Failed.Count > 0 ? "WarnBrush" : "OkBrush");
+        RefreshCard(game);
+        await RenderDetailAsync(game);
     }
 
     private IReadOnlyList<SettingRow> ReadRows(InstalledGame game, GameProfile profile)
@@ -460,13 +516,13 @@ public sealed class GameLibraryPage : ToolPageBase
         return GameCompare.Build(profile, _maker, new GameSnapshot(states, titles, high, gpu, driver, power, pre, dlss, values), catalog, DriverCatalog.For(game.ExeName)?.HasReflex ?? false);
     }
 
-    private UIElement BuildTable(IReadOnlyList<SettingRow> rows)
+    private UIElement BuildTable(IReadOnlyList<SettingRow> rows, string heading = "Configuração atual × recomendada")
     {
         var box = new StackPanel { Margin = new Thickness(0, 6, 0, 4) };
         int fix = rows.Count(r => r.CanFix || r.State == RowState.Different);
         box.Children.Add(new TextBlock
         {
-            Text = fix == 0 ? "Configuração atual × recomendada: tudo certo" : $"Configuração atual × recomendada: {fix} ponto(s) para ajustar",
+            Text = fix == 0 ? $"{heading}: tudo certo" : $"{heading}: {fix} ponto(s) para ajustar",
             FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4),
         });
 
@@ -567,6 +623,15 @@ public sealed class GameLibraryPage : ToolPageBase
     private async Task UndoAsync(InstalledGame game)
     {
         var result = await Task.Run(() => AppServices.GameOptimization.Undo(game.Id));
+        if (AppServices.GameLibrary.Get(game.Id).QosApplied && QosCommands.IsSafeExe(game.ExeName))
+        {
+            try
+            {
+                await Task.Run(() => AppServices.GameQos.Remove(game.ExeName!));
+                AppServices.GameLibrary.Update(game.Id, s => s.QosApplied = false);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { SetStatus("Não foi possível remover a prioridade de rede: " + ex.Message, "WarnBrush"); }
+        }
         var drvUndo = await Task.Run(() => AppServices.GameDriver.Undo(game.Id));
         SetStatus($"{result.Applied.Count + drvUndo.Applied.Count} ajuste(s) desfeito(s)" + (drvUndo.Failed.Count > 0 ? " (driver: " + string.Join("; ", drvUndo.Failed) + ")" : "") + (result.AlreadyOn.Count > 0 ? $"; {result.AlreadyOn.Count} mantido(s) porque outro jogo ainda usa" : "") + ".", "OkBrush");
         RefreshCard(game);

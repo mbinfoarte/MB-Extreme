@@ -182,6 +182,9 @@ public sealed class GameSettings
     public List<string> AppliedTweaks { get; set; } = new();
 
     public DateTime? OptimizedAt { get; set; }
+
+    /// <summary>A otimização de rede criou uma política de QoS para este jogo (removida ao desfazer).</summary>
+    public bool QosApplied { get; set; }
 }
 
 public sealed class ManualGame

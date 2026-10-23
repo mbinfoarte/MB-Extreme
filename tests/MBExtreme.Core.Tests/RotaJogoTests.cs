@@ -1,4 +1,5 @@
 using System.Net;
+using MBExtreme.Core.Games;
 using MBExtreme.Core.Network;
 using Xunit;
 
@@ -200,5 +201,53 @@ public class RotaJogoTests
         Assert.Equal("127.0.0.1", d.Host);
         Assert.Equal(3, d.Samples);
         Assert.NotEmpty(d.Findings);
+    }
+
+    [Theory]
+    [InlineData("FC27.exe", true)]
+    [InlineData("cs2.exe", true)]
+    [InlineData("Valorant-Win64-Shipping.exe", true)]
+    [InlineData("meu jogo (x64).exe", true)]
+    [InlineData("a'; Remove-Item C:\\ -Recurse; '.exe", false)]
+    [InlineData("jogo$(calc).exe", false)]
+    [InlineData("..\\x.exe", false)]
+    [InlineData("jogo.dll", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void Qos_SoAceitaNomeSeguro(string? exe, bool ok) => Assert.Equal(ok, QosCommands.IsSafeExe(exe));
+
+    [Fact]
+    public void Qos_ComandosTemONomeDaPoliticaEODscp()
+    {
+        Assert.Equal("MBExtreme-FC27", QosCommands.PolicyName("FC27.exe"));
+        string create = QosCommands.Create("FC27.exe");
+        Assert.Contains("New-NetQosPolicy -Name 'MBExtreme-FC27'", create);
+        Assert.Contains("-AppPathNameMatchCondition 'FC27.exe'", create);
+        Assert.Contains("-DSCPAction 46", create);
+        Assert.Contains("Remove-NetQosPolicy -Name 'MBExtreme-FC27'", QosCommands.Remove("FC27.exe"));
+        Assert.Throws<ArgumentException>(() => QosCommands.Create("x'; calc; '.exe"));
+    }
+
+    [Fact]
+    public void RedeDoJogo_LinhasEEstados()
+    {
+        var titles = new Dictionary<string, string> { ["net-throttling"] = "Limite de pacotes", ["net-qos-limit"] = "Banda do QoS" };
+        var states = new Dictionary<string, bool?> { ["net-throttling"] = true, ["net-qos-limit"] = false };
+        var rows = GameNetworkPlan.Rows(states, titles, qosActive: false, hasExe: true);
+        Assert.Equal(RowState.Ok, rows.Single(r => r.Title == "Limite de pacotes").State);
+        var fix = rows.Single(r => r.Title == "Banda do QoS");
+        Assert.True(fix.CanFix);
+        Assert.True(rows.Single(r => r.Title.StartsWith("Prioridade de rede")).CanFix);
+        var route = rows.Single(r => r.Title == "Rota por servidor próprio");
+        Assert.False(route.CanFix);
+        Assert.Equal(RowState.Info, route.State);
+    }
+
+    [Fact]
+    public void RedeDoJogo_SemExecutavel_NaoOfereceQos()
+    {
+        var rows = GameNetworkPlan.Rows(new Dictionary<string, bool?>(), new Dictionary<string, string>(), null, hasExe: false);
+        Assert.DoesNotContain(rows, r => r.Title.StartsWith("Prioridade de rede"));
+        Assert.Contains(rows, r => r.Title == "Rota por servidor próprio");
     }
 }

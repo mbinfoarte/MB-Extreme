@@ -177,11 +177,18 @@ public static class SystemInfoService
 
         foreach (var sub in cls.GetSubKeyNames())
         {
-            using var key = cls.OpenSubKey(sub);
-            if (key?.GetValue("DriverDesc") as string != adapterName) continue;
-            object? value = key.GetValue("HardwareInformation.qwMemorySize");
-            if (value is long l) return l;
-            if (value is byte[] bytes && bytes.Length >= 8) return BitConverter.ToInt64(bytes, 0);
+            try
+            {
+                using var key = cls.OpenSubKey(sub);
+                if (key?.GetValue("DriverDesc") as string != adapterName) continue;
+                object? value = key.GetValue("HardwareInformation.qwMemorySize");
+                if (value is long l) return l;
+                if (value is byte[] bytes && bytes.Length >= 8) return BitConverter.ToInt64(bytes, 0);
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
+            {
+                // algumas subchaves da classe (ex.: Properties) negam leitura sem administrador; seguem as outras
+            }
         }
 
         return null;

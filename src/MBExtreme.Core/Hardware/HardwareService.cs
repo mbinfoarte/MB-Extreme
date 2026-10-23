@@ -144,7 +144,7 @@ public static class HardwareService
                 .Select(g => new GpuSummary(g.Name, (long)(SystemInfoService.VideoMemoryFromRegistry(g.Name) ?? 0), g.WindowsVersion, g.Vendor))
                 .ToList();
         }
-        catch (Exception ex) when (ex is ManagementException or InvalidOperationException)
+        catch (Exception ex) when (ex is ManagementException or InvalidOperationException or System.Security.SecurityException or UnauthorizedAccessException)
         {
             return Array.Empty<GpuSummary>();
         }
@@ -192,9 +192,13 @@ public static class HardwareService
             if (uninstall is null) continue;
             foreach (string sub in uninstall.GetSubKeyNames())
             {
-                using var key = uninstall.OpenSubKey(sub);
-                string? name = key?.GetValue("DisplayName") as string;
-                if (name is not null && nameParts.Any(p => name.Contains(p, StringComparison.OrdinalIgnoreCase))) return true;
+                try
+                {
+                    using var key = uninstall.OpenSubKey(sub);
+                    string? name = key?.GetValue("DisplayName") as string;
+                    if (name is not null && nameParts.Any(p => name.Contains(p, StringComparison.OrdinalIgnoreCase))) return true;
+                }
+                catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { }
             }
         }
 

@@ -52,14 +52,20 @@ public static class GameScanner
     /// <summary>Pasta de instalação da Steam (para achar as capas já guardadas por ela).</summary>
     public static string SteamPath()
     {
-        string? steam = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string;
+        string? steam = ReadSteamPath();
         if (string.IsNullOrWhiteSpace(steam)) steam = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam");
         return steam.Replace('/', '\\');
     }
 
+    private static string? ReadSteamPath()
+    {
+        try { return Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string; }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException) { return null; }
+    }
+
     private static IEnumerable<InstalledGame> SteamGames()
     {
-        string? steam = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string;
+        string? steam = ReadSteamPath();
         if (string.IsNullOrWhiteSpace(steam)) steam = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam");
         steam = steam.Replace('/', '\\');
         string vdf = Path.Combine(steam, "steamapps", "libraryfolders.vdf");

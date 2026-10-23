@@ -94,9 +94,30 @@ public partial class App : Application
 
     private void OnDispatcherException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        Report(e.Exception);
         e.Handled = true;
+        if (e.Exception is System.Security.SecurityException or UnauthorizedAccessException)
+        {
+            // Falta de permissão em uma ação isolada não deve fechar o programa: grava o erro e avisa.
+            LogOnly(e.Exception);
+            MessageBox.Show("Uma ação não teve permissão do Windows e foi ignorada:\n\n" + e.Exception.Message +
+                "\n\nSe precisar dela, feche e abra o MB Extreme como administrador. O detalhe foi gravado em erro.log.",
+                "MB Extreme (Beta 01)", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        Report(e.Exception);
         Shutdown(1);
+    }
+
+    private static void LogOnly(Exception exception)
+    {
+        try
+        {
+            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme");
+            Directory.CreateDirectory(folder);
+            File.AppendAllText(Path.Combine(folder, "erro.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} (não fatal)\n{exception}\n\n");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     /// <summary>Grava o erro em %AppData%\MBExtreme\erro.log e mostra uma mensagem em vez de fechar sem avisar.</summary>

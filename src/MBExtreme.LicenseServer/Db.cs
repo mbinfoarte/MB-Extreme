@@ -29,10 +29,17 @@ public sealed class Db
             CREATE TABLE IF NOT EXISTS trials (device_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, started_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS activation_keys (key_hash TEXT PRIMARY KEY, plan TEXT NOT NULL, days INTEGER NOT NULL, max_devices INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, redeemed_by INTEGER, redeemed_at TEXT);
             CREATE TABLE IF NOT EXISTS remote_devices (id TEXT PRIMARY KEY, secret_hash TEXT NOT NULL, device_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, last_seen TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS affiliates (user_id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, pix_key TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS referrals (user_id INTEGER PRIMARY KEY, affiliate_user_id INTEGER NOT NULL, created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS commissions (id INTEGER PRIMARY KEY, affiliate_user_id INTEGER NOT NULL, referred_user_id INTEGER NOT NULL, payment_ref TEXT NOT NULL UNIQUE, amount_paid_cents INTEGER NOT NULL, rate REAL NOT NULL, commission_cents INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'approved', payout_id INTEGER, created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS payouts (id INTEGER PRIMARY KEY, affiliate_user_id INTEGER NOT NULL, amount_cents INTEGER NOT NULL, pix_key TEXT NOT NULL, requested_at TEXT NOT NULL, paid_at TEXT, note TEXT NOT NULL DEFAULT '');
             CREATE TABLE IF NOT EXISTS remote_audit (id INTEGER PRIMARY KEY, client_id TEXT NOT NULL, technician TEXT NOT NULL, requested_at TEXT NOT NULL, accepted INTEGER NOT NULL DEFAULT 0, ended_at TEXT, bytes INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL DEFAULT '');
             """);
         try { Exec(c, "ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''"); } // bancos criados antes da coluna de nome
         catch (SqliteException) { }
+        try { Exec(c, "ALTER TABLE users ADD COLUMN google_sub TEXT"); } // bancos criados antes do login com Google
+        catch (SqliteException) { }
+        Exec(c, "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google ON users(google_sub) WHERE google_sub IS NOT NULL");
     }
 
     private SqliteConnection Open()
@@ -291,4 +298,228 @@ public sealed class Db
     public User? UserByProviderRef(string fragment) =>
         Query("SELECT u.id, u.email, u.password_hash, u.name FROM users u JOIN subscriptions s ON s.user_id = u.id WHERE s.provider_ref LIKE $f LIMIT 1",
             r => new User(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3)), ("$f", "%" + fragment + "%"));
+
+    // ---- login com Google
+
+    public User? UserByGoogleSub(string sub) =>
+        Query("SELECT id, email, password_hash, name FROM users WHERE google_sub = $g", r => new User(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3)), ("$g", sub));
+
+    /// <summary>Conta criada pelo Google: a senha fica "inutilizável" (hash aleatório que ninguém conhece).</summary>
+    public long? CreateGoogleUser(string email, string googleSub, string name, string unusablePasswordHash)
+    {
+        try
+        {
+            using var c = Open();
+            Exec(c, "INSERT INTO users(email, password_hash, created_at, name, google_sub) VALUES($e, $p, $t, $n, $g)",
+                ("$e", email), ("$p", unusablePasswordHash), ("$t", T(DateTimeOffset.UtcNow)), ("$n", name), ("$g", googleSub));
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "SELECT last_insert_rowid()";
+            return (long)cmd.ExecuteScalar()!;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return null;
+        }
+    }
+
+    public void LinkGoogle(long userId, string googleSub) =>
+        Run("UPDATE users SET google_sub = $g WHERE id = $u AND google_sub IS NULL", ("$g", googleSub), ("$u", userId));
+
+    // ---- afiliados
+
+    public sealed record Affiliate(long UserId, string Code, string PixKey, DateTimeOffset CreatedAt);
+
+    public sealed record Commission(long Id, long AffiliateUserId, long ReferredUserId, string PaymentRef, long AmountPaidCents, double Rate, long CommissionCents, string Status, long? PayoutId, DateTimeOffset CreatedAt);
+
+    public sealed record Payout(long Id, long AffiliateUserId, long AmountCents, string PixKey, DateTimeOffset RequestedAt, DateTimeOffset? PaidAt, string Note);
+
+    public sealed record AffiliateStats(int Signups, int PaidCustomers, long PendingCents, long AvailableCents, long RequestedCents, long PaidCents);
+
+    private static Affiliate ReadAffiliate(SqliteDataReader r) => new(r.GetInt64(0), r.GetString(1), r.GetString(2), D(r.GetString(3)));
+
+    public Affiliate? AffiliateOf(long userId) =>
+        Query("SELECT user_id, code, pix_key, created_at FROM affiliates WHERE user_id = $u", ReadAffiliate, ("$u", userId));
+
+    public Affiliate? AffiliateByCode(string code) =>
+        Query("SELECT user_id, code, pix_key, created_at FROM affiliates WHERE code = $c", ReadAffiliate, ("$c", code));
+
+    /// <summary>Cadastra o usuário como afiliado, com um código aleatório livre.</summary>
+    public Affiliate CreateAffiliate(long userId)
+    {
+        if (AffiliateOf(userId) is { } existing) return existing;
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            string code = AffiliateProgram.NewCode();
+            try
+            {
+                Run("INSERT INTO affiliates(user_id, code, created_at) VALUES($u, $c, $t)", ("$u", userId), ("$c", code), ("$t", T(DateTimeOffset.UtcNow)));
+                return AffiliateOf(userId)!;
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+            {
+                if (AffiliateOf(userId) is { } raced) return raced; // outra requisição já cadastrou
+            }
+        }
+        throw new InvalidOperationException("Não foi possível gerar um código de afiliado.");
+    }
+
+    /// <summary>Troca o código do link (um nome fácil de lembrar). Falso se já existe.</summary>
+    public bool SetAffiliateCode(long userId, string code)
+    {
+        try
+        {
+            using var c = Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "UPDATE affiliates SET code = $c WHERE user_id = $u";
+            cmd.Parameters.AddWithValue("$c", code);
+            cmd.Parameters.AddWithValue("$u", userId);
+            return cmd.ExecuteNonQuery() > 0;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return false;
+        }
+    }
+
+    public void SetPixKey(long userId, string pixKey) => Run("UPDATE affiliates SET pix_key = $p WHERE user_id = $u", ("$p", pixKey), ("$u", userId));
+
+    /// <summary>Guarda quem indicou esta conta (só a primeira indicação vale).</summary>
+    public bool AddReferral(long userId, long affiliateUserId)
+    {
+        if (userId == affiliateUserId) return false;
+        try
+        {
+            Run("INSERT INTO referrals(user_id, affiliate_user_id, created_at) VALUES($u, $a, $t)", ("$u", userId), ("$a", affiliateUserId), ("$t", T(DateTimeOffset.UtcNow)));
+            return true;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return false;
+        }
+    }
+
+    public long? ReferrerOf(long userId) =>
+        Query("SELECT affiliate_user_id FROM referrals WHERE user_id = $u", r => (long?)r.GetInt64(0), ("$u", userId));
+
+    /// <summary>Quantas comissões já existem deste cliente indicado (é o número do pagamento dele).</summary>
+    public int CommissionCountFor(long referredUserId) =>
+        Query("SELECT COUNT(*) FROM commissions WHERE referred_user_id = $u", r => r.GetInt32(0), ("$u", referredUserId));
+
+    /// <summary>Registra a comissão de um pagamento. Falso se esse pagamento já foi registrado.</summary>
+    public bool AddCommission(long affiliateUserId, long referredUserId, string paymentRef, long amountPaidCents, double rate, long commissionCents)
+    {
+        try
+        {
+            Run("INSERT INTO commissions(affiliate_user_id, referred_user_id, payment_ref, amount_paid_cents, rate, commission_cents, created_at) VALUES($a, $r, $p, $m, $x, $c, $t)",
+                ("$a", affiliateUserId), ("$r", referredUserId), ("$p", paymentRef), ("$m", amountPaidCents), ("$x", rate), ("$c", commissionCents), ("$t", T(DateTimeOffset.UtcNow)));
+            return true;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Estorno do pagamento: a comissão deixa de valer (se ainda não foi paga; se já foi paga, fica como "estornada" para acerto).</summary>
+    public bool ReverseCommission(string paymentRef)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "UPDATE commissions SET status = 'reversed' WHERE payment_ref = $p AND status <> 'reversed'";
+        cmd.Parameters.AddWithValue("$p", paymentRef);
+        return cmd.ExecuteNonQuery() > 0;
+    }
+
+    private static Commission ReadCommission(SqliteDataReader r) =>
+        new(r.GetInt64(0), r.GetInt64(1), r.GetInt64(2), r.GetString(3), r.GetInt64(4), r.GetDouble(5), r.GetInt64(6), r.GetString(7), r.IsDBNull(8) ? null : r.GetInt64(8), D(r.GetString(9)));
+
+    public List<Commission> CommissionsOf(long affiliateUserId, int count = 50) =>
+        QueryAll("SELECT id, affiliate_user_id, referred_user_id, payment_ref, amount_paid_cents, rate, commission_cents, status, payout_id, created_at FROM commissions WHERE affiliate_user_id = $a ORDER BY id DESC LIMIT $n",
+            ReadCommission, ("$a", affiliateUserId), ("$n", count));
+
+    public AffiliateStats StatsOf(long affiliateUserId, AffiliateProgram program, DateTimeOffset now)
+    {
+        int signups = Query("SELECT COUNT(*) FROM referrals WHERE affiliate_user_id = $a", r => r.GetInt32(0), ("$a", affiliateUserId));
+        var all = QueryAll("SELECT id, affiliate_user_id, referred_user_id, payment_ref, amount_paid_cents, rate, commission_cents, status, payout_id, created_at FROM commissions WHERE affiliate_user_id = $a AND status <> 'reversed'",
+            ReadCommission, ("$a", affiliateUserId));
+        long pending = 0, available = 0, requested = 0, paid = 0;
+        var confirmed = new HashSet<long>();
+        var payouts = QueryAll("SELECT id, affiliate_user_id, amount_cents, pix_key, requested_at, paid_at, note FROM payouts WHERE affiliate_user_id = $a",
+            r => new Payout(r.GetInt64(0), r.GetInt64(1), r.GetInt64(2), r.GetString(3), D(r.GetString(4)), r.IsDBNull(5) ? null : D(r.GetString(5)), r.GetString(6)), ("$a", affiliateUserId))
+            .ToDictionary(p => p.Id);
+        foreach (var commission in all)
+        {
+            bool released = program.Available(commission.CreatedAt, now);
+            if (released) confirmed.Add(commission.ReferredUserId);
+            if (commission.PayoutId is long pid)
+            {
+                if (payouts.TryGetValue(pid, out var payout) && payout.PaidAt is not null) paid += commission.CommissionCents;
+                else requested += commission.CommissionCents;
+            }
+            else if (released) available += commission.CommissionCents;
+            else pending += commission.CommissionCents;
+        }
+        return new AffiliateStats(signups, confirmed.Count, pending, available, requested, paid);
+    }
+
+    /// <summary>Pede o saque de tudo que está disponível. Devolve o pedido, ou nulo se o saldo não chega ao mínimo.</summary>
+    public Payout? RequestPayout(long affiliateUserId, string pixKey, AffiliateProgram program, DateTimeOffset now)
+    {
+        using var c = Open();
+        using var tx = c.BeginTransaction();
+        var eligible = new List<long>();
+        long total = 0;
+        using (var q = c.CreateCommand())
+        {
+            q.Transaction = tx;
+            q.CommandText = "SELECT id, commission_cents, created_at FROM commissions WHERE affiliate_user_id = $a AND status = 'approved' AND payout_id IS NULL";
+            q.Parameters.AddWithValue("$a", affiliateUserId);
+            using var r = q.ExecuteReader();
+            while (r.Read())
+                if (program.Available(D(r.GetString(2)), now)) { eligible.Add(r.GetInt64(0)); total += r.GetInt64(1); }
+        }
+        if (total < program.MinPayoutCents || eligible.Count == 0) return null;
+
+        long payoutId;
+        using (var ins = c.CreateCommand())
+        {
+            ins.Transaction = tx;
+            ins.CommandText = "INSERT INTO payouts(affiliate_user_id, amount_cents, pix_key, requested_at) VALUES($a, $m, $p, $t); SELECT last_insert_rowid();";
+            ins.Parameters.AddWithValue("$a", affiliateUserId);
+            ins.Parameters.AddWithValue("$m", total);
+            ins.Parameters.AddWithValue("$p", pixKey);
+            ins.Parameters.AddWithValue("$t", T(now));
+            payoutId = (long)ins.ExecuteScalar()!;
+        }
+        foreach (long id in eligible)
+        {
+            using var up = c.CreateCommand();
+            up.Transaction = tx;
+            up.CommandText = "UPDATE commissions SET payout_id = $p WHERE id = $i";
+            up.Parameters.AddWithValue("$p", payoutId);
+            up.Parameters.AddWithValue("$i", id);
+            up.ExecuteNonQuery();
+        }
+        tx.Commit();
+        return new Payout(payoutId, affiliateUserId, total, pixKey, now, null, "");
+    }
+
+    public List<Payout> PayoutsOf(long? affiliateUserId, bool onlyOpen)
+    {
+        string where = (affiliateUserId is null ? "1=1" : "affiliate_user_id = $a") + (onlyOpen ? " AND paid_at IS NULL" : "");
+        var args = affiliateUserId is null ? Array.Empty<(string, object?)>() : new (string, object?)[] { ("$a", affiliateUserId) };
+        return QueryAll($"SELECT id, affiliate_user_id, amount_cents, pix_key, requested_at, paid_at, note FROM payouts WHERE {where} ORDER BY id DESC LIMIT 200",
+            r => new Payout(r.GetInt64(0), r.GetInt64(1), r.GetInt64(2), r.GetString(3), D(r.GetString(4)), r.IsDBNull(5) ? null : D(r.GetString(5)), r.GetString(6)), args);
+    }
+
+    public bool MarkPayoutPaid(long payoutId, string note)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "UPDATE payouts SET paid_at = $t, note = $n WHERE id = $i AND paid_at IS NULL";
+        cmd.Parameters.AddWithValue("$t", T(DateTimeOffset.UtcNow));
+        cmd.Parameters.AddWithValue("$n", note);
+        cmd.Parameters.AddWithValue("$i", payoutId);
+        return cmd.ExecuteNonQuery() > 0;
+    }
 }

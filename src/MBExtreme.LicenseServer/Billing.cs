@@ -25,12 +25,27 @@ public static class PlanCatalog
 
     public static PlanOption? Find(string? key) => Options.FirstOrDefault(o => o.Key == key);
 
-    public static PlanOffer Offer(long monthlyCents, PlanOption option, int devices)
+    /// <summary>Preços de vitrine recomendados (1 PC) em centavos: R$ 19,90 por mês, e os períodos maiores com desconto.</summary>
+    public static readonly IReadOnlyDictionary<string, long> DefaultPrices = new Dictionary<string, long>
+    {
+        ["monthly"] = 1990, ["quarterly"] = 4990, ["semiannual"] = 8990, ["annual"] = 14990,
+    };
+
+    /// <summary>
+    /// Oferta de um período para N computadores. Com <paramref name="fixedTotals"/> (preço fechado de 1 PC por período) o preço é esse valor;
+    /// sem ele, vale o mensal com o desconto percentual do período. O desconto mostrado é sempre o real em relação ao mensal.
+    /// </summary>
+    public static PlanOffer Offer(long monthlyCents, PlanOption option, int devices, IReadOnlyDictionary<string, long>? fixedTotals = null)
     {
         devices = Math.Clamp(devices, 1, 10);
         double deviceFactor = 1 + (devices - 1) * ExtraDeviceFactor;
-        long total = (long)Math.Round(monthlyCents * option.Months * (1 - option.DiscountPercent / 100.0) * deviceFactor);
-        return new PlanOffer(option.Key, option.Title, option.Months, devices, total, total / option.Months, option.DiscountPercent);
+        long onePc = fixedTotals is not null && fixedTotals.TryGetValue(option.Key, out long fixedTotal)
+            ? fixedTotal
+            : (long)Math.Round(monthlyCents * option.Months * (1 - option.DiscountPercent / 100.0));
+        long baseMonthly = fixedTotals is not null && fixedTotals.TryGetValue("monthly", out long m) ? m : monthlyCents;
+        int discount = option.Months <= 1 || baseMonthly <= 0 ? 0 : (int)Math.Round((1 - (double)onePc / (baseMonthly * option.Months)) * 100);
+        long total = (long)Math.Round(onePc * deviceFactor);
+        return new PlanOffer(option.Key, option.Title, option.Months, devices, total, total / option.Months, Math.Max(0, discount));
     }
 
     public static string Money(long cents) => $"R$ {cents / 100m:N2}".Replace(',', '#').Replace('.', ',').Replace('#', '.');
@@ -146,6 +161,34 @@ public sealed class StripeGateway
         string t = now.ToUnixTimeSeconds().ToString();
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
         return $"t={t},v1={Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(t + "." + payload))).ToLowerInvariant()}";
+    }
+
+    /// <summary>Pagamento ou estorno de uma fatura (base das comissões de afiliado).</summary>
+    public sealed record StripePayment(string Kind, string? CustomerId, string? UserId, string InvoiceId, long AmountCents);
+
+    public static StripePayment? TranslatePayment(JsonElement stripeEvent)
+    {
+        string type = stripeEvent.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
+        if (!stripeEvent.TryGetProperty("data", out var data) || !data.TryGetProperty("object", out var obj)) return null;
+        string? Str(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        long Num(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.TryGetInt64(out long n) ? n : 0;
+
+        switch (type)
+        {
+            case "invoice.paid":
+                string? id = Str(obj, "id");
+                if (id is null) return null;
+                string? user = obj.TryGetProperty("subscription_details", out var sd) && sd.TryGetProperty("metadata", out var md) ? Str(md, "user_id") : null;
+                return new StripePayment("paid", Str(obj, "customer"), user, id, Num(obj, "amount_paid"));
+
+            case "charge.refunded":
+                string? invoice = Str(obj, "invoice");
+                bool full = Num(obj, "amount") > 0 && Num(obj, "amount_refunded") >= Num(obj, "amount");
+                return invoice is null || !full ? null : new StripePayment("refunded", Str(obj, "customer"), null, invoice, Num(obj, "amount_refunded"));
+
+            default:
+                return null;
+        }
     }
 
     /// <summary>Traduz o evento do Stripe. Devolve nulo para eventos que não mudam a assinatura.</summary>

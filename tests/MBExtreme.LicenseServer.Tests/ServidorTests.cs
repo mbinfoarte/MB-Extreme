@@ -182,7 +182,7 @@ public class ServidorTests : IClassFixture<ServerFixture>
         var status = LicenseVerifier.Evaluate(license, await PublicKeyAsync(), deviceId, DateTimeOffset.UtcNow);
         Assert.Equal("pro", status.Plan);
         Assert.Equal("trialing", status.Payload!.Status);
-        Assert.InRange(status.DaysLeft(DateTimeOffset.UtcNow) ?? -1, 6, 7);
+        Assert.InRange(status.DaysLeft(DateTimeOffset.UtcNow) ?? -1, 2, 3);
     }
 
     [Fact]

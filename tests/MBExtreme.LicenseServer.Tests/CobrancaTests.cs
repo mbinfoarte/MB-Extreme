@@ -143,19 +143,19 @@ public class CobrancaTests : IClassFixture<ServerFixture>
     public async Task PlanosPublicosListamPeriodosEPrecos()
     {
         var plans = await _server.CreateClient().GetFromJsonAsync<JsonElement>("/v1/plans");
-        Assert.Equal(7, plans.GetProperty("trialDays").GetInt32());
+        Assert.Equal(3, plans.GetProperty("trialDays").GetInt32());
         Assert.Equal(4, plans.GetProperty("plans").GetArrayLength());
     }
 
     [Fact]
-    public async Task PrimeiraAtivacaoGanhaTesteGratisDeSeteDiasUmaVezPorComputador()
+    public async Task PrimeiraAtivacaoGanhaTesteGratisDeTresDiasUmaVezPorComputador()
     {
         var (site, _, userId) = await RegisterAsync();
         string deviceId = Guid.NewGuid().ToString("N");
         await ActivateAsync(site, deviceId);
         var end = await PeriodEnd(userId);
         Assert.NotNull(end);
-        Assert.InRange((end!.Value - DateTimeOffset.UtcNow).TotalDays, 6.9, 7.1);
+        Assert.InRange((end!.Value - DateTimeOffset.UtcNow).TotalDays, 2.9, 3.1);
 
         // outra conta no mesmo computador não ganha o teste de novo
         var (site2, _, user2) = await RegisterAsync();

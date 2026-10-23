@@ -25,8 +25,24 @@ builder.Services.AddSingleton(db);
 builder.Services.AddSingleton(signing);
 builder.Services.AddSingleton(issuer);
 
-long monthlyCents = config.GetValue("Billing:MonthlyCents", 2990L);
-int trialDays = Math.Clamp(config.GetValue("Billing:TrialDays", 7), 0, 60);
+long monthlyCents = config.GetValue("Billing:MonthlyCents", 1990L);
+int trialDays = Math.Clamp(config.GetValue("Billing:TrialDays", 3), 0, 60);
+var fixedPrices = new Dictionary<string, long>();
+foreach (var (key, cents) in PlanCatalog.DefaultPrices) fixedPrices[key] = config.GetValue($"Billing:Prices:{key}", cents);
+monthlyCents = fixedPrices["monthly"];
+var affiliateProgram = new AffiliateProgram
+{
+    CommissionMonths = Math.Clamp(config.GetValue("Affiliates:CommissionMonths", 12), 0, 60),
+    HoldDays = Math.Clamp(config.GetValue("Affiliates:HoldDays", 30), 0, 365),
+    MinPayoutCents = Math.Max(0, config.GetValue("Affiliates:MinPayoutCents", 5000L)),
+    CookieDays = Math.Clamp(config.GetValue("Affiliates:CookieDays", 60), 1, 365),
+};
+var site = new SiteOptions(
+    config["Site:Brand"] ?? "MB Extreme", config["Site:SupportEmail"] ?? "suporte@mbextreme.com.br",
+    config["Download:SetupUrl"] ?? "", config["Download:PortableUrl"] ?? "", config["Download:Version"] ?? "Beta 01",
+    config["Google:ClientId"] ?? "", trialDays, fixedPrices, monthlyCents, affiliateProgram);
+Pages.Options = site;
+builder.Services.AddSingleton(sp => new GoogleAuth(site.GoogleClientId));
 var adminEmails = new HashSet<string>((config["Admin:Emails"] ?? "").Split(new[] { ',', ';' }).Select(e => e.Trim().ToLowerInvariant()).Where(e => e.Length > 0));
 string stripeWebhookSecret = config["Stripe:WebhookSecret"] ?? "";
 var stripePrices = new Dictionary<string, string>();
@@ -39,6 +55,7 @@ var relay = new RemoteRelay(db, signing.PublicKey, (config["Remote:Technicians"]
 builder.Services.AddSingleton(relay);
 
 var app = builder.Build();
+app.UseStaticFiles();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 
 const string CookieName = "mbx_session";
@@ -75,50 +92,119 @@ string Csrf(string session) => $"<input type=\"hidden\" name=\"csrf\" value=\"{S
 
 string BaseUrl(HttpContext c) => (string.IsNullOrWhiteSpace(config["Site:BaseUrl"]) ? $"{c.Request.Scheme}://{c.Request.Host}" : config["Site:BaseUrl"]!).TrimEnd('/');
 
-string PricingTable()
+const string RefCookie = "mbx_ref";
+const string NextCookie = "mbx_next";
+
+/// <summary>Liga a conta recém-criada ao afiliado do link que a trouxe (cookie), sem aceitar auto-indicação.</summary>
+void AttachReferral(HttpContext c, long newUserId)
 {
-    var rows = new System.Text.StringBuilder("<table>");
-    foreach (var option in PlanCatalog.Options)
-    {
-        var one = PlanCatalog.Offer(monthlyCents, option, 1);
-        string discount = option.DiscountPercent > 0 ? $" <span class=\"ok\">-{option.DiscountPercent}%</span>" : "";
-        rows.Append($"<tr><td>{E(option.Title)}{discount}</td><td>{PlanCatalog.Money(one.PerMonthCents)}/mês</td></tr>");
-    }
-    return rows.Append("</table>").ToString();
+    if (!c.Request.Cookies.TryGetValue(RefCookie, out var raw)) return;
+    string code = AffiliateProgram.NormalizeCode(raw);
+    if (!AffiliateProgram.ValidCode(code)) return;
+    var affiliate = db.AffiliateByCode(code);
+    if (affiliate is not null && affiliate.UserId != newUserId) db.AddReferral(newUserId, affiliate.UserId);
 }
+
+IResult AuthPage(HttpContext c, string title, string action, string button, bool register, string? error, string? next, int status = 200) =>
+    Html(SitePages.AuthForm(site, title, action, button, register, error, next, BaseUrl(c)), status);
 
 // ======================================================= site
 
-app.MapGet("/", (HttpContext c) => Html(Page("Planos", Home(devMode, PricingTable()), CurrentUser(c)?.Email)));
+app.MapGet("/", (HttpContext c) => Html(SitePages.Home(site, CurrentUser(c)?.Email, devMode)));
+app.MapGet("/planos", (HttpContext c) => Html(SitePages.Plans(site, CurrentUser(c)?.Email)));
+app.MapGet("/download", (HttpContext c) => Html(SitePages.Download(site, CurrentUser(c)?.Email)));
+app.MapGet("/afiliados", (HttpContext c) =>
+{
+    var me = CurrentUser(c);
+    return Html(SitePages.AffiliatesLanding(site, me?.Email, me is not null && db.AffiliateOf(me.Value.UserId) is not null));
+});
 app.MapGet("/health", () => Results.Text("ok"));
+app.MapGet("/robots.txt", (HttpContext c) => Results.Text($"User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /affiliate\nDisallow: /v1/\nSitemap: {BaseUrl(c)}/sitemap.xml\n"));
+app.MapGet("/sitemap.xml", (HttpContext c) => Results.Content(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" +
+    string.Concat(new[] { "/", "/planos", "/download", "/afiliados", "/termos", "/privacidade" }.Select(u => $"<url><loc>{BaseUrl(c)}{u}</loc></url>")) + "</urlset>", "application/xml"));
 
-app.MapGet("/register", (HttpContext c) => Html(Form("Criar conta", "/register", "Criar conta", true, null)));
+IResult Legal(HttpContext c, string title, string file)
+{
+    string path = Path.Combine(AppContext.BaseDirectory, "legal", file);
+    string text = File.Exists(path) ? File.ReadAllText(path) : "# " + title + "\n\nTexto em preparação.";
+    return Html(SiteLayout.Narrow(site, title, SiteLayout.Markdown(text), CurrentUser(c)?.Email));
+}
+app.MapGet("/termos", (HttpContext c) => Legal(c, "Termos de uso", "termos.md"));
+app.MapGet("/privacidade", (HttpContext c) => Legal(c, "Política de privacidade", "privacidade.md"));
+
+/// <summary>Link de indicação: guarda o código por alguns dias e leva para a página inicial.</summary>
+app.MapGet("/r/{code}", (HttpContext c, string code) =>
+{
+    code = AffiliateProgram.NormalizeCode(code);
+    if (AffiliateProgram.ValidCode(code) && db.AffiliateByCode(code) is not null)
+        c.Response.Cookies.Append(RefCookie, code, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax, Secure = c.Request.IsHttps, Expires = DateTimeOffset.UtcNow.AddDays(affiliateProgram.CookieDays) });
+    return Results.Redirect("/");
+});
+
+app.MapGet("/register", (HttpContext c) => { string next = SafeNext(c.Request.Query["next"]); c.Response.Cookies.Append(NextCookie, next, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax, Secure = c.Request.IsHttps, MaxAge = TimeSpan.FromMinutes(30) }); return AuthPage(c, "Criar conta", "/register", "Criar conta", true, null, c.Request.Query["next"].ToString() is { Length: > 0 } ? next : null); });
 app.MapPost("/register", async (HttpContext c) =>
 {
-    if (!limiter.Allow("reg|" + Ip(c), 10 * limitScale, TimeSpan.FromMinutes(10))) return Html(Form("Criar conta", "/register", "Criar conta", true, "Muitas tentativas. Aguarde alguns minutos."), 429);
+    if (!limiter.Allow("reg|" + Ip(c), 10 * limitScale, TimeSpan.FromMinutes(10))) return AuthPage(c, "Criar conta", "/register", "Criar conta", true, "Muitas tentativas. Aguarde alguns minutos.", null, 429);
     var form = await c.Request.ReadFormAsync();
+    string next = SafeNext(form["next"]);
     string email = form["email"].ToString().Trim().ToLowerInvariant(), password = form["password"].ToString();
-    if (!Security.ValidEmail(email)) return Html(Form("Criar conta", "/register", "Criar conta", true, "E-mail inválido."), 400);
-    if (password.Length < 8 || password.Length > 200) return Html(Form("Criar conta", "/register", "Criar conta", true, "A senha precisa ter de 8 a 200 caracteres."), 400);
+    if (!Security.ValidEmail(email)) return AuthPage(c, "Criar conta", "/register", "Criar conta", true, "E-mail inválido.", next, 400);
+    if (password.Length < 8 || password.Length > 200) return AuthPage(c, "Criar conta", "/register", "Criar conta", true, "A senha precisa ter de 8 a 200 caracteres.", next, 400);
     string name = form["name"].ToString().Trim();
     if (name.Length > 80) name = name[..80];
     long? id = db.CreateUser(email, Security.HashPassword(password), name);
-    if (id is null) return Html(Form("Criar conta", "/register", "Criar conta", true, "Este e-mail já tem conta. Entre com a senha."), 409);
+    if (id is null) return AuthPage(c, "Criar conta", "/register", "Criar conta", true, "Este e-mail já tem conta. Entre com a senha.", next, 409);
+    AttachReferral(c, id.Value);
     StartSession(c, id.Value);
-    return Results.Redirect("/account");
+    return Results.Redirect(next);
 });
 
-app.MapGet("/login", (HttpContext c) => Html(Form("Entrar", "/login", "Entrar", false, null, c.Request.Query["next"])));
+app.MapGet("/login", (HttpContext c) => { string next = SafeNext(c.Request.Query["next"]); c.Response.Cookies.Append(NextCookie, next, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax, Secure = c.Request.IsHttps, MaxAge = TimeSpan.FromMinutes(30) }); return AuthPage(c, "Entrar", "/login", "Entrar", false, null, c.Request.Query["next"].ToString() is { Length: > 0 } ? next : null); });
 app.MapPost("/login", async (HttpContext c) =>
 {
     var form = await c.Request.ReadFormAsync();
     string next = SafeNext(form["next"]);
-    if (!limiter.Allow("login|" + Ip(c), 10 * limitScale, TimeSpan.FromMinutes(5))) return Html(Form("Entrar", "/login", "Entrar", false, "Muitas tentativas. Aguarde alguns minutos.", next), 429);
+    if (!limiter.Allow("login|" + Ip(c), 10 * limitScale, TimeSpan.FromMinutes(5))) return AuthPage(c, "Entrar", "/login", "Entrar", false, "Muitas tentativas. Aguarde alguns minutos.", next, 429);
     var user = db.UserByEmail(form["email"].ToString().Trim().ToLowerInvariant());
     // mesma resposta e mesmo custo para e-mail inexistente e senha errada
     bool ok = Security.VerifyPassword(form["password"].ToString(), user?.PasswordHash ?? Security.HashPassword("x"));
-    if (user is null || !ok) return Html(Form("Entrar", "/login", "Entrar", false, "E-mail ou senha incorretos.", next), 401);
+    if (user is null || !ok) return AuthPage(c, "Entrar", "/login", "Entrar", false, "E-mail ou senha incorretos.", next, 401);
     StartSession(c, user.Id);
+    return Results.Redirect(next);
+});
+
+/// <summary>Retorno do "Entrar com o Google": confere o token no servidor e abre a sessão. Conta nova nasce com senha inutilizável.</summary>
+app.MapPost("/auth/google", async (HttpContext c) =>
+{
+    var google = app.Services.GetRequiredService<GoogleAuth>();
+    if (!google.Configured) return Results.NotFound();
+    if (!limiter.Allow("google|" + Ip(c), 20 * limitScale, TimeSpan.FromMinutes(5))) return AuthPage(c, "Entrar", "/login", "Entrar", false, "Muitas tentativas. Aguarde alguns minutos.", null, 429);
+    var form = await c.Request.ReadFormAsync();
+    // proteção exigida pelo Google: o valor do formulário deve ser igual ao do cookie g_csrf_token
+    string csrfCookie = c.Request.Cookies["g_csrf_token"] ?? "";
+    if (csrfCookie.Length == 0 || csrfCookie != form["g_csrf_token"].ToString()) return AuthPage(c, "Entrar", "/login", "Entrar", false, "Não foi possível confirmar o pedido. Tente de novo.", null, 400);
+
+    var identity = await google.ValidateAsync(form["credential"], DateTimeOffset.UtcNow, c.RequestAborted);
+    if (identity is null || !identity.EmailVerified) return AuthPage(c, "Entrar", "/login", "Entrar", false, "Não foi possível entrar com o Google. Use e-mail e senha ou tente de novo.", null, 401);
+
+    var user = db.UserByGoogleSub(identity.Subject);
+    if (user is null)
+    {
+        var sameEmail = db.UserByEmail(identity.Email);
+        if (sameEmail is not null) { db.LinkGoogle(sameEmail.Id, identity.Subject); user = db.UserByGoogleSub(identity.Subject) ?? sameEmail; }
+        else
+        {
+            long? id = db.CreateGoogleUser(identity.Email, identity.Subject, identity.Name, Security.HashPassword(Security.RandomToken()));
+            if (id is null) return AuthPage(c, "Entrar", "/login", "Entrar", false, "Não foi possível criar a conta. Tente de novo.", null, 409);
+            AttachReferral(c, id.Value);
+            user = db.UserById(id.Value);
+        }
+    }
+    if (user is null) return Results.BadRequest();
+    StartSession(c, user.Id);
+    string next = SafeNext(c.Request.Cookies[NextCookie]);
+    c.Response.Cookies.Delete(NextCookie);
     return Results.Redirect(next);
 });
 
@@ -148,25 +234,27 @@ app.MapGet("/account", (HttpContext c) =>
     string trialInfo = sub is { Provider: "teste-gratis" } ? $"<p class=\"warn\">Teste grátis até {sub.PeriodEnd.LocalDateTime:dd/MM/yyyy}.</p>" : "";
     string offers = string.Concat(PlanCatalog.Options.Select(o =>
     {
-        var one = PlanCatalog.Offer(monthlyCents, o, 1);
-        var two = PlanCatalog.Offer(monthlyCents, o, 2);
+        var one = PlanCatalog.Offer(monthlyCents, o, 1, fixedPrices);
+        var two = PlanCatalog.Offer(monthlyCents, o, 2, fixedPrices);
         string buy = stripe.Configured && stripe.HasPrice(o.Key)
             ? $"<form method=\"post\" action=\"/account/checkout\">{Csrf(me.Value.Session)}<input type=\"hidden\" name=\"period\" value=\"{o.Key}\"><select name=\"devices\"><option value=\"1\">1 PC</option><option value=\"2\">2 PCs</option><option value=\"3\">3 PCs</option></select> <button class=\"go\">Assinar</button></form>"
             : "<span class=\"muted\">em breve</span>";
         return $"<tr><td>{E(o.Title)}{(o.DiscountPercent > 0 ? $" <span class=\"ok\">-{o.DiscountPercent}%</span>" : "")}</td><td>{PlanCatalog.Money(one.PerMonthCents)}/mês</td><td class=\"muted\">2 PCs: {PlanCatalog.Money(two.PerMonthCents)}/mês</td><td>{buy}</td></tr>";
     }));
     string portal = sub is { Provider: "stripe" } ? $"<form method=\"post\" action=\"/account/billing\">{Csrf(me.Value.Session)}<button class=\"go\">Gerenciar assinatura e faturas</button></form>" : "";
-    string redeem = $"<form method=\"post\" action=\"/account/redeem\" class=\"card\">{Csrf(me.Value.Session)}<h2>Tenho uma chave de ativação</h2><input name=\"key\" placeholder=\"MBX-XXXX-XXXX-XXXX-XXXX\" maxlength=\"40\" required><button class=\"go\">Resgatar</button></form>";
+    string redeem = $"<form method=\"post\" action=\"/account/redeem\" class=\"box\">{Csrf(me.Value.Session)}<h2>Tenho uma chave de ativação</h2><input name=\"key\" placeholder=\"MBX-XXXX-XXXX-XXXX-XXXX\" maxlength=\"40\" required><button class=\"go\">Resgatar</button></form>";
     string devTool = devMode
         ? $"<form method=\"post\" action=\"/account/dev-subscribe\">{Csrf(me.Value.Session)}<button class=\"go\">Simular assinatura Pro (modo de teste)</button></form>"
         : "<a class=\"go\" href=\"/\">Assinar o plano Pro</a>";
 
     return Html(Page("Minha conta", $"""
         <h1>Minha conta</h1><p class="muted">{E(me.Value.Email)}</p>
-        <div class="card"><h2>Plano</h2><p>{planText}</p>{trialInfo}{portal}{(resolvedPlan == "pro" ? "" : devTool)}</div>
-        <div class="card"><h2>Planos</h2><table>{offers}</table></div>
+        <div class="box"><h2>Plano</h2><p>{planText}</p>{trialInfo}{portal}{(resolvedPlan == "pro" ? "" : devTool)}</div>
+        <div class="box"><h2>Baixar o programa</h2><p class="muted">Instale o MB Extreme, abra <b>Licença e conta</b> e clique em <b>Entrar e ativar este PC</b>. O teste de {trialDays} dias começa no primeiro PC ativado.</p><a class="go" href="/download">Ir para o download</a></div>
+        <div class="box"><h2>Planos</h2><table>{offers}</table></div>
+        <div class="box"><h2>Programa de afiliados</h2><p class="muted">Indique o MB Extreme e ganhe comissão recorrente (Latão, Bronze, Prata e Ouro).</p><a class="go" href="/affiliate">{(db.AffiliateOf(me.Value.UserId) is null ? "Virar afiliado" : "Abrir meu painel")}</a></div>
         {redeem}
-        <div class="card"><h2>Computadores ({devices.Count} de {maxDevices})</h2>
+        <div class="box"><h2>Computadores ({devices.Count} de {maxDevices})</h2>
         {(devices.Count == 0 ? "<p class=\"muted\">Nenhum computador ativado. No MB Extreme, abra Licença e clique em Entrar.</p>" : $"<table><tr><th>Nome</th><th>Último uso</th><th></th></tr>{rows}</table>")}</div>
         """, me.Value.Email));
 });
@@ -240,6 +328,50 @@ app.MapPost("/activate", async (HttpContext c) =>
 
     db.SetDeviceCodeState(request.Code, "approved", me.Value.UserId);
     return Html(Message("Computador ativado", "Pode voltar ao MB Extreme: a licença chega em alguns segundos." + trialNote, "ok"));
+});
+
+// ======================================================= afiliados
+
+app.MapGet("/affiliate", (HttpContext c) =>
+{
+    var me = CurrentUser(c);
+    if (me is null) return Results.Redirect("/login?next=/affiliate");
+    var aff = db.AffiliateOf(me.Value.UserId);
+    if (aff is null)
+        return Html(Pages.Page("Programa de afiliados", $"""
+            <h1>Virar afiliado</h1>
+            <p class="muted">Receba de {(int)(AffiliateProgram.Tiers[0].Rate * 100)}% a {(int)(AffiliateProgram.Tiers[^1].Rate * 100)}% de comissão recorrente pelos clientes que você indicar.</p>
+            <form method="post" action="/affiliate/join" class="box">{Csrf(me.Value.Session)}<button class="go">Criar meu link de afiliado</button></form>
+            <p><a href="/afiliados" style="color:var(--accent)">Ver as regras do programa</a></p>
+            """, me.Value.Email));
+    string? message = c.Request.Query["msg"].ToString() switch { "payout" => "Saque pedido. Você receberá por Pix depois da conferência.", "pix" => "Chave Pix salva.", "min" => $"O saldo disponível ainda não chegou a {PlanCatalog.Money(affiliateProgram.MinPayoutCents)}.", _ => null };
+    return Html(SitePages.AffiliateDashboard(site, me.Value.Email, Csrf(me.Value.Session), aff, db.StatsOf(aff.UserId, affiliateProgram, DateTimeOffset.UtcNow),
+        db.CommissionsOf(aff.UserId), db.PayoutsOf(aff.UserId, false), BaseUrl(c), message, c.Request.Query["msg"] == "min"));
+});
+
+app.MapPost("/affiliate/join", async (HttpContext c) =>
+{
+    var me = CurrentUser(c);
+    if (me is null) return Results.Redirect("/login");
+    var form = await c.Request.ReadFormAsync();
+    if (!await CsrfOk(c, form, me.Value.Session)) return Html(Message("Pedido inválido", "Recarregue a página e tente de novo.", "bad"), 400);
+    db.CreateAffiliate(me.Value.UserId);
+    return Results.Redirect("/affiliate");
+});
+
+app.MapPost("/affiliate/payout", async (HttpContext c) =>
+{
+    var me = CurrentUser(c);
+    if (me is null) return Results.Redirect("/login");
+    var form = await c.Request.ReadFormAsync();
+    if (!await CsrfOk(c, form, me.Value.Session)) return Html(Message("Pedido inválido", "Recarregue a página e tente de novo.", "bad"), 400);
+    var aff = db.AffiliateOf(me.Value.UserId);
+    if (aff is null) return Results.Redirect("/affiliate");
+    string pix = form["pix"].ToString().Trim();
+    if (pix.Length is < 5 or > 120 || pix.Any(char.IsControl)) return Html(Message("Chave Pix inválida", "Confira a chave e tente de novo.", "bad"), 400);
+    db.SetPixKey(aff.UserId, pix);
+    var payout = db.RequestPayout(aff.UserId, pix, affiliateProgram, DateTimeOffset.UtcNow);
+    return Results.Redirect("/affiliate?msg=" + (payout is not null ? "payout" : db.StatsOf(aff.UserId, affiliateProgram, DateTimeOffset.UtcNow).AvailableCents > 0 ? "min" : "pix"));
 });
 
 // ======================================================= API do aplicativo
@@ -336,7 +468,7 @@ app.MapGet("/v1/plans", () => Results.Json(new
     plans = PlanCatalog.Options.Select(o => new
     {
         o.Key, o.Title, o.Months, o.DiscountPercent,
-        offers = Enumerable.Range(1, 3).Select(d => PlanCatalog.Offer(monthlyCents, o, d)),
+        offers = Enumerable.Range(1, 3).Select(d => PlanCatalog.Offer(monthlyCents, o, d, fixedPrices)),
     }),
 }));
 
@@ -424,6 +556,24 @@ app.MapPost("/v1/admin/keys", async (HttpContext c) =>
     return Results.Json(new { keys, days, maxDevices = devices });
 });
 
+/// <summary>Saques de afiliados em aberto (para pagar por Pix). Só administradores.</summary>
+app.MapGet("/v1/admin/payouts", (HttpContext c) =>
+{
+    if (adminEmails.Count == 0) return Results.NotFound();
+    if (AdminEmail(c) is null) return Results.Json(new { message = "Não autorizado." }, statusCode: 403);
+    var list = db.PayoutsOf(null, onlyOpen: true).Select(p => new { p.Id, p.AffiliateUserId, email = db.UserById(p.AffiliateUserId)?.Email, p.AmountCents, p.PixKey, p.RequestedAt });
+    return Results.Json(new { payouts = list });
+});
+
+app.MapPost("/v1/admin/payouts/{id:long}/paid", async (HttpContext c, long id) =>
+{
+    if (adminEmails.Count == 0) return Results.NotFound();
+    if (AdminEmail(c) is null) return Results.Json(new { message = "Não autorizado." }, statusCode: 403);
+    var body = await JsonSerializer.DeserializeAsync<JsonElement>(c.Request.Body, jsonOptions);
+    string note = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("note", out var n) ? n.GetString() ?? "" : "";
+    return db.MarkPayoutPaid(id, note.Length > 120 ? note[..120] : note) ? Results.Json(new { ok = true }) : Results.NotFound();
+});
+
 app.MapPost("/v1/webhooks/stripe", async (HttpContext c) =>
 {
     if (stripeWebhookSecret.Length < 8) return Results.NotFound();
@@ -437,6 +587,31 @@ app.MapPost("/v1/webhooks/stripe", async (HttpContext c) =>
     catch (JsonException) { return Results.BadRequest(); }
     string eventId = ev.TryGetProperty("id", out var idp) ? idp.GetString() ?? "" : "";
     if (eventId.Length == 0) return Results.BadRequest();
+
+    // pagamentos e estornos: geram ou cancelam a comissão do afiliado
+    var payment = StripeGateway.TranslatePayment(ev);
+    if (payment is { Kind: "refunded" })
+    {
+        if (!db.RememberWebhook("stripe|" + eventId)) return Results.Json(new { ok = true, duplicate = true });
+        db.ReverseCommission(payment.InvoiceId);
+        return Results.Json(new { ok = true });
+    }
+    if (payment is not null)
+    {
+        User? payer = payment.UserId is { } puid && long.TryParse(puid, out long pid) ? db.UserById(pid)
+            : payment.CustomerId is { Length: > 0 } pcus ? db.UserByProviderRef(pcus) : null;
+        if (payer is null) return Results.Json(new { ok = false, message = "Conta não encontrada; reenvie depois." }, statusCode: 202); // sem registrar: o Stripe tenta de novo
+        if (!db.RememberWebhook("stripe|" + eventId)) return Results.Json(new { ok = true, duplicate = true });
+
+        if (payment.AmountCents > 0 && db.ReferrerOf(payer.Id) is long referrer && db.AffiliateOf(referrer) is { } affiliate
+            && affiliateProgram.PaysCommission(db.CommissionCountFor(payer.Id)))
+        {
+            var tier = AffiliateProgram.TierFor(db.StatsOf(affiliate.UserId, affiliateProgram, DateTimeOffset.UtcNow).PaidCustomers);
+            db.AddCommission(affiliate.UserId, payer.Id, payment.InvoiceId, payment.AmountCents, tier.Rate, AffiliateProgram.Commission(payment.AmountCents, tier.Rate));
+        }
+        return Results.Json(new { ok = true });
+    }
+
     if (!db.RememberWebhook("stripe|" + eventId)) return Results.Json(new { ok = true, duplicate = true });
 
     var update = StripeGateway.Translate(ev);

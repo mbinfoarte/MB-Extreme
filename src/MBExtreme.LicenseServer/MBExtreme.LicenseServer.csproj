@@ -14,6 +14,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Logo do site e textos legais (Markdown) copiados da documentação. -->
+    <Content Include="..\MBExtreme.App\Assets\logo.png" Link="wwwroot\logo.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\TERMOS-DE-USO.md" Link="legal\termos.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\POLITICA-PRIVACIDADE.md" Link="legal\privacidade.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MBExtreme.Core\MBExtreme.Core.csproj" />
   </ItemGroup>
 

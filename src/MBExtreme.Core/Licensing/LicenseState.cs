@@ -89,8 +89,10 @@ public static class DeviceIdentity
     [SupportedOSPlatform("windows")]
     public static string Current()
     {
-        string guid = Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography", "MachineGuid", null) as string
-            ?? Environment.MachineName;
+        string? guid = null;
+        try { guid = Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography", "MachineGuid", null) as string; }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { }
+        guid ??= Environment.MachineName;
         return Compute(guid);
     }
 

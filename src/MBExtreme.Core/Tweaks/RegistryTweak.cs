@@ -18,9 +18,16 @@ internal static class RegistryAccess
 
     public static object? Read(RegistryHive hive, string path, string name)
     {
-        using var root = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
-        using var key = root.OpenSubKey(path, false);
-        return key?.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+        try
+        {
+            using var root = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
+            using var key = root.OpenSubKey(path, false);
+            return key?.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
+        {
+            return null; // sem permissão para ler: tratado como "não existe" (o ajuste aparece como indisponível)
+        }
     }
 
     public static bool SameValue(object? current, object expected)

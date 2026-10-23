@@ -77,7 +77,7 @@ public sealed class GameLibraryPage : ToolPageBase
                 : n.Contains("Intel", StringComparison.OrdinalIgnoreCase) || n.Contains("Arc", StringComparison.OrdinalIgnoreCase) ? GpuMaker.Intel : GpuMaker.Unknown;
             _tierText.Text = $"Seu PC: {advice.Tier} · {(gpu?.Name ?? "placa de vídeo não identificada")}. {advice.Headline}";
         }
-        catch (Exception ex) when (ex is InvalidOperationException or AggregateException)
+        catch (Exception ex) when (ex is InvalidOperationException or AggregateException or System.Security.SecurityException or UnauthorizedAccessException or IOException or System.Management.ManagementException)
         {
             _tierText.Text = "Não foi possível ler o hardware agora.";
         }
@@ -92,8 +92,16 @@ public sealed class GameLibraryPage : ToolPageBase
         SetStatus("Procurando jogos...");
         try
         {
-            _steamPath = await Task.Run(GameScanner.SteamPath);
-            _games = await Task.Run(() => GameScanner.Scan(AppServices.GameLibrary));
+            try
+            {
+                _steamPath = await Task.Run(GameScanner.SteamPath);
+                _games = await Task.Run(() => GameScanner.Scan(AppServices.GameLibrary));
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+            {
+                SetStatus("Não foi possível procurar os jogos agora: " + ex.Message, "BadBrush");
+                return;
+            }
             SetStatus(_games.Count == 0 ? "Nenhum jogo encontrado. Use Adicionar jogo ou programa." : $"{_games.Count} item(ns) encontrado(s).", _games.Count == 0 ? "WarnBrush" : "OkBrush");
             RenderGrid();
         }

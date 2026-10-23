@@ -29,16 +29,24 @@ public sealed class SubKeyValueTweak : Tweak
     {
         var result = new List<string>();
         using var root = RegistryKey.OpenBaseKey(_hive, RegistryView.Registry64);
-        using var parent = root.OpenSubKey(_parent, false);
-        if (parent is null) return result;
-        foreach (string name in parent.GetSubKeyNames())
+        RegistryKey? parent;
+        string[] names;
+        try
+        {
+            parent = root.OpenSubKey(_parent, false);
+            names = parent?.GetSubKeyNames() ?? Array.Empty<string>();
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { return result; }
+        using var parentKey = parent;
+        if (parentKey is null) return result;
+        foreach (string name in names)
         {
             try
             {
-                using var key = parent.OpenSubKey(name, false);
+                using var key = parentKey.OpenSubKey(name, false);
                 if (key is not null && _filter(key)) result.Add(_parent + "\\" + name);
             }
-            catch (System.Security.SecurityException) { /* subchave protegida: ignora */ }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { /* subchave protegida: ignora */ }
         }
         return result;
     }
@@ -83,17 +91,21 @@ public static class GpuClass
     public static bool Has(params string[] words)
     {
         using var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-        using var parent = root.OpenSubKey(ClassPath, false);
-        if (parent is null) return false;
-        foreach (string name in parent.GetSubKeyNames())
+        try
         {
-            try
+            using var parent = root.OpenSubKey(ClassPath, false);
+            if (parent is null) return false;
+            foreach (string name in parent.GetSubKeyNames())
             {
-                using var key = parent.OpenSubKey(name, false);
-                if (key is not null && IsVendorKey(key, words)) return true;
+                try
+                {
+                    using var key = parent.OpenSubKey(name, false);
+                    if (key is not null && IsVendorKey(key, words)) return true;
+                }
+                catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { }
             }
-            catch (System.Security.SecurityException) { }
         }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { }
         return false;
     }
 

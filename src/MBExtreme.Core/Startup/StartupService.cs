@@ -66,28 +66,39 @@ public static class StartupService
 
     private static bool ReadApproved(StartupSource source, string name)
     {
-        using var root = RegistryKey.OpenBaseKey(ApprovedHive(source), RegistryView.Registry64);
-        using var key = root.OpenSubKey(ApprovedPath(source));
-        return IsEnabledBytes(key?.GetValue(name) as byte[]);
+        try
+        {
+            using var root = RegistryKey.OpenBaseKey(ApprovedHive(source), RegistryView.Registry64);
+            using var key = root.OpenSubKey(ApprovedPath(source));
+            return IsEnabledBytes(key?.GetValue(name) as byte[]);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { return true; }
     }
 
     private static void AddRunKey(List<StartupEntry> list, RegistryHive hive, string path, StartupSource source)
     {
-        using var root = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
-        using var key = root.OpenSubKey(path);
-        if (key is null) return;
-        foreach (string name in key.GetValueNames())
+        try
         {
-            string command = key.GetValue(name)?.ToString() ?? "";
-            if (name.Length == 0) continue;
-            list.Add(new StartupEntry(name, command, source, ReadApproved(source, name)));
+            using var root = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
+            using var key = root.OpenSubKey(path);
+            if (key is null) return;
+            foreach (string name in key.GetValueNames())
+            {
+                string command = key.GetValue(name)?.ToString() ?? "";
+                if (name.Length == 0) continue;
+                list.Add(new StartupEntry(name, command, source, ReadApproved(source, name)));
+            }
         }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { /* sem permissão para ler esta chave: fica de fora da lista */ }
     }
 
     private static void AddFolder(List<StartupEntry> list, string folder, StartupSource source)
     {
         if (!Directory.Exists(folder)) return;
-        foreach (string file in Directory.GetFiles(folder))
+        string[] files;
+        try { files = Directory.GetFiles(folder); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+        foreach (string file in files)
         {
             string name = Path.GetFileName(file);
             if (name.Equals("desktop.ini", StringComparison.OrdinalIgnoreCase)) continue;

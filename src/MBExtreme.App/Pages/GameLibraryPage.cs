@@ -45,8 +45,17 @@ public sealed class GameLibraryPage : ToolPageBase
         Body.Children.Add(_detail);
         Body.Children.Add(_grid);
         Body.Children.Add(Muted("Steam, Epic e GOG são lidos só para listar os jogos; nenhum arquivo deles é alterado. Os ajustes de otimização usam o catálogo do MB Extreme (com backup e desfazer).", 11));
+        Unloaded += (_, _) =>
+        {
+            AppServices.GameMeasure.Changed -= OnMeasureChanged;
+            AppServices.GameMeasure.Finished -= OnMeasureFinished;
+        };
         Loaded += async (_, _) =>
         {
+            AppServices.GameMeasure.Changed -= OnMeasureChanged;
+            AppServices.GameMeasure.Finished -= OnMeasureFinished;
+            AppServices.GameMeasure.Changed += OnMeasureChanged;
+            AppServices.GameMeasure.Finished += OnMeasureFinished;
             await LoadHardwareAsync();
             await ScanAsync();
         };
@@ -269,6 +278,10 @@ public sealed class GameLibraryPage : ToolPageBase
         var play = SmallButton("Jogar", (_, _) => Play(game), true);
         play.Margin = new Thickness(0, 0, 8, 6);
         buttons.Children.Add(play);
+        if (AppServices.GameMeasure.GameId == game.Id)
+            buttons.Children.Add(Tight(SmallButton("Parar medição de FPS", (_, _) => AppServices.GameMeasure.Stop(), true)));
+        else if (game.ExeName is not null)
+            buttons.Children.Add(Tight(SmallButton("Jogar e medir FPS", (_, _) => Play(game, true))));
         bool optimized = settings.OptimizedAt is not null;
         buttons.Children.Add(Tight(SmallButton(optimized ? "Reaplicar otimização" : "Otimizar para este jogo", async (_, _) => await OptimizeAsync(game, plan, profile), !optimized)));
         if (optimized) buttons.Children.Add(Tight(SmallButton("Desfazer otimização", async (_, _) => await UndoAsync(game))));
@@ -294,6 +307,7 @@ public sealed class GameLibraryPage : ToolPageBase
         var rows = await Task.Run(() => ReadRows(game, profile));
         if (_selected?.Id != game.Id) return;
         panel.Children.Add(BuildTable(rows));
+        panel.Children.Add(BuildPerformance(game));
         if (_maker == GpuMaker.Nvidia)
         {
             var adv = new CheckBox
@@ -494,7 +508,7 @@ public sealed class GameLibraryPage : ToolPageBase
         _ = RenderDetailAsync(game);
     }
 
-    private void Play(InstalledGame game)
+    private void Play(InstalledGame game, bool measure = false)
     {
         if (string.IsNullOrWhiteSpace(game.LaunchTarget))
         {
@@ -516,6 +530,12 @@ public sealed class GameLibraryPage : ToolPageBase
             if (!settings.BoostAuto) AppServices.Boost.SetAuto(true);
         }
 
+        if (measure)
+        {
+            string? problem = AppServices.GameMeasure.Start(game, AppServices.GameLibrary.Get(game.Id).OptimizedAt is not null);
+            if (problem is not null) { SetStatus(problem, "BadBrush"); return; }
+        }
+
         try
         {
             Process.Start(new ProcessStartInfo(game.LaunchTarget) { UseShellExecute = true, WorkingDirectory = game.Launcher == GameLauncher.Manual ? game.InstallPath : "" });
@@ -525,8 +545,54 @@ public sealed class GameLibraryPage : ToolPageBase
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException)
         {
+            if (measure) AppServices.GameMeasure.Stop();
             SetStatus("Não foi possível abrir: " + ex.Message, "BadBrush");
         }
+        if (measure) _ = RenderDetailAsync(game);
+    }
+
+    private void OnMeasureChanged(object? sender, EventArgs e) => SetStatus(AppServices.GameMeasure.Status, "OkBrush");
+
+    private void OnMeasureFinished(string gameId, PerfSession? session)
+    {
+        if (_selected?.Id == gameId) _ = RenderDetailAsync(_selected);
+    }
+
+    private UIElement BuildPerformance(InstalledGame game)
+    {
+        var sessions = AppServices.Perf.Get(game.Id);
+        var box = new StackPanel { Margin = new Thickness(0, 6, 0, 4) };
+        box.Children.Add(new TextBlock { Text = "Desempenho medido (FPS)", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        var cmp = PerfCompare.Build(sessions);
+        if (cmp.Before is not null && cmp.After is not null)
+        {
+            var grid = new Grid();
+            for (int c = 0; c < 4; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(c == 0 ? 1.4 : 1, GridUnitType.Star) });
+            void Cell(string text, int row, int col, string brush = "TextBrush", bool bold = false)
+            {
+                var t = new TextBlock { Text = text, FontSize = 11.5, Margin = new Thickness(0, 2, 8, 2), Foreground = Brush(brush), FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal };
+                Grid.SetRow(t, row); Grid.SetColumn(t, col); grid.Children.Add(t);
+            }
+            for (int r = 0; r < 4; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Cell("", 0, 0); Cell("Antes", 0, 1, "MutedBrush", true); Cell("Depois", 0, 2, "MutedBrush", true); Cell("Mudança", 0, 3, "MutedBrush", true);
+            string good = cmp.Verdict == Verdict.Worse ? "WarnBrush" : "OkBrush";
+            Cell("FPS médio", 1, 0); Cell($"{cmp.Before.AvgFps:0.#}", 1, 1); Cell($"{cmp.After.AvgFps:0.#}", 1, 2); Cell($"{cmp.AvgChangePercent:+0.#;-0.#;0}%", 1, 3, good, true);
+            Cell("1% pior", 2, 0); Cell($"{cmp.Before.Low1Fps:0.#}", 2, 1); Cell($"{cmp.After.Low1Fps:0.#}", 2, 2); Cell($"{cmp.LowChangePercent:+0.#;-0.#;0}%", 2, 3, good, true);
+            Cell("Duração", 3, 0); Cell($"{cmp.Before.Seconds} s", 3, 1); Cell($"{cmp.After.Seconds} s", 3, 2);
+            box.Children.Add(grid);
+        }
+        box.Children.Add(Muted(cmp.Message, 11));
+        foreach (string w in cmp.Warnings) box.Children.Add(Muted("• " + w, 10.5));
+        box.Children.Add(Muted(sessions.Count == 0
+            ? "Use \"Jogar e medir FPS\": o MB Extreme mede enquanto você joga e guarda a sessão ao fechar o jogo. Faça o mesmo trecho (2 a 3 minutos) antes e depois de otimizar. A medição lê eventos do Windows, sem mexer no jogo (antitrapaça), e precisa de administrador."
+            : $"{sessions.Count} sessão(ões) guardada(s). Para comparar com justiça, jogue o mesmo mapa/trecho.", 10.5));
+        if (sessions.Count > 0)
+        {
+            var clear = SmallButton("Apagar medidas deste jogo", (_, _) => { AppServices.Perf.Clear(game.Id); _ = RenderDetailAsync(game); });
+            clear.Margin = new Thickness(0, 4, 0, 0);
+            box.Children.Add(clear);
+        }
+        return box;
     }
 
     private void AddManual()

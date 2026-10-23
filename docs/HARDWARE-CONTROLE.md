@@ -35,3 +35,11 @@ Ao escolher um jogo, a tabela mostra cada ponto com o valor **agora** e o **reco
 Nada é gravado sem você clicar em **Otimizar**; as mudanças de driver e de placa pedem confirmação listando "antes → depois". O valor de antes fica em `%AppData%\MBExtreme\game-driver.json` e **Desfazer otimização** devolve (ou remove a configuração do perfil, se ela não existia). Reflex/Anti-Lag continuam sendo opções dentro do jogo.
 
 **Validação pendente:** o acesso ao NVAPI foi escrito a partir da interface pública e não pôde ser testado sem uma placa NVIDIA. Em caso de falha o programa mostra o código de erro e não altera nada. Teste primeiro com um jogo sem importância.
+
+## Biblioteca de jogos: medir FPS antes e depois
+
+Na tela do jogo, **Jogar e medir FPS** abre o jogo e mede os quadros por segundo enquanto você joga (mesmo monitor do painel de FPS: eventos DXGI do Windows, sem injetar nada no jogo, precisa de administrador). Ao fechar o jogo, a sessão (FPS médio, "1% pior", mínimo, máximo, duração) é guardada em `%AppData%\MBExtreme\performance.json` (últimas 20 por jogo). Sessões com menos de 20 s não valem.
+
+Cada sessão fica marcada como **antes** (jogo sem otimização) ou **depois** (otimizado pelo MB Extreme). A tela mostra a comparação entre a última medida de antes e a última de depois, com a porcentagem de mudança, e avisa quando as durações são muito diferentes, quando alguma sessão foi curta ou quando a diferença está dentro da variação normal. Se piorar, sugere desfazer e medir de novo.
+
+Limites: a comparação só é justa no mesmo mapa/trecho; tela cheia exclusiva e algumas APIs podem não ser detectadas (o app avisa depois de 3 minutos sem quadros); não foi testado em PC real ainda. Estimativa de ganho antes de medir não foi implementada.

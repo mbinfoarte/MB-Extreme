@@ -9,6 +9,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using MBExtreme.Core.Games;
+using MBExtreme.Core.Network;
 
 namespace MBExtreme.UI.Pages;
 
@@ -403,6 +404,8 @@ public sealed class GameLibraryPage : ToolPageBase
         var performance = new StackPanel();
         performance.Children.Add(BuildPerformance(game));
 
+        var network = BuildNetwork(game, settings.OptimizedAt is not null);
+
         var requirements = new StackPanel();
         if (info is { MinimumRequirements.Length: > 0 } or { RecommendedRequirements.Length: > 0 })
         {
@@ -411,8 +414,8 @@ public sealed class GameLibraryPage : ToolPageBase
         }
         else requirements.Children.Add(Muted("A loja não informou requisitos para este jogo.", 11));
 
-        var sections = new UIElement[] { summary, optimize, performance, requirements };
-        string[] names = { "Resumo", "Otimização", "Desempenho", "Requisitos" };
+        var sections = new UIElement[] { summary, optimize, performance, network, requirements };
+        string[] names = { "Resumo", "Otimização", "Desempenho", "Rede", "Requisitos" };
         _tab = Math.Clamp(_tab, 0, sections.Length - 1);
         void Show(int i)
         {
@@ -638,6 +641,192 @@ public sealed class GameLibraryPage : ToolPageBase
             SetStatus("Não foi possível abrir: " + ex.Message, "BadBrush");
         }
         if (measure) _ = RenderDetailAsync(game);
+    }
+
+    // ------------------------------------------------------------ rede: rota, ping e atraso sob carga
+
+    private CancellationTokenSource? _netCts;
+    private readonly TextBlock _netStatus = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11.5, Margin = new Thickness(0, 6, 0, 4) };
+    private readonly StackPanel _netResult = new();
+    private string _lastHost = "";
+    private string _manualHost = "";
+
+    private UIElement BuildNetwork(InstalledGame game, bool optimized)
+    {
+        var box = new StackPanel();
+        box.Children.Add(Muted("Descobre com quais servidores o jogo está falando, mede ping, perda e oscilação e mostra o caminho salto a salto para achar onde está o atraso. Só mede; não muda nada no PC. Abra o jogo e entre numa partida antes de analisar.", 11));
+
+        var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        bool running = _netCts is not null;
+        buttons.Children.Add(Tight(SmallButton("Analisar rota do jogo", async (_, _) => await AnalyzeGameAsync(game, optimized), !running)));
+        buttons.Children.Add(Tight(SmallButton("Teste de atraso sob carga", async (_, _) => await BufferbloatAsync())));
+        if (running) buttons.Children.Add(Tight(SmallButton("Parar", (_, _) => _netCts?.Cancel())));
+        box.Children.Add(buttons);
+
+        var hostRow = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        hostRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        hostRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var host = new TextBox { Text = _manualHost, ToolTip = "Endereço ou IP de um servidor para testar (ex.: o IP que o jogo mostra)" };
+        host.TextChanged += (_, _) => _manualHost = host.Text;
+        hostRow.Children.Add(host);
+        var test = SmallButton("Testar este endereço", async (_, _) => await ProbeManualAsync(host.Text));
+        test.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(test, 1);
+        hostRow.Children.Add(test);
+        box.Children.Add(hostRow);
+
+        // os mesmos blocos de texto são reaproveitados a cada desenho do painel: soltar do desenho anterior
+        (_netStatus.Parent as Panel)?.Children.Remove(_netStatus);
+        (_netResult.Parent as Panel)?.Children.Remove(_netResult);
+        box.Children.Add(_netStatus);
+        box.Children.Add(_netResult);
+
+        var reports = AppServices.NetReports.Get(game.Id);
+        var cmp = NetCompare.Build(reports);
+        box.Children.Add(new TextBlock { Text = "Ping antes e depois da otimização", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) });
+        box.Children.Add(Muted(cmp.Message, 11));
+        foreach (string w in cmp.Warnings) box.Children.Add(Muted("• " + w, 10.5));
+        if (reports.Count > 0)
+        {
+            var clear = SmallButton("Apagar medidas de rede deste jogo", (_, _) => { AppServices.NetReports.Clear(game.Id); _ = RenderDetailAsync(game); });
+            clear.Margin = new Thickness(0, 4, 0, 0);
+            box.Children.Add(clear);
+        }
+        box.Children.Add(Muted("Trocar o caminho dos pacotes (rota diferente da do seu provedor) precisa de um servidor próprio de repasse; veja docs/REDE-PRIVADA-JOGOS.md.", 10.5));
+        return box;
+    }
+
+    private void NetSay(string text, string brush = "MutedBrush")
+    {
+        _netStatus.Text = text;
+        _netStatus.Foreground = Brush(brush);
+    }
+
+    private async Task AnalyzeGameAsync(InstalledGame game, bool optimized)
+    {
+        if (_netCts is not null) return;
+        if (game.ExeName is null) { NetSay("Não sei qual é o executável deste jogo.", "WarnBrush"); return; }
+        var pids = GameConnections.PidsOf(game.ExeName);
+        if (pids.Count == 0) { NetSay($"O jogo não está aberto. Abra {game.Name} (botão Jogar), entre numa partida e clique em Analisar de novo.", "WarnBrush"); return; }
+
+        _netCts = new CancellationTokenSource();
+        var token = _netCts.Token;
+        _netResult.Children.Clear();
+        var watcher = new UdpEndpointWatcher();
+        try
+        {
+            string udpNote = "";
+            try { watcher.Start(); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                udpNote = " (sem permissão para ver o tráfego UDP; execute como administrador)";
+            }
+
+            for (int s = 8; s > 0; s--)
+            {
+                NetSay($"Observando as conexões do jogo ({s} s)...{udpNote}");
+                await Task.Delay(1000, token);
+            }
+
+            var all = new List<RemoteEndpoint>();
+            all.AddRange(await Task.Run(() => GameConnections.TcpEndpointsOf(pids), token));
+            all.AddRange(watcher.EndpointsOf(pids));
+            var targets = GameEndpoints.Top(all, 2);
+            if (targets.Count == 0)
+            {
+                NetSay("Não vi conexões do jogo com a internet. Entre numa partida online e tente de novo." + udpNote, "WarnBrush");
+                return;
+            }
+
+            bool first = true;
+            foreach (var target in targets)
+            {
+                string address = target.Address.ToString();
+                var progress = new Progress<string>(t => NetSay($"{address}:{target.Port} ({target.Protocol}) — {t}"));
+                var diagnosis = await RouteProbe.RunAsync(address, target.Protocol == "TCP" ? target.Port : 0, 15, 4, progress, token);
+                RenderDiagnosis(diagnosis, $"{target.Protocol} porta {target.Port}");
+                if (first && diagnosis.Samples > 0 && diagnosis.Verdict != "Sem resposta")
+                {
+                    AppServices.NetReports.Add(game.Id, new NetReport
+                    {
+                        At = DateTime.Now, Host = address, Optimized = optimized, AvgMs = Math.Round(diagnosis.Average, 1),
+                        JitterMs = Math.Round(diagnosis.Jitter, 1), LossPercent = Math.Round(diagnosis.LossPercent, 1), Samples = diagnosis.Samples,
+                    });
+                    _lastHost = address;
+                }
+                first = false;
+            }
+            NetSay("Análise concluída e guardada para comparar antes e depois.", "OkBrush");
+        }
+        catch (OperationCanceledException)
+        {
+            NetSay("Análise parada.");
+        }
+        finally
+        {
+            watcher.Dispose();
+            _netCts = null;
+        }
+        if (_selected?.Id == game.Id) await RenderDetailAsync(game);
+    }
+
+    private async Task ProbeManualAsync(string text)
+    {
+        string host = text.Trim();
+        if (_netCts is not null) return;
+        if (!NetAnalyzer.IsValidHost(host)) { NetSay("Escreva um endereço ou IP válido.", "WarnBrush"); return; }
+        _netCts = new CancellationTokenSource();
+        _netResult.Children.Clear();
+        try
+        {
+            var diagnosis = await RouteProbe.RunAsync(host, 443, 15, 4, new Progress<string>(t => NetSay($"{host} — {t}")), _netCts.Token);
+            RenderDiagnosis(diagnosis, "teste manual");
+            _lastHost = host;
+            NetSay("Teste concluído.", "OkBrush");
+        }
+        catch (OperationCanceledException) { NetSay("Teste parado."); }
+        finally { _netCts = null; }
+    }
+
+    private async Task BufferbloatAsync()
+    {
+        if (_netCts is not null) return;
+        _netCts = new CancellationTokenSource();
+        _netResult.Children.Clear();
+        try
+        {
+            string target = string.IsNullOrEmpty(_lastHost) ? "1.1.1.1" : _lastHost;
+            var result = await Bufferbloat.RunAsync(target, Http, new Progress<string>(t => NetSay(t)), _netCts.Token);
+            if (result is null) { NetSay("Sem resposta do servidor de teste (" + target + "). Verifique a internet.", "WarnBrush"); return; }
+            var card = new StackPanel { Margin = new Thickness(0, 4, 0, 4) };
+            card.Children.Add(new TextBlock { Text = $"Atraso sob carga: nota {result.Grade}", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = Brush(result.Grade is "A" or "B" ? "OkBrush" : result.Grade == "C" ? "WarnBrush" : "BadBrush") });
+            card.Children.Add(Muted($"Ping parado: {result.IdleMs:0} ms · durante download: {(result.DownloadLoadedMs is { } d ? d.ToString("0") + " ms" : "sem medida")} · durante upload: {(result.UploadLoadedMs is { } u ? u.ToString("0") + " ms" : "sem medida")}", 11));
+            card.Children.Add(Muted(result.Advice, 11));
+            _netResult.Children.Add(card);
+            NetSay("Teste concluído (usa o servidor de velocidade da Cloudflare só como carga).", "OkBrush");
+        }
+        catch (OperationCanceledException) { NetSay("Teste parado."); }
+        finally { _netCts = null; }
+    }
+
+    private void RenderDiagnosis(RouteDiagnosis d, string origin)
+    {
+        var card = new StackPanel { Margin = new Thickness(0, 6, 0, 6) };
+        string verdictBrush = d.Verdict is "Excelente" or "Bom" ? "OkBrush" : d.Verdict == "Regular" ? "WarnBrush" : "BadBrush";
+        card.Children.Add(new TextBlock { Text = $"{d.Host} · {d.Verdict}", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = Brush(verdictBrush) });
+        card.Children.Add(Muted($"{origin} · média {d.Average:0.#} ms (mín {d.Min:0.#}, máx {d.Max:0.#}) · oscilação {d.Jitter:0.#} ms · perda {d.LossPercent:0.#}% em {d.Samples} testes", 11));
+        foreach (var f in d.Findings)
+        {
+            string brush = f.Level == FindingLevel.Bad ? "BadBrush" : f.Level == FindingLevel.Warn ? "WarnBrush" : "MutedBrush";
+            card.Children.Add(new TextBlock { Text = (f.Level == FindingLevel.Info ? "• " : "▲ ") + f.Title, FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = Brush(brush), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
+            card.Children.Add(Muted(f.Detail, 10.5));
+        }
+        if (d.Hops.Count > 0)
+        {
+            string lines = string.Join("\n", d.Hops.Select(h => h.Received == 0 ? $"{h.Hop,2}  {h.Address,-18}  sem resposta" : $"{h.Hop,2}  {h.Address,-18}  {h.Average,6:0.#} ms  perda {h.LossPercent:0}%"));
+            card.Children.Add(new Expander { Header = $"Caminho salto a salto ({d.Hops.Count})", Foreground = Brush("TextBrush"), Content = new TextBlock { Text = lines, FontFamily = new System.Windows.Media.FontFamily("Consolas"), FontSize = 10.5, Foreground = Brush("MutedBrush") } });
+        }
+        _netResult.Children.Add(card);
     }
 
     private void OnMeasureChanged(object? sender, EventArgs e) => SetStatus(AppServices.GameMeasure.Status, "OkBrush");

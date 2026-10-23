@@ -32,6 +32,7 @@ internal static class AppServices
     public static GamePriorityService GamePriority { get; } = new(TweakStore);
     public static GameOptimizationService GameOptimization { get; } = new(Tweaks, GameLibrary);
     public static PerfStore Perf { get; } = new();
+    public static MBExtreme.Core.Network.NetReportStore NetReports { get; } = new();
     internal static GameMeasureController GameMeasure { get; } = new();
     public static NvApiDrs NvidiaDriver { get; } = new();
     public static GameDriverService GameDriver { get; } = new(NvidiaDriver, new RegistryGpuPreferenceStore(),

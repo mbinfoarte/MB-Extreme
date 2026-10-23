@@ -31,6 +31,7 @@ public sealed class GameLibraryPage : ToolPageBase
     private int _tier = 2;
     private string _steamPath = "";
     private bool _busy;
+    private bool _advanced;
 
     public GameLibraryPage() : base("Biblioteca de jogos",
         "Seus jogos instalados. Escolha um para abrir com o Modo Jogo, otimizar o PC para o tipo de jogo e a sua placa de vídeo, e ver os requisitos informados pela loja.")
@@ -293,6 +294,18 @@ public sealed class GameLibraryPage : ToolPageBase
         var rows = await Task.Run(() => ReadRows(game, profile));
         if (_selected?.Id != game.Id) return;
         panel.Children.Add(BuildTable(rows));
+        if (_maker == GpuMaker.Nvidia)
+        {
+            var adv = new CheckBox
+            {
+                Content = "Incluir ajustes avançados do driver (experimentais; cada um tem explicação e é desfeito pelo \"Desfazer otimização\")",
+                IsChecked = _advanced, Foreground = Brush("TextBrush"), FontSize = 11.5, Margin = new Thickness(0, 2, 0, 6),
+            };
+            adv.Click += async (_, _) => { _advanced = adv.IsChecked == true; await RenderDetailAsync(game); };
+            panel.Children.Add(adv);
+            if (DriverCatalog.For(game.ExeName) is { } cat)
+                panel.Children.Add(Muted($"Perfil de driver do catálogo: {cat.Title}. Fonte dos valores: NVIDIA Profile Inspector (licença MIT) e guias da comunidade; veja docs/PERFIS-DRIVER-NVIDIA.md.", 10.5));
+        }
 
         var tweakNames = plan.TweakIds.Select(id => AppServices.Tweaks.FirstOrDefault(t => t.Id == id)).Where(t => t is { Risk: MBExtreme.Core.Tweaks.TweakRisk.Low } t2 && t2.IsAvailable).Select(t => "• " + t!.Title).ToList();
         if (tweakNames.Count > 0) panel.Children.Add(new Expander { Header = $"O que será ajustado no Windows ({tweakNames.Count})", Content = Muted(string.Join("\n", tweakNames), 11), Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 0) });
@@ -334,7 +347,11 @@ public sealed class GameLibraryPage : ToolPageBase
             pre = AppServices.NvidiaDriver.Read(exe, DriverSettingIds.PreRenderLimit);
         }
         string? dlss = _maker == GpuMaker.Nvidia ? DlssInfo.Find(game.InstallPath) : null;
-        return GameCompare.Build(profile, _maker, new GameSnapshot(states, titles, high, gpu, driver, power, pre, dlss));
+        var catalog = DriverCatalog.SettingsFor(game.ExeName, _advanced);
+        var values = new Dictionary<uint, DriverValue?>();
+        if (driver && game.ExeName is { } exeCat)
+            foreach (var item in catalog) values[item.Id] = AppServices.NvidiaDriver.Read(exeCat, item.Id);
+        return GameCompare.Build(profile, _maker, new GameSnapshot(states, titles, high, gpu, driver, power, pre, dlss, values), catalog, DriverCatalog.For(game.ExeName)?.HasReflex ?? false);
     }
 
     private UIElement BuildTable(IReadOnlyList<SettingRow> rows)
@@ -408,10 +425,12 @@ public sealed class GameLibraryPage : ToolPageBase
 
     private async Task OptimizeAsync(InstalledGame game, OptimizationPlan plan, GameProfile profile)
     {
-        var driverPlan = DriverPlan.For(profile, _maker);
+        var catalogProfile = DriverCatalog.For(game.ExeName);
+        var driverPlan = DriverPlan.For(profile, _maker, catalogProfile?.HasReflex ?? false);
+        var catalogItems = _maker == GpuMaker.Nvidia ? DriverCatalog.SettingsFor(game.ExeName, _advanced) : Array.Empty<DriverSetting>();
         var pending = (await Task.Run(() => ReadRows(game, profile))).Where(r => r.CanFix && r.Group is "Driver NVIDIA" or "Placa de vídeo").ToList();
         bool withDriver = false;
-        if (pending.Count > 0 && !driverPlan.IsEmpty)
+        if (pending.Count > 0 && (!driverPlan.IsEmpty || catalogItems.Count > 0))
         {
             var ask = MessageBox.Show(
                 "Além dos ajustes do Windows, posso mudar estas configurações só para " + game.Name + ":\n\n" +
@@ -430,7 +449,7 @@ public sealed class GameLibraryPage : ToolPageBase
         if (withDriver && game.ExeName is { } exeName)
         {
             string? exePath = await Task.Run(() => GameFiles.FindExePath(game));
-            var drv = await Task.Run(() => AppServices.GameDriver.Apply(game.Id, exeName, exePath, driverPlan));
+            var drv = await Task.Run(() => AppServices.GameDriver.Apply(game.Id, exeName, exePath, driverPlan, catalogItems));
             if (drv.Applied.Count > 0) parts.Add($"{drv.Applied.Count} configuração(ões) de driver/placa");
             if (drv.Failed.Count > 0) parts.Add("driver: " + string.Join("; ", drv.Failed));
         }

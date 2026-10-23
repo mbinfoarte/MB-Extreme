@@ -184,4 +184,76 @@ public class ConfiguracaoPorJogoTests
         Assert.Equal(0x00011014u, NvApiDrs.Version(NvApiDrs.ProfileSize));
         Assert.Equal(0x00013008u, NvApiDrs.Version(NvApiDrs.AppSize));
     }
+
+    [Theory]
+    [InlineData("bf6.exe", "battlefield")]
+    [InlineData("BF2042.EXE", "battlefield")]
+    [InlineData("cs2.exe", "cs2")]
+    [InlineData("VALORANT-Win64-Shipping.exe", "valorant")]
+    [InlineData("r5apex_dx12.exe", "apex")]
+    public void Catalogo_AchaOJogoPeloExecutavel(string exe, string chave) => Assert.Equal(chave, DriverCatalog.For(exe)?.Key);
+
+    [Fact]
+    public void Catalogo_JogoDesconhecido_SoTemOAjusteSeguro()
+    {
+        Assert.Null(DriverCatalog.For("meujogo.exe"));
+        Assert.All(DriverCatalog.SettingsFor("meujogo.exe", advanced: true), x => Assert.False(x.Advanced));
+    }
+
+    [Fact]
+    public void Catalogo_AvancadoSoApareceQuandoLigado()
+    {
+        Assert.DoesNotContain(DriverCatalog.SettingsFor("bf6.exe", false), x => x.Advanced);
+        Assert.Contains(DriverCatalog.SettingsFor("bf6.exe", true), x => x.Id == DriverCatalog.ThreadedOptimization);
+    }
+
+    [Fact]
+    public void Catalogo_IdsDoInspector()
+    {
+        Assert.Equal(0x20C1221Eu, DriverCatalog.ThreadedOptimization);
+        Assert.Equal(0x00AC8497u, DriverCatalog.ShaderCacheSize);
+        Assert.Equal(0x10E41E01u, DriverCatalog.DlssOverride);
+        Assert.All(DriverCatalog.All, p => Assert.All(p.Settings, x => Assert.False(string.IsNullOrWhiteSpace(x.Why))));
+    }
+
+    [Fact]
+    public void PlanoDeDriver_JogoComReflex_NaoMexeNosQuadrosPreRenderizados()
+    {
+        var plan = DriverPlan.For(GameProfiles.Competitive, GpuMaker.Nvidia, hasReflex: true);
+        Assert.Equal(1u, plan.PowerMode);
+        Assert.Null(plan.PreRenderLimit);
+    }
+
+    [Fact]
+    public void Aplicar_AjustesDoCatalogo_GuardamEDesfazemMesmoEmOutraInstancia()
+    {
+        var d = new FakeDriver();
+        d.Own[("bf6.exe", DriverCatalog.ThreadedOptimization)] = 1;
+        string path = Path.Combine(Path.GetTempPath(), $"mbx-drv-{Guid.NewGuid():N}.json");
+        var g = new FakeGpu();
+        var extra = DriverCatalog.SettingsFor("bf6.exe", true);
+
+        var r = new GameDriverService(d, g, path).Apply("bf", "bf6.exe", null, DriverPlan.For(GameProfiles.Competitive, GpuMaker.Nvidia, true), extra);
+        Assert.Empty(r.Failed);
+        Assert.Equal(2u, d.Own[("bf6.exe", DriverCatalog.ThreadedOptimization)]);
+        Assert.Equal(0xFFFFFFFFu, d.Own[("bf6.exe", DriverCatalog.ShaderCacheSize)]);
+
+        var u = new GameDriverService(d, g, path).Undo("bf"); // reinício do programa: lê o backup do disco
+        Assert.Empty(u.Failed);
+        Assert.Equal(1u, d.Own[("bf6.exe", DriverCatalog.ThreadedOptimization)]);
+        Assert.False(d.Own.ContainsKey(("bf6.exe", DriverCatalog.ShaderCacheSize)));
+        Assert.Contains("Cache de shaders", u.Applied);
+    }
+
+    [Fact]
+    public void Tabela_MostraLinhasDoCatalogo()
+    {
+        var catalog = DriverCatalog.SettingsFor("cs2.exe", true);
+        var snap = new GameSnapshot(new Dictionary<string, bool?>(), new Dictionary<string, string>(), false, GpuPreferenceMode.HighPerformance, true,
+            new DriverValue(1, true), null, null, new Dictionary<uint, DriverValue?> { [DriverCatalog.ShaderCacheSize] = new DriverValue(0xFFFFFFFF, true) });
+        var rows = GameCompare.Build(GameProfiles.Competitive, GpuMaker.Nvidia, snap, catalog, hasReflex: true);
+        Assert.Equal(RowState.Ok, rows.Single(r => r.Title == "Cache de shaders").State);
+        Assert.Contains(rows, r => r.Title.Contains("(avançado)") && r.State == RowState.Info); // sem leitura: não oferece correção
+        Assert.DoesNotContain(rows, r => r.Title.StartsWith("Quadros pré-renderizados")); // Reflex manda
+    }
 }

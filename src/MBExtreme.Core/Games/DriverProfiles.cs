@@ -37,9 +37,10 @@ public sealed record DriverPlan(uint? PowerMode, uint? PreRenderLimit, GpuPrefer
 {
     public bool IsEmpty => PowerMode is null && PreRenderLimit is null && GpuPreference is null;
 
-    public static DriverPlan For(GameProfile profile, GpuMaker maker) => profile.Key switch
+    /// <summary>hasReflex: o jogo tem NVIDIA Reflex próprio; então os quadros pré-renderizados do driver ficam de fora (o Reflex manda).</summary>
+    public static DriverPlan For(GameProfile profile, GpuMaker maker, bool hasReflex = false) => profile.Key switch
     {
-        "competitive" => new DriverPlan(maker == GpuMaker.Nvidia ? 1u : null, maker == GpuMaker.Nvidia ? 1u : null, GpuPreferenceMode.HighPerformance),
+        "competitive" => new DriverPlan(maker == GpuMaker.Nvidia ? 1u : null, maker == GpuMaker.Nvidia && !hasReflex ? 1u : null, GpuPreferenceMode.HighPerformance),
         "openworld" or "racing" => new DriverPlan(maker == GpuMaker.Nvidia ? 1u : null, null, GpuPreferenceMode.HighPerformance),
         "app" => new DriverPlan(maker == GpuMaker.Nvidia ? 1u : null, null, GpuPreferenceMode.HighPerformance),
         _ => new DriverPlan(null, null, null),

@@ -44,3 +44,15 @@ Não existe um "perfil oficial" por jogo; o que há são guias com opiniões que
 6. **Teste antes de manter**: depois de aplicar, o assistente da Etapa 9 pede um teste curto (FPS/estabilidade) e oferece reverter.
 
 Limite: ainda não foi possível testar nada disto em placa NVIDIA real; o primeiro lote deve ser validado no seu PC antes de ampliar.
+
+## 4. Situação da implementação (23/10/2026)
+Pronto (`Core/Games/DriverCatalog.cs`, `GameCompare.cs`, tela da biblioteca):
+- Catálogo para Battlefield (6, 2042, V, 4, 1), CS2, Valorant, Apex, Fortnite e Warzone/CoD; jogo sem perfil próprio recebe só o ajuste seguro (cache de shaders sem limite).
+- Nível seguro: modo de energia, cache de shaders. **Avançado (caixa na tela do jogo):** otimização com threads desligada (Battlefield), textura em alto desempenho, sincronia vertical forçada desligada (CS2/Apex), DLSS com versão mais recente do driver (Battlefield/Fortnite/CoD).
+- Jogos com Reflex (todos acima) **não** recebem quadros pré-renderizados; o Reflex dentro do jogo manda.
+- Tudo aparece na tabela "Agora × Recomendado", pede confirmação, guarda o valor de antes e é desfeito por "Desfazer otimização" (inclusive depois de reiniciar o programa).
+
+Ficou de fora de propósito:
+- **Resizable BAR**: precisa de vários campos, um deles de 64 bits, que a nossa interface (só números de 32 bits) ainda não grava. Também depende da BIOS.
+- **Exportar/importar `.nip`**: não implementado; use o próprio Profile Inspector para isso.
+- **Detecção do perfil pré-existente**: o programa grava no perfil que o driver já tem para o jogo (ou cria um); ainda não mostra "este jogo já tem perfil da NVIDIA".

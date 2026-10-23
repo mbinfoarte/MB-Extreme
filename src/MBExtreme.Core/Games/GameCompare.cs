@@ -17,11 +17,12 @@ public sealed record GameSnapshot(
     bool DriverAvailable,
     DriverValue? PowerMode,
     DriverValue? PreRenderLimit,
-    string? DlssVersion);
+    string? DlssVersion,
+    IReadOnlyDictionary<uint, DriverValue?>? CatalogValues = null);
 
 public static class GameCompare
 {
-    public static IReadOnlyList<SettingRow> Build(GameProfile profile, GpuMaker maker, GameSnapshot snap)
+    public static IReadOnlyList<SettingRow> Build(GameProfile profile, GpuMaker maker, GameSnapshot snap, IReadOnlyList<DriverSetting>? catalog = null, bool hasReflex = false)
     {
         var rows = new List<SettingRow>();
 
@@ -38,7 +39,7 @@ public static class GameCompare
             snap.HighPriority == true ? RowState.Ok : snap.HighPriority == false ? RowState.Different : RowState.Info,
             "Ligada pelo botão \"Prioridade alta de CPU\"; vale toda vez que o jogo abre.", false));
 
-        var plan = DriverPlan.For(profile, maker);
+        var plan = DriverPlan.For(profile, maker, hasReflex);
         if (plan.GpuPreference is { } wantGpu && snap.GpuPreference is { } haveGpu)
             rows.Add(new SettingRow("Placa de vídeo", "Placa de vídeo usada pelo jogo", GpuPreference.Name(haveGpu), GpuPreference.Name(wantGpu),
                 haveGpu == wantGpu ? RowState.Ok : RowState.Different,
@@ -57,6 +58,12 @@ public static class GameCompare
                 if (plan.PreRenderLimit is { } wantPre)
                     rows.Add(DriverRow("Quadros pré-renderizados (baixa latência)", snap.PreRenderLimit, wantPre, v => v == 0 ? "Padrão do driver" : v.ToString(),
                         "Valor 1 reduz o atraso entre o clique e a imagem. Se o jogo tiver NVIDIA Reflex, prefira ligar o Reflex dentro dele."));
+                foreach (var item in catalog ?? Array.Empty<DriverSetting>())
+                {
+                    DriverValue? now = snap.CatalogValues is not null && snap.CatalogValues.TryGetValue(item.Id, out var v) ? v : null;
+                    var row = DriverRow(item.Title + (item.Advanced ? " (avançado)" : ""), now, item.Value, x => x == item.Value ? item.ValueText : "Valor 0x" + x.ToString("X"), item.Why);
+                    rows.Add(row);
+                }
             }
         }
 
@@ -140,7 +147,7 @@ public sealed class GameDriverService
 
     public bool HasBackup(string gameId) { lock (_lock) return Load().ContainsKey(gameId); }
 
-    public DriverApplyResult Apply(string gameId, string exeName, string? exePath, DriverPlan plan)
+    public DriverApplyResult Apply(string gameId, string exeName, string? exePath, DriverPlan plan, IReadOnlyList<DriverSetting>? extra = null)
     {
         var applied = new List<string>();
         var failed = new List<string>();
@@ -162,8 +169,9 @@ public sealed class GameDriverService
                 if (error is null) applied.Add(label); else failed.Add($"{label}: {error}");
             }
 
-            Driver(DriverSettingIds.PowerMode, plan.PowerMode, "Modo de gerenciamento de energia");
-            Driver(DriverSettingIds.PreRenderLimit, plan.PreRenderLimit, "Quadros pré-renderizados");
+            Driver(DriverSettingIds.PowerMode, plan.PowerMode, DriverCatalog.TitleOf(DriverSettingIds.PowerMode));
+            Driver(DriverSettingIds.PreRenderLimit, plan.PreRenderLimit, DriverCatalog.TitleOf(DriverSettingIds.PreRenderLimit));
+            foreach (var item in extra ?? Array.Empty<DriverSetting>()) Driver(item.Id, item.Value, item.Title);
 
             if (plan.GpuPreference is { } gpu && !string.IsNullOrEmpty(saved.ExePath))
             {
@@ -201,7 +209,7 @@ public sealed class GameDriverService
             foreach (var (id, old) in saved.Driver.ToList())
             {
                 string? error = old is { } v ? _driver.Write(saved.Exe, id, v) : _driver.Remove(saved.Exe, id);
-                if (error is null) { reverted.Add(id == DriverSettingIds.PowerMode ? "Modo de gerenciamento de energia" : "Quadros pré-renderizados"); saved.Driver.Remove(id); }
+                if (error is null) { reverted.Add(DriverCatalog.TitleOf(id)); saved.Driver.Remove(id); }
                 else failed.Add(error);
             }
 

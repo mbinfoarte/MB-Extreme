@@ -329,7 +329,7 @@ public sealed class GameLibraryPage : ToolPageBase
 
     private sealed record GameView(
         InstalledGame Game, SteamStoreInfo? Info, GameSettings Settings, GameProfile Profile, OptimizationPlan Plan,
-        IReadOnlyList<SettingRow> Rows, IReadOnlyList<SettingRow> NetRows);
+        IReadOnlyList<SettingRow> Rows, IReadOnlyList<SettingRow> NetRows, RequirementReport? Requirements = null);
 
     private GameView? _view;
     private bool _expanded;
@@ -357,7 +357,20 @@ public sealed class GameLibraryPage : ToolPageBase
         var netRows = await Task.Run(() => ReadNetworkRows(game));
         if (_selected?.Id != game.Id) return;
 
-        _view = new GameView(game, info, settings, profile, plan, rows, netRows);
+        // compara o PC com os requisitos da loja (estimativa pelo nível do processador e da placa)
+        RequirementReport? requirements = null;
+        if (info is { MinimumRequirements.Length: > 0 } or { RecommendedRequirements.Length: > 0 })
+        {
+            try
+            {
+                var hw = await AppServices.Hardware();
+                requirements = RequirementChecker.Check(info!.MinimumRequirements, info.RecommendedRequirements, MachineProfile.From(hw));
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.Management.ManagementException or AggregateException) { }
+        }
+        if (_selected?.Id != game.Id) return;
+
+        _view = new GameView(game, info, settings, profile, plan, rows, netRows, requirements);
         Paint();
     }
 
@@ -513,8 +526,10 @@ public sealed class GameLibraryPage : ToolPageBase
 
         // 4) requisitos
         string req = info is { MinimumRequirements.Length: > 0 } ? Shorten(info.MinimumRequirements, 150) : "A loja não informou requisitos para este jogo.";
-        panel.Children.Add(InfoCard("Requisitos", info is { MinimumRequirements.Length: > 0 } ? "Mínimos informados pela loja" : "Sem requisitos informados",
-            info is { MinimumRequirements.Length: > 0 } ? "TextBrush" : "MutedBrush", req, "Ver detalhes", () => OpenDetails(3)));
+        bool hasReq = info is { MinimumRequirements.Length: > 0 };
+        string reqLine = v.Requirements is { Verdict: not Fit.Unknown } rr ? rr.Summary : hasReq ? "Mínimos informados pela loja" : "Sem requisitos informados";
+        string reqBrush = v.Requirements?.Verdict switch { Fit.Recommended => "OkBrush", Fit.Minimum => v.Requirements.Summary.Contains("por pouco") ? "WarnBrush" : "OkBrush", Fit.Below => "BadBrush", _ => hasReq ? "TextBrush" : "MutedBrush" };
+        panel.Children.Add(InfoCard("Requisitos", reqLine, reqBrush, req, "Ver detalhes", () => OpenDetails(3)));
         return panel;
     }
 
@@ -660,6 +675,7 @@ public sealed class GameLibraryPage : ToolPageBase
             default:
                 var info = v.Info;
                 if (info is { ShortDescription.Length: > 0 }) panel.Children.Add(Muted(info.ShortDescription, 11.5));
+                if (v.Requirements is { Verdict: not Fit.Unknown } or { Minimum.Count: > 0 }) panel.Children.Add(RequirementTable(v.Requirements!));
                 if (info is { MinimumRequirements.Length: > 0 } or { RecommendedRequirements.Length: > 0 })
                 {
                     if (info!.MinimumRequirements.Length > 0) panel.Children.Add(Muted("\n" + info.MinimumRequirements, 11.5));
@@ -669,6 +685,36 @@ public sealed class GameLibraryPage : ToolPageBase
                 break;
         }
 
+        return panel;
+    }
+
+    /// <summary>Seu PC contra o que o jogo pede: cada item com ✓, ≈ (por pouco) ou ✗.</summary>
+    private UIElement RequirementTable(RequirementReport report)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 4) };
+        string brush = report.Verdict switch { Fit.Recommended => "OkBrush", Fit.Minimum => "OkBrush", Fit.Below => "BadBrush", _ => "MutedBrush" };
+        panel.Children.Add(new TextBlock { Text = report.Summary, FontWeight = FontWeights.SemiBold, FontSize = 14, TextWrapping = TextWrapping.Wrap, Foreground = Brush(brush) });
+        void Section(string title, IReadOnlyList<RequirementItem> items)
+        {
+            if (items.Count == 0) return;
+            panel.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 2) });
+            foreach (var item in items)
+            {
+                string mark = item.Status switch { ItemStatus.Ok => "✓", ItemStatus.Close => "≈", ItemStatus.Below => "✗", ItemStatus.Info => "·", _ => "?" };
+                string color = item.Status switch { ItemStatus.Ok => "OkBrush", ItemStatus.Close => "WarnBrush", ItemStatus.Below => "BadBrush", _ => "MutedBrush" };
+                var line = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
+                var head = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+                head.Inlines.Add(new System.Windows.Documents.Run(mark + "  ") { Foreground = Brush(color), FontWeight = FontWeights.Bold });
+                head.Inlines.Add(new System.Windows.Documents.Run(item.Name + ": ") { FontWeight = FontWeights.SemiBold });
+                head.Inlines.Add(new System.Windows.Documents.Run($"pede {item.Required} · você tem {item.Yours}") { Foreground = Brush("MutedBrush") });
+                line.Children.Add(head);
+                if (item.Note is { Length: > 0 } note && item.Status is not ItemStatus.Ok) line.Children.Add(Muted(note, 11));
+                panel.Children.Add(line);
+            }
+        }
+        Section("Mínimo", report.Minimum);
+        Section("Recomendado", report.Recommended);
+        panel.Children.Add(Muted("A comparação de processador e placa de vídeo é uma estimativa pelo nível do modelo (tabela do MB Extreme), não um teste. Memória, memória de vídeo e Windows são números exatos.", 11));
         return panel;
     }
 

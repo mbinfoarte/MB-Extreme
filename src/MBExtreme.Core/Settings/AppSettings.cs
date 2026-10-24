@@ -234,6 +234,24 @@ public sealed class AppSettings
 
     public string? StudioVerticalBottomSource { get; set; }
 
+    /// <summary>Gravar também uma cópia vertical, ao mesmo tempo que o vídeo normal.</summary>
+    public bool StudioVerticalCopy { get; set; }
+
+    // ---- criador de vídeos curtos (Shorts, Reels)
+    public int ShortsFormat { get; set; }
+
+    /// <summary>0 = inteira com fundo desfocado, 1 = preencher, 2 = dividida (jogo em cima e recorte embaixo).</summary>
+    public int ShortsMode { get; set; }
+
+    public int ShortsFocus { get; set; } = 50;
+
+    /// <summary>Canto do vídeo que aparece aproximado embaixo: 0 = sup. esquerdo, 1 = sup. direito, 2 = inf. esquerdo, 3 = inf. direito.</summary>
+    public int ShortsCorner { get; set; } = 3;
+
+    public int ShortsFps { get; set; } = 30;
+
+    public int ShortsMbps { get; set; } = 12;
+
     // ---- legendas automáticas ao vivo
     public bool StudioCaptionOn { get; set; }
 

@@ -92,11 +92,12 @@ public sealed record VerticalLayout(int Width, int Height, bool Split, int TopPe
 public static class VerticalGraph
 {
     /// <summary>Entradas extras do FFmpeg (câmera ou arquivo de cada parte), na ordem em que as partes aparecem.</summary>
-    public static IReadOnlyList<string[]> ExtraInputs(VerticalLayout layout, int fps)
+    public static IReadOnlyList<string[]> ExtraInputs(VerticalLayout layout, int fps, Func<VerticalPane, bool>? shared = null)
     {
         var list = new List<string[]>();
         foreach (var pane in layout.Panes)
         {
+            if (pane.Kind == PaneKind.Camera && shared?.Invoke(pane) == true) continue;   // a câmera já está aberta por outra parte do vídeo
             if (pane.Kind == PaneKind.Camera)
                 list.Add(new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + pane.Source });
             else if (pane.Kind == PaneKind.File)
@@ -111,19 +112,20 @@ public static class VerticalGraph
     /// Partes do filtro, terminando em <c>[b0]</c>. <paramref name="screen"/> é o trecho que entrega a captura já em BGRA (com os filtros de cor), terminado em <c>[scr]</c>.
     /// <paramref name="firstExtra"/> é o número da primeira entrada extra no FFmpeg.
     /// </summary>
-    public static List<string> Build(VerticalLayout layout, string screen, int firstExtra)
+    public static List<string> Build(VerticalLayout layout, string screen, int firstExtra, string prefix = "", Func<VerticalPane, string?>? sharedCamera = null)
     {
+        string p = prefix;
         var parts = new List<string> { screen };
         var panes = layout.Panes.ToList();
         int screens = panes.Count(p => p.Kind == PaneKind.Screen);
         var screenLabels = new Queue<string>();
         if (screens == 2)
         {
-            parts.Add("[scr]split=2[sa][sb]");
-            screenLabels.Enqueue("[sa]");
-            screenLabels.Enqueue("[sb]");
+            parts.Add($"[{p}scr]split=2[{p}sa][{p}sb]");
+            screenLabels.Enqueue($"[{p}sa]");
+            screenLabels.Enqueue($"[{p}sb]");
         }
-        else screenLabels.Enqueue("[scr]");
+        else screenLabels.Enqueue($"[{p}scr]");
 
         int extra = firstExtra;
         var outputs = new List<string>();
@@ -131,35 +133,36 @@ public static class VerticalGraph
         {
             var pane = panes[i];
             int h = i == 0 ? layout.TopHeight : layout.BottomHeight;
-            string input = pane.Kind == PaneKind.Screen ? screenLabels.Dequeue() : $"[{extra++}:v]format=bgra,";
-            string label = i == 0 ? "[pt]" : "[pb]";
-            AddPane(parts, input, pane, layout.Width, h, label, "p" + i);
+            string? shared = pane.Kind == PaneKind.Camera ? sharedCamera?.Invoke(pane) : null;
+            string input = pane.Kind == PaneKind.Screen ? screenLabels.Dequeue() : shared is not null ? $"{shared}format=bgra," : $"[{extra++}:v]format=bgra,";
+            string label = i == 0 ? $"[{p}pt]" : $"[{p}pb]";
+            AddPane(parts, input, pane, layout.Width, h, label, p + "p" + i);
             outputs.Add(label);
         }
 
         if (!layout.Split)
         {
-            parts.Add($"{outputs[0]}null[b0]");
+            parts.Add($"{outputs[0]}null[{p}b0]");
             return parts;
         }
 
-        string joined = layout.Divider ? "[bv]" : "[b0]";
+        string joined = layout.Divider ? $"[{p}bv]" : $"[{p}b0]";
         if (panes[0].Kind == PaneKind.Screen)
         {
             // a tela manda no ritmo do vídeo: ela é o fundo e a outra parte entra por cima
-            parts.Add($"[pt]pad={layout.Width}:{layout.Height}:0:0:black[bp]");
-            parts.Add($"[bp][pb]overlay=0:{layout.TopHeight}:shortest=0{joined}");
+            parts.Add($"[{p}pt]pad={layout.Width}:{layout.Height}:0:0:black[{p}bp]");
+            parts.Add($"[{p}bp][{p}pb]overlay=0:{layout.TopHeight}:shortest=0{joined}");
         }
         else
         {
-            parts.Add($"[pb]pad={layout.Width}:{layout.Height}:0:{layout.TopHeight}:black[bp]");
-            parts.Add($"[bp][pt]overlay=0:0:shortest=0{joined}");
+            parts.Add($"[{p}pb]pad={layout.Width}:{layout.Height}:0:{layout.TopHeight}:black[{p}bp]");
+            parts.Add($"[{p}bp][{p}pt]overlay=0:0:shortest=0{joined}");
         }
 
         if (layout.Divider)
         {
             int thickness = Math.Max(2, layout.Width / 270) & ~1;
-            parts.Add($"[bv]drawbox=x=0:y={layout.TopHeight - thickness / 2}:w=iw:h={thickness}:color=0xFFC400:t=fill[b0]");
+            parts.Add($"[{p}bv]drawbox=x=0:y={layout.TopHeight - thickness / 2}:w=iw:h={thickness}:color=0xFFC400:t=fill[{p}b0]");
         }
         return parts;
     }

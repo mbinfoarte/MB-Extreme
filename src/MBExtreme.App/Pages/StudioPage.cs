@@ -1975,6 +1975,8 @@ public sealed partial class StudioPage : ToolPageBase
         // ---- vídeo vertical e legendas
         var vertical = CurrentVertical();
         if (vertical?.Validate() is { } verticalProblem) return (null, verticalProblem);
+        var verticalCopy = CurrentVerticalCopy();
+        if (verticalCopy?.Validate() is { } copyProblem) return (null, copyProblem);
         var captions = CurrentCaptions();
         if (captions is not null && !SpeechInstaller.IsInstalled) return (null, "Baixe o modelo de voz na aba Vertical para usar as legendas.");
 
@@ -1990,7 +1992,7 @@ public sealed partial class StudioPage : ToolPageBase
         var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
             _s.StudioFps, encoder, _s.StudioBitrateMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
             _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), cameras, pix, pixPayload,
-            imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey(), vertical, captions);
+            imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey(), vertical, captions, verticalCopy);
         return (config, null);
     }
 

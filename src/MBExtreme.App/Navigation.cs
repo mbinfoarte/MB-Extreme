@@ -37,6 +37,7 @@ internal static class NavigationMap
         new("record", "Gravação e transmissão", "Grave a tela, transmita ao vivo e salve replays.", "\uE714", new Tile[]
         {
             new("record", "Gravação e transmissão", "Grave, transmita ao vivo e salve replays, com áudio, câmera e escolha de janela.", "\uE714"),
+            new("shorts", "Vídeos curtos (Shorts e Reels)", "Corte um vídeo longo em vários vídeos verticais, na mão ou pelos momentos mais fortes.", "\uE8B2"),
         }),
         new("test", "Testes", "Informações, sensores, benchmark e estresse.", "\uE9D9", new Tile[]
         {

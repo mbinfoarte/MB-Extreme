@@ -34,7 +34,8 @@ internal sealed record StudioConfig(
     IReadOnlyList<OverlayLayer>? Layers = null,
     string? LayersKey = null,
     VerticalLayout? Vertical = null,
-    CaptionConfig? Captions = null);
+    CaptionConfig? Captions = null,
+    VerticalLayout? VerticalCopy = null);
 
 /// <summary>Legendas automáticas ao vivo: de onde vem a voz e como a legenda aparece.</summary>
 internal sealed record CaptionConfig(bool Microphone, int Size, CaptionPosition Position, CaptionColor Color, bool Uppercase);
@@ -152,6 +153,8 @@ internal sealed class StudioController
             Layers = config.Layers ?? Array.Empty<OverlayLayer>(),
             Vertical = vertical,
             Captions = captionOverlay,
+            VerticalCopy = config.Record ? config.VerticalCopy : null,
+            VerticalFile = config.Record && config.VerticalCopy is not null ? "gravacao-" + stamp + "-vertical" + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             WorkingDirectory = Folder,
             RecordFile = config.Record ? "gravacao-" + stamp + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             RecordMp4 = config.Mp4,
@@ -206,6 +209,7 @@ internal sealed class StudioController
         parts.Add("filtro:" + c.Filter?.ToChain());
         if (c.Vertical is { } v)
             parts.Add($"vertical:{v.Width}x{v.Height}:{v.Split}:{v.TopPercent}:{v.Divider}:" + string.Join(",", v.Panes.Select(p => $"{p.Kind}/{p.Fit}/{p.Fx}/{p.Fy}/{p.Zoom}/{p.Source}")));
+        if (c.VerticalCopy is { } vc) parts.Add($"copia-vertical:{vc.Width}x{vc.Height}:{vc.Split}:{vc.TopPercent}:{vc.Divider}:" + string.Join(",", vc.Panes.Select(p => $"{p.Kind}/{p.Fit}/{p.Fx}/{p.Fy}/{p.Zoom}/{p.Source}")));
         if (c.Captions is { } cap) parts.Add($"legenda:{cap.Microphone}:{cap.Size}:{cap.Position}:{cap.Color}:{cap.Uppercase}");
         foreach (var layer in c.Layers ?? Array.Empty<OverlayLayer>()) parts.Add($"camada:{layer.Kind}:{layer.Corner}:{layer.WidthPercent}:{layer.StartSeconds}:{layer.EveryMinutes}:{layer.ShowSeconds}");
         parts.Add("identidade:" + c.LayersKey);

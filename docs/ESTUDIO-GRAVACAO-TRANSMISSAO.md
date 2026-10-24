@@ -147,3 +147,22 @@ Feito sem placa RTX e sem inteligência artificial:
 - **Câmera virtual do NVIDIA Broadcast**: aparece na lista de câmeras e traz fundo virtual, enquadramento automático e contato visual sem esforço do nosso app.
 
 Não feito (exige IA/RTX): fundo virtual próprio, enquadramento automático, contato visual, super resolução, geração de quadros, remoção de eco da sala. Ideias futuras: teste do microfone com medidor e gravação curta, luz-chave com gradiente (máscara radial), zoom e posição manuais por câmera.
+
+## Cópia vertical automática e vídeos curtos
+
+### Cópia vertical ao gravar (aba Vertical)
+Marque **"Gravar também uma cópia vertical"**: enquanto grava o vídeo normal (horizontal), o mesmo FFmpeg recorta e monta, em tempo real, um segundo arquivo `gravacao-…-vertical` em 9:16 (ou o formato escolhido), com o mesmo áudio. O enquadramento é o da aba (tela inteira com fundo desfocado, preencher cortando, ou dividida com recorte aproximado, como a câmera do canto). Se a câmera usada embaixo é a mesma câmera pequena do canto, ela é aberta uma vez só e dividida entre as duas saídas. Cuidados: usa dois codificadores da placa ao mesmo tempo (placas antigas podem perder quadros), só vale com a gravação ligada, e o replay e a transmissão continuam no vídeo normal. O recorte é **fixo** (não segue o mouse nem o jogador).
+
+### Vídeos curtos (página "Vídeos curtos", dentro de Gravação e transmissão)
+Escolha uma gravação longa (ou uma das recentes) e gere vários vídeos verticais em MP4:
+- **Cortes na mão** (início e fim, de 3 a 180 s), **divididos por tempo** (30, 45, 60 ou 90 s) ou **sugeridos pelos momentos mais fortes**: o app mede o volume do áudio a cada segundo, compara com o volume normal do vídeo e escolhe os picos (gritos, comemorações, lances), com 10 s antes e 15 s depois, sem sobreposição.
+- **Montagem**: inteira com fundo desfocado, preencher cortando ou dividida (vídeo em cima e um canto aproximado embaixo, útil para câmera do apresentador ou minimapa).
+- Tamanho (de 720×1280 a 2160×3840), 30 ou 60 quadros e taxa; usa o codificador da placa (ou o processador se não houver). Os arquivos saem em `Vídeos\MB Extreme\Curtos\<nome do vídeo>`.
+
+Limites: sem legenda nos cortes ainda, sem rastreio de rosto, a sugestão por som só enxerga volume (não entende o conteúdo), e nada disso foi testado em PC real.
+
+### O que a pesquisa mostrou (e ideias para as próximas versões)
+- O plugin **Aitum Vertical** do OBS adiciona uma tela vertical paralela à horizontal, com cenas separadas e gravação/transmissão simultâneas; relatos dizem que dois codificadores dobram o trabalho da placa ([guia](https://obs-versions.com/blog/obs-vertical-streaming-guide), [fórum do OBS](https://obsproject.com/forum/threads/aitum-vertical.166504/page-11)). Nossa cópia vertical faz o equivalente dentro do mesmo FFmpeg.
+- Ferramentas como o **OpusClip** transformam vídeo longo em curtos com enquadramento automático que segue quem fala, legendas animadas e nota de "potencial viral" ([resumo](https://www.castmagic.io/software-reviews/opus-clip)). Próximos passos viáveis: legenda automática nos cortes (Vosk no áudio do arquivo e queimar no vídeo), legendas animadas (palavra em destaque, arquivo ASS), rastreio de rosto para o recorte seguir o apresentador e uma nota por corte (volume + densidade de fala).
+- O recorte que **segue o mouse ou o jogo** ao vivo é possível enviando comandos ao filtro `crop` por ZeroMQ (`zmq`) ou `sendcmd`; as discussões do FFmpeg indicam enviar posições absolutas de x/y a cada quadro, e exige um FFmpeg com `libzmq` ([discussão](https://ffmpeg.org/pipermail/ffmpeg-user/2018-June/040076.html), [limitações do crop](https://trac.ffmpeg.org/ticket/11438)). Fica como fase futura.
+- Outras ideias para o app: exportar legenda em SRT junto do vídeo, título e hashtags sugeridos para cada corte, miniatura (capa) automática, publicar direto no YouTube/Instagram/TikTok (exige apps OAuth de cada rede), modelo de voz maior opcional e cenas verticais salvas com atalho.

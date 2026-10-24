@@ -61,6 +61,15 @@ public static class StudioCommand
             if (v.Panes.Count(p => p.Kind == PaneKind.Camera) == 2 && string.Equals(v.Top.Source, v.Bottom.Source, StringComparison.OrdinalIgnoreCase))
                 return "As duas partes usam a mesma câmera; escolha câmeras diferentes.";
         }
+        if (r.VerticalCopy is { } copy)
+        {
+            if (r.Vertical is not null) return "A cópia vertical não vale quando o vídeo principal já é vertical.";
+            if (r.RecordFile is null) return "A cópia vertical é gravada junto com a gravação: ligue a opção Gravar.";
+            if (string.IsNullOrWhiteSpace(r.VerticalFile) || r.VerticalFile.IndexOfAny(new[] { '"', '|', '\'', ';', '[', ']' }) >= 0) return "O arquivo da cópia vertical não é válido.";
+            if (copy.Validate() is { } cp) return cp;
+            var names = copy.Panes.Where(p => p.Kind == PaneKind.Camera).Select(p => p.Source ?? "").ToList();
+            if (names.Count == 2 && string.Equals(names[0], names[1], StringComparison.OrdinalIgnoreCase)) return "As duas partes da cópia vertical usam a mesma câmera; escolha câmeras diferentes.";
+        }
         if (r.Captions is { } c)
         {
             if (!CaptionOverlay.IsValidPath(c.Line1File) || !CaptionOverlay.IsValidPath(c.Line2File) || !CaptionOverlay.IsValidPath(c.FontFile))
@@ -118,10 +127,18 @@ public static class StudioCommand
         // ---- câmeras e QR do Pix (entradas extras, depois do vídeo e do áudio)
         int firstExtra = audio ? 2 : 1;
         int verticalFirst = firstExtra;
+        int copyFirst = 0;
         if (r.Vertical is { } vertical)
         {
             foreach (var input in VerticalGraph.ExtraInputs(vertical, fps)) args.AddRange(input);
             firstExtra += vertical.Panes.Count(p => p.Kind != PaneKind.Screen);
+        }
+        if (r.VerticalCopy is { } copyLayout)
+        {
+            copyFirst = firstExtra;
+            var shared = SharedCameraTest(r);
+            foreach (var input in VerticalGraph.ExtraInputs(copyLayout, fps, shared)) args.AddRange(input);
+            firstExtra += copyLayout.Panes.Count(p => p.Kind == PaneKind.File || (p.Kind == PaneKind.Camera && !shared(p)));
         }
         foreach (var camera in r.Cameras)
             args.AddRange(new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + camera.DeviceName });
@@ -133,9 +150,9 @@ public static class StudioCommand
         // ---- filtros
         string? filter = null;
         string? complex = null;
-        if (r.Cameras.Count > 0 || r.Pix is not null || r.Layers.Count > 0 || r.Filter is { IsNeutral: false } || r.Vertical is not null || r.Captions is not null)
+        if (r.Cameras.Count > 0 || r.Pix is not null || r.Layers.Count > 0 || r.Filter is { IsNeutral: false } || r.Vertical is not null || r.Captions is not null || r.VerticalCopy is not null)
         {
-            complex = OverlayGraph(r, firstExtra, verticalFirst, gdi, sameSize);
+            complex = OverlayGraph(r, firstExtra, verticalFirst, copyFirst, gdi, sameSize);
         }
         else if (gdi)
         {
@@ -192,6 +209,19 @@ public static class StudioCommand
             outputs.Add($"[f=segment:segment_time={SegmentSeconds}:segment_wrap={ReplaySegmentCount(r.ReplaySeconds)}:reset_timestamps=1:segment_format=matroska:onfail=ignore]{folder}/seg%03d.mkv");
         }
         args.AddRange(new[] { "-f", "tee", string.Join("|", outputs) });
+
+        // ---- cópia vertical: segunda saída (arquivo próprio) com a mesma captura e o mesmo áudio
+        if (r.VerticalCopy is { } verticalCopy && r.VerticalFile is { } verticalFile)
+        {
+            int copyMbps = Math.Clamp(FfmpegCommand.DefaultBitrateMbps(verticalCopy.Width, verticalCopy.Height, fps), 4, 30);
+            args.AddRange(new[] { "-map", "[vv]", "-c:v", r.Encoder.FfmpegName });
+            args.AddRange(QualityArgs(r.Encoder, r.Quality));
+            args.AddRange(new[] { "-b:v", copyMbps + "M", "-maxrate", (int)Math.Ceiling(copyMbps * 1.5) + "M", "-bufsize", copyMbps * 2 + "M", "-g", (fps * 2).ToString(), "-flags", "+global_header" });
+            if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", Math.Clamp(r.AudioKbps, 64, 320) + "k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
+            args.AddRange(r.RecordMp4
+                ? new[] { "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof", verticalFile }
+                : new[] { "-f", "matroska", verticalFile });
+        }
         return args;
     }
 
@@ -216,15 +246,27 @@ public static class StudioCommand
     /// Filtro com a imagem da tela e, por cima, as câmeras e o QR do Pix. As câmeras são medidas em % da largura da tela capturada, antes de reduzir.
     /// Cada camada vira o fundo da próxima: [b0] + câmera 1 = [b1], [b1] + câmera 2 = [b2]...
     /// </summary>
-    private static string OverlayGraph(StudioRequest r, int firstExtra, int verticalFirst, bool gdi, bool sameSize)
+    private static string OverlayGraph(StudioRequest r, int firstExtra, int verticalFirst, int copyFirst, bool gdi, bool sameSize)
     {
         int baseWidth = r.Vertical is { } vl ? vl.Width : gdi ? r.OutputWidth : r.Source.Area.Width;
         int margin = Math.Max(8, baseWidth / 80);
         string mainFilter = r.Filter?.ToChain() is { } chain ? "," + chain : "";
         string screen = (gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra") + mainFilter;
-        var parts = r.Vertical is { } vertical
-            ? VerticalGraph.Build(vertical, screen + "[scr]", verticalFirst)
-            : new List<string> { screen + "[b0]" };
+        List<string> parts;
+        if (r.Vertical is { } vertical) parts = VerticalGraph.Build(vertical, screen + "[scr]", verticalFirst);
+        else if (r.VerticalCopy is { } copy)
+        {
+            // a imagem tratada é dividida em duas: uma segue para o vídeo normal e a outra vira o quadro vertical
+            parts = new List<string> { screen + "[scr0]", "[scr0]split=2[b0][vsrc]" };
+            string? SharedLabel(VerticalPane pane)
+            {
+                int index = r.Cameras.ToList().FindIndex(c => string.Equals(c.DeviceName, pane.Source, StringComparison.OrdinalIgnoreCase));
+                return index >= 0 ? $"[cv{index}]" : null;
+            }
+            parts.AddRange(VerticalGraph.Build(copy, "[vsrc]null[v_scr]", copyFirst, "v_", SharedLabel));
+            parts.Add("[v_b0]format=nv12[vv]");
+        }
+        else parts = new List<string> { screen + "[b0]" };
 
         int layer = 0;
         for (int i = 0; i < r.Cameras.Count; i++)
@@ -233,7 +275,13 @@ public static class StudioCommand
             int width = Math.Max(2, baseWidth * camera.ClampedPercent / 100);
             width -= width % 2;
             string camFilter = camera.Filter?.ToChain() is { } camChain ? "," + camChain : "";
-            string cam = $"[{firstExtra + i}:v]scale={width}:-2,format=bgra{camFilter}" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
+            string camIn = $"[{firstExtra + i}:v]";
+            if (r.VerticalCopy is { } usedCopy && usedCopy.Panes.Any(p => p.Kind == PaneKind.Camera && string.Equals(p.Source, camera.DeviceName, StringComparison.OrdinalIgnoreCase)))
+            {
+                parts.Add($"{camIn}split=2[cm{i}][cv{i}]");   // a mesma câmera alimenta o canto do vídeo normal e a parte do vertical
+                camIn = $"[cm{i}]";
+            }
+            string cam = $"{camIn}scale={width}:-2,format=bgra{camFilter}" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
             parts.Add($"{cam}[c{i}]");
             parts.Add($"[b{layer}][c{i}]overlay={CameraPosition(camera.Corner, margin)}:shortest=0[b{layer + 1}]");
             layer++;
@@ -275,6 +323,10 @@ public static class StudioCommand
         parts.Add($"[b{layer}]{finish}[v]");
         return string.Join(";", parts);
     }
+
+    /// <summary>Câmera de uma parte da cópia vertical que já está aberta como câmera do canto (o DirectShow não abre a mesma duas vezes).</summary>
+    private static Func<VerticalPane, bool> SharedCameraTest(StudioRequest r) =>
+        pane => pane.Kind == PaneKind.Camera && r.Cameras.Any(c => string.Equals(c.DeviceName, pane.Source, StringComparison.OrdinalIgnoreCase));
 
     private static string N(double v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 

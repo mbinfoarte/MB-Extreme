@@ -4,14 +4,15 @@ namespace MBExtreme.Core.Recording;
 
 public enum VideoCodec { H264, Hevc, Av1 }
 
-public enum EncoderKind { Nvenc, Amf, Qsv }
+/// <summary>Software = processador (x264), usado só quando a placa de vídeo não tem codificador.</summary>
+public enum EncoderKind { Nvenc, Amf, Qsv, Software }
 
 /// <summary>Um codificador de vídeo da placa de vídeo, como aparece no FFmpeg (ex.: h264_nvenc).</summary>
 public sealed record EncoderOption(VideoCodec Codec, EncoderKind Kind, string FfmpegName)
 {
     public string CodecText => Codec switch { VideoCodec.H264 => "H.264", VideoCodec.Hevc => "H.265 (HEVC)", _ => "AV1" };
 
-    public string KindText => Kind switch { EncoderKind.Nvenc => "NVIDIA NVENC", EncoderKind.Amf => "AMD AMF", _ => "Intel Quick Sync" };
+    public string KindText => Kind switch { EncoderKind.Nvenc => "NVIDIA NVENC", EncoderKind.Amf => "AMD AMF", EncoderKind.Software => "Processador (x264)", _ => "Intel Quick Sync" };
 
     public string Title => $"{CodecText} · {KindText}";
 }

@@ -44,9 +44,13 @@ public sealed partial class StudioPage
     }
 
     /// <summary>Quadro vertical escolhido, ou null com o modo desligado.</summary>
-    private VerticalLayout? CurrentVertical()
+    private VerticalLayout? CurrentVertical() => _s.StudioVerticalOn ? CurrentVerticalLayout() : null;
+
+    /// <summary>Cópia vertical gravada junto com o vídeo normal (só com a gravação ligada e o modo vertical principal desligado).</summary>
+    private VerticalLayout? CurrentVerticalCopy() => !_s.StudioVerticalOn && _s.StudioVerticalCopy && _outRecord ? CurrentVerticalLayout() : null;
+
+    private VerticalLayout CurrentVerticalLayout()
     {
-        if (!_s.StudioVerticalOn) return null;
         var f = VerticalFormat.ByIndex(_s.StudioVerticalFormat);
         return new VerticalLayout(f.Width, f.Height, _s.StudioVerticalSplit, _s.StudioVerticalTopPercent, new PaneRef(_s, true).ToPane(), new PaneRef(_s, false).ToPane(), _s.StudioVerticalDivider);
     }
@@ -66,7 +70,14 @@ public sealed partial class StudioPage
         on.Click += (_, _) => { _s.StudioVerticalOn = on.IsChecked == true; BuildVertical(); UpdatePlan(); };
         _tabVertical.Children.Add(on);
 
-        if (_s.StudioVerticalOn)
+        var copy = new CheckBox { Content = "Gravar também uma cópia vertical, ao mesmo tempo que o vídeo normal", IsChecked = _s.StudioVerticalCopy, IsEnabled = !_s.StudioVerticalOn, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 2, 0, 2) };
+        copy.Click += (_, _) => { _s.StudioVerticalCopy = copy.IsChecked == true; BuildVertical(); };
+        _tabVertical.Children.Add(copy);
+        _tabVertical.Children.Add(Muted(_s.StudioVerticalOn
+            ? "A cópia vale quando o vídeo principal é o normal (horizontal)."
+            : "Você grava normalmente e, no mesmo momento, sai um segundo arquivo vertical (\"-vertical\") com o enquadramento escolhido abaixo, sem editar depois. Só vale com a gravação ligada; usa mais a placa de vídeo (dois codificadores) e o replay e a transmissão continuam no vídeo normal.", 11));
+
+        if (_s.StudioVerticalOn || _s.StudioVerticalCopy)
         {
             var formats = VerticalFormat.All;
             int fi = Math.Clamp(_s.StudioVerticalFormat, 0, formats.Count - 1);
@@ -166,7 +177,7 @@ public sealed partial class StudioPage
     /// <summary>Desenho simples das duas partes na proporção do formato escolhido.</summary>
     private void RefreshVerticalMock()
     {
-        var layout = CurrentVertical();
+        var layout = _s.StudioVerticalOn || _s.StudioVerticalCopy ? CurrentVerticalLayout() : null;
         if (layout is null) return;
         _verticalMock.BorderBrush = Brush("AccentBrush");
         _verticalMock.Background = Brush("BgBrush");

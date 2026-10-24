@@ -160,6 +160,15 @@ public sealed record StudioRequest
     /// <summary>Vídeo vertical (Shorts, Reels, TikTok): montagem em uma ou duas partes. Quando definido, OutputWidth/OutputHeight são o tamanho do quadro vertical.</summary>
     public VerticalLayout? Vertical { get; init; }
 
+    /// <summary>
+    /// Cópia vertical gravada ao mesmo tempo que o vídeo normal (o mesmo jogo, recortado e montado em 9:16 em tempo real).
+    /// Precisa de <see cref="VerticalFile"/>. Não vale junto com <see cref="Vertical"/>.
+    /// </summary>
+    public VerticalLayout? VerticalCopy { get; init; }
+
+    /// <summary>Arquivo (relativo à pasta de trabalho) da cópia vertical.</summary>
+    public string? VerticalFile { get; init; }
+
     /// <summary>Legendas automáticas queimadas no vídeo em tempo real (vertical ou não).</summary>
     public CaptionOverlay? Captions { get; init; }
 

@@ -202,6 +202,7 @@ public partial class MainWindow : Window
         "stress" => new StressPage(),
         "fps" => new FpsPage(),
         "record" => new StudioPage(),
+        "shorts" => new ShortsPage(),
         "storage" => new StoragePage(),
         "netanalyzer" => new NetAnalyzerPage(),
         "devices" => new DevicesPage(),

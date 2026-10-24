@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using MBExtreme.Core.Repair;
+using MBExtreme.Core.Storage;
 using MBExtreme.Core.Windows;
 
 namespace MBExtreme.UI.Pages;
@@ -29,6 +30,16 @@ public sealed class RepairPage : ToolPageBase
     private readonly CheckBox _restorePoint;
     private readonly List<Button> _runButtons = new();
     private Button? _cancel;
+    private readonly WrapPanel _driveChips = new() { Margin = new Thickness(0, 4, 0, 6) };
+    private readonly StackPanel _diskHost = new();
+    private readonly List<Button> _diskRunButtons = new();
+    private IReadOnlyList<(string Name, string Text, bool IsSystem)> _drives = Array.Empty<(string, string, bool)>();
+    private string _driveName = RepairCatalog.SystemDrive;
+    private bool _drivesLoaded;
+
+    /// <summary>Unidade a escolher ao abrir a página (vem do Gerenciador de discos).</summary>
+    internal static string? PendingDrive { get; set; }
+
     // o estado vale para o app todo: voltar à página durante um reparo não libera um segundo
     private static bool s_running;
     private static CancellationTokenSource? s_cts;
@@ -52,7 +63,11 @@ public sealed class RepairPage : ToolPageBase
             Margin = new Thickness(0, 4, 0, 0),
         };
         Body.Children.Add(_restorePoint);
-        Loaded += (_, _) => SetRunning(s_running);
+        Loaded += async (_, _) =>
+        {
+            SetRunning(s_running);
+            await LoadDrivesAsync();
+        };
 
         Body.Children.Add(Heading("Andamento"));
         Body.Children.Add(_current);
@@ -71,11 +86,98 @@ public sealed class RepairPage : ToolPageBase
             {
                 group = task.Group;
                 Body.Children.Add(Heading(group));
+                if (group == RepairCatalog.GroupDisk) BuildDiskSelector();
             }
+
+            if (task.Group == RepairCatalog.GroupDisk) continue; // as tarefas de disco dependem da unidade escolhida
             Body.Children.Add(TaskCard(task));
         }
 
         Body.Children.Add(Muted($"Relatórios de cada reparo ficam em {RepairRunner.LogDirectory}. O SFC e o DISM também gravam seus próprios registros: {RepairInterpreter.CbsLog} e {RepairInterpreter.DismLog}."));
+    }
+
+    // ---------------------------------------------------------------- escolha do disco
+
+    private void BuildDiskSelector()
+    {
+        Body.Children.Add(Muted("Escolha qual disco verificar ou reparar. Os comandos abaixo valem só para a unidade escolhida.", 12));
+        Body.Children.Add(_driveChips);
+        Body.Children.Add(_diskHost);
+        PaintDriveChips();
+        RebuildDiskTasks();
+    }
+
+    private async Task LoadDrivesAsync()
+    {
+        if (!_drivesLoaded)
+        {
+            try
+            {
+                var list = await Task.Run(() => DriveMap.List(true));
+                _drives = list
+                    .Select(d => (d.Name, $"{d.Letter}: {(string.IsNullOrWhiteSpace(d.Label) ? "" : d.Label + " · ")}{d.TotalBytes / 1_073_741_824.0:0} GB" + (d.IsSystem ? " · Windows" : d.IsExternal ? " · externo" : ""), d.IsSystem))
+                    .ToList();
+                _drivesLoaded = true;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or System.IO.IOException)
+            {
+                _drives = new[] { (RepairCatalog.SystemDrive, RepairCatalog.SystemDrive + " · Windows", true) };
+            }
+        }
+
+        if (PendingDrive is { } pending && _drives.Any(d => d.Name.Equals(pending, StringComparison.OrdinalIgnoreCase)))
+        {
+            _driveName = _drives.First(d => d.Name.Equals(pending, StringComparison.OrdinalIgnoreCase)).Name;
+            RebuildDiskTasks();
+        }
+
+        PendingDrive = null;
+        PaintDriveChips();
+    }
+
+    private void PaintDriveChips()
+    {
+        _driveChips.Children.Clear();
+        var drives = _drives.Count > 0 ? _drives : new[] { (RepairCatalog.SystemDrive, RepairCatalog.SystemDrive + " · Windows", true) };
+        foreach (var (name, text, _) in drives)
+        {
+            string drive = name;
+            var chip = new Button
+            {
+                Content = text,
+                Margin = new Thickness(0, 0, 6, 6),
+                Padding = new Thickness(11, 4, 11, 4),
+                FontSize = 12,
+                Style = (Style)FindResource(drive.Equals(_driveName, StringComparison.OrdinalIgnoreCase) ? "PrimaryButton" : "GhostButton"),
+            };
+            chip.Click += (_, _) =>
+            {
+                if (s_running) return;
+                _driveName = drive;
+                PaintDriveChips();
+                RebuildDiskTasks();
+            };
+            _driveChips.Children.Add(chip);
+        }
+    }
+
+    private void RebuildDiskTasks()
+    {
+        foreach (var button in _diskRunButtons) _runButtons.Remove(button);
+        _diskRunButtons.Clear();
+        _diskHost.Children.Clear();
+
+        bool isSystem = _drives.FirstOrDefault(d => d.Name.Equals(_driveName, StringComparison.OrdinalIgnoreCase)).IsSystem
+            || _driveName.Equals(RepairCatalog.SystemDrive, StringComparison.OrdinalIgnoreCase);
+        string language = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        foreach (var task in RepairCatalog.DiskTasks(_driveName, isSystem, language))
+        {
+            int before = _runButtons.Count;
+            _diskHost.Children.Add(TaskCard(task));
+            for (int i = before; i < _runButtons.Count; i++) _diskRunButtons.Add(_runButtons[i]);
+        }
+
+        foreach (var button in _diskRunButtons) button.IsEnabled = !s_running;
     }
 
     private UIElement TaskCard(RepairTask task)

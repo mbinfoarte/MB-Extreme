@@ -78,6 +78,7 @@ internal static class NavigationMap
             new("boot", "Inicialização e boot", "Como o Windows liga e desliga.", "\uE7E8"),
             new("periph", "Periféricos", "Mouse e teclado.", "\uE765"),
             new("security", "Segurança", "Antivírus, firewall e controle de contas.", "\uE72E"),
+            new("diskmgr", "Gerenciador de discos", "Crie, formate, divida e organize partições; troque letras e prepare discos novos.", "\uEDA2"),
             new("repair", "Reparo do Windows", "SFC, DISM, CHKDSK e correções de Windows Update, loja e rede.", "\uE90F"),
         }),
         new("sup", "Suporte", "Ajuda do suporte da MB InfoArt por acesso remoto.", "\uE8F2", new Tile[]

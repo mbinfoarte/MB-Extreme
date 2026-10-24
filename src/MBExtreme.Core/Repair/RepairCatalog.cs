@@ -245,5 +245,55 @@ public static class RepairCatalog
         };
     }
 
+    /// <summary>Tarefas de disco para a unidade escolhida (ex.: "E:"). O disco do Windows usa o CHKDSK agendado; os outros usam o Repair-Volume, que não precisa reiniciar.</summary>
+    public static IReadOnlyList<RepairTask> DiskTasks(string drive, bool isSystem, string language)
+    {
+        string normalized = NormalizeDrive(drive);
+        char letter = normalized[0];
+        string yes = YesAnswer(language);
+        var tasks = new List<RepairTask>();
+
+        if (isSystem)
+        {
+            tasks.AddRange(Create(normalized, language).Where(t => t.Group == GroupDisk));
+        }
+        else
+        {
+            tasks.Add(new("chkdsk-scan", GroupDisk, $"Verificar o disco {normalized} (sem alterar)",
+                "Procura erros no sistema de arquivos com o disco em uso e só mostra o resultado. Não corrige nada.",
+                "1 a 10 minutos",
+                new[] { Ps($"Verificando {normalized}",
+                    $"$r=Repair-Volume -DriveLetter {letter} -Scan; switch([string]$r){{ 'NoErrorsFound' {{ 'Nenhum erro encontrado.' }} 'ErrorsFixed' {{ 'Erros encontrados e corrigidos.' }} default {{ 'Resultado: '+$r+'. Use o reparo abaixo para corrigir.' }} }}") }));
+
+            tasks.Add(new("chkdsk-fix", GroupDisk, $"Reparar o disco {normalized}",
+                "Tira a unidade do ar por alguns instantes (fecha os arquivos abertos nela), procura erros e corrige. Não precisa reiniciar o PC.",
+                "2 a 30 minutos",
+                new[] { Ps($"Reparando {normalized}",
+                    $"$r=Repair-Volume -DriveLetter {letter} -OfflineScanAndFix; switch([string]$r){{ 'NoErrorsFound' {{ 'Nenhum erro encontrado.' }} 'ErrorsFixed' {{ 'Erros encontrados e corrigidos.' }} default {{ 'Resultado: '+$r }} }}") },
+                Caution: $"Os arquivos abertos em {normalized} serão fechados. Salve tudo e feche os programas que usam essa unidade antes de continuar."));
+
+            tasks.Add(new("chkdsk-deep", GroupDisk, $"Reparo profundo do disco {normalized} (setores defeituosos)",
+                "Roda o CHKDSK com /f /r /x: corrige erros e procura setores defeituosos lendo o disco inteiro. Em discos grandes pode levar horas.",
+                "30 minutos a várias horas",
+                new[] { new RepairStep($"Verificando {normalized} a fundo", "chkdsk.exe", $"{normalized} /f /r /x", StepKind.Chkdsk) },
+                Caution: $"A unidade {normalized} fica indisponível durante a verificação e os arquivos abertos nela são fechados. Não desligue o PC nem retire o disco."));
+        }
+
+        tasks.Add(new("disk-health", GroupDisk, "Ver a saúde dos discos (SMART)",
+            "Mostra o estado de saúde que o próprio disco informa. Healthy é bom; Warning ou Unhealthy pedem backup e troca do disco.",
+            "Menos de 1 minuto",
+            new[] { Ps("Lendo a saúde dos discos", "Get-PhysicalDisk | ForEach-Object { $_.FriendlyName + ' · ' + $_.MediaType + ' · saúde: ' + $_.HealthStatus + ' · estado: ' + $_.OperationalStatus }") }));
+        return tasks;
+    }
+
+    /// <summary>Aceita "e", "E:" ou "E:\" e devolve "E:". Qualquer outra coisa é recusada (a letra vai para um comando).</summary>
+    public static string NormalizeDrive(string drive)
+    {
+        string text = (drive ?? "").Trim().TrimEnd('\\');
+        if (text.Length == 1) text += ":";
+        if (text.Length != 2 || text[1] != ':' || !char.IsAsciiLetter(text[0])) throw new ArgumentException("Letra de unidade inválida.", nameof(drive));
+        return char.ToUpperInvariant(text[0]) + ":";
+    }
+
     public static RepairTask? Find(string id) => All().FirstOrDefault(t => t.Id == id);
 }

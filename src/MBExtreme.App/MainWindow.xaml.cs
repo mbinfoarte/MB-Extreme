@@ -217,6 +217,7 @@ public partial class MainWindow : Window
         "profiles" => new ProfilesPage(),
         "startup" => new StartupPage(),
         "repair" => new RepairPage(),
+        "diskmgr" => new DiskManagerPage(),
         "license" => new LicensePage(),
         "support" => new SupportPage(),
         "remote" or "remote-console" => new RemoteAccessPage(),

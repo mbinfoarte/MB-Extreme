@@ -267,6 +267,12 @@ public sealed class AppSettings
 
     public bool StudioCaptionUpper { get; set; } = true;
 
+    // ---- ranking anônimo (só com consentimento)
+    public bool RankingOptIn { get; set; }
+
+    /// <summary>Código aleatório da instalação para o ranking. Nasce quando a pessoa aceita e é trocado ao apagar os dados.</summary>
+    public string RankingInstallId { get; set; } = "";
+
     // ---- chat
     public bool StudioChatAuto { get; set; } = true;
 

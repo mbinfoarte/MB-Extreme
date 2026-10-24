@@ -17,6 +17,8 @@ namespace MBExtreme.UI.Pages;
 public sealed class BenchmarkPage : ToolPageBase
 {
     private readonly StackPanel _results = new();
+    private readonly StackPanel _rankingPanel = new();
+    private static string _rankingNote = "";
     private readonly CheckBox _disk = new() { Content = "Incluir disco (grava um arquivo temporário de 256 MB)", IsChecked = true };
     private readonly CheckBox _gpu = new() { Content = "Incluir GPU 3D (cenas em Direct3D)", IsChecked = true };
     private readonly TextBox _label = new() { Width = 320, HorizontalAlignment = HorizontalAlignment.Left };
@@ -46,6 +48,8 @@ public sealed class BenchmarkPage : ToolPageBase
         Body.Children.Add(_label);
         Body.Children.Add(Muted("Ex.: \"Antes do perfil Jogo\". O nome aparece no histórico e em Antes e depois."));
         Body.Children.Add(RecordOption());
+        Body.Children.Add(CardOf(_rankingPanel));
+        BuildRanking();
         Body.Children.Add(_previewCard);
         Body.Children.Add(_results);
         Loaded += (_, _) => RenderHistory();
@@ -91,6 +95,7 @@ public sealed class BenchmarkPage : ToolPageBase
             await sampler;
             result = result with { Monitoring = recorder.Tracks(), Phases = phases };
             BenchmarkHistory.Add(result);
+            _ = SubmitAndShowAsync(result);
             Progress.Finish($"Pontuação: {result.Score}", true,
                 $"1 núcleo {result.CpuSingleMops:0} · todos {result.CpuMultiMops:0} · memória {result.MemoryGBps:0.0} GB/s · latência {result.MemoryLatencyNs:0} ns" +
                 (result.Gpu3DScore > 0 ? $" · GPU {result.Gpu3DScore}" : ""));
@@ -126,6 +131,7 @@ public sealed class BenchmarkPage : ToolPageBase
                 Label: string.IsNullOrWhiteSpace(_label.Text) ? null : _label.Text.Trim(),
                 GpuName: gpu.GpuName, Gpu3DScore: gpu.Score, GpuScenes: gpu.Scenes);
             BenchmarkHistory.Add(result);
+            _ = SubmitAndShowAsync(result);
             SetStatus($"GPU {gpu.GpuName}: pontuação {gpu.Score}", "OkBrush");
             RenderHistory();
         }
@@ -223,6 +229,74 @@ public sealed class BenchmarkPage : ToolPageBase
     }
 
     protected override void OnProgressClosed() => RenderHistory();
+
+    // ---------------------------------------------------------------- ranking anônimo (opcional)
+
+    private void BuildRanking()
+    {
+        _rankingPanel.Children.Clear();
+        _rankingPanel.Children.Add(new TextBlock { Text = "Ranking anônimo (opcional)", FontSize = 15, FontWeight = FontWeights.SemiBold });
+        _rankingPanel.Children.Add(Muted("Compare o seu PC com outros que usam o MB Extreme. Se você participar, cada medição envia só o modelo do processador e da placa de vídeo, a memória, as notas e um código aleatório criado neste PC. Não vão nome, e-mail, licença nem arquivos. Desligado por padrão: você escolhe, pode ver o que seria enviado e apagar tudo quando quiser.", 11.5));
+
+        var opt = new CheckBox { Content = "Participar do ranking anônimo", IsChecked = RankingService.OptedIn, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 8, 0, 4), FontWeight = FontWeights.SemiBold };
+        opt.Click += (_, _) =>
+        {
+            AppServices.Settings.RankingOptIn = opt.IsChecked == true;
+            AppServices.Settings.Save();
+            if (opt.IsChecked != true) _rankingNote = "";
+            BuildRanking();
+        };
+        _rankingPanel.Children.Add(opt);
+        if (!RankingService.Configured)
+            _rankingPanel.Children.Add(new TextBlock { Text = "O servidor do ranking ainda não está configurado nesta versão, então nada é enviado.", FontSize = 12, Foreground = Brush("WarnBrush"), TextWrapping = TextWrapping.Wrap });
+
+        var buttons = new WrapPanel();
+        var preview = SmallButton("Ver o que será enviado", async (_, _) => await ShowPreviewAsync());
+        preview.Margin = new Thickness(0, 4, 8, 4);
+        buttons.Children.Add(preview);
+        var forget = SmallButton("Apagar meus dados do ranking", async (_, _) => await ForgetRankingAsync());
+        forget.Margin = new Thickness(0, 4, 8, 4);
+        forget.IsEnabled = RankingService.Configured;
+        buttons.Children.Add(forget);
+        _rankingPanel.Children.Add(buttons);
+
+        if (_rankingNote.Length > 0)
+            _rankingPanel.Children.Add(new TextBlock { Text = _rankingNote, FontSize = 13, Foreground = Brush("AccentBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+    }
+
+    private async Task ShowPreviewAsync()
+    {
+        try
+        {
+            var hw = await AppServices.Hardware();
+            var last = BenchmarkHistory.Load().LastOrDefault(r => r.Score > 0);
+            string text = last is null
+                ? "Faça um benchmark completo primeiro: aqui aparece exatamente o que seria enviado dele."
+                : RankingService.Preview(RankingService.BuildBench(last, hw)!);
+            MessageBox.Show(text + (last is null ? "" : "\n\nO código (installId) é aleatório e nasce neste PC; ele só é criado se você participar."), "O que será enviado ao ranking", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Management.ManagementException or AggregateException)
+        {
+            SetStatus("Não foi possível ler o hardware para mostrar o que seria enviado.", "WarnBrush");
+        }
+    }
+
+    private async Task ForgetRankingAsync()
+    {
+        bool ok = await RankingService.ForgetAsync();
+        _rankingNote = "";
+        BuildRanking();
+        SetStatus(ok ? "Seus dados foram apagados do ranking e este PC ganhou um código novo." : "Não foi possível apagar agora (sem internet, ou nada foi enviado ainda). Tente de novo mais tarde.", ok ? "OkBrush" : "WarnBrush");
+    }
+
+    private async Task SubmitAndShowAsync(BenchmarkResult result)
+    {
+        if (!RankingService.OptedIn) return;
+        var standing = await RankingService.SubmitBenchAsync(result);
+        string gpu = result.GpuName is { Length: > 0 } name && result.Gpu3DScore > 0 ? name : "a sua placa";
+        _rankingNote = RankingService.Describe(standing, gpu);
+        Dispatcher.Invoke(BuildRanking);
+    }
 
     private static readonly Color Orange = Color.FromRgb(0xFF, 0x9A, 0x1F);
 

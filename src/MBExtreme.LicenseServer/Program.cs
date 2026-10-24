@@ -22,6 +22,13 @@ var issuer = new LicenseIssuer(signing);
 var limiter = new RateLimiter();
 
 builder.Services.AddSingleton(db);
+
+// ranking anônimo (opcional no app): banco separado e segredo próprio para embaralhar o código de instalação
+string pepperPath = Path.Combine(dataDir, "ranking-pepper.txt");
+string rankingPepper = config["Ranking:Pepper"] is { Length: >= 16 } configured ? configured : File.Exists(pepperPath) ? File.ReadAllText(pepperPath).Trim() : "";
+if (rankingPepper.Length < 16) { rankingPepper = Security.RandomToken(); File.WriteAllText(pepperPath, rankingPepper); }
+var ranking = new RankingStore(Path.Combine(dataDir, "ranking.db"), rankingPepper);
+ranking.Purge();
 builder.Services.AddSingleton(signing);
 builder.Services.AddSingleton(issuer);
 
@@ -460,6 +467,8 @@ app.MapPost("/v1/license/deactivate", async (HttpContext c) =>
 });
 
 // ======================================================= cobrança (Stripe), chaves de ativação e planos
+
+RankingEndpoints.Map(app, ranking, limiter, limitScale, Ip);
 
 app.MapGet("/v1/plans", () => Results.Json(new
 {

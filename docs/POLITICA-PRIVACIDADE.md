@@ -21,6 +21,9 @@ O conteúdo do acesso remoto (tela, mouse, teclado) é **cifrado de ponta a pont
 ## O que só é enviado se você autorizar
 Resumo **anônimo** de sessões de jogo (nome do executável do jogo, faixa de hardware, faixa de RAM, FPS médio e mínimos, tipo de gargalo, duração). Desligado por padrão, em *Monitor de gargalos*. Não inclui nome, e-mail, programas instalados nem arquivos. *(O envio ainda não está implementado; hoje o resumo fica só no PC.)*
 
+### Ranking anônimo (desligado por padrão)
+Se você ligar a opção "Participar do ranking anônimo", o app envia, depois de cada benchmark ou medição de jogo: o modelo do processador e da placa de vídeo, a quantidade de memória e de núcleos, as notas e os FPS medidos, o nome do jogo (só nas medições de jogo), a versão do app e um **código aleatório** criado no seu PC. **Não enviamos** nome, e-mail, número de licença, endereço de IP guardado, lista de programas nem arquivos. No servidor, o código é guardado já embaralhado (hash com um segredo nosso), e cada código mantém apenas a medição mais recente de cada tipo. Os dados servem para mostrar a você em que posição o seu PC fica e as medianas de PCs parecidos; medições com mais de 18 meses são apagadas. Você pode ver exatamente o que será enviado, desligar a opção quando quiser e usar "Apagar meus dados do ranking", que remove tudo ligado ao seu código e cria um novo.
+
 ## Seus direitos
 Acessar, corrigir, exportar e **excluir** seus dados, revogar consentimentos e remover computadores em *Minha conta*. Para exclusão da conta, escreva para o e-mail do encarregado. Guardamos dados fiscais pelo prazo legal.
 

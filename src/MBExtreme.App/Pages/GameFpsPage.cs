@@ -57,6 +57,7 @@ public sealed class GameFpsPage : ToolPageBase
         options.Children.Add(row1);
         options.Children.Add(Field("Parar sozinho", Chips(Limits.Select(l => l == 0 ? "Só quando eu parar" : l < 60 ? l + " s" : l / 60 + " min").ToList(), 0, i => _limit = Limits[i])));
         options.Children.Add(Field("Ignorar o começo", Chips(Warmups.Select(w => w == 0 ? "Nada" : w + " s").ToList(), 1, i => _warmup = Warmups[i])));
+        options.Children.Add(Muted("Ranking anônimo: se você ligou a opção em Benchmark do PC, a medição também é enviada (só modelo do PC, nome do jogo e FPS, sem dados pessoais).", 11));
         Body.Children.Add(CardOf(options));
 
         BuildLive();
@@ -246,6 +247,11 @@ public sealed class GameFpsPage : ToolPageBase
         ShowSession(session);
         RefreshHistory();
         SetStatus($"Medição de {session.Game} pronta e guardada.", "OkBrush");
+        if (RankingService.OptedIn)
+        {
+            var standing = await RankingService.SubmitGameAsync(session);
+            SetStatus($"Medição de {session.Game} pronta e guardada.\nRanking: " + RankingService.Describe(standing, session.Metrics.AverageFps), standing is null ? "WarnBrush" : "OkBrush");
+        }
     }
 
     // ---------------------------------------------------------------- relatório

@@ -29,13 +29,14 @@
             </Border>
 
             <!-- Medidores -->
-            <UniformGrid Columns="4" Margin="0,20,0,0">
+            <UniformGrid Columns="3" Margin="0,20,0,0">
                 <Border x:Name="CpuCard" Cursor="Hand" Style="{StaticResource Card}" Margin="0,0,8,0">
                     <StackPanel>
                         <TextBlock Text="CPU" FontSize="15" FontWeight="SemiBold" />
                         <TextBlock Text="Temperatura · linha: uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                         <ctl:ArcGauge x:Name="CpuGauge" Height="150" Margin="0,8,0,0" Unit="°C" Maximum="110" WarnAt="75" BadAt="90" />
                         <TextBlock x:Name="CpuDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <TextBlock x:Name="CpuFans" FontSize="12" TextAlignment="Center" Margin="0,4,0,0" TextWrapping="Wrap" />
                         <ctl:AreaChart x:Name="CpuUseChart" Height="46" Margin="0,8,0,0" Maximum="100" />
                     </StackPanel>
                 </Border>
@@ -45,10 +46,11 @@
                         <TextBlock Text="Temperatura · linha: uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                         <ctl:ArcGauge x:Name="GpuGauge" Height="150" Margin="0,8,0,0" Unit="°C" Maximum="110" WarnAt="78" BadAt="88" />
                         <TextBlock x:Name="GpuDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <TextBlock x:Name="GpuFans" FontSize="12" TextAlignment="Center" Margin="0,4,0,0" TextWrapping="Wrap" />
                         <ctl:AreaChart x:Name="GpuUseChart" Height="46" Margin="0,8,0,0" Maximum="100" />
                     </StackPanel>
                 </Border>
-                <Border x:Name="RamCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,8,0">
+                <Border x:Name="RamCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,0,0">
                     <StackPanel>
                         <Grid>
                             <TextBlock Text="Memória" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -61,22 +63,12 @@
                         <ctl:AreaChart x:Name="RamChart" Height="46" Margin="0,8,0,0" Maximum="100" />
                     </StackPanel>
                 </Border>
-                <Border x:Name="NetCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,0,0">
-                    <StackPanel>
-                        <TextBlock Text="Internet" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Text="Ping · linha: histórico" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                        <ctl:ArcGauge x:Name="PingGauge" Height="150" Margin="0,8,0,0" Unit="ms" Maximum="200" WarnAt="60" BadAt="120" />
-                        <TextBlock x:Name="PingDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
-                        <ctl:AreaChart x:Name="PingChart" Height="46" Margin="0,8,0,0" Maximum="100" />
-                    </StackPanel>
-                </Border>
             </UniformGrid>
 
-            <!-- Rede, ventoinhas e energia -->
+            <!-- Internet (com o ping) e energia -->
             <Grid Margin="0,16,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="2*" />
-                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
@@ -91,22 +83,36 @@
                                 <TextBlock Text="Envio" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                         </Grid>
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <StackPanel Margin="0,0,36,0">
-                                <TextBlock Text="Download" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                                <TextBlock x:Name="DownloadText" FontSize="24" FontWeight="SemiBold" Text="—" />
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="190" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- ping: toque para abrir o analisador de rede -->
+                            <Border x:Name="NetCard" Cursor="Hand" Background="Transparent" ToolTip="Ping até 1.1.1.1. Clique para abrir o analisador de rede.">
+                                <StackPanel>
+                                    <TextBlock Text="Ping" FontSize="12" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center" />
+                                    <ctl:ArcGauge x:Name="PingGauge" Height="130" Unit="ms" Maximum="200" WarnAt="60" BadAt="120" />
+                                    <TextBlock x:Name="PingDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel Margin="0,0,36,0">
+                                        <TextBlock Text="Download" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                        <TextBlock x:Name="DownloadText" FontSize="24" FontWeight="SemiBold" Text="—" />
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Envio" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                        <TextBlock x:Name="UploadText" FontSize="24" FontWeight="SemiBold" Text="—" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border x:Name="NetChartHost" Height="110" Margin="0,8,0,0" />
                             </StackPanel>
-                            <StackPanel>
-                                <TextBlock Text="Envio" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                                <TextBlock x:Name="UploadText" FontSize="24" FontWeight="SemiBold" Text="—" />
-                            </StackPanel>
-                        </StackPanel>
-                        <Border x:Name="NetChartHost" Height="120" Margin="0,10,0,0" />
-                        <UniformGrid Columns="3" Margin="0,10,0,0">
-                            <StackPanel Margin="0,0,8,0">
-                                <TextBlock Text="Ping (internet)" FontSize="11" Foreground="{StaticResource MutedBrush}" />
-                                <TextBlock x:Name="PingStat" FontSize="13" FontWeight="SemiBold" Text="—" TextWrapping="Wrap" />
-                            </StackPanel>
+                        </Grid>
+                        <UniformGrid Columns="2" Margin="0,10,0,0">
                             <StackPanel Margin="0,0,8,0">
                                 <TextBlock Text="Latência e oscilação" FontSize="11" Foreground="{StaticResource MutedBrush}" />
                                 <TextBlock x:Name="JitterStat" FontSize="13" FontWeight="SemiBold" Text="—" TextWrapping="Wrap" />
@@ -131,20 +137,24 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="1" Style="{StaticResource Card}" Margin="8,0,8,0">
+                <Border Grid.Column="1" Style="{StaticResource Card}" Margin="8,0,0,0">
                     <StackPanel>
-                        <TextBlock Text="Ventoinhas" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock x:Name="FansText" Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="22" Text="—" />
-                    </StackPanel>
-                </Border>
-
-                <Border Grid.Column="2" Style="{StaticResource Card}" Margin="8,0,0,0">
-                    <StackPanel>
-                        <TextBlock Text="Energia" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Text="Consumo agora" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                        <TextBlock x:Name="PowerTotalText" FontSize="28" FontWeight="SemiBold" Margin="0,8,0,0" Text="—" />
-                        <TextBlock x:Name="PowerDetail" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
+                        <Grid>
+                            <TextBlock Text="Energia" FontSize="15" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="●" Foreground="#FFC400" Margin="0,0,4,0" />
+                                <TextBlock Text="Total" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,14,0" />
+                                <TextBlock Text="●" Foreground="#E8E8EC" Margin="0,0,4,0" />
+                                <TextBlock Text="CPU" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,14,0" />
+                                <TextBlock Text="●" Foreground="#8E8E96" Margin="0,0,4,0" />
+                                <TextBlock Text="GPU" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="Consumo agora" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0" />
+                        <TextBlock x:Name="PowerTotalText" FontSize="24" FontWeight="SemiBold" Text="—" />
+                        <TextBlock x:Name="PowerDetail" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
                                    Foreground="{StaticResource MutedBrush}" />
+                        <Border x:Name="PowerChartHost" Height="150" Margin="0,10,0,0" />
                     </StackPanel>
                 </Border>
             </Grid>

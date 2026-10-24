@@ -54,7 +54,7 @@ public sealed class SensorService : IDisposable
                     string name = sensor.Name;
 
                     if (sensor.SensorType == SensorType.Fan && value > 0)
-                        fans.Add(new FanReading(name, value));
+                        fans.Add(new FanReading(name, value, isGpu));
 
                     if (isCpu)
                     {

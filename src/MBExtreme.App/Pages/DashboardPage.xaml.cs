@@ -23,6 +23,10 @@ public partial class DashboardPage : UserControl
     private readonly List<double> _downHistory = new();
     private readonly List<double> _upHistory = new();
     private readonly LiveChart _netChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0xE8, 0xE8, 0xEC));
+    private readonly LiveChart _powerChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0xE8, 0xE8, 0xEC), Color.FromRgb(0x8E, 0x8E, 0x96));
+    private readonly List<double> _powerTotalHistory = new();
+    private readonly List<double> _powerCpuHistory = new();
+    private readonly List<double> _powerGpuHistory = new();
     private readonly PingWindow _pings = new(20);
     private ActiveAdapter? _adapter;
     private double? _localPing;
@@ -51,6 +55,8 @@ public partial class DashboardPage : UserControl
         UpdateRamAuto();
         _netChart.FormatMax = v => Rate(v * 125_000);
         NetChartHost.Child = _netChart;
+        _powerChart.FormatMax = v => $"{v:0} W";
+        PowerChartHost.Child = _powerChart;
         _timer.Tick += async (_, _) => await UpdateAsync();
         Loaded += async (_, _) =>
         {
@@ -319,15 +325,12 @@ public partial class DashboardPage : UserControl
         if (ping is double ms)
         {
             Push(_pingHistory, ms);
-            PingChart.Maximum = Math.Max(100, _pingHistory.Max() * 1.2);
-            PingChart.Values = _pingHistory.ToList();
         }
         PingDetail.Text = ping is null ? "Sem resposta de 1.1.1.1" : "até 1.1.1.1";
     }
 
     private void UpdateNetworkInfo()
     {
-        PingStat.Text = _lastPing is double p ? $"{p:0} ms" : "sem resposta";
         JitterStat.Text = _pings.Average is double avg
             ? $"média {avg:0} ms · oscilação {_pings.Jitter ?? 0:0.0} ms · perda {_pings.LossPercent:0}%"
             : "—";
@@ -398,9 +401,10 @@ public partial class DashboardPage : UserControl
             GpuUseChart.Values = _gpuHistory.ToList();
         }
 
-        FansText.Text = s.Fans.Count == 0
-            ? "Nenhuma ventoinha lida."
-            : string.Join("\n", s.Fans.Take(6).Select(f => $"{f.Name}: {f.Rpm:0} rpm"));
+        // ventoinhas junto de cada peça: CPU (e bomba do cooler), placa de vídeo e, na CPU, as do gabinete
+        var fans = FanGroups.Split(s.Fans);
+        ShowFans(CpuFans, fans.Cpu, fans.Case.Count > 0 ? "Gabinete: " + FanGroups.Describe(fans.Case.Take(3)) : null);
+        ShowFans(GpuFans, fans.Gpu, null);
 
         double? total = s.CpuPowerWatts is null && s.GpuPowerWatts is null
             ? null
@@ -409,6 +413,21 @@ public partial class DashboardPage : UserControl
         PowerDetail.Text = Join(
             s.CpuPowerWatts is double a ? $"CPU {a:0} W" : null,
             s.GpuPowerWatts is double b ? $"GPU {b:0} W" : null);
+        if (total is double sum)
+        {
+            Push(_powerTotalHistory, sum);
+            Push(_powerCpuHistory, s.CpuPowerWatts ?? 0);
+            Push(_powerGpuHistory, s.GpuPowerWatts ?? 0);
+            _powerChart.Update(_powerTotalHistory.ToList(), _powerCpuHistory.ToList(), _powerGpuHistory.ToList());
+        }
+    }
+
+    private void ShowFans(TextBlock target, IReadOnlyList<FanReading> own, string? extra)
+    {
+        string text = Join(own.Count > 0 ? "Ventoinhas: " + FanGroups.Describe(own) : null, extra);
+        bool none = text.Length == 0;
+        target.Text = none ? "Ventoinhas: sem leitura" : text;
+        target.Foreground = (Brush)FindResource(none ? "MutedBrush" : "TextBrush");
     }
 
     private static string Join(params string?[] parts) =>

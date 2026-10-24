@@ -17,7 +17,7 @@ public sealed record Gpu3DResult(string GpuName, int Score, IReadOnlyList<GpuSce
 /// cálculo puro (GFLOPS). Escolhe a placa de vídeo com mais memória dedicada. Não usa marcas ou cenas de terceiros.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public static class Gpu3DBenchmark
+public static partial class Gpu3DBenchmark
 {
     private const int Width = 1920;
     private const int Height = 1080;

@@ -129,10 +129,16 @@ public static class SessionComparison
     }
 }
 
+/// <summary>Escapa só o que importa em HTML (mantém acentos legíveis, ao contrário do HtmlEncode do .NET, que vira entidades numéricas).</summary>
+internal static class HtmlText
+{
+    public static string Escape(string text) => text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&#39;");
+}
+
 /// <summary>Relatório da sessão em uma página HTML sozinha (gráficos em SVG, sem internet), para guardar ou mandar para alguém.</summary>
 public static class SessionReport
 {
-    private static string N(double v, string format = "0.#") => v.ToString(format, CultureInfo.InvariantCulture);
+    internal static string N(double v, string format = "0.#") => v.ToString(format, CultureInfo.InvariantCulture);
 
     public static string ToText(FpsSession s)
     {
@@ -147,7 +153,7 @@ public static class SessionReport
         return sb.ToString();
     }
 
-    private static string Svg(IReadOnlyList<double> values, string color, double? ceiling = null, int width = 760, int height = 140)
+    internal static string Svg(IReadOnlyList<double> values, string color, double? ceiling = null, int width = 760, int height = 140)
     {
         if (values.Count < 2) return "<p class=\"m\">Sem dados.</p>";
         double max = ceiling ?? Math.Max(1, values.Max() * 1.1);
@@ -164,7 +170,7 @@ public static class SessionReport
     public static string ToHtml(FpsSession s)
     {
         var m = s.Metrics;
-        string E(string text) => WebUtility.HtmlEncode(text);
+        string E(string text) => HtmlText.Escape(text);
         var sb = new StringBuilder();
         sb.Append("<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Relatório de FPS</title><style>")
           .Append("body{background:#0d0d0f;color:#eee;font:14px Segoe UI,Arial,sans-serif;margin:0;padding:24px}h1{font-size:22px;margin:0 0 4px}.m{color:#8e8e96;font-size:12px}")

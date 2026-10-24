@@ -48,3 +48,15 @@ Reddit e fóruns: as buscas não trouxeram um conjunto de dados aberto novo; as 
 3. Ranking anônimo opcional no servidor e envio das medições com consentimento.
 4. Perguntar a PassMark e TechPowerUp sobre licença, se quisermos mais cobertura.
 5. Queimador de GPU e redesenho do Teste de estresse.
+
+## 4. Implementado a partir desta pesquisa
+1. **Requisitos na Biblioteca**: leitor do texto da Steam (inglês e português), comparação do PC com o que o jogo pede (memória, VRAM, Windows em números; processador e placa pela nossa tabela de níveis, `HardwareTiers`), veredito (*atende o recomendado / o mínimo / abaixo do mínimo / sem dados*) e lista item a item com ✓, ≈ e ✗. Modelos desconhecidos viram "sem dados".
+2. **Índice do Blender Open Data**: ferramenta `tools/MBExtreme.IndexTool` (e passo do CI, que não derruba o build se falhar) baixa o arquivo de resultados (CC0), normaliza os tempos por cena e versão do Blender e grava `hardware-index.json` (nome do modelo e nota, sem os resultados originais). O app mostra "mais rápido que X% dos N modelos" para o processador e a placa. **O formato exato dos dados do Blender não pôde ser conferido** (o site não abre neste ambiente): a leitura é tolerante e o índice sai vazio, sem quebrar nada, se o formato mudou.
+3. **Ranking anônimo opcional**: servidor com banco separado (`ranking.db`), código de instalação embaralhado, validação, limites por IP e por instalação, medições com mais de 18 meses apagadas, "apagar meus dados"; no app, consentimento explícito (desligado por padrão), botão para ver o que será enviado e envio das medições do benchmark e do jogo. A posição só aparece com amostras suficientes (30 PCs com a mesma placa; 10 no caso de um jogo).
+4. **Teste de estresse com GPU**: queimador 3D (fractal, cubos, preenchimento, cálculo puro ou combinado) com a imagem na tela, conferência de um quadro de referência a cada 3 s (diferença = erro), detecção de reinício da placa (TDR), limite de temperatura; monitoramento ao vivo (uso, temperatura, clock e potência de GPU e CPU, FPS da cena), relatório com gráficos e veredito, HTML exportável e histórico.
+
+### O que ainda depende de você
+- Configurar o endereço do servidor (`AppInfo.DefaultServerUrl` ou a configuração do usuário) para o ranking funcionar.
+- Conferir o primeiro índice gerado pelo CI (passo "Gerar o índice de hardware") e, se o Blender mudou o formato, ajustar `HardwareIndexBuilder`.
+- Revisar a tabela de níveis de placas e processadores (`HardwareTiers`) com calma: são estimativas escritas por nós.
+- Atualizar o texto jurídico da política de privacidade e os termos com um advogado antes de lançar o ranking.

@@ -42,7 +42,7 @@ internal static class NavigationMap
         {
             new("gamefps", "Jogo (FPS)", "Mede um jogo: FPS, 1% pior, gráfico de tempo de quadro, engasgos e sensores.", "\uE7FC"),
             new("bench", "Benchmark do PC", "CPU, memória, disco e GPU em 3D.", "\uE9D9"),
-            new("stress", "Teste de estresse", "Carga no hardware, por núcleo ou geral.", "\uE7BA"),
+            new("stress", "Teste de estresse", "CPU, memória e GPU 3D com monitoramento ao vivo, erros e relatório.", "\uE7BA"),
             new("compare", "Antes e depois", "Mede o efeito real de cada mudança.", "\uE9D9"),
             new("fps", "Painel de FPS sobre o jogo", "Overlay com FPS, temperatura e uso.", "\uE9D9"),
         }),

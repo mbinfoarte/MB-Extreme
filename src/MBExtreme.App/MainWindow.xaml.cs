@@ -201,6 +201,7 @@ public partial class MainWindow : Window
         "bench" => new BenchmarkPage(),
         "stress" => new StressPage(),
         "fps" => new FpsPage(),
+        "gamefps" => new GameFpsPage(),
         "record" => new StudioPage(),
         "shorts" => new ShortsPage(),
         "storage" => new StoragePage(),

@@ -6,7 +6,7 @@ public static class FeaturePolicy
     /// <summary>Páginas (chaves da navegação) do plano Pro. Tudo que não está aqui é gratuito.</summary>
     public static IReadOnlySet<string> ProPages { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
-        "record", "shorts", "bench", "compare", "stress", "latency", "gameboost", "gameadvisor", "fps",
+        "record", "shorts", "gamefps", "bench", "compare", "stress", "latency", "gameboost", "gameadvisor", "fps",
         "hardware", "bios", "recipe", "netanalyzer", "wifi", "drivers",
         "tweaks-perf", "tweaks-game", "net-tweaks", "duplicates", "largefiles", "shredder",
         "gamelibrary", "profiles",

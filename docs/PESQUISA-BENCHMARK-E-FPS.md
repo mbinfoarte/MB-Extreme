@@ -82,3 +82,10 @@ Uma tela "Verificação de configuração" com avisos acionáveis:
 - O driver de sensores usado por bibliotecas como a LibreHardwareMonitor pode ser bloqueado por Defender, HVCI ou antitrapaça **(confirmar na versão 0.9.6 que usamos)**: o app deve funcionar sem sensores e explicar por quê.
 - Avisos de licença de terceiros precisam estar no app (7-Zip LGPL, Vosk, NAudio, TraceEvent, QRCoder, Vortice, FFmpeg).
 - Não prometer comparação com resultados de 3DMark/Cinebench: a nossa pontuação é de outra escala.
+
+## 5. Já implementado (fase 1, primeira parte)
+- **Menu Benchmark** próprio, com: Jogo (FPS), Benchmark do PC, Teste de estresse, Antes e depois e o painel de FPS sobre o jogo (saíram de Jogos e de Testes).
+- **Motor de quadros v2** (`MBExtreme.Core.Fps`): `FrameAnalysis` (FPS médio, mínimo e máximo, 1% e 0,1% piores pelos dois métodos, P99, desvio, engasgos pela média móvel de 20 quadros, pausas ignoradas, aquecimento cortado, série reduzida guardando picos, FPS por segundo, histograma e curva de percentis), `FrameCapture` (guarda todos os quadros e escolhe o jogo sozinho ou pelo nome) e `FpsSessions` (sessões, histórico em JSON, comparação A x B, relatório em HTML e texto).
+- **Página "Jogo (FPS)"**: captura com tempo opcional e aquecimento; painel ao vivo (FPS grande, gráfico de tempo de quadro e de FPS por segundo, quatro cartões de sensores); relatório com cartões, nota de fluidez, gráficos e sensores; salvar HTML, exportar CSV, copiar resumo; histórico e comparação.
+- Ainda **não** usa o PresentMon: continua nos eventos DXGI do Windows (o PresentMon fica para quando for validado em PC real).
+- Falta (próximos passos): redesenhar o Teste de estresse com painel de monitoramento no estilo OCCT/Adrenalin, estresse de GPU com gráficos, DiskSpd e 7-Zip, Blender Benchmark, verificação de configuração, overlay configurável.

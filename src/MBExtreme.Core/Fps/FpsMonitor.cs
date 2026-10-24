@@ -21,6 +21,7 @@ public sealed class FpsMonitor : IDisposable
     private TraceEventSession? _session;
     private Task? _worker;
     private double _lastEvent;
+    private volatile FrameCapture? _capture;
 
     public bool IsRunning => _session is not null;
 
@@ -44,6 +45,26 @@ public sealed class FpsMonitor : IDisposable
         double seconds = data.TimeStampRelativeMSec / 1000.0;
         _lastEvent = seconds;
         _tracker.Record(data.ProcessID, seconds);
+        _capture?.Record(data.ProcessID, seconds);
+    }
+
+    /// <summary>Começa a guardar todos os quadros (para uma sessão de análise). Com <paramref name="processName"/>, só esse programa; sem nome, o que mais apresentar quadros.</summary>
+    public void BeginCapture(string? processName = null)
+    {
+        if (_session is null) throw new InvalidOperationException("O monitor de FPS não está ligado.");
+        _capture = new FrameCapture(processName, IsIgnored, ProcessName);
+    }
+
+    public bool IsCapturing => _capture is not null;
+
+    public LiveCapture? CaptureLive(int recentFrames = 600) => _capture?.Live(recentFrames);
+
+    /// <summary>Termina a captura e devolve todos os instantes de quadros do jogo (nulo se nenhum jogo apresentou quadros).</summary>
+    public CaptureResult? EndCapture()
+    {
+        var capture = _capture;
+        _capture = null;
+        return capture?.Finish();
     }
 
     /// <summary>O programa que mais apresenta quadros agora (ignora o desktop e este aplicativo).</summary>
@@ -63,11 +84,14 @@ public sealed class FpsMonitor : IDisposable
 
     public string ProcessName(int processId)
     {
-        if (_names.TryGetValue(processId, out var cached)) return cached;
+        lock (_names)
+        {
+            if (_names.TryGetValue(processId, out var cached)) return cached;
+        }
         string name;
         try { name = Process.GetProcessById(processId).ProcessName; }
         catch (ArgumentException) { name = "processo " + processId; }
-        return _names[processId] = name;
+        lock (_names) return _names[processId] = name;
     }
 
     private bool IsIgnored(int pid)

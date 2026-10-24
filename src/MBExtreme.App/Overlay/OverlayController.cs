@@ -52,6 +52,36 @@ internal sealed class OverlayController
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    private bool _monitorStartedForCapture;
+
+    public bool IsCapturing => _monitor.IsCapturing;
+
+    /// <summary>Começa a guardar todos os quadros do jogo (análise de sessão). Liga o monitor se ainda não estiver ligado.</summary>
+    public void BeginCapture(string? processName)
+    {
+        if (!_monitor.IsRunning)
+        {
+            StartMonitoring();
+            _monitorStartedForCapture = true;
+        }
+        _monitor.BeginCapture(processName);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public LiveCapture? CaptureLive(int recentFrames = 300) => _monitor.CaptureLive(recentFrames);
+
+    public CaptureResult? EndCapture()
+    {
+        var result = _monitor.EndCapture();
+        if (_monitorStartedForCapture)
+        {
+            _monitorStartedForCapture = false;
+            if (!OverlayVisible) StopMonitoring();
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+        return result;
+    }
+
     public void ShowOverlay()
     {
         StartMonitoring();

@@ -32,14 +32,21 @@ internal static class NavigationMap
             new("latency", "Diagnóstico de latência", "Acha o driver que causa micro-travadas.", "\uE9D9"),
             new("gameadvisor", "Assistente de jogo", "Configurações ideais para o seu hardware.", "\uE770"),
             new("bottleneck", "Monitor de gargalos", "O que limita o seu FPS: placa, processador, memória, disco ou calor.", "\uE9D9"),
-            new("fps", "Monitor de FPS", "Overlay com FPS, temperatura e uso.", "\uE9D9"),
         }),
         new("record", "Gravação e transmissão", "Grave a tela, transmita ao vivo e salve replays.", "\uE714", new Tile[]
         {
             new("record", "Gravação e transmissão", "Grave, transmita ao vivo e salve replays, com áudio, câmera e escolha de janela.", "\uE714"),
             new("shorts", "Vídeos curtos (Shorts e Reels)", "Corte um vídeo longo em vários vídeos verticais, na mão ou pelos momentos mais fortes.", "\uE8B2"),
         }),
-        new("test", "Testes", "Informações, sensores, benchmark e estresse.", "\uE9D9", new Tile[]
+        new("benchmark", "Benchmark", "Teste o PC, meça jogos em detalhe e compare antes e depois.", "\uE9D9", new Tile[]
+        {
+            new("gamefps", "Jogo (FPS)", "Mede um jogo: FPS, 1% pior, gráfico de tempo de quadro, engasgos e sensores.", "\uE7FC"),
+            new("bench", "Benchmark do PC", "CPU, memória, disco e GPU em 3D.", "\uE9D9"),
+            new("stress", "Teste de estresse", "Carga no hardware, por núcleo ou geral.", "\uE7BA"),
+            new("compare", "Antes e depois", "Mede o efeito real de cada mudança.", "\uE9D9"),
+            new("fps", "Painel de FPS sobre o jogo", "Overlay com FPS, temperatura e uso.", "\uE9D9"),
+        }),
+        new("test", "Testes", "Informações e sensores do PC.", "\uE9D9", new Tile[]
         {
             new("sysinfo", "Informações do sistema", "Estilo CPU-Z, GPU-Z e AIDA.", "\uE770"),
             new("cpu-detail", "Processador", "Uso, temperatura, velocidade e energia, por núcleo.", "\uE950"),
@@ -48,9 +55,6 @@ internal static class NavigationMap
             new("disks", "Discos", "Modelo, velocidade e espaço livre e usado.", "\uEDA2"),
             new("removable", "Pendrives e HDs externos", "Espaço e remoção segura.", "\uE88E"),
             new("monitor", "Monitor em tempo real", "Clock, uso, tensões e temperaturas.", "\uE9D9"),
-            new("bench", "Benchmark", "CPU, memória, disco e GPU em 3D.", "\uE9D9"),
-            new("compare", "Antes e depois", "Mede o efeito real de cada mudança.", "\uE9D9"),
-            new("stress", "Teste de estresse", "Carga no hardware, por núcleo ou geral.", "\uE7BA"),
             new("fans", "Ventoinhas e refrigeração", "Velocidade das ventoinhas, bomba e cooler, com curva por temperatura.", "\uE9CA"),
             new("rgb", "Iluminação RGB", "Cores dos LEDs RGB e ARGB do PC (via OpenRGB).", "\uE790"),
         }),

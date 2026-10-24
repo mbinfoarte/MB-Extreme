@@ -36,7 +36,10 @@ public sealed class GameLibraryPage : ToolPageBase
     private int _tab;
     private readonly StackPanel _sideTop = new();
     private readonly Grid _split = new();
+    private readonly ColumnDefinition _gridColumn = new() { Width = new GridLength(1, GridUnitType.Star) };
+    private readonly ColumnDefinition _gapColumn = new() { Width = new GridLength(14) };
     private readonly ColumnDefinition _sideColumn = new() { Width = new GridLength(430) };
+    private ScrollViewer? _gridScroll;
     private readonly Dictionary<string, ImageSource> _coverImages = new();
 
     public GameLibraryPage() : base("Biblioteca de jogos",
@@ -72,11 +75,12 @@ public sealed class GameLibraryPage : ToolPageBase
 
     private void BuildSplit()
     {
-        _split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+        _split.ColumnDefinitions.Add(_gridColumn);
+        _split.ColumnDefinitions.Add(_gapColumn);
         _split.ColumnDefinitions.Add(_sideColumn);
 
         var gridScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _grid };
+        _gridScroll = gridScroll;
         Grid.SetColumn(gridScroll, 0);
         _split.Children.Add(gridScroll);
 
@@ -100,15 +104,31 @@ public sealed class GameLibraryPage : ToolPageBase
     private void FitSplit()
     {
         _split.Height = Math.Max(440, ActualHeight - 300);
+        if (_expanded && _selected is not null)
+        {
+            // detalhes: o painel ocupa o lugar da grade de capas
+            _gridColumn.Width = new GridLength(0);
+            _gapColumn.Width = new GridLength(0);
+            _sideColumn.Width = new GridLength(1, GridUnitType.Star);
+            if (_gridScroll is not null) _gridScroll.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _gridColumn.Width = new GridLength(1, GridUnitType.Star);
+        _gapColumn.Width = new GridLength(14);
         _sideColumn.Width = new GridLength(ActualWidth < 1050 ? 340 : 430);
+        if (_gridScroll is not null) _gridScroll.Visibility = Visibility.Visible;
     }
 
     private void ShowPlaceholder()
     {
+        _expanded = false;
+        _view = null;
+        FitSplit();
         _sideTop.Children.Clear();
         _detail.Children.Clear();
         _sideTop.Children.Add(new TextBlock { Text = "Escolha um jogo", FontSize = 18, FontWeight = FontWeights.SemiBold });
-        _sideTop.Children.Add(Muted("Clique na capa de um jogo para ver e mudar as configurações só dele aqui ao lado: jogar, medir FPS, otimizar, ajustes do driver e requisitos.", 11));
+        _sideTop.Children.Add(Muted("Clique na capa de um jogo para ver o resumo dele aqui ao lado: jogar, otimizar, medir FPS, rede e requisitos.", 11));
     }
 
     // ------------------------------------------------------------ hardware
@@ -307,6 +327,14 @@ public sealed class GameLibraryPage : ToolPageBase
         _ = RenderDetailAsync(game);
     }
 
+    private sealed record GameView(
+        InstalledGame Game, SteamStoreInfo? Info, GameSettings Settings, GameProfile Profile, OptimizationPlan Plan,
+        IReadOnlyList<SettingRow> Rows, IReadOnlyList<SettingRow> NetRows);
+
+    private GameView? _view;
+    private bool _expanded;
+    private int _detailTab;
+
     private async Task RenderDetailAsync(InstalledGame game)
     {
         // informações da loja (gêneros, requisitos): consulta uma vez e guarda em disco
@@ -329,114 +357,319 @@ public sealed class GameLibraryPage : ToolPageBase
         var netRows = await Task.Run(() => ReadNetworkRows(game));
         if (_selected?.Id != game.Id) return;
 
-        // ---- topo fixo: capa, nome, botões principais e abas
+        _view = new GameView(game, info, settings, profile, plan, rows, netRows);
+        Paint();
+    }
+
+    /// <summary>Desenha o painel do jogo: resumo e otimização na lateral, ou os detalhes ocupando o lugar da grade.</summary>
+    private void Paint()
+    {
+        if (_view is not { } v) return;
+        FitSplit();
         _sideTop.Children.Clear();
-        var head = new Grid();
+        _detail.Children.Clear();
+
+        if (_expanded)
+        {
+            var back = SmallButton("‹  Voltar", (_, _) => { _expanded = false; Paint(); });
+            back.Margin = new Thickness(0, 0, 0, 8);
+            back.HorizontalAlignment = HorizontalAlignment.Left;
+            _sideTop.Children.Add(back);
+        }
+
+        _sideTop.Children.Add(BuildHeader(v));
+        _sideTop.Children.Add(BuildActions(v));
+
+        if (_expanded)
+        {
+            _sideTop.Children.Add(Chips(new[] { "Ajustes do jogo", "Rede e rota", "Desempenho (FPS)", "Requisitos" }, _detailTab, i => { _detailTab = i; Paint(); }));
+            _detail.Children.Add(DetailSection(v));
+            return;
+        }
+
+        _tab = Math.Clamp(_tab, 0, 1);
+        _sideTop.Children.Add(Chips(new[] { "Resumo", "Otimização" }, _tab, i => { _tab = i; Paint(); }));
+        _detail.Children.Add(_tab == 0 ? SummaryPanel(v) : OptimizePanel(v));
+    }
+
+    private void OpenDetails(int detailTab)
+    {
+        _expanded = true;
+        _detailTab = detailTab;
+        Paint();
+    }
+
+    // ---- topo: capa, nome, Jogar
+
+    private UIElement BuildHeader(GameView v)
+    {
+        var game = v.Game;
+        var head = new Grid { Margin = new Thickness(0, 0, 0, 4) };
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (_coverImages.TryGetValue(game.Id, out var coverImage))
-        {
-            var thumb = new Border { Width = 54, Height = 81, CornerRadius = new CornerRadius(6), Margin = new Thickness(0, 0, 10, 0), Background = new ImageBrush(coverImage) { Stretch = Stretch.UniformToFill } };
-            head.Children.Add(thumb);
-        }
-        var titles = new StackPanel();
+            head.Children.Add(new Border { Width = 54, Height = 81, CornerRadius = new CornerRadius(6), Margin = new Thickness(0, 0, 10, 0), Background = new ImageBrush(coverImage) { Stretch = Stretch.UniformToFill } });
+
+        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         titles.Children.Add(new TextBlock { Text = game.Name, FontSize = 18, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-        string played = settings.MinutesPlayed < 1 ? "sem registro de tempo" : $"{settings.MinutesPlayed / 60:0.#} h jogadas" + (settings.LastPlayed is { } last ? $" · último: {last:dd/MM}" : "");
+        var s = v.Settings;
+        string played = s.MinutesPlayed < 1 ? "sem registro de tempo" : $"{s.MinutesPlayed / 60:0.#} h jogadas" + (s.LastPlayed is { } last ? $" · último: {last:dd/MM}" : "");
         titles.Children.Add(Muted($"{game.LauncherName} · {played}", 11));
         Grid.SetColumn(titles, 1);
         head.Children.Add(titles);
-        _sideTop.Children.Add(head);
 
-        var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 2) };
         var play = SmallButton("Jogar", (_, _) => Play(game), true);
-        play.Margin = new Thickness(0, 0, 8, 6);
-        buttons.Children.Add(play);
-        if (AppServices.GameMeasure.GameId == game.Id)
-            buttons.Children.Add(Tight(SmallButton("Parar medição de FPS", (_, _) => AppServices.GameMeasure.Stop(), true)));
-        else if (game.ExeName is not null)
-            buttons.Children.Add(Tight(SmallButton("Jogar e medir FPS", (_, _) => Play(game, true))));
-        bool optimized = settings.OptimizedAt is not null;
-        buttons.Children.Add(Tight(SmallButton(optimized ? "Reaplicar otimização" : "Otimizar", async (_, _) => await OptimizeAsync(game, plan, profile), !optimized)));
-        if (optimized) buttons.Children.Add(Tight(SmallButton("Desfazer otimização", async (_, _) => await UndoAsync(game))));
-        _sideTop.Children.Add(buttons);
+        play.Margin = new Thickness(10, 0, 0, 0);
+        play.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(play, 2);
+        head.Children.Add(play);
+        return head;
+    }
 
-        // ---- seções (abas)
-        var summary = new StackPanel();
-        summary.Children.Add(Muted((game.ExeName is null ? "Executável não identificado" : game.ExeName) + (info is { Genres.Count: > 0 } ? " · " + string.Join(", ", info.Genres.Take(4)) : ""), 11));
-        if (info is { ShortDescription.Length: > 0 }) summary.Children.Add(Muted(info.ShortDescription, 11));
-        summary.Children.Add(new TextBlock { Text = "Tipo de jogo", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) });
-        summary.Children.Add(Muted("Define o pacote de otimização:", 11));
+    // ---- ações: otimizar, medir FPS e desfazer
+
+    private UIElement BuildActions(GameView v)
+    {
+        var game = v.Game;
+        var buttons = new WrapPanel { Margin = new Thickness(0, 6, 0, 4) };
+        bool optimized = v.Settings.OptimizedAt is not null;
+        buttons.Children.Add(Tight(SmallButton(optimized ? "Reaplicar otimização" : "Otimizar", async (_, _) => await OptimizeAllAsync(game, v.Plan, v.Profile), !optimized)));
+
+        if (AppServices.GameMeasure.GameId == game.Id)
+            buttons.Children.Add(Tight(SmallButton("Parar medição", (_, _) => AppServices.GameMeasure.Stop(), true)));
+        else if (game.ExeName is not null)
+        {
+            var measure = Tight(SmallButton("Medir FPS", (_, _) => Play(game, true)));
+            measure.ToolTip = "Abre o jogo e mede o FPS enquanto você joga; a sessão é guardada ao fechar o jogo.";
+            buttons.Children.Add(measure);
+        }
+
+        if (optimized) buttons.Children.Add(Tight(SmallButton("Desfazer", async (_, _) => await UndoAsync(game))));
+        return buttons;
+    }
+
+    /// <summary>Otimiza o jogo e a rede dele de uma vez (cada parte continua desfazível pelo "Desfazer").</summary>
+    private async Task OptimizeAllAsync(InstalledGame game, OptimizationPlan plan, GameProfile profile)
+    {
+        await OptimizeAsync(game, plan, profile);
+        if (_view is { } v && v.NetRows.Any(r => r.CanFix))
+            await OptimizeNetworkAsync(game, profile);
+    }
+
+    // ---- aba Resumo: poucos cartões, cada um com "Ver detalhes"
+
+    private UIElement SummaryPanel(GameView v)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var game = v.Game;
+        var info = v.Info;
+        panel.Children.Add(Muted((game.ExeName ?? "Executável não identificado") + (info is { Genres.Count: > 0 } ? " · " + string.Join(", ", info.Genres.Take(3)) : ""), 11));
+
+        // 1) otimização
+        int gameFix = v.Rows.Count(r => r.CanFix || r.State == RowState.Different);
+        int netFix = v.NetRows.Count(r => r.CanFix || r.State == RowState.Different);
+        int fix = gameFix + netFix;
+        bool optimized = v.Settings.OptimizedAt is not null;
+        string optLine, optBrush;
+        if (optimized && fix == 0) { optLine = "✓ Otimizado · tudo certo"; optBrush = "OkBrush"; }
+        else if (optimized) { optLine = $"Otimizado, mas {fix} ponto(s) mudaram desde então"; optBrush = "WarnBrush"; }
+        else if (fix == 0) { optLine = "Já está como o recomendado"; optBrush = "OkBrush"; }
+        else { optLine = $"{fix} ponto(s) para otimizar"; optBrush = "WarnBrush"; }
+        panel.Children.Add(InfoCard("Otimização", optLine, optBrush,
+            $"Jogo: {(gameFix == 0 ? "tudo certo" : gameFix + " a ajustar")} · Rede: {(netFix == 0 ? "tudo certo" : netFix + " a ajustar")}",
+            "Ver ajustes", () => { _tab = 1; Paint(); }));
+
+        // 2) desempenho (FPS)
+        var sessions = AppServices.Perf.Get(game.Id);
+        var cmp = PerfCompare.Build(sessions);
+        string fpsLine, fpsBrush = "TextBrush", fpsSub;
+        if (cmp.Before is not null && cmp.After is not null)
+        {
+            fpsLine = $"FPS médio {cmp.Before.AvgFps:0} → {cmp.After.AvgFps:0} ({cmp.AvgChangePercent:+0;-0;0}%)";
+            fpsBrush = cmp.Verdict == Verdict.Worse ? "WarnBrush" : "OkBrush";
+            fpsSub = $"1% pior {cmp.Before.Low1Fps:0} → {cmp.After.Low1Fps:0} ({cmp.LowChangePercent:+0;-0;0}%) · antes e depois da otimização";
+        }
+        else if (sessions.LastOrDefault() is { } last)
+        {
+            fpsLine = $"FPS médio {last.AvgFps:0} · 1% pior {last.Low1Fps:0}";
+            fpsSub = "Falta medir o outro lado (antes ou depois de otimizar) para comparar.";
+        }
+        else
+        {
+            fpsLine = "Ainda não medido";
+            fpsBrush = "MutedBrush";
+            fpsSub = game.ExeName is null ? "Não sei qual é o executável deste jogo." : "Clique em Medir FPS, jogue 2 a 3 minutos e feche o jogo.";
+        }
+        panel.Children.Add(InfoCard("Desempenho (FPS)", fpsLine, fpsBrush, fpsSub, "Ver detalhes", () => OpenDetails(2)));
+
+        // 3) rede
+        var report = AppServices.NetReports.Get(game.Id).LastOrDefault();
+        panel.Children.Add(InfoCard("Rede e rota",
+            report is null ? "Rota ainda não analisada" : $"Ping médio {report.AvgMs:0} ms · oscilação {report.JitterMs:0.#} ms · perda {report.LossPercent:0.#}%",
+            report is null ? "MutedBrush" : report.LossPercent > 2 || report.JitterMs > 15 ? "WarnBrush" : "OkBrush",
+            report is null ? "Entre numa partida e use Ver detalhes → Analisar rota." : $"Medido em {report.At:dd/MM HH:mm} · {report.Host}",
+            "Ver detalhes", () => OpenDetails(1)));
+
+        // 4) requisitos
+        string req = info is { MinimumRequirements.Length: > 0 } ? Shorten(info.MinimumRequirements, 150) : "A loja não informou requisitos para este jogo.";
+        panel.Children.Add(InfoCard("Requisitos", info is { MinimumRequirements.Length: > 0 } ? "Mínimos informados pela loja" : "Sem requisitos informados",
+            info is { MinimumRequirements.Length: > 0 } ? "TextBrush" : "MutedBrush", req, "Ver detalhes", () => OpenDetails(3)));
+        return panel;
+    }
+
+    private static string Shorten(string text, int max)
+    {
+        string flat = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return flat.Length <= max ? flat : flat[..max].TrimEnd() + "…";
+    }
+
+    private Border InfoCard(string title, string line, string brush, string sub, string buttonText, Action open)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Text = title, FontSize = 11, Foreground = Brush("MutedBrush") });
+        text.Children.Add(new TextBlock { Text = line, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = Brush(brush), TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(new TextBlock { Text = sub, FontSize = 11, Foreground = Brush("MutedBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+        grid.Children.Add(text);
+        var button = SmallButton(buttonText, (_, _) => open());
+        button.Padding = new Thickness(10, 4, 10, 4);
+        button.FontSize = 11.5;
+        button.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(button, 1);
+        grid.Children.Add(button);
+        var card = CardOf(grid);
+        card.Padding = new Thickness(12, 8, 8, 8);
+        card.Margin = new Thickness(0, 6, 0, 0);
+        return card;
+    }
+
+    // ---- aba Otimização: duas listas curtas (jogo e rede)
+
+    private UIElement OptimizePanel(GameView v)
+    {
+        var game = v.Game;
+        var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+
+        panel.Children.Add(new TextBlock { Text = "Tipo de jogo", FontSize = 12, FontWeight = FontWeights.SemiBold });
         var profiles = GameProfiles.All.ToList();
-        summary.Children.Add(Chips(profiles.Select(p => p.Title.Split('(')[0].Trim()).ToList(), Math.Max(0, profiles.FindIndex(p => p.Key == profile.Key)), i =>
+        panel.Children.Add(Chips(profiles.Select(p => p.Title.Split('(')[0].Trim()).ToList(), Math.Max(0, profiles.FindIndex(p => p.Key == v.Profile.Key)), i =>
         {
             AppServices.GameLibrary.Update(game.Id, s => { s.ProfileKey = profiles[i].Key; if (game.ExeName is not null) s.ExeName = game.ExeName; });
             _ = RenderDetailAsync(game);
         }));
-        summary.Children.Add(Muted(profile.Description, 11));
-        var extra = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+        panel.Children.Add(Muted(v.Profile.Description, 11));
+
+        panel.Children.Add(Group("Jogo", v.Rows, () => OpenDetails(0)));
+        panel.Children.Add(Group("Rede", v.NetRows.Where(r => r.Recommended != "Precisa de servidor").ToList(), () => OpenDetails(1)));
+
+        var more = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
         if (game.ExeName is not null)
         {
             bool applied = false;
             try { applied = AppServices.GamePriority.IsApplied(game.ExeName); } catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException) { }
-            extra.Children.Add(Tight(SmallButton(applied ? "Prioridade alta: ligada" : "Prioridade alta de CPU", (_, _) => TogglePriority(game, applied), applied)));
+            more.Children.Add(Tight(SmallButton(applied ? "Prioridade alta: ligada" : "Prioridade alta de CPU", (_, _) => TogglePriority(game, applied), applied)));
         }
         if (game.Launcher == GameLauncher.Manual)
-            extra.Children.Add(Tight(SmallButton("Remover da lista", (_, _) => { AppServices.GameLibrary.RemoveManual(game.LaunchTarget ?? ""); _selected = null; _ = ScanAsync(); })));
-        summary.Children.Add(extra);
+            more.Children.Add(Tight(SmallButton("Remover da lista", (_, _) => { AppServices.GameLibrary.RemoveManual(game.LaunchTarget ?? ""); _selected = null; _expanded = false; _ = ScanAsync(); })));
+        panel.Children.Add(more);
+        return panel;
+    }
 
-        var optimize = new StackPanel();
-        optimize.Children.Add(BuildTable(rows));
-        if (_maker == GpuMaker.Nvidia)
+    /// <summary>Lista curta: nome do ajuste e o estado (✓ OK, ▲ Desligado...). O texto longo fica no tooltip e em "Ver detalhes".</summary>
+    private UIElement Group(string title, IReadOnlyList<SettingRow> rows, Action details)
+    {
+        int fix = rows.Count(r => r.CanFix || r.State == RowState.Different);
+        var box = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
+
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition());
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var label = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        label.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 10, 0) });
+        label.Children.Add(new TextBlock { Text = fix == 0 ? "✓ tudo certo" : $"▲ {fix} a ajustar", FontSize = 12, Foreground = Brush(fix == 0 ? "OkBrush" : "WarnBrush"), VerticalAlignment = VerticalAlignment.Center });
+        head.Children.Add(label);
+        var button = SmallButton("Ver detalhes", (_, _) => details());
+        button.Padding = new Thickness(10, 3, 10, 3);
+        button.FontSize = 11.5;
+        Grid.SetColumn(button, 1);
+        head.Children.Add(button);
+        box.Children.Add(head);
+
+        foreach (var r in rows)
         {
-            var adv = new CheckBox
-            {
-                Content = "Incluir ajustes avançados do driver (experimentais; cada um tem explicação e é desfeito pelo \"Desfazer otimização\")",
-                IsChecked = _advanced, Foreground = Brush("TextBrush"), FontSize = 11.5, Margin = new Thickness(0, 2, 0, 6),
-            };
-            adv.Click += async (_, _) => { _advanced = adv.IsChecked == true; await RenderDetailAsync(game); };
-            optimize.Children.Add(adv);
-            if (DriverCatalog.For(game.ExeName) is { } cat)
-                optimize.Children.Add(Muted($"Perfil de driver do catálogo: {cat.Title}. Fonte dos valores: NVIDIA Profile Inspector (licença MIT) e guias da comunidade; veja docs/PERFIS-DRIVER-NVIDIA.md.", 10.5));
+            var line = new Grid { Margin = new Thickness(0, 3, 0, 0) };
+            line.ColumnDefinitions.Add(new ColumnDefinition());
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            string tip = string.IsNullOrEmpty(r.Note) ? r.Title : r.Title + "\n" + r.Note;
+            line.Children.Add(new TextBlock { Text = ShortTitle(r.Title), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = tip, Margin = new Thickness(0, 0, 8, 0) });
+            string state = r.State == RowState.Ok ? "✓ OK" : r.State == RowState.Different ? "▲ " + r.Current : r.Current;
+            string brush = r.State == RowState.Ok ? "OkBrush" : r.State == RowState.Different ? "WarnBrush" : "MutedBrush";
+            var status = new TextBlock { Text = state, FontSize = 12, Foreground = Brush(brush), ToolTip = tip, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 170 };
+            Grid.SetColumn(status, 1);
+            line.Children.Add(status);
+            box.Children.Add(line);
         }
-        var tweakNames = plan.TweakIds.Select(id => AppServices.Tweaks.FirstOrDefault(t => t.Id == id)).Where(t => t is { Risk: MBExtreme.Core.Tweaks.TweakRisk.Low } t2 && t2.IsAvailable).Select(t => "• " + t!.Title).ToList();
-        if (tweakNames.Count > 0) optimize.Children.Add(new Expander { Header = $"O que será ajustado no Windows ({tweakNames.Count})", Content = Muted(string.Join("\n", tweakNames), 11), Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 0) });
-        optimize.Children.Add(new Expander { Header = "Dicas de configuração do jogo para o seu hardware", Content = Muted(string.Join("\n\n", plan.Advice), 11), Foreground = Brush("TextBrush") });
 
-        // ---- rede e rota do jogo
-        var netBox = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
-        netBox.Children.Add(new TextBlock { Text = "Rede e rota deste jogo", FontSize = 14, FontWeight = FontWeights.SemiBold });
-        netBox.Children.Add(Muted("Reduz o que atrapalha o ping dentro do seu PC. Para ver onde está o atraso no caminho até o servidor, use a aba Rede.", 11));
-        netBox.Children.Add(BuildTable(netRows, "Rede do jogo"));
-        var netButtons = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        netButtons.Children.Add(Tight(SmallButton("Otimizar rede deste jogo", async (_, _) => await OptimizeNetworkAsync(game, profile), netRows.Any(r => r.CanFix))));
-        netButtons.Children.Add(Tight(SmallButton("Analisar rota do jogo", (_, _) => { _tab = 3; _ = RenderDetailAsync(game); })));
-        netBox.Children.Add(netButtons);
-        optimize.Children.Add(netBox);
+        if (rows.Count == 0) box.Children.Add(Muted("Nada para mostrar aqui.", 11));
+        return box;
+    }
 
-        var performance = new StackPanel();
-        performance.Children.Add(BuildPerformance(game));
+    private static string ShortTitle(string title)
+    {
+        string t = title.Split('(')[0].Trim();
+        if (t.Length == 0) t = title;
+        return t.Length <= 46 ? t : t[..45].TrimEnd() + "…";
+    }
 
-        var network = BuildNetwork(game, settings.OptimizedAt is not null);
+    // ---- detalhes (painel expandido no lugar da grade)
 
-        var requirements = new StackPanel();
-        if (info is { MinimumRequirements.Length: > 0 } or { RecommendedRequirements.Length: > 0 })
+    private UIElement DetailSection(GameView v)
+    {
+        var game = v.Game;
+        var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        switch (_detailTab)
         {
-            if (info!.MinimumRequirements.Length > 0) requirements.Children.Add(Muted(info.MinimumRequirements, 11));
-            if (info.RecommendedRequirements.Length > 0) requirements.Children.Add(Muted("\n" + info.RecommendedRequirements, 11));
+            case 0:
+                panel.Children.Add(BuildTable(v.Rows));
+                if (_maker == GpuMaker.Nvidia)
+                {
+                    var adv = new CheckBox
+                    {
+                        Content = "Incluir ajustes avançados do driver (experimentais; cada um tem explicação e é desfeito pelo \"Desfazer\")",
+                        IsChecked = _advanced, Foreground = Brush("TextBrush"), FontSize = 11.5, Margin = new Thickness(0, 2, 0, 6),
+                    };
+                    adv.Click += async (_, _) => { _advanced = adv.IsChecked == true; await RenderDetailAsync(game); };
+                    panel.Children.Add(adv);
+                    if (DriverCatalog.For(game.ExeName) is { } cat)
+                        panel.Children.Add(Muted($"Perfil de driver do catálogo: {cat.Title}. Fonte dos valores: NVIDIA Profile Inspector (licença MIT) e guias da comunidade; veja docs/PERFIS-DRIVER-NVIDIA.md.", 10.5));
+                }
+                var tweakNames = v.Plan.TweakIds.Select(id => AppServices.Tweaks.FirstOrDefault(t => t.Id == id)).Where(t => t is { Risk: MBExtreme.Core.Tweaks.TweakRisk.Low } t2 && t2.IsAvailable).Select(t => "• " + t!.Title).ToList();
+                if (tweakNames.Count > 0) panel.Children.Add(new Expander { Header = $"O que será ajustado no Windows ({tweakNames.Count})", Content = Muted(string.Join("\n", tweakNames), 11), Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 0) });
+                panel.Children.Add(new Expander { Header = "Dicas de configuração do jogo para o seu hardware", Content = Muted(string.Join("\n\n", v.Plan.Advice), 11), Foreground = Brush("TextBrush") });
+                break;
+            case 1:
+                panel.Children.Add(BuildTable(v.NetRows, "Rede do jogo"));
+                panel.Children.Add(BuildNetwork(game, v.Settings.OptimizedAt is not null));
+                break;
+            case 2:
+                panel.Children.Add(BuildPerformance(game));
+                break;
+            default:
+                var info = v.Info;
+                if (info is { ShortDescription.Length: > 0 }) panel.Children.Add(Muted(info.ShortDescription, 11.5));
+                if (info is { MinimumRequirements.Length: > 0 } or { RecommendedRequirements.Length: > 0 })
+                {
+                    if (info!.MinimumRequirements.Length > 0) panel.Children.Add(Muted("\n" + info.MinimumRequirements, 11.5));
+                    if (info.RecommendedRequirements.Length > 0) panel.Children.Add(Muted("\n" + info.RecommendedRequirements, 11.5));
+                }
+                else panel.Children.Add(Muted("A loja não informou requisitos para este jogo.", 11.5));
+                break;
         }
-        else requirements.Children.Add(Muted("A loja não informou requisitos para este jogo.", 11));
 
-        var sections = new UIElement[] { summary, optimize, performance, network, requirements };
-        string[] names = { "Resumo", "Otimização", "Desempenho", "Rede", "Requisitos" };
-        _tab = Math.Clamp(_tab, 0, sections.Length - 1);
-        void Show(int i)
-        {
-            _tab = i;
-            _detail.Children.Clear();
-            _detail.Children.Add(sections[i]);
-        }
-        _sideTop.Children.Add(Chips(names, _tab, Show));
-        Show(_tab);
+        return panel;
     }
 
     private IReadOnlyList<SettingRow> ReadNetworkRows(InstalledGame game)
@@ -927,7 +1160,7 @@ public sealed class GameLibraryPage : ToolPageBase
         box.Children.Add(Muted(cmp.Message, 11));
         foreach (string w in cmp.Warnings) box.Children.Add(Muted("• " + w, 10.5));
         box.Children.Add(Muted(sessions.Count == 0
-            ? "Use \"Jogar e medir FPS\": o MB Extreme mede enquanto você joga e guarda a sessão ao fechar o jogo. Faça o mesmo trecho (2 a 3 minutos) antes e depois de otimizar. A medição lê eventos do Windows, sem mexer no jogo (antitrapaça), e precisa de administrador."
+            ? "Use \"Medir FPS\": o MB Extreme abre o jogo, mede enquanto você joga e guarda a sessão ao fechar o jogo. Faça o mesmo trecho (2 a 3 minutos) antes e depois de otimizar. A medição lê eventos do Windows, sem mexer no jogo (antitrapaça), e precisa de administrador."
             : $"{sessions.Count} sessão(ões) guardada(s). Para comparar com justiça, jogue o mesmo mapa/trecho.", 10.5));
         if (sessions.Count > 0)
         {

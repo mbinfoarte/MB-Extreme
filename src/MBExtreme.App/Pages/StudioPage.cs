@@ -14,6 +14,7 @@ using MBExtreme.Core.Network;
 using MBExtreme.Core.Progress;
 using MBExtreme.Core.Recording;
 using MBExtreme.Core.Settings;
+using MBExtreme.UI.Controls;
 using MBExtreme.UI.Recording;
 
 namespace MBExtreme.UI.Pages;
@@ -57,7 +58,22 @@ public sealed class StudioPage : ToolPageBase
     private readonly StackPanel _liveButtons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Grid _previewHost = new() { HorizontalAlignment = HorizontalAlignment.Left };
     private readonly List<Border> _ghosts = new();
-    private readonly StackPanel _tabPix = new();
+    private readonly StackPanel _tabPix = new(), _tabStats = new();
+    private readonly LiveStatsService _stats = new(new HttpClient { Timeout = TimeSpan.FromSeconds(12) });
+    private readonly ViewerHistory _viewers = new(120);
+    private readonly LiveChart _viewerChart = new(60, Color.FromRgb(0xFF, 0xC4, 0x00)) { Height = 70, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly Border _statsCard = new() { Visibility = Visibility.Collapsed };
+    private readonly TextBlock _statsViewers = new() { FontSize = 26, FontWeight = FontWeights.SemiBold };
+    private readonly TextBlock _statsLine = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
+    private readonly TextBlock _statsTitle = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly TextBlock _statsError = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
+    private readonly TextBlock _statsTest = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly DispatcherTimer _statsTimer = new() { Interval = TimeSpan.FromSeconds(15) };
+    private readonly PasswordBox _statsKey = new() { Width = 300, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBox _statsId = new() { Width = 300, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBox _twitchId = new() { Width = 300, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 64 };
+    private readonly PasswordBox _twitchSecret = new() { Width = 300, HorizontalAlignment = HorizontalAlignment.Left };
+    private bool _statsBusy, _hasStats, _syncingId, _wasStreaming;
     private readonly TextBox _pixKey = new() { Width = 300, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _pixName = new() { Width = 220, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 25 };
     private readonly TextBox _pixCity = new() { Width = 160, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 15 };
@@ -137,6 +153,7 @@ public sealed class StudioPage : ToolPageBase
 
         Body.Children.Add(_live);
         BuildLive();
+        BuildStatsCard();
         Body.Children.Add(_config);
         BuildSource();
         BuildTiles();
@@ -148,6 +165,7 @@ public sealed class StudioPage : ToolPageBase
         RebuildCameras();
         BuildPix();
         BuildStream();
+        BuildStatsTab();
         BuildReplaySettings();
         BuildShortcuts();
         BuildCompat();
@@ -159,10 +177,15 @@ public sealed class StudioPage : ToolPageBase
 
         _studio.Notice += OnNotice;
         _timer.Tick += (_, _) => Tick();
+        _statsTimer.Tick += async (_, _) =>
+        {
+            if (_s.StudioStatsOn && _studio.IsRunning && _studio.Config?.Stream is not null) await RefreshStatsAsync(false);
+        };
         _previewTimer.Tick += async (_, _) => await UpdatePreviewAsync();
         Loaded += async (_, _) =>
         {
             _timer.Start();
+            _statsTimer.Start();
             _previewTimer.Start();
             RefreshFiles();
             RefreshState();
@@ -171,6 +194,7 @@ public sealed class StudioPage : ToolPageBase
         Unloaded += (_, _) =>
         {
             _timer.Stop();
+            _statsTimer.Stop();
             _previewTimer.Stop();
             _studio.Notice -= OnNotice;
         };
@@ -573,8 +597,8 @@ public sealed class StudioPage : ToolPageBase
     {
         var title = new TextBlock { Text = "Configurações", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) };
         _config.Children.Add(title);
-        var tabs = new[] { _tabVideo, _tabAudio, _tabCamera, _tabPix, _tabStream, _tabReplay, _tabShortcuts, _tabAdvanced };
-        _config.Children.Add(Chips(new[] { "Vídeo", "Áudio", "Câmeras", "Pix", "Transmissão", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
+        var tabs = new[] { _tabVideo, _tabAudio, _tabCamera, _tabPix, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced };
+        _config.Children.Add(Chips(new[] { "Vídeo", "Áudio", "Câmeras", "Pix", "Transmissão", "Estatísticas", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
         {
             _settingsTab = i;
             for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == i);
@@ -771,6 +795,228 @@ public sealed class StudioPage : ToolPageBase
         SetStatus(_cameraList.Count == 0 ? "Nenhuma câmera encontrada. Conecte uma e tente de novo." : $"{_cameraList.Count} câmera(s) encontrada(s).", _cameraList.Count == 0 ? "WarnBrush" : "OkBrush");
     }
 
+    // ---------------------------------------------------------------- estatísticas da transmissão
+
+    private void BuildStatsCard()
+    {
+        var panel = new StackPanel();
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition());
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.Children.Add(new TextBlock { Text = "Estatísticas da transmissão", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        var refresh = SmallButton("Atualizar", async (_, _) => await RefreshStatsAsync(true));
+        refresh.Padding = new Thickness(10, 3, 10, 3);
+        refresh.FontSize = 11.5;
+        var open = SmallButton("Abrir o painel da plataforma", (_, _) => OpenManagePage());
+        open.Padding = new Thickness(10, 3, 10, 3);
+        open.FontSize = 11.5;
+        buttons.Children.Add(refresh);
+        buttons.Children.Add(open);
+        Grid.SetColumn(buttons, 1);
+        head.Children.Add(buttons);
+        panel.Children.Add(head);
+
+        panel.Children.Add(_statsViewers);
+        _statsLine.Foreground = Brush("MutedBrush");
+        _statsTitle.Foreground = Brush("TextBrush");
+        _statsError.Foreground = Brush("WarnBrush");
+        _viewerChart.FormatMax = v => $"{v:0}";
+        panel.Children.Add(_statsLine);
+        panel.Children.Add(_viewerChart);
+        panel.Children.Add(_statsTitle);
+        panel.Children.Add(_statsError);
+
+        _statsCard.Style = (Style)FindResource("Card");
+        _statsCard.Padding = new Thickness(14, 10, 14, 10);
+        _statsCard.Margin = new Thickness(0, 8, 0, 0);
+        _statsCard.Child = panel;
+        Body.Children.Add(_statsCard);
+    }
+
+    private void BuildStatsTab()
+    {
+        _tabStats.Children.Clear();
+        foreach (var box in new FrameworkElement[] { _statsKey, _statsId, _twitchId, _twitchSecret, _statsTest }) Detach(box);
+
+        var on = Check("Mostrar as estatísticas da transmissão", "Espectadores agora, visualizações, curtidas, comentários, pico e média, com um gráfico, na tela do estúdio.");
+        on.IsChecked = _s.StudioStatsOn;
+        on.Click += (_, _) => { _s.StudioStatsOn = on.IsChecked == true; UpdateStatsVisibility(); };
+        _tabStats.Children.Add(on);
+        _tabStats.Children.Add(Muted("Os números vêm das APIs oficiais das plataformas, com uma chave do SEU canal (grátis). Ficam sem login e sem enviar nada seu para nós.", 11));
+
+        _syncingId = true;
+        _statsId.Text = _s.StudioChatId;
+        _syncingId = false;
+        _statsId.TextChanged -= StatsIdChanged;
+        _statsId.TextChanged += StatsIdChanged;
+        _tabStats.Children.Add(Field("Canal ou live", _statsId, 140));
+        _tabStats.Children.Add(Muted("YouTube: código ou endereço da live (aparece depois de v= ou no painel de transmissão). Twitch: nome do seu canal. É o mesmo campo do chat, na aba Transmissão.", 11));
+
+        // YouTube
+        _tabStats.Children.Add(Heading("YouTube"));
+        if (SecretStore.Unprotect(_s.StudioYouTubeKeyProtected) is { } savedKey) _statsKey.Password = savedKey;
+        _statsKey.PasswordChanged -= StatsSecretChanged;
+        _statsKey.PasswordChanged += StatsSecretChanged;
+        _tabStats.Children.Add(Field("Chave de API", _statsKey, 140));
+        var how = SmallButton("Como criar a chave (Google Cloud)", (_, _) => OpenWeb("https://console.cloud.google.com/apis/credentials"));
+        how.Margin = new Thickness(0, 0, 0, 4);
+        _tabStats.Children.Add(Field("", how, 140));
+        _tabStats.Children.Add(Muted("Crie um projeto, ative a \"YouTube Data API v3\" e gere uma chave de API. O limite grátis (10.000 unidades por dia) dá para consultar a cada 15 segundos o dia inteiro. A chave fica guardada protegida pelo Windows, só para o seu usuário.", 11));
+
+        // Twitch
+        _tabStats.Children.Add(Heading("Twitch"));
+        _twitchId.Text = _s.StudioTwitchClientId;
+        _twitchId.TextChanged -= TwitchIdChanged;
+        _twitchId.TextChanged += TwitchIdChanged;
+        _tabStats.Children.Add(Field("Client ID", _twitchId, 140));
+        if (SecretStore.Unprotect(_s.StudioTwitchSecretProtected) is { } savedSecret) _twitchSecret.Password = savedSecret;
+        _twitchSecret.PasswordChanged -= StatsSecretChanged;
+        _twitchSecret.PasswordChanged += StatsSecretChanged;
+        _tabStats.Children.Add(Field("Segredo (Client Secret)", _twitchSecret, 140));
+        var twitchHow = SmallButton("Como criar o aplicativo (Twitch Developers)", (_, _) => OpenWeb("https://dev.twitch.tv/console/apps"));
+        twitchHow.Margin = new Thickness(0, 0, 0, 4);
+        _tabStats.Children.Add(Field("", twitchHow, 140));
+        _tabStats.Children.Add(Muted("Registre um aplicativo (categoria \"Application Integration\"), copie o Client ID e gere um segredo. A Twitch informa espectadores, título e jogo; não informa visualizações totais por esta consulta.", 11));
+
+        var test = SmallButton("Testar agora", async (_, _) => await RefreshStatsAsync(true));
+        test.Margin = new Thickness(0, 10, 0, 0);
+        test.HorizontalAlignment = HorizontalAlignment.Left;
+        _tabStats.Children.Add(test);
+        _statsTest.Foreground = Brush("MutedBrush");
+        _tabStats.Children.Add(_statsTest);
+
+        _tabStats.Children.Add(Heading("Configurações da transmissão"));
+        _tabStats.Children.Add(Muted("Título, categoria, privacidade, latência e atraso da live são mudados no painel da própria plataforma: o botão \"Abrir o painel da plataforma\" leva direto para ele. O MB Extreme mostra aqui o título e a categoria atuais. Mudá-los de dentro do programa exigiria entrar na sua conta do Google ou da Twitch com um aplicativo aprovado por eles, o que ainda não existe.", 11));
+        var manage = SmallButton("Abrir o painel da plataforma", (_, _) => OpenManagePage());
+        manage.HorizontalAlignment = HorizontalAlignment.Left;
+        manage.Margin = new Thickness(0, 4, 0, 0);
+        _tabStats.Children.Add(manage);
+        _tabStats.Children.Add(Muted("Facebook e outros servidores: a plataforma só libera estatísticas para aplicativos aprovados por ela; abra o painel para ver.", 11));
+    }
+
+    private void StatsIdChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_syncingId) return;
+        _syncingId = true;
+        _s.StudioChatId = _statsId.Text.Trim();
+        _chatId.Text = _statsId.Text;
+        _syncingId = false;
+    }
+
+    private void TwitchIdChanged(object? sender, TextChangedEventArgs e) => _s.StudioTwitchClientId = _twitchId.Text.Trim();
+
+    private void StatsSecretChanged(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _s.StudioYouTubeKeyProtected = _statsKey.Password.Length > 0 ? SecretStore.Protect(_statsKey.Password) : null;
+            _s.StudioTwitchSecretProtected = _twitchSecret.Password.Length > 0 ? SecretStore.Protect(_twitchSecret.Password) : null;
+        }
+        catch (CryptographicException)
+        {
+            SetStatus("Não foi possível guardar a chave com segurança; ela vale só até fechar o programa.", "WarnBrush");
+        }
+    }
+
+    private void UpdateStatsVisibility()
+    {
+        bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
+        _statsCard.Visibility = Vis(_s.StudioStatsOn && (streaming || _hasStats));
+    }
+
+    private async Task RefreshStatsAsync(bool manual)
+    {
+        if (_statsBusy) return;
+        var service = CurrentService();
+        if (service is StreamService.Facebook or StreamService.Custom)
+        {
+            if (manual) ShowStatsError("Esta plataforma não libera estatísticas por aqui. Use \"Abrir o painel da plataforma\".");
+            return;
+        }
+
+        _statsBusy = true;
+        try
+        {
+            var result = service == StreamService.YouTube
+                ? await _stats.QueryYouTubeAsync(_statsId.Text, _statsKey.Password, CancellationToken.None)
+                : await _stats.QueryTwitchAsync(_statsId.Text, _twitchId.Text, _twitchSecret.Password, CancellationToken.None);
+            if (result.Stats is { } stats) ShowStats(stats);
+            else ShowStatsError(result.Error ?? "Não foi possível consultar.");
+        }
+        finally
+        {
+            _statsBusy = false;
+        }
+    }
+
+    private static string Count(long? value) => value is { } v ? v.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("pt-BR")) : "—";
+
+    private void ShowStats(LiveStats stats)
+    {
+        _hasStats = true;
+        _statsError.Visibility = Visibility.Collapsed;
+        if (stats.IsLive && stats.Viewers is { } now)
+        {
+            _viewers.Add(now);
+            _viewerChart.Update(_viewers.Values.ToList());
+            _statsViewers.Text = $"● {Count(now)} espectador{(now == 1 ? "" : "es")} agora";
+            _statsViewers.FontSize = 26;
+            _statsViewers.Foreground = Brush("OkBrush");
+        }
+        else
+        {
+            _statsViewers.Text = stats.IsLive ? "● No ar (a plataforma ainda não informou espectadores)" : "Fora do ar na plataforma";
+            _statsViewers.FontSize = 16;
+            _statsViewers.Foreground = Brush(stats.IsLive ? "OkBrush" : "MutedBrush");
+        }
+
+        var parts = new List<string>();
+        if (stats.TotalViews is not null) parts.Add($"{Count(stats.TotalViews)} visualizações");
+        if (stats.Likes is not null) parts.Add($"{Count(stats.Likes)} curtidas");
+        if (stats.Comments is not null) parts.Add($"{Count(stats.Comments)} comentários");
+        if (_viewers.Values.Count > 0) parts.Add($"pico {Count(_viewers.Peak)} · média {_viewers.Average:0}");
+        if (stats.StartedAt is { } started && stats.IsLive) parts.Add($"no ar há {DateTime.Now - started:hh\\:mm\\:ss}");
+        _statsLine.Text = string.Join("  ·  ", parts);
+
+        string title = stats.Title.Length == 0 ? "" : stats.Title + (stats.Category.Length > 0 ? " · " + stats.Category : "");
+        _statsTitle.Text = title;
+        _statsTitle.Visibility = Vis(title.Length > 0);
+        _statsTest.Text = "✓ " + stats.Platform + " respondeu" + (stats.IsLive ? " (ao vivo)." : " (canal fora do ar).");
+        _statsTest.Foreground = Brush("OkBrush");
+        UpdateStatsVisibility();
+    }
+
+    private void ShowStatsError(string text)
+    {
+        _statsError.Text = "⚠ " + text;
+        _statsError.Visibility = Vis(_hasStats || _studio.IsRunning);
+        _statsTest.Text = "⚠ " + text;
+        _statsTest.Foreground = Brush("WarnBrush");
+        if (!_hasStats && _studio.IsRunning && _studio.Config?.Stream is not null)
+        {
+            _statsViewers.Text = "Estatísticas indisponíveis";
+            _statsViewers.Foreground = Brush("MutedBrush");
+            _statsLine.Text = "";
+            _statsTitle.Visibility = Visibility.Collapsed;
+            _statsCard.Visibility = Vis(_s.StudioStatsOn);
+            _statsError.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void OpenManagePage()
+    {
+        string? url = LiveStatsService.ManageUrl(CurrentService(), _statsId.Text);
+        if (url is null) { SetStatus("Este servidor não tem painel conhecido. Abra o site da plataforma onde você transmite.", "WarnBrush"); return; }
+        OpenWeb(url);
+    }
+
+    private static void OpenWeb(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (Win32Exception) { }
+    }
+
     // ---------------------------------------------------------------- Pix
 
     private static readonly int[] PixPercents = { 10, 14, 18, 22 };
@@ -946,7 +1192,11 @@ public sealed class StudioPage : ToolPageBase
 
         // chat
         var chatRow = new WrapPanel();
+        _syncingId = true;
         _chatId.Text = _s.StudioChatId;
+        _syncingId = false;
+        _chatId.TextChanged -= ChatIdChanged;
+        _chatId.TextChanged += ChatIdChanged;
         _chatId.Margin = new Thickness(0, 0, 8, 4);
         chatRow.Children.Add(_chatId);
         var openChat = SmallButton("Abrir o chat", (_, _) => OpenChat());
@@ -958,6 +1208,15 @@ public sealed class StudioPage : ToolPageBase
             : ChatLinks.Prompt(service) + ".", 11));
         _tabStream.Children.Add(Muted("A transmissão usa H.264, taxa constante e quadro-chave a cada 2 s. A chave nunca aparece em mensagens nem em arquivos de relatório.", 11));
         UpdatePlan();
+    }
+
+    private void ChatIdChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_syncingId) return;
+        _syncingId = true;
+        _statsId.Text = _chatId.Text;
+        _s.StudioChatId = _chatId.Text.Trim();
+        _syncingId = false;
     }
 
     /// <summary>Atualiza o cartão "padrões da plataforma" e o resumo do que será enviado, com as configurações atuais.</summary>
@@ -1604,6 +1863,10 @@ public sealed class StudioPage : ToolPageBase
         if (!running) _pending.Visibility = Visibility.Collapsed;
         RefreshMuteButtons();
         _live.Visibility = Vis(_studio.IsRunning);
+        bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
+        if (streaming && !_wasStreaming) { _viewers.Reset(); _hasStats = false; if (_s.StudioStatsOn) _ = RefreshStatsAsync(false); }
+        _wasStreaming = streaming;
+        UpdateStatsVisibility();
         _liveButtons.Visibility = Vis(_studio.Config?.Stream is not null && _studio.IsRunning);
         _wasRunning = running;
     }

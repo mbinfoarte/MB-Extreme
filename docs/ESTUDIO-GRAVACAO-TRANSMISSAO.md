@@ -72,6 +72,20 @@ Aba **Pix**: chave (CPF, CNPJ, e-mail, telefone com +55 ou chave aleatória, com
 
 Isto é um projeto à parte (e tem implicações fiscais e de taxas); o QR estático já entrega o recebimento direto, sem intermediário.
 
+## Estatísticas da transmissão
+
+Aba **Estatísticas** e cartão no alto da tela com a live no ar: espectadores agora, visualizações, curtidas, comentários, pico e média da sessão, gráfico dos espectadores, título e categoria. Atualiza a cada 15 s.
+
+| Plataforma | Fonte | O que traz | O que o usuário precisa |
+|---|---|---|---|
+| YouTube | YouTube Data API v3 (`videos.list`: snippet, statistics, liveStreamingDetails) | espectadores simultâneos, visualizações, curtidas, comentários, título, categoria, início | chave de API do próprio projeto no Google Cloud (grátis; 1 unidade por consulta, cota de 10.000/dia) e o código da live |
+| Twitch | Helix `GET /streams` com token de aplicativo (client credentials) | espectadores, título, jogo, início | Client ID e segredo de um aplicativo próprio (dev.twitch.tv/console/apps) e o nome do canal |
+| Facebook / outros | nenhuma | — | a API só libera para aplicativos aprovados; o botão abre o painel da plataforma |
+
+As chaves ficam protegidas pelo Windows (DPAPI), só para o usuário, e nunca em log. Quando a cota ou a chave falham, a tela explica o motivo.
+
+**Configurações da live (título, categoria, privacidade, latência, atraso, DVR):** o programa mostra título e categoria atuais, mas **não os altera**. Mudar isso pela API exige que o dono entre com a conta do Google ou da Twitch (OAuth) em um aplicativo aprovado pela plataforma (o escopo do YouTube que edita transmissões é "sensível" e passa por verificação do Google, que leva semanas). Por isso o botão **Abrir o painel da plataforma** leva direto ao YouTube Studio da live, ao Stream Manager da Twitch ou ao Produtor do Facebook. Fazer isso de dentro do programa é um projeto à parte (aplicativo OAuth verificado, e idealmente o servidor do MB Extreme guardando as credenciais do aplicativo).
+
 ## Lances automáticos pelo som
 
 No Replay: **Salvar os lances automaticamente**. A cada 0,1 s o programa mede o volume do som do PC (sem o microfone) e compara os últimos 2 s com o volume normal dos últimos 60 s. Se passar de 1,5x (alta), 1,9x (média) ou 2,4x (baixa) e de um volume mínimo, depois de 20 s de aquecimento, espera alguns segundos (3, 6 ou 10, para pegar a comemoração) e salva o clipe do replay, com pausa de 45 s entre clipes. Um aviso "Lance salvo" aparece por cima do jogo (janelas e sem bordas; em tela cheia exclusiva o Windows pode esconder). O atalho de salvar replay continua valendo para marcar um lance na mão.

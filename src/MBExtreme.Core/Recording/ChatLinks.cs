@@ -9,6 +9,23 @@ public static class ChatLinks
     private static readonly Regex YouTubeId = new(@"^[A-Za-z0-9_-]{11}$", RegexOptions.Compiled);
     private static readonly Regex YouTubeFromUrl = new(@"(?:[?&]v=|youtu\.be/|/live/)([A-Za-z0-9_-]{11})", RegexOptions.Compiled);
 
+    /// <summary>Código de 11 caracteres de um vídeo ou live do YouTube, a partir do código ou de um endereço. Null se não for reconhecido.</summary>
+    public static string? YouTubeVideoId(string? input)
+    {
+        string text = (input ?? "").Trim();
+        if (YouTubeId.IsMatch(text)) return text;
+        return YouTubeFromUrl.Match(text) is { Success: true } m ? m.Groups[1].Value : null;
+    }
+
+    /// <summary>Nome do canal da Twitch, a partir do nome, de @nome ou do endereço do canal. Null se for inválido.</summary>
+    public static string? TwitchLogin(string? input)
+    {
+        string text = (input ?? "").Trim().TrimStart('@');
+        int slash = text.LastIndexOf('/');
+        if (slash >= 0) text = text[(slash + 1)..];
+        return TwitchChannel.IsMatch(text) ? text.ToLowerInvariant() : null;
+    }
+
     public static bool Supports(StreamService service) => service is StreamService.Twitch or StreamService.YouTube;
 
     public static string Prompt(StreamService service) => service switch

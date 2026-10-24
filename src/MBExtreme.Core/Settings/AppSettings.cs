@@ -139,6 +139,17 @@ public sealed class AppSettings
     /// <summary>Mostra um aviso pequeno por cima do jogo quando um clipe é salvo (funciona com jogo em janela ou sem bordas).</summary>
     public bool StudioClipToast { get; set; } = true;
 
+    // ---- estatísticas da transmissão (espectadores, visualizações...)
+    public bool StudioStatsOn { get; set; } = true;
+
+    /// <summary>Chave de API do YouTube (do Google Cloud do próprio usuário), protegida pelo Windows. Nunca em texto puro.</summary>
+    public string? StudioYouTubeKeyProtected { get; set; }
+
+    public string StudioTwitchClientId { get; set; } = "";
+
+    /// <summary>Segredo do aplicativo da Twitch do próprio usuário, protegido pelo Windows.</summary>
+    public string? StudioTwitchSecretProtected { get; set; }
+
     /// <summary>Canal da Twitch ou código da transmissão do YouTube, para abrir o chat.</summary>
     public string StudioChatId { get; set; } = "";
 

@@ -20,6 +20,7 @@
     <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
     <!-- Captura de áudio (WASAPI) e mixagem para a gravação e a transmissão. MIT. -->
     <PackageReference Include="NAudio.Core" Version="2.2.1" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
   </ItemGroup>
 

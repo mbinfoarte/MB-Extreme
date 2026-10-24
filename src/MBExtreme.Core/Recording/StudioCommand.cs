@@ -7,6 +7,7 @@ public static class StudioCommand
 {
     public const int SegmentSeconds = 4;
     public const int MaxStreamMbps = 8;
+    public const int MaxCameras = 3;
 
     private static readonly Regex SafeKey = new(@"^[A-Za-z0-9_\-.~%=&?]+$", RegexOptions.Compiled);
 
@@ -40,7 +41,12 @@ public static class StudioCommand
             if (url.IndexOfAny(new[] { '|', '[', ']', '"', ' ', '\'' }) >= 0) return "O endereço do servidor tem caracteres inválidos.";
         }
         if (r.Source.Kind == SourceKind.WindowGdi && string.IsNullOrWhiteSpace(r.Source.WindowTitle)) return "A janela escolhida não tem título.";
-        if (r.Camera is { } cam && !CameraOverlay.IsValidName(cam.DeviceName)) return "O nome da câmera tem caracteres que não são aceitos. Escolha outra câmera da lista.";
+        if (r.Cameras.Count > MaxCameras) return $"Use no máximo {MaxCameras} câmeras ao mesmo tempo.";
+        foreach (var cam in r.Cameras)
+            if (!CameraOverlay.IsValidName(cam.DeviceName)) return "O nome da câmera tem caracteres que não são aceitos. Escolha outra câmera da lista.";
+        if (r.Cameras.Select(c => c.DeviceName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != r.Cameras.Count)
+            return "A mesma câmera foi escolhida duas vezes. Cada câmera só pode aparecer uma vez.";
+        if (r.Pix is { } pix && !PixOverlay.IsValidPath(pix.ImagePath)) return "A imagem do QR do Pix não é válida.";
         return null;
     }
 
@@ -90,18 +96,19 @@ public static class StudioCommand
             });
         }
 
-        // ---- câmera (entrada extra)
-        var camera = r.Camera;
-        int cameraInput = audio ? 2 : 1;
-        if (camera is not null)
+        // ---- câmeras e QR do Pix (entradas extras, depois do vídeo e do áudio)
+        int firstExtra = audio ? 2 : 1;
+        foreach (var camera in r.Cameras)
             args.AddRange(new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + camera.DeviceName });
+        if (r.Pix is { } pixInput)
+            args.AddRange(new[] { "-loop", "1", "-framerate", "5", "-i", pixInput.ImagePath });
 
         // ---- filtros
         string? filter = null;
         string? complex = null;
-        if (camera is not null)
+        if (r.Cameras.Count > 0 || r.Pix is not null)
         {
-            complex = CameraGraph(r, camera, cameraInput, gdi, sameSize);
+            complex = OverlayGraph(r, firstExtra, gdi, sameSize);
         }
         else if (gdi)
         {
@@ -178,20 +185,45 @@ public static class StudioCommand
         _ => $"x=main_w-overlay_w-{margin}:y=main_h-overlay_h-{margin}",
     };
 
-    /// <summary>Filtro com a imagem da tela e a câmera por cima. A câmera é medida em % da largura da tela capturada, antes de reduzir.</summary>
-    private static string CameraGraph(StudioRequest r, CameraOverlay camera, int cameraInput, bool gdi, bool sameSize)
+    /// <summary>
+    /// Filtro com a imagem da tela e, por cima, as câmeras e o QR do Pix. As câmeras são medidas em % da largura da tela capturada, antes de reduzir.
+    /// Cada camada vira o fundo da próxima: [b0] + câmera 1 = [b1], [b1] + câmera 2 = [b2]...
+    /// </summary>
+    private static string OverlayGraph(StudioRequest r, int firstExtra, bool gdi, bool sameSize)
     {
         int baseWidth = gdi ? r.OutputWidth : r.Source.Area.Width;
-        int camWidth = Math.Max(2, baseWidth * camera.ClampedPercent / 100);
-        camWidth -= camWidth % 2;
         int margin = Math.Max(8, baseWidth / 80);
+        var parts = new List<string> { (gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra") + "[b0]" };
 
-        string background = gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra";
-        string cam = $"[{cameraInput}:v]scale={camWidth}:-2,format=bgra" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
+        int layer = 0;
+        for (int i = 0; i < r.Cameras.Count; i++)
+        {
+            var camera = r.Cameras[i];
+            int width = Math.Max(2, baseWidth * camera.ClampedPercent / 100);
+            width -= width % 2;
+            string cam = $"[{firstExtra + i}:v]scale={width}:-2,format=bgra" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
+            parts.Add($"{cam}[c{i}]");
+            parts.Add($"[b{layer}][c{i}]overlay={CameraPosition(camera.Corner, margin)}:shortest=0[b{layer + 1}]");
+            layer++;
+        }
+
+        if (r.Pix is { } pix)
+        {
+            int width = Math.Max(2, baseWidth * pix.ClampedPercent / 100);
+            width -= width % 2;
+            string enable = pix.EveryMinutes > 0
+                ? $":enable='lt(mod(t,{pix.EveryMinutes * 60}),{Math.Clamp(pix.ShowSeconds, 3, pix.EveryMinutes * 60)})'"
+                : "";
+            parts.Add($"[{firstExtra + r.Cameras.Count}:v]scale={width}:-2,format=bgra[pix]");
+            parts.Add($"[b{layer}][pix]overlay={CameraPosition(pix.Corner, margin)}{enable}:shortest=0[b{layer + 1}]");
+            layer++;
+        }
+
         string finish = gdi
             ? $"scale={r.OutputWidth}:{r.OutputHeight}:force_original_aspect_ratio=decrease,pad={r.OutputWidth}:{r.OutputHeight}:(ow-iw)/2:(oh-ih)/2:black,format=nv12"
             : sameSize ? "format=nv12" : $"scale={r.OutputWidth}:{r.OutputHeight}:flags=bilinear,format=nv12";
-        return $"{background}[bg];{cam}[cam];[bg][cam]overlay={CameraPosition(camera.Corner, margin)}:shortest=0,{finish}[v]";
+        parts.Add($"[b{layer}]{finish}[v]");
+        return string.Join(";", parts);
     }
 
     /// <summary>Linha de comando para mostrar na tela, com a chave escondida.</summary>

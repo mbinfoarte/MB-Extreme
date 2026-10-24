@@ -9,6 +9,7 @@ public sealed class AudioInput
 {
     private readonly BufferedWaveProvider _buffer;
     private readonly VolumeSampleProvider _volume;
+    private readonly PeakSampleProvider _meter;
 
     internal AudioInput(string name, WaveFormat format, float volume)
     {
@@ -25,7 +26,11 @@ public sealed class AudioInput
         else if (samples.WaveFormat.Channels > 2) samples = new FirstTwoChannelsProvider(samples);
         if (samples.WaveFormat.SampleRate != AudioMixer.SampleRate) samples = new WdlResamplingSampleProvider(samples, AudioMixer.SampleRate);
         _volume = new VolumeSampleProvider(samples) { Volume = volume };
+        _meter = new PeakSampleProvider(_volume);
     }
+
+    /// <summary>Maior volume (0 a 1) desta fonte desde a última chamada. Serve para detectar lances sem misturar com a voz do microfone.</summary>
+    public float TakePeak() => _meter.TakePeak();
 
     public string Name { get; }
 
@@ -35,7 +40,7 @@ public sealed class AudioInput
         set => _volume.Volume = Math.Clamp(value, 0f, 2f);
     }
 
-    internal ISampleProvider Output => _volume;
+    internal ISampleProvider Output => _meter;
 
     /// <summary>Entrega o áudio capturado (no formato informado ao criar a fonte).</summary>
     public void Push(byte[] data, int count) => _buffer.AddSamples(data, 0, count);
@@ -117,6 +122,33 @@ public sealed class AudioMixer
         catch (OperationCanceledException) { }
         catch (IOException) { /* o FFmpeg fechou a leitura */ }
         catch (ObjectDisposedException) { }
+    }
+}
+
+/// <summary>Repassa o áudio sem mexer e guarda o maior valor lido desde a última consulta.</summary>
+internal sealed class PeakSampleProvider : ISampleProvider
+{
+    private readonly ISampleProvider _source;
+    private volatile float _peak;
+
+    public PeakSampleProvider(ISampleProvider source) => _source = source;
+
+    public WaveFormat WaveFormat => _source.WaveFormat;
+
+    public int Read(float[] buffer, int offset, int count)
+    {
+        int read = _source.Read(buffer, offset, count);
+        float peak = _peak;
+        for (int i = 0; i < read; i++) peak = Math.Max(peak, Math.Abs(buffer[offset + i]));
+        _peak = peak;
+        return read;
+    }
+
+    public float TakePeak()
+    {
+        float peak = _peak;
+        _peak = 0;
+        return peak;
     }
 }
 

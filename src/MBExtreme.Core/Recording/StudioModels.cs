@@ -79,6 +79,15 @@ public enum EncoderQuality { Fast, Balanced, Quality }
 
 public enum CameraCorner { TopLeft, TopRight, BottomLeft, BottomRight }
 
+/// <summary>Imagem do QR do Pix (PNG pronto) mostrada num canto. <paramref name="EveryMinutes"/> 0 = sempre visível.</summary>
+public sealed record PixOverlay(string ImagePath, CameraCorner Corner, int WidthPercent, int EveryMinutes, int ShowSeconds)
+{
+    public int ClampedPercent => Math.Clamp(WidthPercent, 8, 30);
+
+    public static bool IsValidPath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) && path.IndexOfAny(new[] { '"', '|', '\'', '\r', '\n', ';', '[', ']' }) < 0;
+}
+
 /// <summary>Câmera (webcam) que aparece num canto do vídeo, como nas transmissões.</summary>
 public sealed record CameraOverlay(string DeviceName, CameraCorner Corner, int WidthPercent, bool Frame)
 {
@@ -129,7 +138,18 @@ public sealed record StudioRequest
 
     public EncoderQuality Quality { get; init; } = EncoderQuality.Balanced;
 
-    public CameraOverlay? Camera { get; init; }
+    /// <summary>Até três câmeras, cada uma num canto (o DirectShow não abre a mesma câmera duas vezes).</summary>
+    public IReadOnlyList<CameraOverlay> Cameras { get; init; } = Array.Empty<CameraOverlay>();
+
+    /// <summary>Atalho para a primeira câmera (compatibilidade).</summary>
+    public CameraOverlay? Camera
+    {
+        get => Cameras.Count > 0 ? Cameras[0] : null;
+        init => Cameras = value is null ? Array.Empty<CameraOverlay>() : new[] { value };
+    }
+
+    /// <summary>QR do Pix por cima do vídeo (sempre ou por alguns segundos a cada tantos minutos).</summary>
+    public PixOverlay? Pix { get; init; }
 
     public bool AnyOutput => RecordFile is not null || Stream is not null || ReplayFolder is not null;
 }

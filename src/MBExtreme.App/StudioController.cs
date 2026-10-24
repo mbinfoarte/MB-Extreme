@@ -1,7 +1,10 @@
 using System.ComponentModel;
 using System.IO;
+using System.Diagnostics;
 using System.Windows;
+using System.Windows.Threading;
 using MBExtreme.Core.Recording;
+using MBExtreme.UI.Overlay;
 using MBExtreme.UI.Recording;
 
 namespace MBExtreme.UI;
@@ -24,7 +27,9 @@ internal sealed record StudioConfig(
     int StreamCapMbps = 0,
     int AudioKbps = 160,
     EncoderQuality Quality = EncoderQuality.Balanced,
-    CameraOverlay? Camera = null);
+    IReadOnlyList<CameraOverlay>? Cameras = null,
+    PixOverlay? Pix = null,
+    string? PixPayload = null);
 
 /// <summary>Mantém a sessão do estúdio viva enquanto você troca de página e cuida dos atalhos globais (salvar replay, gravar e transmitir).</summary>
 internal sealed class StudioController
@@ -32,19 +37,28 @@ internal sealed class StudioController
     private const string ReplayFolder = "replay-buffer";
 
     private readonly Dictionary<StudioAction, int> _hotkeyIds = new();
+    private readonly DispatcherTimer _highlightTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private HighlightDetector? _detector;
+    private int _detectorSensitivity = -1;
+    private bool _autoSaving;
     private bool _saving, _toggling;
     private string? _ffmpeg;
 
-    public StudioController() => Session.Ended += (_, _) =>
-        Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
-        {
-            if (Session.EndedUnexpectedly)
+    public StudioController()
+    {
+        Session.Ended += (_, _) =>
+            Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
             {
-                string? last = Session.LastMessage;
-                Stop();
-                Raise("O estúdio terminou sozinho" + (last is null ? "." : ": " + last), false);
-            }
-        }));
+                if (Session.EndedUnexpectedly)
+                {
+                    string? last = Session.LastMessage;
+                    Stop();
+                    Raise("O estúdio terminou sozinho" + (last is null ? "." : ": " + last), false);
+                }
+            }));
+        _highlightTimer.Tick += (_, _) => HighlightTick();
+    }
 
     public StudioSession Session { get; } = new();
 
@@ -98,7 +112,8 @@ internal sealed class StudioController
             StreamMaxMbps = streamMax,
             AudioKbps = audioKbps,
             Quality = config.Quality,
-            Camera = config.Camera,
+            Cameras = config.Cameras ?? Array.Empty<CameraOverlay>(),
+            Pix = config.Pix,
             WorkingDirectory = Folder,
             RecordFile = config.Record ? "gravacao-" + stamp + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             RecordMp4 = config.Mp4,
@@ -111,7 +126,88 @@ internal sealed class StudioController
         _ffmpeg = ffmpeg;
         Config = config;
         LastConfig = config;
+        _detector = null;
+        _highlightTimer.Start();
     }
+
+    /// <summary>Aplica uma configuração nova à sessão que está rodando: para a captura e começa de novo. A transmissão reconecta (alguns segundos fora do ar), a gravação continua num arquivo novo e o replay recomeça vazio.</summary>
+    public async Task RestartAsync(StudioConfig next)
+    {
+        if (_ffmpeg is null) throw new InvalidOperationException("O estúdio não está ligado.");
+        string ffmpeg = _ffmpeg;
+        await Task.Run(Stop);
+        await StartAsync(ffmpeg, next);
+    }
+
+    /// <summary>Texto que muda sempre que algo que exige reiniciar a captura muda. A chave de transmissão entra só como resumo (nunca em texto).</summary>
+    public static string Signature(StudioConfig c)
+    {
+        var parts = new List<string>
+        {
+            c.Source.Kind.ToString(), c.Source.DisplayIndex.ToString(), $"{c.Source.Area.X},{c.Source.Area.Y},{c.Source.Area.Width},{c.Source.Area.Height}", c.Source.WindowTitle ?? "",
+            c.OutputHeight.ToString(), c.Fps.ToString(), c.Encoder.FfmpegName, c.BitrateMbps.ToString(), c.Record.ToString(), c.Mp4.ToString(),
+            c.Replay.ToString(), c.ReplaySeconds.ToString(), c.StreamCapMbps.ToString(), c.AudioKbps.ToString(), c.Quality.ToString(),
+            c.Audio is null ? "sem-audio" : $"{c.Audio.CaptureSystem}:{c.Audio.OutputId}:{c.Audio.CaptureMicrophone}:{c.Audio.MicrophoneId}",
+        };
+        if (c.Stream is { } t)
+        {
+            byte[] hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(t.FullUrl));
+            parts.Add($"stream:{t.Service}:{Convert.ToHexString(hash, 0, 6)}");
+        }
+        foreach (var cam in c.Cameras ?? Array.Empty<CameraOverlay>()) parts.Add($"cam:{cam.DeviceName}:{cam.Corner}:{cam.WidthPercent}:{cam.Frame}");
+        if (c.Pix is { } pix)
+        {
+            byte[] pixHash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(c.PixPayload ?? ""));
+            parts.Add($"pix:{pix.Corner}:{pix.WidthPercent}:{pix.EveryMinutes}:{pix.ShowSeconds}:{Convert.ToHexString(pixHash, 0, 6)}");
+        }
+        return string.Join("|", parts);
+    }
+
+    // ---------------------------------------------------------------- clipes automáticos de lances
+
+    private void HighlightTick()
+    {
+        if (!Session.IsRunning || Config is not { Replay: true })
+        {
+            _highlightTimer.Stop();
+            return;
+        }
+
+        var settings = AppServices.Settings;
+        if (!settings.StudioAutoClip || !Session.HasAudio || !Session.HasSystemAudio) return;
+        int sensitivity = Math.Clamp(settings.StudioAutoClipSensitivity, 0, 2);
+        if (_detector is null || sensitivity != _detectorSensitivity)
+        {
+            _detector = new HighlightDetector((HighlightDetector.Sensitivity)sensitivity);
+            _detectorSensitivity = sensitivity;
+        }
+
+        // só o som do jogo conta: a sua própria voz no microfone não pode disparar o clipe
+        if (_detector.Feed(Session.TakeSystemPeak(), _clock.Elapsed.TotalSeconds) && !_autoSaving)
+            _ = SaveHighlightAsync(Math.Clamp(settings.StudioAutoClipAfterSeconds, 0, 20));
+    }
+
+    private async Task SaveHighlightAsync(int afterSeconds)
+    {
+        _autoSaving = true;
+        try
+        {
+            if (AppServices.Settings.StudioClipToast) ClipToast.Show("Lance detectado", $"Salvando o clipe em {afterSeconds} s...");
+            if (afterSeconds > 0) await Task.Delay(TimeSpan.FromSeconds(afterSeconds));
+            await SaveReplayAsync(automatic: true);
+        }
+        finally
+        {
+            _autoSaving = false;
+        }
+    }
+
+    // ---------------------------------------------------------------- áudio ao vivo
+
+    /// <summary>Muda o volume do som do PC ou do microfone na hora, sem reiniciar a captura.</summary>
+    public void SetVolume(bool microphone, float volume) => Session.SetVolume(microphone, volume);
+
+    public float GetVolume(bool microphone) => Session.GetVolume(microphone);
 
     // ---------------------------------------------------------------- atalhos globais
 
@@ -205,20 +301,23 @@ internal sealed class StudioController
     /// <summary>Para tudo. Devolve o arquivo gravado, se havia.</summary>
     public string? Stop()
     {
-        string? file = Session.Stop();
+        string? file = Session.Stop();   // o relógio dos lances se desliga sozinho no próximo tique (este método roda fora da interface)
         if (Config?.Replay == true) ReplayBuffer.ClearSegments(Path.Combine(Folder, ReplayFolder));
         return file;
     }
 
-    public async Task<string?> SaveReplayAsync()
+    public Task<string?> SaveReplayAsync() => SaveReplayAsync(automatic: false);
+
+    public async Task<string?> SaveReplayAsync(bool automatic)
     {
         if (_saving || !Session.IsRunning || Config is not { Replay: true } config) return null;
         _saving = true;
         try
         {
             string clip = await Session.SaveReplayAsync(ClipsFolder, config.GameName);
-            Raise("Replay salvo: " + clip, true);
+            Raise((automatic ? "Lance salvo automaticamente: " : "Replay salvo: ") + clip, true);
             if (config.Beep) System.Media.SystemSounds.Asterisk.Play();
+            if (AppServices.Settings.StudioClipToast) ClipToast.Show(automatic ? "Lance salvo" : "Clipe salvo", Path.GetFileName(clip));
             return clip;
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or Win32Exception)

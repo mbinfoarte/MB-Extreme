@@ -56,9 +56,26 @@ public sealed class StudioPage : ToolPageBase
     private readonly TextBlock _liveNet = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
     private readonly StackPanel _liveButtons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Grid _previewHost = new() { HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly Border _ghost = new() { Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+    private readonly List<Border> _ghosts = new();
+    private readonly StackPanel _tabPix = new();
+    private readonly TextBox _pixKey = new() { Width = 300, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBox _pixName = new() { Width = 220, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 25 };
+    private readonly TextBox _pixCity = new() { Width = 160, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 15 };
+    private readonly TextBox _pixAmount = new() { Width = 100, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 10 };
+    private readonly TextBox _pixNote = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 40 };
+    private readonly TextBlock _pixStatus = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+    private readonly System.Windows.Controls.Image _pixPreview = new() { Width = 170, HorizontalAlignment = HorizontalAlignment.Left, Stretch = Stretch.Uniform };
+    private string? _pixPayload;
+    private readonly Border _pending = new() { Visibility = Visibility.Collapsed };
+    private readonly TextBlock _pendingText = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+    private readonly Button _pendingButton = new() { Content = "Aplicar agora", Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    private readonly Button _muteMic = new() { Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(11, 4, 11, 4), FontSize = 12 };
+    private readonly Button _muteSystem = new() { Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(11, 4, 11, 4), FontSize = 12 };
+    private readonly TextBlock _autoClipState = new() { FontSize = 12, Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap };
+    private bool _applying, _restartWarned;
+    private int _tickCount, _previewTick;
+    private static readonly string PixImagePath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "pix-qr.png");
     private readonly StackPanel _displayHost = new();
-    private readonly StackPanel _cameraPick = new();
     private readonly TextBox _chatId = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
     private IReadOnlyList<string> _cameraList = Array.Empty<string>();
     private bool _keyLoaded, _uploadBusy, _wasRunning;
@@ -126,8 +143,10 @@ public sealed class StudioPage : ToolPageBase
         BuildSettings();
         BuildEngine();
         BuildVideo();
+        MigrateCamera();
         BuildAudio();
-        BuildCamera();
+        RebuildCameras();
+        BuildPix();
         BuildStream();
         BuildReplaySettings();
         BuildShortcuts();
@@ -180,6 +199,32 @@ public sealed class StudioPage : ToolPageBase
         var chat = SmallButton("Abrir o chat", (_, _) => OpenChat(), false);
         chat.Margin = new Thickness(0, 0, 8, 0);
         _liveButtons.Children.Add(chat);
+
+        // áudio ao vivo: vale na hora, sem reiniciar
+        var audio = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        _muteMic.Click += (_, _) => ToggleMute(true, _studio.GetVolume(true) > 0.001f);
+        _muteSystem.Click += (_, _) => ToggleMute(false, _studio.GetVolume(false) > 0.001f);
+        audio.Children.Add(_muteMic);
+        audio.Children.Add(_muteSystem);
+        panel.Children.Add(audio);
+        _autoClipState.Margin = new Thickness(0, 6, 0, 0);
+
+        // mudanças que exigem reiniciar a captura
+        _pending.Style = (Style)FindResource("Card");
+        _pending.BorderBrush = Brush("WarnBrush");
+        _pending.Padding = new Thickness(12, 8, 12, 8);
+        _pending.Margin = new Thickness(0, 8, 0, 0);
+        _pendingText.Foreground = Brush("WarnBrush");
+        _pendingButton.Style = (Style)FindResource("PrimaryButton");
+        _pendingButton.Click += async (_, _) => await ApplyAsync();
+        var pendingRow = new Grid();
+        pendingRow.ColumnDefinitions.Add(new ColumnDefinition());
+        pendingRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        pendingRow.Children.Add(_pendingText);
+        Grid.SetColumn(_pendingButton, 1);
+        pendingRow.Children.Add(_pendingButton);
+        _pending.Child = pendingRow;
+        panel.Children.Add(_pending);
     }
 
     /// <summary>Botões de escolha única, pequenos e que quebram de linha (o estúdio tem muitas opções).</summary>
@@ -320,10 +365,11 @@ public sealed class StudioPage : ToolPageBase
         tile.Child = row;
         tile.MouseLeftButtonUp += (_, _) =>
         {
-            if (_studio.IsRunning || AppServices.Recorder.IsRecording) return;
+            if (AppServices.Recorder.IsRecording) return;
             toggle();
             RefreshTiles();
             UpdatePlan();
+            UpdateAutoClipText();
         };
         return tile;
     }
@@ -361,14 +407,8 @@ public sealed class StudioPage : ToolPageBase
         _previewNote.Foreground = Brush("MutedBrush");
         _previewNote.FontSize = 11;
 
-        _ghost.Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0));
-        _ghost.BorderBrush = Brush("AccentBrush");
-        _ghost.BorderThickness = new Thickness(2);
-        _ghost.CornerRadius = new CornerRadius(4);
-        _ghost.Child = new TextBlock { Text = "Câmera", FontSize = 11, Foreground = Brush("AccentBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _previewHost.Children.Add(_preview);
-        _previewHost.Children.Add(_ghost);
-        _preview.SizeChanged += (_, _) => UpdateGhost();
+        _preview.SizeChanged += (_, _) => UpdateGhosts();
 
         var box = new StackPanel();
         box.Children.Add(_previewHost);
@@ -413,21 +453,54 @@ public sealed class StudioPage : ToolPageBase
         RefreshDisplays();
     }
 
-    /// <summary>Retângulo tracejado que mostra onde a câmera vai aparecer (só enquanto a câmera estiver ligada).</summary>
-    private void UpdateGhost()
+    /// <summary>Retângulos sobre a pré-visualização que mostram onde cada câmera e o QR do Pix vão aparecer.</summary>
+    private void UpdateGhosts()
     {
-        bool show = _s.StudioCameraOn && _preview.Source is not null && _preview.ActualWidth > 40;
-        _ghost.Visibility = Vis(show);
-        if (!show) return;
+        var items = new List<(string Label, int Corner, double Percent, double Aspect)>();
+        for (int i = 0; i < _s.StudioCameras.Count; i++)
+            if (_s.StudioCameras[i].On) items.Add(($"Câmera {i + 1}", _s.StudioCameras[i].Corner, _s.StudioCameras[i].Percent, 9.0 / 16));
+        if (_s.StudioPixOn) items.Add(("Pix", _s.StudioPixCorner, _s.StudioPixPercent, 1.25));
 
-        double width = _preview.ActualWidth * Math.Clamp(_s.StudioCameraPercent, 10, 40) / 100.0;
-        _ghost.Width = Math.Max(24, width);
-        _ghost.Height = Math.Max(14, width * 9 / 16);
-        double margin = Math.Max(4, _preview.ActualWidth / 80);
-        _ghost.Margin = new Thickness(margin);
-        int corner = Math.Clamp(_s.StudioCameraCorner, 0, 3);
-        _ghost.HorizontalAlignment = corner is 0 or 2 ? HorizontalAlignment.Left : HorizontalAlignment.Right;
-        _ghost.VerticalAlignment = corner is 0 or 1 ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+        bool visible = _preview.Source is not null && _preview.ActualWidth > 40;
+        while (_ghosts.Count > items.Count)
+        {
+            _previewHost.Children.Remove(_ghosts[^1]);
+            _ghosts.RemoveAt(_ghosts.Count - 1);
+        }
+        while (_ghosts.Count < items.Count)
+        {
+            var ghost = new Border
+            {
+                IsHitTestVisible = false, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(2),
+                Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)),
+                Child = new TextBlock { FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            };
+            _ghosts.Add(ghost);
+            _previewHost.Children.Add(ghost);
+        }
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            var (label, corner, percent, aspect) = items[i];
+            corner = Math.Clamp(corner, 0, 3);
+            bool overlaps = items.Where((o, j) => j != i && Math.Clamp(o.Corner, 0, 3) == corner).Any();
+            var ghost = _ghosts[i];
+            ghost.Visibility = Vis(visible);
+            ghost.BorderBrush = Brush(overlaps ? "WarnBrush" : "AccentBrush");
+            ghost.ToolTip = overlaps ? "Está no mesmo canto de outra camada: uma vai cobrir a outra." : null;
+            if (ghost.Child is TextBlock text)
+            {
+                text.Text = label;
+                text.Foreground = Brush(overlaps ? "WarnBrush" : "AccentBrush");
+            }
+
+            double width = _preview.ActualWidth * Math.Clamp(percent, 8, 40) / 100.0;
+            ghost.Width = Math.Max(24, width);
+            ghost.Height = Math.Max(14, width * aspect);
+            ghost.Margin = new Thickness(Math.Max(4, _preview.ActualWidth / 80));
+            ghost.HorizontalAlignment = corner is 0 or 2 ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+            ghost.VerticalAlignment = corner is 0 or 1 ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+        }
     }
 
     private PixelRect CurrentArea()
@@ -446,7 +519,9 @@ public sealed class StudioPage : ToolPageBase
 
     private async Task UpdatePreviewAsync()
     {
-        if (_previewBusy || _studio.IsRunning || AppServices.Recorder.IsRecording) return;
+        if (_previewBusy || AppServices.Recorder.IsRecording) return;
+        // com o estúdio ligado a imagem atualiza só uma vez por segundo, para pesar pouco no jogo
+        if (_studio.IsRunning && ++_previewTick % 4 != 0) return;
         _previewBusy = true;
         try
         {
@@ -462,7 +537,7 @@ public sealed class StudioPage : ToolPageBase
                 {
                     _preview.Source = null;
                     _previewNote.Text = "Escolha uma janela para ver a pré-visualização.";
-                    UpdateGhost();
+                    UpdateGhosts();
                     return;
                 }
                 var w = _windowList[_windows.Selected];
@@ -475,7 +550,7 @@ public sealed class StudioPage : ToolPageBase
             {
                 _preview.Source = null;
                 _previewNote.Text = "Não foi possível mostrar a pré-visualização desta origem.";
-                UpdateGhost();
+                UpdateGhosts();
                 return;
             }
 
@@ -484,7 +559,7 @@ public sealed class StudioPage : ToolPageBase
                 ? "A imagem saiu preta. Em jogos, use \"Recorte da tela\"; em programas comuns, \"Conteúdo da janela\"."
                 : "É assim que o vídeo vai sair (imagem reduzida, atualizada várias vezes por segundo).";
             _previewNote.Foreground = Brush(frame.MostlyBlack ? "WarnBrush" : "MutedBrush");
-            UpdateGhost();
+            UpdateGhosts();
         }
         finally
         {
@@ -498,12 +573,12 @@ public sealed class StudioPage : ToolPageBase
     {
         var title = new TextBlock { Text = "Configurações", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) };
         _config.Children.Add(title);
-        var tabs = new[] { _tabVideo, _tabAudio, _tabCamera, _tabStream, _tabReplay, _tabShortcuts, _tabAdvanced };
-        _config.Children.Add(Chips(new[] { "Vídeo", "Áudio", "Câmera", "Transmissão", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
+        var tabs = new[] { _tabVideo, _tabAudio, _tabCamera, _tabPix, _tabStream, _tabReplay, _tabShortcuts, _tabAdvanced };
+        _config.Children.Add(Chips(new[] { "Vídeo", "Áudio", "Câmeras", "Pix", "Transmissão", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
         {
             _settingsTab = i;
             for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == i);
-            if (i == 3) UpdatePlan();
+            if (i == 4) UpdatePlan();
         }));
         for (int t = 0; t < tabs.Length; t++)
         {
@@ -592,47 +667,92 @@ public sealed class StudioPage : ToolPageBase
         RefreshAudioDevices();
     }
 
-    private void BuildCamera()
+    /// <summary>Quem usava a opção de uma câmera só passa a ter uma câmera na lista nova.</summary>
+    private void MigrateCamera()
     {
-        var on = Check("Mostrar a minha câmera no vídeo", "Aparece num canto da gravação, do replay e da transmissão, como nas lives.");
-        on.IsChecked = _s.StudioCameraOn;
-        on.Click += (_, _) => { _s.StudioCameraOn = on.IsChecked == true; UpdateGhost(); };
-        _tabCamera.Children.Add(on);
-
-        var pick = new StackPanel();
-        _cameraPick.Children.Clear();
-        pick.Children.Add(_cameraPick);
-        var find = SmallButton("Procurar câmeras", async (_, _) => await FindCamerasAsync());
-        find.Margin = new Thickness(0, 2, 0, 4);
-        find.HorizontalAlignment = HorizontalAlignment.Left;
-        pick.Children.Add(find);
-        _tabCamera.Children.Add(Field("Câmera", pick));
-
-        _tabCamera.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(_s.StudioCameraCorner, 0, 3), i => { _s.StudioCameraCorner = i; UpdateGhost(); })));
-        _tabCamera.Children.Add(Field("Tamanho", Chips(CameraPercents.Select(p => p + "% da largura").ToList(),
-            Math.Max(0, Array.IndexOf(CameraPercents, _s.StudioCameraPercent)), i => { _s.StudioCameraPercent = CameraPercents[i]; UpdateGhost(); })));
-        var frame = Check("Moldura amarela em volta da câmera");
-        frame.IsChecked = _s.StudioCameraFrame;
-        frame.Click += (_, _) => _s.StudioCameraFrame = frame.IsChecked == true;
-        _tabCamera.Children.Add(Field("Moldura", frame));
-        _cameraNote.Foreground = Brush("MutedBrush");
-        _tabCamera.Children.Add(_cameraNote);
-        _cameraNote.Text = "O retângulo \"Câmera\" na pré-visualização mostra onde ela vai ficar. A câmera precisa estar livre (feche outros programas que a usam). Para usar uma câmera virtual (OBS, celular), ela aparece na lista como qualquer outra.";
-        RefreshCameraChips();
+        if (_s.StudioCameras.Count == 0 && _s.StudioCameraName is { Length: > 0 } name)
+        {
+            _s.StudioCameras.Add(new StudioCameraSetting { Name = name, Corner = _s.StudioCameraCorner, Percent = _s.StudioCameraPercent, Frame = _s.StudioCameraFrame, On = _s.StudioCameraOn });
+            _s.StudioCameraName = null;
+            _s.StudioCameraOn = false;
+            _s.Save();
+        }
     }
 
-    private void RefreshCameraChips()
+    private void RebuildCameras()
     {
-        _cameraPick.Children.Clear();
-        if (_cameraList.Count == 0)
+        _tabCamera.Children.Clear();
+        var head = new WrapPanel { Margin = new Thickness(0, 2, 0, 4) };
+        var find = SmallButton("Procurar câmeras", async (_, _) => await FindCamerasAsync());
+        find.Margin = new Thickness(0, 0, 8, 4);
+        head.Children.Add(find);
+        var add = SmallButton("+ Adicionar câmera", (_, _) => AddCamera());
+        add.Margin = new Thickness(0, 0, 8, 4);
+        add.IsEnabled = _s.StudioCameras.Count < StudioCommand.MaxCameras;
+        head.Children.Add(add);
+        head.Children.Add(Muted($"Até {StudioCommand.MaxCameras} câmeras ao mesmo tempo, cada uma num canto. Cada câmera física só pode aparecer uma vez.", 11));
+        _tabCamera.Children.Add(head);
+
+        if (_s.StudioCameras.Count == 0)
+            _tabCamera.Children.Add(Muted("Nenhuma câmera adicionada. Clique em \"Procurar câmeras\" e depois em \"+ Adicionar câmera\".", 12));
+
+        for (int i = 0; i < _s.StudioCameras.Count; i++)
         {
-            _cameraPick.Children.Add(Muted(_ffmpegPath is null ? "Instale o FFmpeg (aba Avançado) para procurar câmeras." : "Clique em \"Procurar câmeras\".", 12));
-            return;
+            int index = i;
+            var cam = _s.StudioCameras[i];
+            var card = new StackPanel();
+
+            var top = new Grid();
+            top.ColumnDefinitions.Add(new ColumnDefinition());
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var on = new CheckBox { Content = $"Câmera {i + 1} ligada", IsChecked = cam.On, FontWeight = FontWeights.SemiBold, Foreground = Brush("TextBrush") };
+            on.Click += (_, _) => { cam.On = on.IsChecked == true; UpdateGhosts(); };
+            top.Children.Add(on);
+            var remove = SmallButton("Remover", (_, _) => { _s.StudioCameras.RemoveAt(index); RebuildCameras(); UpdateGhosts(); });
+            remove.Padding = new Thickness(10, 3, 10, 3);
+            remove.FontSize = 11.5;
+            Grid.SetColumn(remove, 1);
+            top.Children.Add(remove);
+            card.Children.Add(top);
+
+            card.Children.Add(Field("Dispositivo", CameraChoice(cam), 110));
+            card.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(cam.Corner, 0, 3), c => { cam.Corner = c; UpdateGhosts(); }), 110));
+            card.Children.Add(Field("Tamanho", Chips(CameraPercents.Select(p => p + "%").ToList(), Math.Max(0, Array.IndexOf(CameraPercents, cam.Percent)), c => { cam.Percent = CameraPercents[c]; UpdateGhosts(); }), 110));
+            var frame = new CheckBox { Content = "Moldura amarela em volta", IsChecked = cam.Frame, Foreground = Brush("TextBrush") };
+            frame.Click += (_, _) => cam.Frame = frame.IsChecked == true;
+            card.Children.Add(Field("Moldura", frame, 110));
+
+            var border = CardOf(card);
+            border.Padding = new Thickness(12, 8, 12, 6);
+            _tabCamera.Children.Add(border);
         }
 
-        int selected = Math.Max(0, _cameraList.ToList().IndexOf(_s.StudioCameraName ?? ""));
-        if (_s.StudioCameraName is null || !_cameraList.Contains(_s.StudioCameraName)) _s.StudioCameraName = _cameraList[selected];
-        _cameraPick.Children.Add(Chips(_cameraList.ToList(), selected, i => _s.StudioCameraName = _cameraList[i]));
+        _cameraNote.Foreground = Brush("MutedBrush");
+        (_cameraNote.Parent as Panel)?.Children.Remove(_cameraNote);
+        _cameraNote.Text = "Os retângulos \"Câmera 1, 2...\" na pré-visualização mostram onde cada uma vai ficar (amarelo-escuro = dois no mesmo canto). A câmera precisa estar livre: feche outros programas que a usam. Câmeras virtuais (OBS, celular) aparecem na lista como qualquer outra. Dá para ligar e desligar câmeras com a transmissão no ar (a captura reinicia por alguns segundos).";
+        _tabCamera.Children.Add(_cameraNote);
+    }
+
+    private UIElement CameraChoice(StudioCameraSetting cam)
+    {
+        if (_cameraList.Count == 0)
+            return Muted(_ffmpegPath is null ? "Instale o FFmpeg (aba Avançado) para procurar câmeras." : cam.Name is { Length: > 0 } ? cam.Name + " (clique em Procurar câmeras)" : "Clique em \"Procurar câmeras\".", 12);
+        var names = _cameraList.ToList();
+        if (cam.Name is { Length: > 0 } saved && !names.Contains(saved)) names.Insert(0, saved + " (não encontrada)");
+        int selected = cam.Name is null ? -1 : Math.Max(0, names.FindIndex(n => n == cam.Name || n == cam.Name + " (não encontrada)"));
+        if (selected < 0) { cam.Name = names[0]; selected = 0; }
+        return Chips(names, selected, i => cam.Name = names[i].Replace(" (não encontrada)", ""));
+    }
+
+    private void AddCamera()
+    {
+        if (_s.StudioCameras.Count >= StudioCommand.MaxCameras) return;
+        string? name = _cameraList.FirstOrDefault(n => _s.StudioCameras.All(c => c.Name != n));
+        int[] corners = { 3, 1, 2, 0 };
+        _s.StudioCameras.Add(new StudioCameraSetting { Name = name, Corner = corners[_s.StudioCameras.Count % corners.Length], Percent = _s.StudioCameras.Count == 0 ? 22 : 15 });
+        RebuildCameras();
+        UpdateGhosts();
+        if (name is null) SetStatus("Clique em \"Procurar câmeras\" para listar as câmeras do PC.", "WarnBrush");
     }
 
     private async Task FindCamerasAsync()
@@ -647,8 +767,110 @@ public sealed class StudioPage : ToolPageBase
         string path = _ffmpegPath;
         SetStatus("Procurando câmeras...");
         _cameraList = await Task.Run(() => FfmpegRecorder.ListCameras(path));
-        RefreshCameraChips();
+        RebuildCameras();
         SetStatus(_cameraList.Count == 0 ? "Nenhuma câmera encontrada. Conecte uma e tente de novo." : $"{_cameraList.Count} câmera(s) encontrada(s).", _cameraList.Count == 0 ? "WarnBrush" : "OkBrush");
+    }
+
+    // ---------------------------------------------------------------- Pix
+
+    private static readonly int[] PixPercents = { 10, 14, 18, 22 };
+    private static readonly int[] PixEvery = { 0, 3, 5, 10 };
+    private static readonly int[] PixSeconds = { 10, 20, 30 };
+
+    private void BuildPix()
+    {
+        _tabPix.Children.Clear();
+        foreach (var box in new FrameworkElement[] { _pixStatus, _pixPreview }) Detach(box);
+
+        var on = Check("Mostrar o QR do Pix na transmissão", "O QR aparece num canto do vídeo (na transmissão, na gravação e no replay) para o público apoiar a live.");
+        on.IsChecked = _s.StudioPixOn;
+        on.Click += (_, _) => { _s.StudioPixOn = on.IsChecked == true; UpdateGhosts(); };
+        _tabPix.Children.Add(on);
+
+        _pixKey.Text = _s.StudioPixKey;
+        _pixName.Text = _s.StudioPixName;
+        _pixCity.Text = _s.StudioPixCity;
+        _pixAmount.Text = _s.StudioPixAmount > 0 ? _s.StudioPixAmount.ToString("0.00", System.Globalization.CultureInfo.CurrentCulture) : "";
+        _pixNote.Text = _s.StudioPixNote;
+        foreach (var box in new[] { _pixKey, _pixName, _pixCity, _pixAmount, _pixNote }) { Detach(box); box.TextChanged -= PixChanged; box.TextChanged += PixChanged; }
+
+        _tabPix.Children.Add(Field("Chave Pix", _pixKey, 130));
+        _tabPix.Children.Add(Field("Nome de quem recebe", _pixName, 130));
+        _tabPix.Children.Add(Field("Cidade", _pixCity, 130));
+        _tabPix.Children.Add(Field("Valor (R$, opcional)", _pixAmount, 130));
+        _tabPix.Children.Add(Field("Mensagem", _pixNote, 130));
+        _tabPix.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(_s.StudioPixCorner, 0, 3), i => { _s.StudioPixCorner = i; UpdateGhosts(); }), 130));
+        _tabPix.Children.Add(Field("Tamanho", Chips(PixPercents.Select(p => p + "%").ToList(), Math.Max(0, Array.IndexOf(PixPercents, _s.StudioPixPercent)), i => { _s.StudioPixPercent = PixPercents[i]; UpdateGhosts(); }), 130));
+        _tabPix.Children.Add(Field("Aparecer", Chips(PixEvery.Select(m => m == 0 ? "Sempre" : $"a cada {m} min").ToList(), Math.Max(0, Array.IndexOf(PixEvery, _s.StudioPixEveryMinutes)), i => _s.StudioPixEveryMinutes = PixEvery[i]), 130));
+        _tabPix.Children.Add(Field("Por quanto tempo", Chips(PixSeconds.Select(m => m + " s").ToList(), Math.Max(0, Array.IndexOf(PixSeconds, _s.StudioPixShowSeconds)), i => _s.StudioPixShowSeconds = PixSeconds[i]), 130));
+
+        var actions = new WrapPanel { Margin = new Thickness(0, 6, 0, 4) };
+        var copy = SmallButton("Copiar \"Pix copia e cola\"", (_, _) =>
+        {
+            if (_pixPayload is null) { SetStatus("Preencha a chave, o nome e a cidade primeiro.", "WarnBrush"); return; }
+            if (TryCopy(_pixPayload)) SetStatus("Código Pix copiado. Cole no chat ou na descrição da live.", "OkBrush");
+        });
+        copy.Margin = new Thickness(0, 0, 8, 4);
+        actions.Children.Add(copy);
+        var save = SmallButton("Salvar imagem do QR...", (_, _) => SavePixImage());
+        save.Margin = new Thickness(0, 0, 8, 4);
+        actions.Children.Add(save);
+        _tabPix.Children.Add(actions);
+
+        _pixStatus.Margin = new Thickness(0, 2, 0, 4);
+        _tabPix.Children.Add(_pixStatus);
+        _tabPix.Children.Add(_pixPreview);
+        _tabPix.Children.Add(Muted("Este é o Pix estático: o dinheiro cai direto na sua conta, sem intermediário e sem taxa do MB Extreme. Em compensação o programa NÃO fica sabendo quando alguém paga (o banco é quem avisa), então não há alerta automático na tela com o nome e o valor do apoiador. Esse alerta, como nos serviços de \"live pix\", exige um provedor de pagamentos que confirme cada Pix e um servidor para avisar a transmissão; está descrito em docs/ESTUDIO-GRAVACAO-TRANSMISSAO.md.", 11));
+        RefreshPix();
+    }
+
+    private void PixChanged(object? sender, TextChangedEventArgs e) => RefreshPix();
+
+    private void RefreshPix()
+    {
+        _s.StudioPixKey = _pixKey.Text.Trim();
+        _s.StudioPixName = _pixName.Text.Trim();
+        _s.StudioPixCity = _pixCity.Text.Trim();
+        _s.StudioPixNote = _pixNote.Text.Trim();
+        string amountText = _pixAmount.Text.Trim().Replace(',', '.');
+        decimal amount = 0;
+        bool amountOk = amountText.Length == 0 || decimal.TryParse(amountText, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out amount);
+        _s.StudioPixAmount = amountOk ? amount : 0;
+
+        try
+        {
+            if (!amountOk) throw new ArgumentException("Valor inválido. Use números, como 10,00.");
+            if (_s.StudioPixKey.Length == 0) throw new ArgumentException("Digite a chave Pix para gerar o QR.");
+            _pixPayload = PixPayload.Build(_s.StudioPixKey, _s.StudioPixName, _s.StudioPixCity, amount > 0 ? amount : null, _s.StudioPixNote);
+            _pixPreview.Source = PixImage.Render(_pixPayload, string.IsNullOrWhiteSpace(_s.StudioPixNote) ? "Apoie via Pix" : _s.StudioPixNote, PixPayload.Clean(_s.StudioPixName, 25));
+            _pixPreview.Visibility = Visibility.Visible;
+            _pixStatus.Text = "✓ QR gerado" + (amount > 0 ? $" para R$ {amount:0.00}" : " (quem paga escolhe o valor)") + ". Confira o recebedor no aplicativo do banco ao testar.";
+            _pixStatus.Foreground = Brush("OkBrush");
+        }
+        catch (ArgumentException ex)
+        {
+            _pixPayload = null;
+            _pixPreview.Source = null;
+            _pixPreview.Visibility = Visibility.Collapsed;
+            _pixStatus.Text = _s.StudioPixKey.Length == 0 ? ex.Message : "⚠ " + ex.Message;
+            _pixStatus.Foreground = Brush(_s.StudioPixKey.Length == 0 ? "MutedBrush" : "WarnBrush");
+        }
+    }
+
+    private void SavePixImage()
+    {
+        if (_pixPayload is null || _pixPreview.Source is not System.Windows.Media.Imaging.BitmapSource image) { SetStatus("Preencha a chave, o nome e a cidade primeiro.", "WarnBrush"); return; }
+        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "Imagem PNG (*.png)|*.png", FileName = "pix-qr.png", Title = "Salvar o QR do Pix" };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            PixImage.SavePng(image, dialog.FileName);
+            SetStatus("QR salvo em " + dialog.FileName, "OkBrush");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            SetStatus("Não foi possível salvar: " + ex.Message, "BadBrush");
+        }
     }
 
     private static readonly StreamService[] ServiceOrder = { StreamService.Twitch, StreamService.YouTube, StreamService.Facebook, StreamService.Custom };
@@ -818,6 +1040,31 @@ public sealed class StudioPage : ToolPageBase
         beep.Click += (_, _) => _s.StudioReplayBeep = beep.IsChecked == true;
         _tabReplay.Children.Add(Field("Aviso", beep));
         _tabReplay.Children.Add(Muted("O replay fica só no disco enquanto o estúdio está ligado: os pedaços são apagados quando você para. Quanto maior o tempo, mais espaço em disco.", 11));
+
+        var auto = Check("Salvar os lances automaticamente (pelo som do jogo)", "Quando a torcida e a narração sobem de repente (gol, jogada decisiva), o clipe é salvo sozinho, sem apertar nada.");
+        auto.IsChecked = _s.StudioAutoClip;
+        auto.Margin = new Thickness(0, 12, 0, 4);
+        auto.Click += (_, _) => { _s.StudioAutoClip = auto.IsChecked == true; UpdateAutoClipText(); };
+        _tabReplay.Children.Add(auto);
+        _tabReplay.Children.Add(Field("Sensibilidade", Chips(new[] { "Baixa (só lances muito fortes)", "Média", "Alta (pega mais, erra mais)" }, Math.Clamp(_s.StudioAutoClipSensitivity, 0, 2), i => { _s.StudioAutoClipSensitivity = i; UpdateAutoClipText(); })));
+        int[] afters = { 3, 6, 10 };
+        _tabReplay.Children.Add(Field("Salvar depois do lance", Chips(afters.Select(a => a + " s").ToList(), Math.Max(0, Array.IndexOf(afters, _s.StudioAutoClipAfterSeconds)), i => _s.StudioAutoClipAfterSeconds = afters[i])));
+        var toast = new CheckBox { Content = "Mostrar um aviso por cima do jogo quando um clipe for salvo", IsChecked = _s.StudioClipToast, Foreground = Brush("TextBrush") };
+        toast.Click += (_, _) => _s.StudioClipToast = toast.IsChecked == true;
+        _tabReplay.Children.Add(Field("Aviso na tela", toast));
+        Detach(_autoClipState);
+        _autoClipState.Foreground = Brush("MutedBrush");
+        _tabReplay.Children.Add(_autoClipState);
+        _tabReplay.Children.Add(Muted("Como funciona: o programa compara o volume do jogo agora com o volume normal da partida. É uma estimativa pelo SOM, não uma leitura do que acontece na tela: pode salvar um momento barulhento que não era gol e deixar passar um lance silencioso. Para não perder nada, o atalho de salvar replay continua valendo. O clipe tem o tamanho do tempo guardado acima e esta opção vale na hora, mesmo com a transmissão no ar. Precisa do Replay ligado e do som do PC ativo; o seu microfone não conta.", 11));
+        UpdateAutoClipText();
+    }
+
+    private void UpdateAutoClipText()
+    {
+        string[] levels = { "baixa", "média", "alta" };
+        _autoClipState.Text = !_s.StudioAutoClip
+            ? "Lances automáticos: desligados."
+            : $"Lances automáticos: ligados (sensibilidade {levels[Math.Clamp(_s.StudioAutoClipSensitivity, 0, 2)]})." + (_outReplay ? "" : " Ligue o bloco Replay instantâneo para valer.");
     }
 
     private void BuildShortcuts()
@@ -932,7 +1179,7 @@ public sealed class StudioPage : ToolPageBase
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Management.ManagementException or AggregateException) { }
         _ffmpegPath = await Task.Run(FfmpegRecorder.Locate);
-        RefreshCameraChips();
+        RebuildCameras();
         if (_ffmpegPath is null)
         {
             _engineStatus.Text = "FFmpeg não encontrado. Ele é o programa livre que faz a captura e a codificação. Clique em Instalar FFmpeg (instala pelo winget, o instalador oficial da Microsoft).";
@@ -1049,101 +1296,25 @@ public sealed class StudioPage : ToolPageBase
             return;
         }
 
-        // ---- origem
-        CaptureSource? source;
-        string? game = null;
-        var displays = _displayList.Count > 0 ? _displayList : new[] { new DisplayInfo(0, "", new PixelRect(0, 0, ScreenInfo.Primary.Width, ScreenInfo.Primary.Height), true) };
-        if (_sourceTab == 0)
-        {
-            int index = Math.Clamp(_displayIndex, 0, displays.Count - 1);
-            source = CaptureRules.ForDisplay(displays[index]);
-        }
-        else
-        {
-            if (_windows.Selected < 0 || _windows.Selected >= _windowList.Count)
-            {
-                SetStatus("Escolha a janela que será capturada.", "WarnBrush");
-                return;
-            }
+        // a janela escolhida pode ter mudado de lugar ou fechado desde a lista
+        if (_sourceTab == 1 && !await RefreshChosenWindowAsync()) return;
 
-            var chosen = _windowList[_windows.Selected];
-            var current = await Task.Run(() => CaptureCatalog.Windows().FirstOrDefault(w => w.Handle == chosen.Handle));
-            if (current is null)
-            {
-                SetStatus("A janela escolhida foi fechada ou minimizada. Atualize a lista.", "WarnBrush");
-                RefreshWindows();
-                return;
-            }
-
-            game = current.ProcessName;
-            source = CaptureRules.ForWindow(current, displays, gdi: _windowMode == 1);
-            if (source is null)
-            {
-                SetStatus("A janela está fora da área visível das telas.", "WarnBrush");
-                return;
-            }
+        var (config, error) = BuildConfig(write: true);
+        if (config is null)
+        {
+            if (error is not null) SetStatus(error, "WarnBrush");
+            return;
         }
 
-        // ---- codificador
-        var encoder = _encoders[Math.Min(_encoderIndex, _encoders.Count - 1)];
-
-        // ---- transmissão
-        StreamTarget? target = null;
-        if (_outStream)
+        var target = config.Stream;
+        if (target is not null)
         {
-            var h264 = encoder.Codec == VideoCodec.H264 ? encoder : _encoders.FirstOrDefault(e => e.Codec == VideoCodec.H264);
-            if (h264 is null)
-            {
-                SetStatus("A transmissão exige um codificador H.264, que não foi encontrado na sua placa.", "BadBrush");
-                return;
-            }
-            encoder = h264;
-
-            target = new StreamTarget((StreamService)Math.Clamp(_s.StudioStreamService, 0, 3), _customUrl.Text, _key.Password);
-            // se a chave foi colada dentro do endereço, o endereço não é gravado
-            if (target.PathSecret is null) _s.StudioCustomUrl = target.CustomUrl;
             if (MessageBox.Show($"Começar a transmitir ao vivo para {target.DisplayName}?\n\nQuem estiver assistindo verá exatamente o que está sendo capturado.",
                     "Transmissão ao vivo", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         }
 
-        // ---- câmera
-        CameraOverlay? camera = null;
-        if (_s.StudioCameraOn)
-        {
-            if (!CameraOverlay.IsValidName(_s.StudioCameraName))
-            {
-                SetStatus("Escolha a câmera na aba Câmera (clique em Procurar câmeras) ou desligue a opção.", "WarnBrush");
-                return;
-            }
-            camera = new CameraOverlay(_s.StudioCameraName!, (CameraCorner)Math.Clamp(_s.StudioCameraCorner, 0, 3), _s.StudioCameraPercent, _s.StudioCameraFrame);
-        }
-
-        // ---- áudio
-        AudioConfig? audio = null;
-        if (_s.StudioSystemAudio || _s.StudioMicAudio)
-        {
-            _s.StudioOutputId = _outputs.Selected > 0 && _outputs.Selected - 1 < _outList.Count ? _outList[_outputs.Selected - 1].Id : null;
-            _s.StudioMicId = _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null;
-            audio = new AudioConfig(_s.StudioSystemAudio, _s.StudioOutputId, (float)_s.StudioSystemVolume,
-                _s.StudioMicAudio, _s.StudioMicId, (float)_s.StudioMicVolume);
-        }
-
-        _s.StudioChatId = _chatId.Text.Trim();
-        _s.StudioRememberKey = _remember.IsChecked == true;
-        try
-        {
-            _s.StudioProtectedKey = _s.StudioRememberKey && _key.Password.Length > 0 ? SecretStore.Protect(_key.Password) : null;
-        }
-        catch (CryptographicException)
-        {
-            _s.StudioProtectedKey = null;
-            SetStatus("Não foi possível guardar a chave com segurança; ela não será lembrada.", "WarnBrush");
-        }
-        _s.Save();
-
-        var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
-            _s.StudioFps, encoder, _s.StudioBitrateMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
-            _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), camera);
+        PersistSettings(target);
+        var source = config.Source;
 
         _start.IsEnabled = false;
         SetStatus("Iniciando...");
@@ -1162,6 +1333,221 @@ public sealed class StudioPage : ToolPageBase
         }
 
         RefreshState();
+    }
+
+    /// <summary>Atualiza a janela escolhida (posição e título) e avisa se ela sumiu.</summary>
+    private async Task<bool> RefreshChosenWindowAsync()
+    {
+        if (_windows.Selected < 0 || _windows.Selected >= _windowList.Count)
+        {
+            SetStatus("Escolha a janela que será capturada.", "WarnBrush");
+            return false;
+        }
+
+        var chosen = _windowList[_windows.Selected];
+        var current = await Task.Run(() => CaptureCatalog.Windows().FirstOrDefault(w => w.Handle == chosen.Handle));
+        if (current is null)
+        {
+            SetStatus("A janela escolhida foi fechada ou minimizada. Atualize a lista e escolha de novo.", "WarnBrush");
+            RefreshWindows();
+            return false;
+        }
+
+        var list = _windowList.ToList();
+        list[_windows.Selected] = current;
+        _windowList = list;
+        return true;
+    }
+
+    /// <summary>Monta a configuração a partir do que está na tela. <paramref name="write"/> grava a imagem do QR do Pix (só ao iniciar ou aplicar, para não escrever em disco a cada segundo).</summary>
+    private (StudioConfig? Config, string? Error) BuildConfig(bool write)
+    {
+        if (_ffmpegPath is null || _encoders.Count == 0) return (null, "Instale o FFmpeg e detecte os codificadores antes de começar.");
+        if (!_outRecord && !_outStream && !_outReplay) return (null, "Marque pelo menos uma opção: gravar, transmitir ou replay.");
+
+        // ---- origem
+        CaptureSource? source;
+        string? game = null;
+        var displays = _displayList.Count > 0 ? _displayList : new[] { new DisplayInfo(0, "", new PixelRect(0, 0, ScreenInfo.Primary.Width, ScreenInfo.Primary.Height), true) };
+        if (_sourceTab == 0)
+        {
+            source = CaptureRules.ForDisplay(displays[Math.Clamp(_displayIndex, 0, displays.Count - 1)]);
+        }
+        else
+        {
+            if (_windows.Selected < 0 || _windows.Selected >= _windowList.Count) return (null, "Escolha a janela que será capturada.");
+            var window = _windowList[_windows.Selected];
+            game = window.ProcessName;
+            source = CaptureRules.ForWindow(window, displays, gdi: _windowMode == 1);
+            if (source is null) return (null, "A janela está fora da área visível das telas.");
+        }
+
+        // ---- codificador
+        var encoder = _encoders[Math.Min(_encoderIndex, _encoders.Count - 1)];
+
+        // ---- transmissão
+        StreamTarget? target = null;
+        if (_outStream)
+        {
+            var h264 = encoder.Codec == VideoCodec.H264 ? encoder : _encoders.FirstOrDefault(e => e.Codec == VideoCodec.H264);
+            if (h264 is null) return (null, "A transmissão exige um codificador H.264, que não foi encontrado na sua placa.");
+            encoder = h264;
+            target = new StreamTarget((StreamService)Math.Clamp(_s.StudioStreamService, 0, 3), _customUrl.Text, _key.Password);
+        }
+
+        // ---- câmeras
+        var cameras = new List<CameraOverlay>();
+        foreach (var cam in _s.StudioCameras.Where(c => c.On))
+        {
+            if (!CameraOverlay.IsValidName(cam.Name)) return (null, "Escolha a câmera na aba Câmeras (clique em Procurar câmeras) ou desligue-a.");
+            cameras.Add(new CameraOverlay(cam.Name!, (CameraCorner)Math.Clamp(cam.Corner, 0, 3), cam.Percent, cam.Frame));
+        }
+
+        // ---- Pix
+        PixOverlay? pix = null;
+        string? pixPayload = null;
+        if (_s.StudioPixOn)
+        {
+            if (_pixPayload is null) return (null, "O QR do Pix está ligado mas faltam dados (aba Pix): chave, nome e cidade. Preencha ou desligue.");
+            pixPayload = _pixPayload;
+            if (write)
+            {
+                try { PixImage.SavePng(PixImage.Render(_pixPayload, string.IsNullOrWhiteSpace(_s.StudioPixNote) ? "Apoie via Pix" : _s.StudioPixNote, PixPayload.Clean(_s.StudioPixName, 25)), PixImagePath); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return (null, "Não foi possível preparar a imagem do Pix: " + ex.Message); }
+            }
+
+            pix = new PixOverlay(PixImagePath, (CameraCorner)Math.Clamp(_s.StudioPixCorner, 0, 3), _s.StudioPixPercent, _s.StudioPixEveryMinutes, _s.StudioPixShowSeconds);
+        }
+
+        // ---- áudio
+        AudioConfig? audio = null;
+        if (_s.StudioSystemAudio || _s.StudioMicAudio)
+        {
+            string? outputId = _outputs.Selected > 0 && _outputs.Selected - 1 < _outList.Count ? _outList[_outputs.Selected - 1].Id : null;
+            string? micId = _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null;
+            audio = new AudioConfig(_s.StudioSystemAudio, outputId, (float)_s.StudioSystemVolume, _s.StudioMicAudio, micId, (float)_s.StudioMicVolume);
+        }
+
+        var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
+            _s.StudioFps, encoder, _s.StudioBitrateMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
+            _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), cameras, pix, pixPayload);
+        return (config, null);
+    }
+
+    /// <summary>Guarda o que precisa ficar para a próxima vez (nunca a chave de transmissão em texto: só protegida pelo Windows).</summary>
+    private void PersistSettings(StreamTarget? target)
+    {
+        if (target is not null && target.PathSecret is null) _s.StudioCustomUrl = target.CustomUrl;
+        _s.StudioOutputId = _outputs.Selected > 0 && _outputs.Selected - 1 < _outList.Count ? _outList[_outputs.Selected - 1].Id : null;
+        _s.StudioMicId = _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null;
+        _s.StudioChatId = _chatId.Text.Trim();
+        _s.StudioRememberKey = _remember.IsChecked == true;
+        try
+        {
+            _s.StudioProtectedKey = _s.StudioRememberKey && _key.Password.Length > 0 ? SecretStore.Protect(_key.Password) : null;
+        }
+        catch (CryptographicException)
+        {
+            _s.StudioProtectedKey = null;
+            SetStatus("Não foi possível guardar a chave com segurança; ela não será lembrada.", "WarnBrush");
+        }
+        _s.Save();
+    }
+
+    // ---------------------------------------------------------------- mudar com o estúdio ligado
+
+    /// <summary>Compara o que está na tela com o que está no ar e mostra a barra "Aplicar agora" quando há diferença.</summary>
+    private void UpdatePending()
+    {
+        if (!_studio.IsRunning || _studio.Config is not { } running || _applying)
+        {
+            _pending.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var (wanted, error) = BuildConfig(write: false);
+        if (wanted is null)
+        {
+            _pendingText.Text = "Há uma mudança que ainda não dá para aplicar: " + (error ?? "confira as configurações") + " A captura segue como estava.";
+            _pendingButton.IsEnabled = false;
+            _pending.Visibility = Visibility.Visible;
+            return;
+        }
+
+        bool different = StudioController.Signature(wanted) != StudioController.Signature(running);
+        _pendingText.Text = "Você mudou configurações que só entram no ar reiniciando a captura. Aplicar agora faz a transmissão reconectar por alguns segundos e a gravação continuar em um arquivo novo; o replay recomeça vazio.";
+        _pendingButton.IsEnabled = true;
+        _pending.Visibility = Vis(different);
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (!_studio.IsRunning || _applying) return;
+        var (config, error) = BuildConfig(write: true);
+        if (config is null)
+        {
+            SetStatus(error ?? "Não foi possível aplicar.", "WarnBrush");
+            return;
+        }
+
+        if (!_restartWarned)
+        {
+            var ask = MessageBox.Show(
+                "Para aplicar, o MB Extreme reinicia a captura:\n\n• a transmissão sai do ar por alguns segundos e reconecta sozinha;\n• a gravação continua num arquivo novo (o anterior fica salvo);\n• o replay instantâneo recomeça vazio.\n\nMudar o volume do microfone e do som do PC e mutar não precisa reiniciar. Aplicar agora?",
+                "Aplicar mudanças ao vivo", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (ask != MessageBoxResult.Yes) return;
+            _restartWarned = true;
+        }
+
+        PersistSettings(config.Stream);
+        _applying = true;
+        _pending.Visibility = Visibility.Collapsed;
+        SetStatus("Aplicando as mudanças...");
+        try
+        {
+            await _studio.RestartAsync(config);
+            SetStatus("Mudanças aplicadas. " + config.Source.Description, "OkBrush");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Win32Exception)
+        {
+            SetStatus("Não foi possível aplicar (o estúdio parou): " + StudioCommand.MaskSecrets(ex.Message, config.Stream), "BadBrush");
+        }
+        finally
+        {
+            _applying = false;
+        }
+
+        RefreshState();
+        RefreshFiles();
+    }
+
+    private void ToggleMute(bool microphone, bool mute)
+    {
+        if (!_studio.IsRunning) return;
+        float configured = (float)(microphone ? _s.StudioMicVolume : _s.StudioSystemVolume);
+        _studio.SetVolume(microphone, mute ? 0f : Math.Max(configured, 0.05f));
+        RefreshMuteButtons();
+    }
+
+    private void RefreshMuteButtons()
+    {
+        bool running = _studio.IsRunning;
+        bool mic = running && _studio.Session.HasMicrophone;
+        bool sys = running && _studio.Session.HasSystemAudio;
+        _muteMic.Visibility = Vis(mic);
+        _muteSystem.Visibility = Vis(sys);
+        if (mic)
+        {
+            bool muted = _studio.GetVolume(true) <= 0.001f;
+            _muteMic.Content = muted ? "Microfone: mudo (clique para ligar)" : "Microfone: ligado (clique para mutar)";
+            _muteMic.Style = (Style)FindResource(muted ? "GhostButton" : "PrimaryButton");
+        }
+        if (sys)
+        {
+            bool muted = _studio.GetVolume(false) <= 0.001f;
+            _muteSystem.Content = muted ? "Som do PC: mudo (clique para ligar)" : "Som do PC: ligado (clique para mutar)";
+            _muteSystem.Style = (Style)FindResource(muted ? "GhostButton" : "PrimaryButton");
+        }
     }
 
     private async Task EndAsync()
@@ -1214,7 +1600,9 @@ public sealed class StudioPage : ToolPageBase
         _start.IsEnabled = !running;
         _stop.IsEnabled = running;
         _saveReplay.IsEnabled = _studio.IsRunning && _studio.Config?.Replay == true;
-        _config.IsEnabled = !running;
+        // com o estúdio ligado as configurações continuam editáveis: o que exige reiniciar aparece na barra "Aplicar agora"
+        if (!running) _pending.Visibility = Visibility.Collapsed;
+        RefreshMuteButtons();
         _live.Visibility = Vis(_studio.IsRunning);
         _liveButtons.Visibility = Vis(_studio.Config?.Stream is not null && _studio.IsRunning);
         _wasRunning = running;
@@ -1233,6 +1621,7 @@ public sealed class StudioPage : ToolPageBase
             RefreshFiles();
         }
 
+        if (++_tickCount % 2 == 0) UpdatePending();
         var session = _studio.Session;
         if (session.EndedUnexpectedly)
         {

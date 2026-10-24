@@ -101,6 +101,44 @@ public sealed class AppSettings
 
     public bool StudioCameraFrame { get; set; } = true;
 
+    /// <summary>Câmeras do estúdio (até três). Substitui as opções de uma câmera só, que ficam apenas para migrar.</summary>
+    public List<StudioCameraSetting> StudioCameras { get; set; } = new();
+
+    // ---- Pix (QR estático "apoie a live")
+    public bool StudioPixOn { get; set; }
+
+    public string StudioPixKey { get; set; } = "";
+
+    public string StudioPixName { get; set; } = "";
+
+    public string StudioPixCity { get; set; } = "";
+
+    /// <summary>Valor fixo em reais; 0 = quem paga escolhe.</summary>
+    public decimal StudioPixAmount { get; set; }
+
+    public string StudioPixNote { get; set; } = "Apoie a live";
+
+    public int StudioPixCorner { get; set; } = 2;
+
+    public int StudioPixPercent { get; set; } = 14;
+
+    /// <summary>De quantos em quantos minutos o QR aparece; 0 = fica sempre na tela.</summary>
+    public int StudioPixEveryMinutes { get; set; } = 5;
+
+    public int StudioPixShowSeconds { get; set; } = 20;
+
+    // ---- clipes automáticos de lances (pelo som do jogo)
+    public bool StudioAutoClip { get; set; }
+
+    /// <summary>0 = baixa, 1 = média, 2 = alta.</summary>
+    public int StudioAutoClipSensitivity { get; set; } = 1;
+
+    /// <summary>Quantos segundos esperar depois do lance antes de salvar (para o clipe pegar a comemoração).</summary>
+    public int StudioAutoClipAfterSeconds { get; set; } = 6;
+
+    /// <summary>Mostra um aviso pequeno por cima do jogo quando um clipe é salvo (funciona com jogo em janela ou sem bordas).</summary>
+    public bool StudioClipToast { get; set; } = true;
+
     /// <summary>Canal da Twitch ou código da transmissão do YouTube, para abrir o chat.</summary>
     public string StudioChatId { get; set; } = "";
 
@@ -176,4 +214,20 @@ public sealed class RemoteRecentEntry
 {
     public string Id { get; set; } = "";
     public DateTime LastUsed { get; set; }
+}
+
+/// <summary>Uma câmera do estúdio guardada nas configurações.</summary>
+public sealed class StudioCameraSetting
+{
+    public string? Name { get; set; }
+
+    /// <summary>0 = superior esquerdo, 1 = superior direito, 2 = inferior esquerdo, 3 = inferior direito.</summary>
+    public int Corner { get; set; } = 3;
+
+    public int Percent { get; set; } = 22;
+
+    public bool Frame { get; set; } = true;
+
+    /// <summary>Ligada: aparece no vídeo. Desligada: fica na lista, mas não é aberta.</summary>
+    public bool On { get; set; } = true;
 }

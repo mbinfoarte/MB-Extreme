@@ -52,6 +52,22 @@ public sealed class StudioSession : IDisposable
 
     public AudioMixer? Mixer => _mixer;
 
+    /// <summary>Maior volume do som do PC (sem o microfone) desde a última chamada.</summary>
+    public float TakeSystemPeak() => _capture?.SystemSound?.TakePeak() ?? 0f;
+
+    public bool HasSystemAudio => _capture?.SystemSound is not null;
+
+    public bool HasMicrophone => _capture?.Microphone is not null;
+
+    /// <summary>Volume atual de uma fonte (0 a 2); 0 também é "mudo". Mudar o volume vale na hora, sem reiniciar nada.</summary>
+    public float GetVolume(bool microphone) => (microphone ? _capture?.Microphone : _capture?.SystemSound)?.Volume ?? 0f;
+
+    public void SetVolume(bool microphone, float volume)
+    {
+        var input = microphone ? _capture?.Microphone : _capture?.SystemSound;
+        if (input is not null) input.Volume = volume;
+    }
+
     public StudioRequest? Request => _request;
 
     public string? RecordPath => _request?.RecordFile is { } f ? Path.Combine(_request.WorkingDirectory, f) : null;

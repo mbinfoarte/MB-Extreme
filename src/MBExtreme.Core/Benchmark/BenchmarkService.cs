@@ -32,7 +32,14 @@ public sealed record BenchmarkResult(
     string? Label = null,
     string? GpuName = null,
     int Gpu3DScore = 0,
-    IReadOnlyList<GpuSceneResult>? GpuScenes = null);
+    IReadOnlyList<GpuSceneResult>? GpuScenes = null,
+    int RenderSingleScore = 0,
+    int RenderMultiScore = 0,
+    IReadOnlyList<MBExtreme.Core.Fps.SensorTrack>? Monitoring = null,
+    IReadOnlyList<PhaseMark>? Phases = null);
+
+/// <summary>Em que segundo do teste começou cada etapa (para marcar no gráfico de monitoramento).</summary>
+public sealed record PhaseMark(string Name, double StartSeconds);
 
 public sealed record BenchmarkOptions(bool Disk = true, bool Gpu3D = false, bool Quick = false, string? Label = null);
 

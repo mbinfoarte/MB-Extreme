@@ -89,3 +89,9 @@ Uma tela "Verificação de configuração" com avisos acionáveis:
 - **Página "Jogo (FPS)"**: captura com tempo opcional e aquecimento; painel ao vivo (FPS grande, gráfico de tempo de quadro e de FPS por segundo, quatro cartões de sensores); relatório com cartões, nota de fluidez, gráficos e sensores; salvar HTML, exportar CSV, copiar resumo; histórico e comparação.
 - Ainda **não** usa o PresentMon: continua nos eventos DXGI do Windows (o PresentMon fica para quando for validado em PC real).
 - Falta (próximos passos): redesenhar o Teste de estresse com painel de monitoramento no estilo OCCT/Adrenalin, estresse de GPU com gráficos, DiskSpd e 7-Zip, Blender Benchmark, verificação de configuração, overlay configurável.
+
+## 6. Benchmark do PC inspirado em Cinebench, 3DMark e Kombustor
+- **Render da CPU** (novo): traçador de raios próprio (esferas espelhadas, chão xadrez, sombras e reflexos) desenhado em blocos por todas as linhas de execução, com a imagem aparecendo na tela como no Cinebench. Nota em "pts de render" para 1 núcleo e para todos. Código e cena nossos; a nota não é comparável com a do Cinebench.
+- **Resultado reformulado**: anel com a nota, quanto ela está do seu melhor resultado, "esta medição / média / melhor", cartões por parte (CPU, render, memória, disco, GPU), seu sistema (processador, placa de vídeo, memória, Windows), nível estimado para jogos (pelo hardware, não é FPS medido), gráfico de monitoramento (uso e temperatura de GPU e CPU) com as etapas do teste marcadas, e ranking das suas medições com a atual em laranja.
+- Sem tabela de outros PCs: não há dados reais para isso. Isso só entra com o ranking opcional e anônimo descrito acima.
+- Ainda falta o "queimador" de GPU no estilo Kombustor/FurMark (cena 3D na tela com monitoramento e limite de tempo) dentro do Teste de estresse.

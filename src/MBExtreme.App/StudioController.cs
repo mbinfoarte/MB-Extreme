@@ -20,16 +20,19 @@ internal sealed record StudioConfig(
     bool Replay,
     int ReplaySeconds,
     bool Beep,
-    AudioConfig? Audio);
+    AudioConfig? Audio,
+    int StreamCapMbps = 0,
+    int AudioKbps = 160,
+    EncoderQuality Quality = EncoderQuality.Balanced,
+    CameraOverlay? Camera = null);
 
-/// <summary>Mantém a sessão do estúdio viva enquanto você troca de página e cuida do atalho do replay (Ctrl + Shift + F9).</summary>
+/// <summary>Mantém a sessão do estúdio viva enquanto você troca de página e cuida dos atalhos globais (salvar replay, gravar e transmitir).</summary>
 internal sealed class StudioController
 {
-    private const uint VkF9 = 0x78;
     private const string ReplayFolder = "replay-buffer";
 
-    private int _hotkeyId;
-    private bool _saving;
+    private readonly Dictionary<StudioAction, int> _hotkeyIds = new();
+    private bool _saving, _toggling;
     private string? _ffmpeg;
 
     public StudioController() => Session.Ended += (_, _) =>
@@ -49,7 +52,13 @@ internal sealed class StudioController
 
     public bool IsRunning => Session.IsRunning;
 
-    public bool HotkeyActive => _hotkeyId != 0;
+    /// <summary>Última configuração iniciada pela tela; os atalhos de gravar e transmitir reaproveitam a origem, o codificador e a chave dela.</summary>
+    public StudioConfig? LastConfig { get; private set; }
+
+    public bool HotkeyActive => _hotkeyIds.ContainsKey(StudioAction.SaveReplay);
+
+    /// <summary>Atalhos que o Windows não deixou registrar (outro programa já usa).</summary>
+    public IReadOnlyList<string> HotkeyFailures { get; private set; } = Array.Empty<string>();
 
     public static string Folder => ScreenRecorder.Folder;
 
@@ -61,7 +70,20 @@ internal sealed class StudioController
     public async Task StartAsync(string ffmpeg, StudioConfig config)
     {
         var (width, height) = StudioCommand.FitOutput(config.Source.Area.Width, config.Source.Area.Height, config.OutputHeight);
-        int bitrate = config.BitrateMbps > 0 ? config.BitrateMbps : FfmpegCommand.DefaultBitrateMbps(width, height, config.Fps);
+        int fps = config.Fps;
+        int bitrate = config.BitrateMbps > 0 ? config.BitrateMbps : FfmpegCommand.DefaultBitrateMbps(width, height, fps);
+        int videoKbps = 0, audioKbps = config.AudioKbps, streamMax = StudioCommand.MaxStreamMbps;
+        if (config.Stream is { } target)
+        {
+            // a transmissão segue o padrão da plataforma: resolução, quadros e taxa máximos, e o limite de banda escolhido
+            var plan = StreamPlan.Build(target.Service, height, fps, config.BitrateMbps, config.StreamCapMbps, config.AudioKbps);
+            if (plan.Height < height) (width, height) = StudioCommand.FitOutput(config.Source.Area.Width, config.Source.Area.Height, plan.Height);
+            fps = plan.Fps;
+            videoKbps = plan.VideoKbps;
+            audioKbps = plan.AudioKbps;
+            streamMax = (int)Math.Ceiling(plan.VideoKbps / 1000.0);
+        }
+
         string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 
         var request = new StudioRequest
@@ -69,9 +91,14 @@ internal sealed class StudioController
             Source = config.Source,
             OutputWidth = width,
             OutputHeight = height,
-            Fps = config.Fps,
+            Fps = fps,
             Encoder = config.Encoder,
             BitrateMbps = bitrate,
+            VideoKbps = videoKbps,
+            StreamMaxMbps = streamMax,
+            AudioKbps = audioKbps,
+            Quality = config.Quality,
+            Camera = config.Camera,
             WorkingDirectory = Folder,
             RecordFile = config.Record ? "gravacao-" + stamp + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             RecordMp4 = config.Mp4,
@@ -83,20 +110,101 @@ internal sealed class StudioController
         await Session.StartAsync(ffmpeg, request, config.Audio);
         _ffmpeg = ffmpeg;
         Config = config;
+        LastConfig = config;
+    }
 
-        if (config.Replay)
+    // ---------------------------------------------------------------- atalhos globais
+
+    /// <summary>(Re)registra os atalhos das configurações. Chame ao abrir o aplicativo e sempre que a pessoa trocar um atalho.</summary>
+    public void ApplyHotkeys(MBExtreme.Core.Settings.AppSettings settings)
+    {
+        foreach (int id in _hotkeyIds.Values) AppServices.Hotkeys.Unregister(id);
+        _hotkeyIds.Clear();
+
+        var wanted = new Dictionary<StudioAction, HotkeyBinding?>
         {
-            AppServices.Hotkeys.Unregister(_hotkeyId);
-            _hotkeyId = AppServices.Hotkeys.RegisterCtrlShift(VkF9, () => _ = SaveReplayAsync());
-            if (_hotkeyId == 0) Notice?.Invoke("O atalho Ctrl + Shift + F9 está em uso por outro programa. Use o botão Salvar replay.", false);
+            [StudioAction.SaveReplay] = HotkeyBinding.Parse(settings.StudioHotkeySave),
+            [StudioAction.ToggleRecord] = HotkeyBinding.Parse(settings.StudioHotkeyRecord),
+            [StudioAction.ToggleStream] = HotkeyBinding.Parse(settings.StudioHotkeyStream),
+        };
+        var failed = new List<string>();
+        var taken = new HashSet<string>();
+        foreach (var (action, binding) in wanted)
+        {
+            if (binding is null) continue;
+            if (!taken.Add(binding.Stored)) { failed.Add(binding.Text + " (repetido)"); continue; }
+            var captured = action;
+            int id = AppServices.Hotkeys.Register(binding, () => OnHotkey(captured));
+            if (id == 0) failed.Add(binding.Text + " (em uso por outro programa)");
+            else _hotkeyIds[action] = id;
+        }
+
+        HotkeyFailures = failed;
+    }
+
+    private void OnHotkey(StudioAction action)
+    {
+        switch (action)
+        {
+            case StudioAction.SaveReplay:
+                if (!Session.IsRunning || Config is not { Replay: true })
+                    Raise("Ligue o Replay instantâneo e inicie o estúdio para salvar clipes.", false);
+                else
+                    _ = SaveReplayAsync();
+                break;
+            default:
+                _ = ToggleAsync(action);
+                break;
+        }
+    }
+
+    /// <summary>Atalho de gravar ou transmitir: se o estúdio está ligado, para; se não, liga só aquela saída com a última configuração usada.</summary>
+    private async Task ToggleAsync(StudioAction action)
+    {
+        if (_toggling) return;
+        _toggling = true;
+        try
+        {
+            if (Session.IsRunning || AppServices.Recorder.IsRecording)
+            {
+                string? file = await Task.Run(Stop);
+                Raise(file is null ? "Estúdio parado." : "Gravação salva em " + file, true);
+                return;
+            }
+
+            if (LastConfig is not { } last || _ffmpeg is null)
+            {
+                Raise("Abra Gravação e transmissão e inicie uma vez pela tela: o atalho reaproveita a origem e as configurações escolhidas ali.", false);
+                return;
+            }
+
+            StudioConfig next;
+            if (action == StudioAction.ToggleRecord)
+            {
+                next = last with { Record = true, Stream = null };
+            }
+            else
+            {
+                if (last.Stream is null) { Raise("Para transmitir pelo atalho, inicie uma transmissão uma vez pela tela (com a chave) para o programa guardar o destino.", false); return; }
+                next = last with { Record = false };
+            }
+
+            await StartAsync(_ffmpeg, next);
+            Raise(action == StudioAction.ToggleRecord ? "Gravando." : "Transmitindo para " + next.Stream!.DisplayName + ".", true);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            Raise("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, LastConfig?.Stream), false);
+        }
+        finally
+        {
+            _toggling = false;
         }
     }
 
     /// <summary>Para tudo. Devolve o arquivo gravado, se havia.</summary>
     public string? Stop()
     {
-        AppServices.Hotkeys.Unregister(_hotkeyId);
-        _hotkeyId = 0;
         string? file = Session.Stop();
         if (Config?.Replay == true) ReplayBuffer.ClearSegments(Path.Combine(Folder, ReplayFolder));
         return file;

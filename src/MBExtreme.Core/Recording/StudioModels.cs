@@ -74,6 +74,20 @@ public sealed class StreamTarget
 
 public sealed record AudioSetup(string PipePath);
 
+/// <summary>Esforço do codificador: rápido pesa menos no jogo; qualidade deixa a imagem melhor com a mesma taxa.</summary>
+public enum EncoderQuality { Fast, Balanced, Quality }
+
+public enum CameraCorner { TopLeft, TopRight, BottomLeft, BottomRight }
+
+/// <summary>Câmera (webcam) que aparece num canto do vídeo, como nas transmissões.</summary>
+public sealed record CameraOverlay(string DeviceName, CameraCorner Corner, int WidthPercent, bool Frame)
+{
+    public static bool IsValidName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && name.Length <= 120 && name.IndexOfAny(new[] { '"', '\'', '|', '[', ']', '\\', ':', '=', ',', ';', '\r', '\n' }) < 0;
+
+    public int ClampedPercent => Math.Clamp(WidthPercent, 10, 40);
+}
+
 /// <summary>Tudo que define uma sessão do estúdio: captura, qualidade e quais saídas estão ligadas.</summary>
 public sealed record StudioRequest
 {
@@ -104,6 +118,18 @@ public sealed record StudioRequest
     public int ReplaySeconds { get; init; } = 60;
 
     public AudioSetup? Audio { get; init; }
+
+    /// <summary>Taxa de vídeo em kbps; 0 = usa BitrateMbps.</summary>
+    public int VideoKbps { get; init; }
+
+    /// <summary>Limite da taxa quando há transmissão (o padrão da plataforma escolhida).</summary>
+    public int StreamMaxMbps { get; init; } = StudioCommand.MaxStreamMbps;
+
+    public int AudioKbps { get; init; } = 160;
+
+    public EncoderQuality Quality { get; init; } = EncoderQuality.Balanced;
+
+    public CameraOverlay? Camera { get; init; }
 
     public bool AnyOutput => RecordFile is not null || Stream is not null || ReplayFolder is not null;
 }

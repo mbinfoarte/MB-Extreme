@@ -41,6 +41,18 @@ internal sealed class HotkeyManager
         return id;
     }
 
+    /// <summary>Registra um atalho do estúdio (Ctrl + Shift ou Ctrl + Alt, com uma tecla F5 a F12). 0 = outro programa já usa a combinação.</summary>
+    public int Register(MBExtreme.Core.Recording.HotkeyBinding binding, Action action)
+    {
+        if (_window == IntPtr.Zero || !binding.IsValid) return 0;
+        const uint ModAlt = 0x1;
+        uint mods = ModControl | ModNoRepeat | (binding.Modifier == MBExtreme.Core.Recording.HotkeyModifier.CtrlShift ? ModShift : ModAlt);
+        int id = _nextId++;
+        if (!RegisterHotKey(_window, id, mods, binding.VirtualKey)) return 0;
+        _actions[id] = action;
+        return id;
+    }
+
     public void Unregister(int id)
     {
         if (id == 0 || _window == IntPtr.Zero) return;

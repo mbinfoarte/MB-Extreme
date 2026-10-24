@@ -23,6 +23,7 @@ public partial class MainWindow : Window
         {
             AppServices.Overlay.AttachHotkey(this);
             AppServices.Hotkeys.Attach(this);
+            AppServices.Studio.ApplyHotkeys(AppServices.Settings);
         };
         Go("home");
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
@@ -173,6 +174,14 @@ public partial class MainWindow : Window
         if (key == "home") return new DashboardPage();
 
         var module = NavigationMap.Modules.FirstOrDefault(m => m.Key == key);
+        if (module is not null && module.Tiles.Count == 1)
+        {
+            // módulo de uma página só (Gravação e transmissão): abre direto, sem a tela de atalhos
+            var only = CreateInner(module.Tiles[0].Key, module.Tiles[0]);
+            _inner[module.Tiles[0].Key] = only;
+            return only;
+        }
+
         if (module is not null) return new ModuleHubPage(module, k => Go(k));
 
         var tile = NavigationMap.TileOf(key);

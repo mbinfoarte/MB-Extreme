@@ -56,6 +56,20 @@ public sealed class FfmpegRecorder
         return working;
     }
 
+    /// <summary>Nomes das câmeras (dispositivos de vídeo do DirectShow) que o FFmpeg enxerga.</summary>
+    public static IReadOnlyList<string> ListCameras(string ffmpeg)
+    {
+        var listed = Shell.Run(ffmpeg, "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy");
+        return ParseCameras(listed.Error + "\n" + listed.Output);
+    }
+
+    public static IReadOnlyList<string> ParseCameras(string text) =>
+        System.Text.RegularExpressions.Regex.Matches(text, "\"([^\"]+)\"\\s+\\(video\\)")
+            .Select(m => m.Groups[1].Value)
+            .Where(CameraOverlay.IsValidName)
+            .Distinct()
+            .ToList();
+
     public string Start(string ffmpeg, CaptureRequest request)
     {
         if (IsRecording) throw new InvalidOperationException("Já existe uma gravação em andamento.");

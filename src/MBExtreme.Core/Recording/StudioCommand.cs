@@ -40,6 +40,7 @@ public static class StudioCommand
             if (url.IndexOfAny(new[] { '|', '[', ']', '"', ' ', '\'' }) >= 0) return "O endereço do servidor tem caracteres inválidos.";
         }
         if (r.Source.Kind == SourceKind.WindowGdi && string.IsNullOrWhiteSpace(r.Source.WindowTitle)) return "A janela escolhida não tem título.";
+        if (r.Camera is { } cam && !CameraOverlay.IsValidName(cam.DeviceName)) return "O nome da câmera tem caracteres que não são aceitos. Escolha outra câmera da lista.";
         return null;
     }
 
@@ -89,9 +90,20 @@ public static class StudioCommand
             });
         }
 
+        // ---- câmera (entrada extra)
+        var camera = r.Camera;
+        int cameraInput = audio ? 2 : 1;
+        if (camera is not null)
+            args.AddRange(new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + camera.DeviceName });
+
         // ---- filtros
         string? filter = null;
-        if (gdi)
+        string? complex = null;
+        if (camera is not null)
+        {
+            complex = CameraGraph(r, camera, cameraInput, gdi, sameSize);
+        }
+        else if (gdi)
         {
             filter = $"scale={r.OutputWidth}:{r.OutputHeight}:force_original_aspect_ratio=decrease,pad={r.OutputWidth}:{r.OutputHeight}:(ow-iw)/2:(oh-ih)/2:black,format=nv12";
         }
@@ -102,19 +114,35 @@ public static class StudioCommand
                 : $"hwdownload,format=bgra,scale={r.OutputWidth}:{r.OutputHeight}:flags=bilinear,format=nv12";
         }
         if (filter is not null) args.AddRange(new[] { "-vf", filter });
+        if (complex is not null) args.AddRange(new[] { "-filter_complex", complex });
 
         // ---- codificação
-        int rate = Math.Max(2, r.Stream is null ? r.BitrateMbps : Math.Min(r.BitrateMbps, MaxStreamMbps));
         double maxFactor = r.Stream is null ? 1.5 : 1.0;
+        string bitrate, maxrate, bufsize;
+        if (r.VideoKbps > 0)
+        {
+            int kbps = Math.Max(1000, r.Stream is null ? r.VideoKbps : Math.Min(r.VideoKbps, r.StreamMaxMbps * 1000));
+            bitrate = kbps + "k";
+            maxrate = (int)Math.Ceiling(kbps * maxFactor) + "k";
+            bufsize = kbps * 2 + "k";
+        }
+        else
+        {
+            int rate = Math.Max(2, r.Stream is null ? r.BitrateMbps : Math.Min(r.BitrateMbps, r.StreamMaxMbps));
+            bitrate = rate + "M";
+            maxrate = (int)Math.Ceiling(rate * maxFactor) + "M";
+            bufsize = rate * 2 + "M";
+        }
+
+        args.AddRange(new[] { "-map", complex is null ? "0:v" : "[v]", "-c:v", r.Encoder.FfmpegName });
+        args.AddRange(QualityArgs(r.Encoder, r.Quality));
         args.AddRange(new[]
         {
-            "-map", "0:v",
-            "-c:v", r.Encoder.FfmpegName,
-            "-b:v", rate + "M", "-maxrate", (int)Math.Ceiling(rate * maxFactor) + "M", "-bufsize", rate * 2 + "M",
+            "-b:v", bitrate, "-maxrate", maxrate, "-bufsize", bufsize,
             "-g", (fps * 2).ToString(),
             "-flags", "+global_header",
         });
-        if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
+        if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", Math.Clamp(r.AudioKbps, 64, 320) + "k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
 
         // ---- saídas
         var outputs = new List<string>();
@@ -131,6 +159,39 @@ public static class StudioCommand
         }
         args.AddRange(new[] { "-f", "tee", string.Join("|", outputs) });
         return args;
+    }
+
+    /// <summary>Esforço do codificador conforme a marca da placa (NVENC p2/p4/p6, AMF speed/balanced/quality, Quick Sync veryfast/medium/slower).</summary>
+    public static IReadOnlyList<string> QualityArgs(EncoderOption encoder, EncoderQuality quality) => encoder.Kind switch
+    {
+        EncoderKind.Nvenc => new[] { "-preset", quality switch { EncoderQuality.Fast => "p2", EncoderQuality.Quality => "p6", _ => "p4" } },
+        EncoderKind.Amf => new[] { "-quality", quality switch { EncoderQuality.Fast => "speed", EncoderQuality.Quality => "quality", _ => "balanced" } },
+        _ => new[] { "-preset", quality switch { EncoderQuality.Fast => "veryfast", EncoderQuality.Quality => "slower", _ => "medium" } },
+    };
+
+    /// <summary>Posição da câmera: o filtro "overlay" usa main_w/overlay_w para encostar no canto com uma margem.</summary>
+    public static string CameraPosition(CameraCorner corner, int margin) => corner switch
+    {
+        CameraCorner.TopLeft => $"x={margin}:y={margin}",
+        CameraCorner.TopRight => $"x=main_w-overlay_w-{margin}:y={margin}",
+        CameraCorner.BottomLeft => $"x={margin}:y=main_h-overlay_h-{margin}",
+        _ => $"x=main_w-overlay_w-{margin}:y=main_h-overlay_h-{margin}",
+    };
+
+    /// <summary>Filtro com a imagem da tela e a câmera por cima. A câmera é medida em % da largura da tela capturada, antes de reduzir.</summary>
+    private static string CameraGraph(StudioRequest r, CameraOverlay camera, int cameraInput, bool gdi, bool sameSize)
+    {
+        int baseWidth = gdi ? r.OutputWidth : r.Source.Area.Width;
+        int camWidth = Math.Max(2, baseWidth * camera.ClampedPercent / 100);
+        camWidth -= camWidth % 2;
+        int margin = Math.Max(8, baseWidth / 80);
+
+        string background = gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra";
+        string cam = $"[{cameraInput}:v]scale={camWidth}:-2,format=bgra" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
+        string finish = gdi
+            ? $"scale={r.OutputWidth}:{r.OutputHeight}:force_original_aspect_ratio=decrease,pad={r.OutputWidth}:{r.OutputHeight}:(ow-iw)/2:(oh-ih)/2:black,format=nv12"
+            : sameSize ? "format=nv12" : $"scale={r.OutputWidth}:{r.OutputHeight}:flags=bilinear,format=nv12";
+        return $"{background}[bg];{cam}[cam];[bg][cam]overlay={CameraPosition(camera.Corner, margin)}:shortest=0,{finish}[v]";
     }
 
     /// <summary>Linha de comando para mostrar na tela, com a chave escondida.</summary>

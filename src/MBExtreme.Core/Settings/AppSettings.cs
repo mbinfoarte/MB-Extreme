@@ -81,6 +81,36 @@ public sealed class AppSettings
     /// <summary>Chave de transmissão protegida pelo Windows (DPAPI, só este usuário neste PC). Nunca em texto puro.</summary>
     public string? StudioProtectedKey { get; set; }
 
+    /// <summary>0 = rápido, 1 = equilibrado, 2 = qualidade (esforço do codificador).</summary>
+    public int StudioEncoderQuality { get; set; } = 1;
+
+    /// <summary>Qualidade do áudio em kbps (AAC).</summary>
+    public int StudioAudioKbps { get; set; } = 160;
+
+    /// <summary>Limite de banda da transmissão em Mbps; 0 = o padrão da plataforma.</summary>
+    public int StudioStreamCapMbps { get; set; }
+
+    public bool StudioCameraOn { get; set; }
+
+    public string? StudioCameraName { get; set; }
+
+    /// <summary>0 = superior esquerdo, 1 = superior direito, 2 = inferior esquerdo, 3 = inferior direito.</summary>
+    public int StudioCameraCorner { get; set; } = 3;
+
+    public int StudioCameraPercent { get; set; } = 22;
+
+    public bool StudioCameraFrame { get; set; } = true;
+
+    /// <summary>Canal da Twitch ou código da transmissão do YouTube, para abrir o chat.</summary>
+    public string StudioChatId { get; set; } = "";
+
+    /// <summary>Atalhos do estúdio ("CtrlShift+F9"); vazio = desligado.</summary>
+    public string StudioHotkeySave { get; set; } = "CtrlShift+F9";
+
+    public string StudioHotkeyRecord { get; set; } = "CtrlShift+F10";
+
+    public string StudioHotkeyStream { get; set; } = "CtrlShift+F11";
+
     /// <summary>ID de suporte remoto deste PC (9 dígitos) e o segredo que autentica a conexão, protegido pelo Windows.</summary>
     public string? RemoteId { get; set; }
 

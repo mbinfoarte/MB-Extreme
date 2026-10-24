@@ -89,7 +89,7 @@ public sealed record PixOverlay(string ImagePath, CameraCorner Corner, int Width
 }
 
 /// <summary>Câmera (webcam) que aparece num canto do vídeo, como nas transmissões.</summary>
-public sealed record CameraOverlay(string DeviceName, CameraCorner Corner, int WidthPercent, bool Frame)
+public sealed record CameraOverlay(string DeviceName, CameraCorner Corner, int WidthPercent, bool Frame, ImageFilter? Filter = null)
 {
     public static bool IsValidName(string? name) =>
         !string.IsNullOrWhiteSpace(name) && name.Length <= 120 && name.IndexOfAny(new[] { '"', '\'', '|', '[', ']', '\\', ':', '=', ',', ';', '\r', '\n' }) < 0;
@@ -147,6 +147,12 @@ public sealed record StudioRequest
         get => Cameras.Count > 0 ? Cameras[0] : null;
         init => Cameras = value is null ? Array.Empty<CameraOverlay>() : new[] { value };
     }
+
+    /// <summary>Ajustes de cor e nitidez da imagem principal (tela ou janela).</summary>
+    public ImageFilter? Filter { get; init; }
+
+    /// <summary>Entrada do canal, faixa com o nome e logo, por cima de tudo.</summary>
+    public IReadOnlyList<OverlayLayer> Layers { get; init; } = Array.Empty<OverlayLayer>();
 
     /// <summary>QR do Pix por cima do vídeo (sempre ou por alguns segundos a cada tantos minutos).</summary>
     public PixOverlay? Pix { get; init; }

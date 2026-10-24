@@ -58,7 +58,16 @@ public sealed class StudioPage : ToolPageBase
     private readonly StackPanel _liveButtons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Grid _previewHost = new() { HorizontalAlignment = HorizontalAlignment.Left };
     private readonly List<Border> _ghosts = new();
-    private readonly StackPanel _tabPix = new(), _tabStats = new();
+    private readonly StackPanel _tabPix = new(), _tabStats = new(), _tabChannel = new(), _tabImage = new();
+    private ChatPanel? _chatPanel;
+    private readonly TextBox _chName = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 40 };
+    private readonly TextBox _chPresenter = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 40 };
+    private readonly TextBox _chTagline = new() { Width = 360, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 60 };
+    private readonly System.Windows.Controls.Image _introPreview = new() { Height = 70, HorizontalAlignment = HorizontalAlignment.Left, Stretch = Stretch.Uniform };
+    private readonly System.Windows.Controls.Image _lowerPreview = new() { Height = 44, HorizontalAlignment = HorizontalAlignment.Left, Stretch = Stretch.Uniform };
+    private readonly System.Windows.Controls.Image _logoPreview = new() { Height = 56, HorizontalAlignment = HorizontalAlignment.Left, Stretch = Stretch.Uniform };
+    private readonly System.Windows.Controls.Image _pixOwnPreview = new() { Height = 150, HorizontalAlignment = HorizontalAlignment.Left, Stretch = Stretch.Uniform };
+    private static readonly string OverlayFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "overlays");
     private readonly LiveStatsService _stats = new(new HttpClient { Timeout = TimeSpan.FromSeconds(12) });
     private readonly ViewerHistory _viewers = new(120);
     private readonly LiveChart _viewerChart = new(60, Color.FromRgb(0xFF, 0xC4, 0x00)) { Height = 70, Margin = new Thickness(0, 8, 0, 0) };
@@ -154,6 +163,8 @@ public sealed class StudioPage : ToolPageBase
         Body.Children.Add(_live);
         BuildLive();
         BuildStatsCard();
+        _chatPanel = new ChatPanel(() => (CurrentService(), _statsId.Text, _statsKey.Password));
+        Body.Children.Add(_chatPanel);
         Body.Children.Add(_config);
         BuildSource();
         BuildTiles();
@@ -161,6 +172,8 @@ public sealed class StudioPage : ToolPageBase
         BuildEngine();
         BuildVideo();
         MigrateCamera();
+        BuildImage();
+        BuildChannel();
         BuildAudio();
         RebuildCameras();
         BuildPix();
@@ -597,12 +610,12 @@ public sealed class StudioPage : ToolPageBase
     {
         var title = new TextBlock { Text = "Configurações", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) };
         _config.Children.Add(title);
-        var tabs = new[] { _tabVideo, _tabAudio, _tabCamera, _tabPix, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced };
-        _config.Children.Add(Chips(new[] { "Vídeo", "Áudio", "Câmeras", "Pix", "Transmissão", "Estatísticas", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
+        var tabs = new[] { _tabVideo, _tabImage, _tabAudio, _tabCamera, _tabChannel, _tabPix, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced };
+        _config.Children.Add(Chips(new[] { "Vídeo", "Imagem", "Áudio", "Câmeras", "Canal", "Pix", "Transmissão", "Estatísticas", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
         {
             _settingsTab = i;
             for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == i);
-            if (i == 4) UpdatePlan();
+            if (tabs[i] == _tabStream) UpdatePlan();
         }));
         for (int t = 0; t < tabs.Length; t++)
         {
@@ -662,7 +675,6 @@ public sealed class StudioPage : ToolPageBase
         system.Click += (_, _) => _s.StudioSystemAudio = system.IsChecked == true;
         var left = new StackPanel();
         left.Children.Add(system);
-        left.Children.Add(Chips(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioSystemVolume), i => _s.StudioSystemVolume = Volumes[i].Value));
         left.Children.Add(Muted("Saída de som:", 11));
         left.Children.Add(_outputs);
         var leftCard = CardOf(left);
@@ -675,7 +687,6 @@ public sealed class StudioPage : ToolPageBase
         mic.Click += (_, _) => _s.StudioMicAudio = mic.IsChecked == true;
         var right = new StackPanel();
         right.Children.Add(mic);
-        right.Children.Add(Chips(Volumes.Select(v => v.Name).ToList(), NearestVolume(_s.StudioMicVolume), i => _s.StudioMicVolume = Volumes[i].Value));
         right.Children.Add(Muted("Microfone:", 11));
         right.Children.Add(_mics);
         var rightCard = CardOf(right);
@@ -684,6 +695,10 @@ public sealed class StudioPage : ToolPageBase
         Grid.SetColumn(rightCard, 1);
         columns.Children.Add(rightCard);
         _tabAudio.Children.Add(columns);
+        _tabAudio.Children.Add(new AudioMixerPanel(_s, _studio,
+            () => _outputs.Selected > 0 && _outputs.Selected - 1 < _outList.Count ? _outList[_outputs.Selected - 1].Id : null,
+            () => _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null,
+            KnownGames));
 
         _tabAudio.Children.Add(Field("Qualidade do áudio", Chips(AudioKbpsOptions.Select(k => k + " kbps").ToList(),
             Math.Max(0, Array.IndexOf(AudioKbpsOptions, _s.StudioAudioKbps)), i => { _s.StudioAudioKbps = AudioKbpsOptions[i]; UpdatePlan(); })));
@@ -745,6 +760,10 @@ public sealed class StudioPage : ToolPageBase
             var frame = new CheckBox { Content = "Moldura amarela em volta", IsChecked = cam.Frame, Foreground = Brush("TextBrush") };
             frame.Click += (_, _) => cam.Frame = frame.IsChecked == true;
             card.Children.Add(Field("Moldura", frame, 110));
+            card.Children.Add(Field("Qualidade da imagem", Chips(ImageFilter.Presets.Select(p => p.Name).ToList(), Math.Clamp(cam.Preset, 0, ImageFilter.Presets.Count - 1), c => cam.Preset = c), 110));
+            var mirror = new CheckBox { Content = "Espelhar (como um espelho)", IsChecked = cam.Mirror, Foreground = Brush("TextBrush") };
+            mirror.Click += (_, _) => cam.Mirror = mirror.IsChecked == true;
+            card.Children.Add(Field("Espelho", mirror, 110));
 
             var border = CardOf(card);
             border.Padding = new Thickness(12, 8, 12, 6);
@@ -1017,6 +1036,194 @@ public sealed class StudioPage : ToolPageBase
         catch (Win32Exception) { }
     }
 
+    // ---------------------------------------------------------------- imagem (filtros)
+
+    private ImageFilter CurrentFilter() => new ImageFilter(_s.StudioFilterBrightness, _s.StudioFilterContrast, _s.StudioFilterSaturation, _s.StudioFilterGamma, _s.StudioFilterSharpness, _s.StudioFilterDenoise).Clamped();
+
+    private static ImageFilter PresetFilter(int preset, bool mirror)
+    {
+        var f = ImageFilter.Presets[Math.Clamp(preset, 0, ImageFilter.Presets.Count - 1)].Filter;
+        return f with { Mirror = mirror };
+    }
+
+    private IEnumerable<string> KnownGames()
+    {
+        var games = new List<string>(AppServices.Boost.Settings.GameProcesses);
+        if (_studio.Config?.GameName is { Length: > 0 } running) games.Add(running);
+        return games;
+    }
+
+    private void BuildImage()
+    {
+        _tabImage.Children.Clear();
+        _tabImage.Children.Add(Muted("Ajustes de cor e nitidez da tela ou janela capturada, aplicados antes dos textos e das câmeras. Eles usam o processador (a captura passa a ser redimensionada e tratada por software); em PC fraco prefira \"Original\".", 11));
+
+        int current = ImageFilter.Presets.ToList().FindIndex(p => Math.Abs(p.Filter.Brightness - _s.StudioFilterBrightness) < 0.001 && Math.Abs(p.Filter.Contrast - _s.StudioFilterContrast) < 0.001
+            && Math.Abs(p.Filter.Saturation - _s.StudioFilterSaturation) < 0.001 && Math.Abs(p.Filter.Gamma - _s.StudioFilterGamma) < 0.001
+            && Math.Abs(p.Filter.Sharpness - _s.StudioFilterSharpness) < 0.001 && p.Filter.Denoise == _s.StudioFilterDenoise);
+        _tabImage.Children.Add(Field("Predefinição", Chips(ImageFilter.Presets.Select(p => p.Name).ToList(), current, i =>
+        {
+            var f = ImageFilter.Presets[i].Filter;
+            _s.StudioFilterBrightness = f.Brightness; _s.StudioFilterContrast = f.Contrast; _s.StudioFilterSaturation = f.Saturation;
+            _s.StudioFilterGamma = f.Gamma; _s.StudioFilterSharpness = f.Sharpness; _s.StudioFilterDenoise = f.Denoise;
+            BuildImage();
+        })));
+        if (current >= 0) _tabImage.Children.Add(Field("", Muted(ImageFilter.Presets[current].Description, 11)));
+
+        double[] bright = { -0.1, -0.05, 0, 0.05, 0.1 };
+        double[] contrast = { 0.9, 1.0, 1.1, 1.2, 1.3 };
+        double[] saturation = { 0.7, 1.0, 1.2, 1.4, 1.7 };
+        double[] sharp = { 0, 0.4, 0.8, 1.2, 1.6 };
+        _tabImage.Children.Add(Field("Brilho", Levels(bright, _s.StudioFilterBrightness, v => _s.StudioFilterBrightness = v, v => v == 0 ? "normal" : v > 0 ? $"+{v * 100:0}" : $"{v * 100:0}")));
+        _tabImage.Children.Add(Field("Contraste", Levels(contrast, _s.StudioFilterContrast, v => _s.StudioFilterContrast = v, v => $"{v:0.0}")));
+        _tabImage.Children.Add(Field("Cores (saturação)", Levels(saturation, _s.StudioFilterSaturation, v => _s.StudioFilterSaturation = v, v => $"{v:0.0}")));
+        _tabImage.Children.Add(Field("Nitidez", Levels(sharp, _s.StudioFilterSharpness, v => _s.StudioFilterSharpness = v, v => v == 0 ? "desligada" : $"{v:0.0}")));
+        _tabImage.Children.Add(Field("Reduzir chiado", Chips(new[] { "Desligado", "Leve", "Médio", "Forte" }, Math.Clamp(_s.StudioFilterDenoise, 0, 3), i => _s.StudioFilterDenoise = i)));
+        _tabImage.Children.Add(Muted("Para as câmeras, escolha a qualidade e o espelho na aba Câmeras (cada câmera tem o seu). Desfocar o fundo da câmera exige reconhecer a pessoa na imagem (um modelo de inteligência artificial) e ainda não existe aqui.", 11));
+    }
+
+    /// <summary>Botões com alguns níveis de um ajuste; o mais próximo do valor atual fica marcado.</summary>
+    private WrapPanel Levels(double[] values, double current, Action<double> set, Func<double, string> label)
+    {
+        int nearest = 0;
+        for (int i = 1; i < values.Length; i++) if (Math.Abs(values[i] - current) < Math.Abs(values[nearest] - current)) nearest = i;
+        return Chips(values.Select(label).ToList(), nearest, i => set(values[i]));
+    }
+
+    // ---------------------------------------------------------------- canal (identidade e camadas)
+
+    private ChannelProfile Profile() => new(_s.StudioChannelName, _s.StudioPresenter, _s.StudioTagline, _s.StudioChannelLogo, _s.StudioChannelTheme);
+
+    private static string OverlayPath(string name) => System.IO.Path.Combine(OverlayFolder, name);
+
+    private void BuildChannel()
+    {
+        _tabChannel.Children.Clear();
+        foreach (var box in new FrameworkElement[] { _chName, _chPresenter, _chTagline, _introPreview, _lowerPreview, _logoPreview }) Detach(box);
+
+        _tabChannel.Children.Add(Muted("Cadastre o canal uma vez: o nome, quem apresenta, uma frase e o logo. Com isso o programa desenha a entrada, a faixa com o nome e a marca d'água que aparecem por cima do vídeo, com as cores do canal.", 11));
+        _chName.Text = _s.StudioChannelName;
+        _chPresenter.Text = _s.StudioPresenter;
+        _chTagline.Text = _s.StudioTagline;
+        foreach (var box in new[] { _chName, _chPresenter, _chTagline }) { box.TextChanged -= ChannelChanged; box.TextChanged += ChannelChanged; }
+        _tabChannel.Children.Add(Field("Nome do canal", _chName, 140));
+        _tabChannel.Children.Add(Field("Apresentador", _chPresenter, 140));
+        _tabChannel.Children.Add(Field("Frase do canal", _chTagline, 140));
+
+        var logoRow = new WrapPanel();
+        var pick = SmallButton("Escolher o logo...", (_, _) => PickLogo());
+        pick.Margin = new Thickness(0, 0, 8, 4);
+        logoRow.Children.Add(pick);
+        var clear = SmallButton("Tirar o logo", (_, _) => { _s.StudioChannelLogo = null; RefreshChannelPreview(); });
+        clear.Margin = new Thickness(0, 0, 8, 4);
+        logoRow.Children.Add(clear);
+        _tabChannel.Children.Add(Field("Logo", logoRow, 140));
+        _tabChannel.Children.Add(Field("Cor do canal", Chips(OverlayArt.Themes.Select(t => t.Name).ToList(), Math.Clamp(_s.StudioChannelTheme, 0, OverlayArt.Themes.Length - 1), i => { _s.StudioChannelTheme = i; RefreshChannelPreview(); }), 140));
+
+        // ---- entrada
+        _tabChannel.Children.Add(Heading("Entrada do canal"));
+        var intro = new CheckBox { Content = "Mostrar o cartão de abertura quando a transmissão começar", IsChecked = _s.StudioIntroOn, Foreground = Brush("TextBrush") };
+        intro.Click += (_, _) => _s.StudioIntroOn = intro.IsChecked == true;
+        _tabChannel.Children.Add(intro);
+        int[] introStart = { 1, 3, 5 };
+        int[] introShow = { 5, 8, 12 };
+        _tabChannel.Children.Add(Field("Aparece depois de", Chips(introStart.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(introStart, _s.StudioIntroStart)), i => _s.StudioIntroStart = introStart[i]), 140));
+        _tabChannel.Children.Add(Field("Fica na tela por", Chips(introShow.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(introShow, _s.StudioIntroSeconds)), i => _s.StudioIntroSeconds = introShow[i]), 140));
+        _tabChannel.Children.Add(_introPreview);
+
+        // ---- faixa do apresentador
+        _tabChannel.Children.Add(Heading("Faixa com o nome"));
+        var lower = new CheckBox { Content = "Mostrar a faixa com o nome do apresentador e do canal", IsChecked = _s.StudioLowerOn, Foreground = Brush("TextBrush") };
+        lower.Click += (_, _) => _s.StudioLowerOn = lower.IsChecked == true;
+        _tabChannel.Children.Add(lower);
+        int[] lowerStart = { 5, 15, 30, 60 };
+        int[] lowerEvery = { 0, 5, 10, 20 };
+        int[] lowerShow = { 6, 8, 12 };
+        _tabChannel.Children.Add(Field("Primeira vez", Chips(lowerStart.Select(v => $"{v} s").ToList(), Math.Max(0, Array.IndexOf(lowerStart, _s.StudioLowerStart)), i => _s.StudioLowerStart = lowerStart[i]), 140));
+        _tabChannel.Children.Add(Field("Repetir", Chips(lowerEvery.Select(v => v == 0 ? "Só uma vez" : $"a cada {v} min").ToList(), Math.Max(0, Array.IndexOf(lowerEvery, _s.StudioLowerEveryMinutes)), i => _s.StudioLowerEveryMinutes = lowerEvery[i]), 140));
+        _tabChannel.Children.Add(Field("Fica na tela por", Chips(lowerShow.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(lowerShow, _s.StudioLowerSeconds)), i => _s.StudioLowerSeconds = lowerShow[i]), 140));
+        _tabChannel.Children.Add(Field("Canto", Chips(CornerNames, Math.Clamp(_s.StudioLowerCorner, 0, 3), i => _s.StudioLowerCorner = i), 140));
+        _tabChannel.Children.Add(_lowerPreview);
+
+        // ---- marca d'água
+        _tabChannel.Children.Add(Heading("Marca d'água (logo)"));
+        var logo = new CheckBox { Content = "Deixar o logo sempre num canto do vídeo", IsChecked = _s.StudioLogoOn, Foreground = Brush("TextBrush") };
+        logo.Click += (_, _) => _s.StudioLogoOn = logo.IsChecked == true;
+        _tabChannel.Children.Add(logo);
+        int[] logoSizes = { 5, 8, 12 };
+        _tabChannel.Children.Add(Field("Canto", Chips(CornerNames, Math.Clamp(_s.StudioLogoCorner, 0, 3), i => _s.StudioLogoCorner = i), 140));
+        _tabChannel.Children.Add(Field("Tamanho", Chips(logoSizes.Select(v => v + "%").ToList(), Math.Max(0, Array.IndexOf(logoSizes, _s.StudioLogoPercent)), i => _s.StudioLogoPercent = logoSizes[i]), 140));
+        _tabChannel.Children.Add(_logoPreview);
+
+        _tabChannel.Children.Add(Muted("A entrada e a faixa seguem o relógio da transmissão (por exemplo, a faixa volta sozinha de 10 em 10 minutos); mostrar na hora, por botão, ainda exige reiniciar a captura. Para ver o resultado, ligue as opções e use \"Aplicar agora\" ou inicie a transmissão. Aparecem na gravação e no replay também.", 11));
+        RefreshChannelPreview();
+    }
+
+    private void ChannelChanged(object? sender, TextChangedEventArgs e)
+    {
+        _s.StudioChannelName = _chName.Text.Trim();
+        _s.StudioPresenter = _chPresenter.Text.Trim();
+        _s.StudioTagline = _chTagline.Text.Trim();
+        RefreshChannelPreview();
+    }
+
+    private void RefreshChannelPreview()
+    {
+        try
+        {
+            var profile = Profile();
+            _introPreview.Source = OverlayArt.RenderIntro(profile);
+            _lowerPreview.Source = OverlayArt.RenderLowerThird(profile);
+            _logoPreview.Source = OverlayArt.RenderLogo(profile);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException) { }
+    }
+
+    private void PickLogo()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Imagens (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp", Title = "Escolha o logo do canal" };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            _s.StudioChannelLogo = OverlayArt.Import(dialog.FileName, OverlayPath("channel-logo.png"));
+            RefreshChannelPreview();
+            SetStatus("Logo do canal guardado.", "OkBrush");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            SetStatus("Não foi possível usar essa imagem: " + ex.Message, "BadBrush");
+        }
+    }
+
+    /// <summary>Desenha as camadas ligadas e devolve a lista para o FFmpeg (a escrita em disco só ao iniciar ou aplicar).</summary>
+    private List<OverlayLayer> BuildLayers(bool write)
+    {
+        var layers = new List<OverlayLayer>();
+        var profile = Profile();
+        if (_s.StudioIntroOn)
+        {
+            if (write) OverlayArt.SavePng(OverlayArt.RenderIntro(profile), OverlayPath("intro.png"));
+            layers.Add(new OverlayLayer(OverlayKind.Intro, OverlayPath("intro.png"), CameraCorner.TopLeft, 46, _s.StudioIntroStart, 0, _s.StudioIntroSeconds));
+        }
+        if (_s.StudioLowerOn)
+        {
+            if (write) OverlayArt.SavePng(OverlayArt.RenderLowerThird(profile), OverlayPath("lower.png"));
+            layers.Add(new OverlayLayer(OverlayKind.LowerThird, OverlayPath("lower.png"), (CameraCorner)Math.Clamp(_s.StudioLowerCorner, 0, 3), 38, _s.StudioLowerStart, _s.StudioLowerEveryMinutes, _s.StudioLowerSeconds));
+        }
+        if (_s.StudioLogoOn)
+        {
+            if (write) OverlayArt.SavePng(OverlayArt.RenderLogo(profile), OverlayPath("logo.png"));
+            layers.Add(new OverlayLayer(OverlayKind.Logo, OverlayPath("logo.png"), (CameraCorner)Math.Clamp(_s.StudioLogoCorner, 0, 3), _s.StudioLogoPercent, 0, 0, 0));
+        }
+        return layers;
+    }
+
+    private string LayersKey()
+    {
+        long logoSize = _s.StudioChannelLogo is { } l && File.Exists(l) ? new FileInfo(l).Length : 0;
+        return string.Join("|", _s.StudioChannelName, _s.StudioPresenter, _s.StudioTagline, _s.StudioChannelTheme, logoSize);
+    }
+
     // ---------------------------------------------------------------- Pix
 
     private static readonly int[] PixPercents = { 10, 14, 18, 22 };
@@ -1026,12 +1233,29 @@ public sealed class StudioPage : ToolPageBase
     private void BuildPix()
     {
         _tabPix.Children.Clear();
-        foreach (var box in new FrameworkElement[] { _pixStatus, _pixPreview }) Detach(box);
+        foreach (var box in new FrameworkElement[] { _pixStatus, _pixPreview, _pixOwnPreview }) Detach(box);
 
         var on = Check("Mostrar o QR do Pix na transmissão", "O QR aparece num canto do vídeo (na transmissão, na gravação e no replay) para o público apoiar a live.");
         on.IsChecked = _s.StudioPixOn;
         on.Click += (_, _) => { _s.StudioPixOn = on.IsChecked == true; UpdateGhosts(); };
         _tabPix.Children.Add(on);
+
+        _tabPix.Children.Add(Field("Origem do QR", Chips(new[] { "Gerar pela minha chave Pix", "Usar o QR do meu banco" }, _s.StudioPixUseOwn ? 1 : 0, i => { _s.StudioPixUseOwn = i == 1; BuildPix(); }), 130));
+        if (_s.StudioPixUseOwn)
+        {
+            var pickOwn = SmallButton("Escolher a imagem do QR...", (_, _) => PickPixImage());
+            pickOwn.Margin = new Thickness(0, 0, 8, 4);
+            _tabPix.Children.Add(Field("Imagem", pickOwn, 130));
+            _pixNote.Text = _s.StudioPixNote;
+            Detach(_pixNote);
+            _pixNote.TextChanged -= PixChanged;
+            _pixNote.TextChanged += PixChanged;
+            _tabPix.Children.Add(Field("Legenda", _pixNote, 130));
+            _tabPix.Children.Add(Muted("Use o QR que o seu banco gera (do aplicativo, o do Pix \"Receber\" ou o de cobrança fixa). O programa só coloca uma moldura com o nome do canal e a legenda; ele não altera nem lê o QR, e quem paga confere o nome do recebedor no banco. Escolha um QR que não expira (o dinâmico deixa de valer).", 11));
+            AddPixPositionFields();
+            RefreshPix();
+            return;
+        }
 
         _pixKey.Text = _s.StudioPixKey;
         _pixName.Text = _s.StudioPixName;
@@ -1045,10 +1269,7 @@ public sealed class StudioPage : ToolPageBase
         _tabPix.Children.Add(Field("Cidade", _pixCity, 130));
         _tabPix.Children.Add(Field("Valor (R$, opcional)", _pixAmount, 130));
         _tabPix.Children.Add(Field("Mensagem", _pixNote, 130));
-        _tabPix.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(_s.StudioPixCorner, 0, 3), i => { _s.StudioPixCorner = i; UpdateGhosts(); }), 130));
-        _tabPix.Children.Add(Field("Tamanho", Chips(PixPercents.Select(p => p + "%").ToList(), Math.Max(0, Array.IndexOf(PixPercents, _s.StudioPixPercent)), i => { _s.StudioPixPercent = PixPercents[i]; UpdateGhosts(); }), 130));
-        _tabPix.Children.Add(Field("Aparecer", Chips(PixEvery.Select(m => m == 0 ? "Sempre" : $"a cada {m} min").ToList(), Math.Max(0, Array.IndexOf(PixEvery, _s.StudioPixEveryMinutes)), i => _s.StudioPixEveryMinutes = PixEvery[i]), 130));
-        _tabPix.Children.Add(Field("Por quanto tempo", Chips(PixSeconds.Select(m => m + " s").ToList(), Math.Max(0, Array.IndexOf(PixSeconds, _s.StudioPixShowSeconds)), i => _s.StudioPixShowSeconds = PixSeconds[i]), 130));
+        AddPixPositionFields();
 
         var actions = new WrapPanel { Margin = new Thickness(0, 6, 0, 4) };
         var copy = SmallButton("Copiar \"Pix copia e cola\"", (_, _) =>
@@ -1070,10 +1291,55 @@ public sealed class StudioPage : ToolPageBase
         RefreshPix();
     }
 
+    private void AddPixPositionFields()
+    {
+        _tabPix.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(_s.StudioPixCorner, 0, 3), i => { _s.StudioPixCorner = i; UpdateGhosts(); }), 130));
+        _tabPix.Children.Add(Field("Tamanho", Chips(PixPercents.Select(p => p + "%").ToList(), Math.Max(0, Array.IndexOf(PixPercents, _s.StudioPixPercent)), i => { _s.StudioPixPercent = PixPercents[i]; UpdateGhosts(); }), 130));
+        _tabPix.Children.Add(Field("Aparecer", Chips(PixEvery.Select(m => m == 0 ? "Sempre" : $"a cada {m} min").ToList(), Math.Max(0, Array.IndexOf(PixEvery, _s.StudioPixEveryMinutes)), i => _s.StudioPixEveryMinutes = PixEvery[i]), 130));
+        _tabPix.Children.Add(Field("Por quanto tempo", Chips(PixSeconds.Select(m => m + " s").ToList(), Math.Max(0, Array.IndexOf(PixSeconds, _s.StudioPixShowSeconds)), i => _s.StudioPixShowSeconds = PixSeconds[i]), 130));
+    }
+
+    private void PickPixImage()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Imagens (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp", Title = "Escolha a imagem do QR do seu banco" };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            _s.StudioPixOwnImage = OverlayArt.Import(dialog.FileName, OverlayPath("pix-banco.png"));
+            RefreshPix();
+            SetStatus("QR do banco guardado.", "OkBrush");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            SetStatus("Não foi possível usar essa imagem: " + ex.Message, "BadBrush");
+        }
+    }
+
     private void PixChanged(object? sender, TextChangedEventArgs e) => RefreshPix();
 
     private void RefreshPix()
     {
+        if (_s.StudioPixUseOwn)
+        {
+            _s.StudioPixNote = _pixNote.Text.Trim();
+            try
+            {
+                if (_s.StudioPixOwnImage is { } own && File.Exists(own))
+                {
+                    _pixOwnPreview.Source = OverlayArt.RenderPixOwn(own, _s.StudioChannelName, _s.StudioPixNote);
+                    Detach(_pixOwnPreview);
+                    if (!_tabPix.Children.Contains(_pixOwnPreview)) _tabPix.Children.Add(_pixOwnPreview);
+                    _pixOwnPreview.Visibility = Visibility.Visible;
+                    _pixPayload = null;
+                    return;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException) { }
+
+            _pixOwnPreview.Visibility = Visibility.Collapsed;
+            return;
+        }
+
         _s.StudioPixKey = _pixKey.Text.Trim();
         _s.StudioPixName = _pixName.Text.Trim();
         _s.StudioPixCity = _pixCity.Text.Trim();
@@ -1659,7 +1925,8 @@ public sealed class StudioPage : ToolPageBase
         foreach (var cam in _s.StudioCameras.Where(c => c.On))
         {
             if (!CameraOverlay.IsValidName(cam.Name)) return (null, "Escolha a câmera na aba Câmeras (clique em Procurar câmeras) ou desligue-a.");
-            cameras.Add(new CameraOverlay(cam.Name!, (CameraCorner)Math.Clamp(cam.Corner, 0, 3), cam.Percent, cam.Frame));
+            var camFilter = PresetFilter(cam.Preset, cam.Mirror);
+            cameras.Add(new CameraOverlay(cam.Name!, (CameraCorner)Math.Clamp(cam.Corner, 0, 3), cam.Percent, cam.Frame, camFilter.IsNeutral ? null : camFilter));
         }
 
         // ---- Pix
@@ -1667,16 +1934,35 @@ public sealed class StudioPage : ToolPageBase
         string? pixPayload = null;
         if (_s.StudioPixOn)
         {
-            if (_pixPayload is null) return (null, "O QR do Pix está ligado mas faltam dados (aba Pix): chave, nome e cidade. Preencha ou desligue.");
-            pixPayload = _pixPayload;
-            if (write)
+            if (_s.StudioPixUseOwn)
             {
-                try { PixImage.SavePng(PixImage.Render(_pixPayload, string.IsNullOrWhiteSpace(_s.StudioPixNote) ? "Apoie via Pix" : _s.StudioPixNote, PixPayload.Clean(_s.StudioPixName, 25)), PixImagePath); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return (null, "Não foi possível preparar a imagem do Pix: " + ex.Message); }
+                if (_s.StudioPixOwnImage is not { } own || !File.Exists(own)) return (null, "O Pix está ligado para usar o QR do seu banco, mas a imagem não foi escolhida (aba Pix).");
+                pixPayload = "proprio:" + new FileInfo(own).Length + ":" + _s.StudioChannelName + ":" + _s.StudioPixNote;
+                if (write)
+                {
+                    try { OverlayArt.SavePng(OverlayArt.RenderPixOwn(own, _s.StudioChannelName, _s.StudioPixNote), PixImagePath); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return (null, "Não foi possível preparar a imagem do Pix: " + ex.Message); }
+                }
+            }
+            else
+            {
+                if (_pixPayload is null) return (null, "O QR do Pix está ligado mas faltam dados (aba Pix): chave, nome e cidade. Preencha ou desligue.");
+                pixPayload = _pixPayload;
+                if (write)
+                {
+                    try { PixImage.SavePng(PixImage.Render(_pixPayload, string.IsNullOrWhiteSpace(_s.StudioPixNote) ? "Apoie via Pix" : _s.StudioPixNote, PixPayload.Clean(_s.StudioPixName, 25)), PixImagePath); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return (null, "Não foi possível preparar a imagem do Pix: " + ex.Message); }
+                }
             }
 
             pix = new PixOverlay(PixImagePath, (CameraCorner)Math.Clamp(_s.StudioPixCorner, 0, 3), _s.StudioPixPercent, _s.StudioPixEveryMinutes, _s.StudioPixShowSeconds);
         }
+
+        // ---- identidade do canal e filtro de imagem
+        List<OverlayLayer> layers;
+        try { layers = BuildLayers(write); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { return (null, "Não foi possível preparar as camadas do canal: " + ex.Message); }
+        var imageFilter = CurrentFilter();
 
         // ---- áudio
         AudioConfig? audio = null;
@@ -1689,7 +1975,8 @@ public sealed class StudioPage : ToolPageBase
 
         var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
             _s.StudioFps, encoder, _s.StudioBitrateMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
-            _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), cameras, pix, pixPayload);
+            _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), cameras, pix, pixPayload,
+            imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey());
         return (config, null);
     }
 
@@ -1865,6 +2152,8 @@ public sealed class StudioPage : ToolPageBase
         _live.Visibility = Vis(_studio.IsRunning);
         bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
         if (streaming && !_wasStreaming) { _viewers.Reset(); _hasStats = false; if (_s.StudioStatsOn) _ = RefreshStatsAsync(false); }
+        if (streaming && !_wasStreaming && _s.StudioChatAuto && _chatPanel is { IsConnected: false }) _chatPanel.Connect();
+        if (!streaming && _wasStreaming && _chatPanel is { IsConnected: true }) _chatPanel.Disconnect();
         _wasStreaming = streaming;
         UpdateStatsVisibility();
         _liveButtons.Visibility = Vis(_studio.Config?.Stream is not null && _studio.IsRunning);

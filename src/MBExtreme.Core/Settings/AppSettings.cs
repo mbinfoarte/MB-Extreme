@@ -139,6 +139,63 @@ public sealed class AppSettings
     /// <summary>Mostra um aviso pequeno por cima do jogo quando um clipe é salvo (funciona com jogo em janela ou sem bordas).</summary>
     public bool StudioClipToast { get; set; } = true;
 
+    // ---- identidade do canal e camadas (entrada, faixa com o nome, logo)
+    public string StudioChannelName { get; set; } = "";
+
+    public string StudioPresenter { get; set; } = "";
+
+    public string StudioTagline { get; set; } = "";
+
+    /// <summary>Logo do canal já copiado para a pasta do programa (PNG).</summary>
+    public string? StudioChannelLogo { get; set; }
+
+    /// <summary>0 amarelo, 1 branco, 2 azul, 3 vermelho, 4 verde, 5 roxo.</summary>
+    public int StudioChannelTheme { get; set; }
+
+    public bool StudioIntroOn { get; set; }
+
+    public int StudioIntroStart { get; set; } = 1;
+
+    public int StudioIntroSeconds { get; set; } = 8;
+
+    public bool StudioLowerOn { get; set; }
+
+    public int StudioLowerStart { get; set; } = 15;
+
+    /// <summary>De quantos em quantos minutos a faixa volta; 0 = aparece só uma vez.</summary>
+    public int StudioLowerEveryMinutes { get; set; } = 10;
+
+    public int StudioLowerSeconds { get; set; } = 8;
+
+    public int StudioLowerCorner { get; set; } = 2;
+
+    public bool StudioLogoOn { get; set; }
+
+    public int StudioLogoCorner { get; set; } = 1;
+
+    public int StudioLogoPercent { get; set; } = 8;
+
+    // ---- filtros da imagem principal
+    public double StudioFilterBrightness { get; set; }
+
+    public double StudioFilterContrast { get; set; } = 1;
+
+    public double StudioFilterSaturation { get; set; } = 1;
+
+    public double StudioFilterGamma { get; set; } = 1;
+
+    public double StudioFilterSharpness { get; set; }
+
+    public int StudioFilterDenoise { get; set; }
+
+    // ---- Pix com o QR do próprio banco
+    public bool StudioPixUseOwn { get; set; }
+
+    public string? StudioPixOwnImage { get; set; }
+
+    // ---- chat
+    public bool StudioChatAuto { get; set; } = true;
+
     // ---- estatísticas da transmissão (espectadores, visualizações...)
     public bool StudioStatsOn { get; set; } = true;
 
@@ -238,6 +295,11 @@ public sealed class StudioCameraSetting
     public int Percent { get; set; } = 22;
 
     public bool Frame { get; set; } = true;
+
+    /// <summary>0 original, 1 natural, 2 vívida, 3 cinema, 4 nítida (os mesmos ajustes da imagem principal).</summary>
+    public int Preset { get; set; }
+
+    public bool Mirror { get; set; }
 
     /// <summary>Ligada: aparece no vídeo. Desligada: fica na lista, mas não é aberta.</summary>
     public bool On { get; set; } = true;

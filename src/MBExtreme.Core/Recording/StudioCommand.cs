@@ -8,6 +8,7 @@ public static class StudioCommand
     public const int SegmentSeconds = 4;
     public const int MaxStreamMbps = 8;
     public const int MaxCameras = 3;
+    public const int MaxLayers = 4;
 
     private static readonly Regex SafeKey = new(@"^[A-Za-z0-9_\-.~%=&?]+$", RegexOptions.Compiled);
 
@@ -47,6 +48,9 @@ public static class StudioCommand
         if (r.Cameras.Select(c => c.DeviceName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != r.Cameras.Count)
             return "A mesma câmera foi escolhida duas vezes. Cada câmera só pode aparecer uma vez.";
         if (r.Pix is { } pix && !PixOverlay.IsValidPath(pix.ImagePath)) return "A imagem do QR do Pix não é válida.";
+        if (r.Layers.Count > MaxLayers) return $"Use no máximo {MaxLayers} camadas de identidade (entrada, faixa e logo).";
+        foreach (var layer in r.Layers)
+            if (!PixOverlay.IsValidPath(layer.ImagePath)) return "A imagem de uma camada do canal não é válida.";
         return null;
     }
 
@@ -102,11 +106,13 @@ public static class StudioCommand
             args.AddRange(new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + camera.DeviceName });
         if (r.Pix is { } pixInput)
             args.AddRange(new[] { "-loop", "1", "-framerate", "5", "-i", pixInput.ImagePath });
+        foreach (var layer in r.Layers)
+            args.AddRange(new[] { "-loop", "1", "-framerate", "25", "-i", layer.ImagePath });   // 25 quadros por segundo para o esmaecer ficar suave
 
         // ---- filtros
         string? filter = null;
         string? complex = null;
-        if (r.Cameras.Count > 0 || r.Pix is not null)
+        if (r.Cameras.Count > 0 || r.Pix is not null || r.Layers.Count > 0 || r.Filter is { IsNeutral: false })
         {
             complex = OverlayGraph(r, firstExtra, gdi, sameSize);
         }
@@ -193,7 +199,8 @@ public static class StudioCommand
     {
         int baseWidth = gdi ? r.OutputWidth : r.Source.Area.Width;
         int margin = Math.Max(8, baseWidth / 80);
-        var parts = new List<string> { (gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra") + "[b0]" };
+        string mainFilter = r.Filter?.ToChain() is { } chain ? "," + chain : "";
+        var parts = new List<string> { (gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra") + mainFilter + "[b0]" };
 
         int layer = 0;
         for (int i = 0; i < r.Cameras.Count; i++)
@@ -201,7 +208,8 @@ public static class StudioCommand
             var camera = r.Cameras[i];
             int width = Math.Max(2, baseWidth * camera.ClampedPercent / 100);
             width -= width % 2;
-            string cam = $"[{firstExtra + i}:v]scale={width}:-2,format=bgra" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
+            string camFilter = camera.Filter?.ToChain() is { } camChain ? "," + camChain : "";
+            string cam = $"[{firstExtra + i}:v]scale={width}:-2,format=bgra{camFilter}" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
             parts.Add($"{cam}[c{i}]");
             parts.Add($"[b{layer}][c{i}]overlay={CameraPosition(camera.Corner, margin)}:shortest=0[b{layer + 1}]");
             layer++;
@@ -219,11 +227,65 @@ public static class StudioCommand
             layer++;
         }
 
+        int layerInput = firstExtra + r.Cameras.Count + (r.Pix is null ? 0 : 1);
+        for (int i = 0; i < r.Layers.Count; i++)
+        {
+            var item = r.Layers[i];
+            int width = Math.Max(2, baseWidth * item.ClampedPercent / 100);
+            width -= width % 2;
+            parts.Add(LayerChain(item, layerInput + i, width, i));
+            parts.Add($"[b{layer}][l{i}]overlay={LayerPlacement(item, margin)}:shortest=0[b{layer + 1}]");
+            layer++;
+        }
+
         string finish = gdi
             ? $"scale={r.OutputWidth}:{r.OutputHeight}:force_original_aspect_ratio=decrease,pad={r.OutputWidth}:{r.OutputHeight}:(ow-iw)/2:(oh-ih)/2:black,format=nv12"
             : sameSize ? "format=nv12" : $"scale={r.OutputWidth}:{r.OutputHeight}:flags=bilinear,format=nv12";
         parts.Add($"[b{layer}]{finish}[v]");
         return string.Join(";", parts);
+    }
+
+    private static string N(double v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A entrada do canal esmaece ao aparecer e ao sair; a faixa e o logo só são redimensionados (a faixa entra deslizando pela posição).</summary>
+    private static string LayerChain(OverlayLayer layer, int input, int width, int index)
+    {
+        string chain = $"[{input}:v]scale={width}:-2,format=bgra";
+        if (layer.Kind == OverlayKind.Intro)
+        {
+            double fade = Math.Min(0.6, layer.Show / 3);
+            chain += $",fade=t=in:st={N(layer.StartSeconds)}:d={N(fade)}:alpha=1,fade=t=out:st={N(layer.StartSeconds + layer.Show - fade)}:d={N(fade)}:alpha=1";
+        }
+
+        return chain + $"[l{index}]";
+    }
+
+    /// <summary>Posição e janela de tempo da camada. As expressões usam o relógio do vídeo (t), então não é preciso reiniciar nada para a faixa repetir.</summary>
+    private static string LayerPlacement(OverlayLayer layer, int margin)
+    {
+        string start = N(layer.StartSeconds);
+        string show = N(layer.Show);
+        switch (layer.Kind)
+        {
+            case OverlayKind.Logo:
+                return CameraPosition(layer.Corner, margin);
+            case OverlayKind.Intro:
+                return $"x=(main_w-overlay_w)/2:y=(main_h-overlay_h)/2:enable='between(t,{start},{N(layer.StartSeconds + layer.Show)})'";
+            default:
+            {
+                // faixa: aparece em StartSeconds, fica Show segundos e, se EveryMinutes > 0, volta a cada tantos minutos
+                string phase = layer.EveryMinutes > 0 ? $"mod(t-{start},{N(layer.EveryMinutes * 60)})" : $"(t-{start})";
+                string enable = layer.EveryMinutes > 0 ? $"gte(t,{start})*lt({phase},{show})" : $"between(t,{start},{N(layer.StartSeconds + layer.Show)})";
+                bool left = layer.Corner is CameraCorner.TopLeft or CameraCorner.BottomLeft;
+                string slideIn = $"{phase}/0.6";
+                string slideOut = $"({phase}-({show}-0.6))/0.6";
+                string x = left
+                    ? $"if(lt({phase},0.6),-overlay_w+(overlay_w+{margin})*{slideIn},if(gt({phase},{show}-0.6),{margin}-(overlay_w+{margin})*{slideOut},{margin}))"
+                    : $"if(lt({phase},0.6),main_w-(overlay_w+{margin})*{slideIn},if(gt({phase},{show}-0.6),main_w-overlay_w-{margin}+(overlay_w+{margin})*{slideOut},main_w-overlay_w-{margin}))";
+                string y = layer.Corner is CameraCorner.TopLeft or CameraCorner.TopRight ? margin.ToString() : $"main_h-overlay_h-{margin}";
+                return $"x='{x}':y={y}:enable='{enable}'";
+            }
+        }
     }
 
     /// <summary>Linha de comando para mostrar na tela, com a chave escondida.</summary>

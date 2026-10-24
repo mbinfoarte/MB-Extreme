@@ -95,3 +95,20 @@ No Replay: **Salvar os lances automaticamente**. A cada 0,1 s o programa mede o 
 ## Não verificado em hardware real
 
 Câmeras por DirectShow (inclusive várias), a barra "Aplicar agora", a janela de chat, o teste de upload, os atalhos globais, o QR do Pix na transmissão, o detector de lances e o aviso por cima do jogo: testados só por testes automáticos de comando e regras, não em um PC com placa de vídeo. A sintaxe do filtro de várias camadas do FFmpeg e o aviso em tela cheia são os pontos que mais merecem teste real.
+
+## Estúdio profissional (fase 1)
+
+- **Mixer de áudio**: som do PC e microfone com medidor de nível, volume e mudo; abaixo, uma linha por aplicativo que está tocando (jogo, Discord, Spotify, navegador são reconhecidos pelo nome). O volume por aplicativo usa as sessões de áudio do Windows, ou seja, muda também o que você ouve. Volume independente só para a transmissão exige captura por processo (Windows 10 build 20348 ou mais novo) e ainda não foi feito.
+- **Imagem**: brilho, contraste, saturação, gama, nitidez, redução de ruído e espelho, com predefinições (Original, Natural, Vívida, Cinema, Nítida). Cada câmera tem a sua própria qualidade de imagem.
+- **Canal**: nome, apresentador, frase e logo; gera três camadas (entrada do canal, faixa com o nome que desliza de tempos em tempos e logo no canto) com temas de cores e pré-visualização no próprio app.
+- **Pix com QR do seu banco**: envie a imagem do QR e ela aparece dentro de uma moldura organizada com o nome do canal. O Pix é estático: o app não recebe aviso de pagamento.
+- **Chat e perguntas**: Twitch (anônimo, sem login) e YouTube (chave de API e vídeo ao vivo); mensagens pagas (bits, Super Chat) em destaque, filtros (tudo, só pagas, perguntas e pagas) e uma lista de perguntas para marcar como respondida. Pode conectar sozinho ao iniciar a transmissão.
+
+### Ainda não feito (roadmap, a partir do que as comunidades do OBS/Twitch pedem)
+
+1. Cenas e Modo Estúdio (prévia do que vai ao ar antes de trocar), com prévia composta real do que está no ar.
+2. Overlays dinâmicos (alertas de seguidor/doação) e botão "mostrar agora".
+3. Volume independente por aplicativo na transmissão (captura por processo do Windows).
+4. Desfoque de fundo da webcam (precisa de modelo de segmentação), supressão de ruído do microfone, chroma key e câmera virtual.
+5. Alterar título e categoria ao vivo (exige aplicativo OAuth no YouTube/Twitch).
+6. Aviso de Pix em tempo real (exige provedor de pagamento, servidor e cadastro de cada streamer).

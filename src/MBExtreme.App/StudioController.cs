@@ -29,7 +29,10 @@ internal sealed record StudioConfig(
     EncoderQuality Quality = EncoderQuality.Balanced,
     IReadOnlyList<CameraOverlay>? Cameras = null,
     PixOverlay? Pix = null,
-    string? PixPayload = null);
+    string? PixPayload = null,
+    ImageFilter? Filter = null,
+    IReadOnlyList<OverlayLayer>? Layers = null,
+    string? LayersKey = null);
 
 /// <summary>Mantém a sessão do estúdio viva enquanto você troca de página e cuida dos atalhos globais (salvar replay, gravar e transmitir).</summary>
 internal sealed class StudioController
@@ -114,6 +117,8 @@ internal sealed class StudioController
             Quality = config.Quality,
             Cameras = config.Cameras ?? Array.Empty<CameraOverlay>(),
             Pix = config.Pix,
+            Filter = config.Filter,
+            Layers = config.Layers ?? Array.Empty<OverlayLayer>(),
             WorkingDirectory = Folder,
             RecordFile = config.Record ? "gravacao-" + stamp + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             RecordMp4 = config.Mp4,
@@ -154,7 +159,10 @@ internal sealed class StudioController
             byte[] hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(t.FullUrl));
             parts.Add($"stream:{t.Service}:{Convert.ToHexString(hash, 0, 6)}");
         }
-        foreach (var cam in c.Cameras ?? Array.Empty<CameraOverlay>()) parts.Add($"cam:{cam.DeviceName}:{cam.Corner}:{cam.WidthPercent}:{cam.Frame}");
+        foreach (var cam in c.Cameras ?? Array.Empty<CameraOverlay>()) parts.Add($"cam:{cam.DeviceName}:{cam.Corner}:{cam.WidthPercent}:{cam.Frame}:{cam.Filter?.ToChain()}");
+        parts.Add("filtro:" + c.Filter?.ToChain());
+        foreach (var layer in c.Layers ?? Array.Empty<OverlayLayer>()) parts.Add($"camada:{layer.Kind}:{layer.Corner}:{layer.WidthPercent}:{layer.StartSeconds}:{layer.EveryMinutes}:{layer.ShowSeconds}");
+        parts.Add("identidade:" + c.LayersKey);
         if (c.Pix is { } pix)
         {
             byte[] pixHash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(c.PixPayload ?? ""));

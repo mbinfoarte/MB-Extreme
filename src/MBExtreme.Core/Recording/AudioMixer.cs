@@ -14,6 +14,7 @@ public sealed class AudioInput
     internal AudioInput(string name, WaveFormat format, float volume)
     {
         Name = name;
+        SourceFormat = format;
         _buffer = new BufferedWaveProvider(format)
         {
             ReadFully = true,
@@ -34,6 +35,12 @@ public sealed class AudioInput
 
     public string Name { get; }
 
+    /// <summary>Formato do áudio como chega da captura.</summary>
+    public WaveFormat SourceFormat { get; }
+
+    /// <summary>Avisa a cada trecho capturado (legendas ao vivo usam isto). Roda na thread da captura: seja rápido.</summary>
+    public event Action<byte[], int>? Captured;
+
     public float Volume
     {
         get => _volume.Volume;
@@ -43,7 +50,11 @@ public sealed class AudioInput
     internal ISampleProvider Output => _meter;
 
     /// <summary>Entrega o áudio capturado (no formato informado ao criar a fonte).</summary>
-    public void Push(byte[] data, int count) => _buffer.AddSamples(data, 0, count);
+    public void Push(byte[] data, int count)
+    {
+        _buffer.AddSamples(data, 0, count);
+        Captured?.Invoke(data, count);
+    }
 }
 
 /// <summary>Mistura as fontes de áudio em um único fluxo PCM de 48 kHz, 16 bits, estéreo, no ritmo do relógio.</summary>

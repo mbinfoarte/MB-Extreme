@@ -157,5 +157,11 @@ public sealed record StudioRequest
     /// <summary>QR do Pix por cima do vídeo (sempre ou por alguns segundos a cada tantos minutos).</summary>
     public PixOverlay? Pix { get; init; }
 
+    /// <summary>Vídeo vertical (Shorts, Reels, TikTok): montagem em uma ou duas partes. Quando definido, OutputWidth/OutputHeight são o tamanho do quadro vertical.</summary>
+    public VerticalLayout? Vertical { get; init; }
+
+    /// <summary>Legendas automáticas queimadas no vídeo em tempo real (vertical ou não).</summary>
+    public CaptionOverlay? Captions { get; init; }
+
     public bool AnyOutput => RecordFile is not null || Stream is not null || ReplayFolder is not null;
 }

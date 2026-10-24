@@ -193,6 +193,57 @@ public sealed class AppSettings
 
     public string? StudioPixOwnImage { get; set; }
 
+    // ---- vídeo vertical (Shorts, Reels, TikTok)
+    public bool StudioVerticalOn { get; set; }
+
+    public int StudioVerticalFormat { get; set; }
+
+    public bool StudioVerticalSplit { get; set; } = true;
+
+    public int StudioVerticalTopPercent { get; set; } = 55;
+
+    public bool StudioVerticalDivider { get; set; } = true;
+
+    /// <summary>0 = tela, 1 = câmera, 2 = arquivo.</summary>
+    public int StudioVerticalTopKind { get; set; }
+
+    public int StudioVerticalTopFit { get; set; } = 1;
+
+    public int StudioVerticalTopFocusX { get; set; } = 50;
+
+    public int StudioVerticalTopFocusY { get; set; } = 50;
+
+    public int StudioVerticalTopZoom { get; set; } = 100;
+
+    public string? StudioVerticalTopSource { get; set; }
+
+    public int StudioVerticalBottomKind { get; set; } = 1;
+
+    public int StudioVerticalBottomFit { get; set; }
+
+    public int StudioVerticalBottomFocusX { get; set; } = 50;
+
+    public int StudioVerticalBottomFocusY { get; set; } = 50;
+
+    public int StudioVerticalBottomZoom { get; set; } = 100;
+
+    public string? StudioVerticalBottomSource { get; set; }
+
+    // ---- legendas automáticas ao vivo
+    public bool StudioCaptionOn { get; set; }
+
+    /// <summary>0 = microfone, 1 = som do PC.</summary>
+    public int StudioCaptionSource { get; set; }
+
+    /// <summary>0 = pequena, 1 = média, 2 = grande.</summary>
+    public int StudioCaptionSizeIndex { get; set; } = 1;
+
+    public int StudioCaptionPosition { get; set; }
+
+    public int StudioCaptionColor { get; set; }
+
+    public bool StudioCaptionUpper { get; set; } = true;
+
     // ---- chat
     public bool StudioChatAuto { get; set; } = true;
 

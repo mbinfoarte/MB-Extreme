@@ -20,7 +20,7 @@ using MBExtreme.UI.Recording;
 namespace MBExtreme.UI.Pages;
 
 /// <summary>Estúdio: grava a tela ou uma janela, transmite ao vivo e guarda os melhores momentos (replay), com som do PC e microfone.</summary>
-public sealed class StudioPage : ToolPageBase
+public sealed partial class StudioPage : ToolPageBase
 {
     private static readonly (string Name, int Height)[] Resolutions =
         { ("Original", 0), ("1080p", 1080), ("1440p", 1440), ("4K 2160p", 2160), ("720p", 720) };
@@ -172,6 +172,7 @@ public sealed class StudioPage : ToolPageBase
         BuildEngine();
         BuildVideo();
         MigrateCamera();
+        BuildVertical();
         BuildImage();
         BuildChannel();
         BuildAudio();
@@ -610,8 +611,8 @@ public sealed class StudioPage : ToolPageBase
     {
         var title = new TextBlock { Text = "Configurações", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) };
         _config.Children.Add(title);
-        var tabs = new[] { _tabVideo, _tabImage, _tabAudio, _tabCamera, _tabChannel, _tabPix, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced };
-        _config.Children.Add(Chips(new[] { "Vídeo", "Imagem", "Áudio", "Câmeras", "Canal", "Pix", "Transmissão", "Estatísticas", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
+        var tabs = new[] { _tabVideo, _tabVertical, _tabImage, _tabAudio, _tabCamera, _tabChannel, _tabPix, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced };
+        _config.Children.Add(Chips(new[] { "Vídeo", "Vertical", "Imagem", "Áudio", "Câmeras", "Canal", "Pix", "Transmissão", "Estatísticas", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
         {
             _settingsTab = i;
             for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == i);
@@ -1490,7 +1491,7 @@ public sealed class StudioPage : ToolPageBase
     {
         var service = CurrentService();
         var spec = PlatformSpecs.For(service);
-        int height = StudioCommand.FitOutput(CurrentArea().Width, CurrentArea().Height, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height).Height;
+        int height = CurrentVertical()?.Width ?? StudioCommand.FitOutput(CurrentArea().Width, CurrentArea().Height, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height).Height;
         var plan = StreamPlan.Build(service, height, _s.StudioFps, _s.StudioBitrateMbps, _s.StudioStreamCapMbps, _s.StudioAudioKbps);
         var range = PlatformSpecs.BitrateRange(plan.Height, plan.Fps);
 
@@ -1964,6 +1965,12 @@ public sealed class StudioPage : ToolPageBase
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { return (null, "Não foi possível preparar as camadas do canal: " + ex.Message); }
         var imageFilter = CurrentFilter();
 
+        // ---- vídeo vertical e legendas
+        var vertical = CurrentVertical();
+        if (vertical?.Validate() is { } verticalProblem) return (null, verticalProblem);
+        var captions = CurrentCaptions();
+        if (captions is not null && !SpeechInstaller.IsInstalled) return (null, "Baixe o modelo de voz na aba Vertical para usar as legendas.");
+
         // ---- áudio
         AudioConfig? audio = null;
         if (_s.StudioSystemAudio || _s.StudioMicAudio)
@@ -1976,7 +1983,7 @@ public sealed class StudioPage : ToolPageBase
         var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
             _s.StudioFps, encoder, _s.StudioBitrateMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
             _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), cameras, pix, pixPayload,
-            imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey());
+            imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey(), vertical, captions);
         return (config, null);
     }
 
@@ -2149,6 +2156,7 @@ public sealed class StudioPage : ToolPageBase
         // com o estúdio ligado as configurações continuam editáveis: o que exige reiniciar aparece na barra "Aplicar agora"
         if (!running) _pending.Visibility = Visibility.Collapsed;
         RefreshMuteButtons();
+        if (_s.StudioCaptionOn && _settingsTab == 1) RefreshCaptionNow();
         _live.Visibility = Vis(_studio.IsRunning);
         bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
         if (streaming && !_wasStreaming) { _viewers.Reset(); _hasStats = false; if (_s.StudioStatsOn) _ = RefreshStatsAsync(false); }

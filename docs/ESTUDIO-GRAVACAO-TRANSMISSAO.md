@@ -112,3 +112,28 @@ Câmeras por DirectShow (inclusive várias), a barra "Aplicar agora", a janela d
 4. Desfoque de fundo da webcam (precisa de modelo de segmentação), supressão de ruído do microfone, chroma key e câmera virtual.
 5. Alterar título e categoria ao vivo (exige aplicativo OAuth no YouTube/Twitch).
 6. Aviso de Pix em tempo real (exige provedor de pagamento, servidor e cadastro de cada streamer).
+
+## Vídeo vertical e legendas ao vivo (Shorts, Reels, TikTok)
+
+Aba **Vertical** do estúdio. Vale para gravar, transmitir e salvar o replay: tudo é montado em tempo real, num único FFmpeg, sem edição depois.
+
+- **Formatos (altos)**: 1080×1920 (9:16, padrão das redes), 1440×2560 (2K), 2160×3840 (4K, só para gravar), 720×1280 (econômico), 1080×1350 (4:5, feed do Instagram) e 1080×1080. A resolução da aba Vídeo não vale no modo vertical. Na transmissão, o limite da plataforma é aplicado à **largura** (ex.: Twitch 1080) e o quadro é reduzido mantendo a proporção.
+- **Tela dividida**: uma parte em cima e outra embaixo (25% a 75% da altura), com linha amarela opcional. Cada parte pode ser a **tela/janela**, uma **câmera** ou um **arquivo** (imagem, GIF ou vídeo que repete sem parar, como um gameplay de fundo). Duas partes da mesma tela também funcionam (ex.: jogo inteiro em cima e um recorte aproximado, como o minimapa, embaixo).
+- **Enquadramento**: "preencher" (corta as bordas, escolhendo lado, altura e aproximação) ou "inteira com fundo desfocado" (jogo em 16:9 no meio, borrado atrás, como nos Shorts).
+- **Tudo o que já existia continua valendo** por cima do quadro vertical: filtros de imagem, câmeras pequenas nos cantos, Pix, entrada/faixa/logo do canal, áudio, replay e clipes automáticos.
+- **Legendas automáticas**: reconhecimento de voz em português **offline** (Vosk, modelo pequeno de cerca de 32 MB baixado uma vez). A fonte pode ser o microfone ou o som do PC. O texto é escrito em dois arquivos a cada 100 ms e o FFmpeg os relê a cada quadro (`drawtext` com `reload=1`), então a legenda sai gravada no vídeo, no estilo Shorts (letras grandes com contorno, maiúsculas opcionais, cor, tamanho e posição: embaixo, meio, em cima ou na divisória). A legenda some depois de 3 s de silêncio. Também funciona no vídeo horizontal.
+
+### Limites e cuidados
+
+- O modelo pequeno erra mais que serviços na nuvem, principalmente com ruído, gírias e nomes de jogos. Um modelo maior pode ser adicionado depois.
+- Palavras ainda não confirmadas podem mudar na tela por uma fração de segundo (é o texto parcial do reconhecedor).
+- A câmera usada numa parte do vídeo vertical não pode ser usada também como câmera pequena no canto (o DirectShow não abre a mesma câmera duas vezes).
+- Arquivos de fundo em vídeo usam `-re` (tempo real); vídeos muito pesados (4K) gastam processador.
+- Ainda sem teste em PC real: câmeras DirectShow, gráfico de filtros com `drawtext` de arquivo recarregado, biblioteca nativa do Vosk empacotada ao lado do executável e microfone WASAPI alimentando o reconhecedor.
+
+### Próximos passos sugeridos
+
+1. Animações das legendas (palavra atual em destaque, estilo karaokê) com legendas ASS.
+2. Rastreamento do rosto/ação para o corte vertical seguir o jogador.
+3. Cenas verticais salvas (troca com atalho) e modelo de voz maior opcional.
+4. Exportar a legenda também em arquivo SRT junto da gravação.

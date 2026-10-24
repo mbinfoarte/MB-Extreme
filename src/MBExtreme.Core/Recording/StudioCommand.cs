@@ -51,6 +51,21 @@ public static class StudioCommand
         if (r.Layers.Count > MaxLayers) return $"Use no máximo {MaxLayers} camadas de identidade (entrada, faixa e logo).";
         foreach (var layer in r.Layers)
             if (!PixOverlay.IsValidPath(layer.ImagePath)) return "A imagem de uma camada do canal não é válida.";
+        if (r.Vertical is { } v)
+        {
+            if (v.Validate() is { } vp) return vp;
+            if (v.Width != r.OutputWidth || v.Height != r.OutputHeight) return "O tamanho do vídeo vertical não bate com o tamanho de saída.";
+            foreach (var pane in v.Panes.Where(p => p.Kind == PaneKind.Camera))
+                if (r.Cameras.Any(c => string.Equals(c.DeviceName, pane.Source, StringComparison.OrdinalIgnoreCase)))
+                    return "A câmera usada numa parte do vídeo vertical não pode aparecer também como câmera pequena no canto.";
+            if (v.Panes.Count(p => p.Kind == PaneKind.Camera) == 2 && string.Equals(v.Top.Source, v.Bottom.Source, StringComparison.OrdinalIgnoreCase))
+                return "As duas partes usam a mesma câmera; escolha câmeras diferentes.";
+        }
+        if (r.Captions is { } c)
+        {
+            if (!CaptionOverlay.IsValidPath(c.Line1File) || !CaptionOverlay.IsValidPath(c.Line2File) || !CaptionOverlay.IsValidPath(c.FontFile))
+                return "O caminho da legenda ou da fonte tem caracteres que não são aceitos.";
+        }
         return null;
     }
 
@@ -102,6 +117,12 @@ public static class StudioCommand
 
         // ---- câmeras e QR do Pix (entradas extras, depois do vídeo e do áudio)
         int firstExtra = audio ? 2 : 1;
+        int verticalFirst = firstExtra;
+        if (r.Vertical is { } vertical)
+        {
+            foreach (var input in VerticalGraph.ExtraInputs(vertical, fps)) args.AddRange(input);
+            firstExtra += vertical.Panes.Count(p => p.Kind != PaneKind.Screen);
+        }
         foreach (var camera in r.Cameras)
             args.AddRange(new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + camera.DeviceName });
         if (r.Pix is { } pixInput)
@@ -112,9 +133,9 @@ public static class StudioCommand
         // ---- filtros
         string? filter = null;
         string? complex = null;
-        if (r.Cameras.Count > 0 || r.Pix is not null || r.Layers.Count > 0 || r.Filter is { IsNeutral: false })
+        if (r.Cameras.Count > 0 || r.Pix is not null || r.Layers.Count > 0 || r.Filter is { IsNeutral: false } || r.Vertical is not null || r.Captions is not null)
         {
-            complex = OverlayGraph(r, firstExtra, gdi, sameSize);
+            complex = OverlayGraph(r, firstExtra, verticalFirst, gdi, sameSize);
         }
         else if (gdi)
         {
@@ -195,12 +216,15 @@ public static class StudioCommand
     /// Filtro com a imagem da tela e, por cima, as câmeras e o QR do Pix. As câmeras são medidas em % da largura da tela capturada, antes de reduzir.
     /// Cada camada vira o fundo da próxima: [b0] + câmera 1 = [b1], [b1] + câmera 2 = [b2]...
     /// </summary>
-    private static string OverlayGraph(StudioRequest r, int firstExtra, bool gdi, bool sameSize)
+    private static string OverlayGraph(StudioRequest r, int firstExtra, int verticalFirst, bool gdi, bool sameSize)
     {
-        int baseWidth = gdi ? r.OutputWidth : r.Source.Area.Width;
+        int baseWidth = r.Vertical is { } vl ? vl.Width : gdi ? r.OutputWidth : r.Source.Area.Width;
         int margin = Math.Max(8, baseWidth / 80);
         string mainFilter = r.Filter?.ToChain() is { } chain ? "," + chain : "";
-        var parts = new List<string> { (gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra") + mainFilter + "[b0]" };
+        string screen = (gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra") + mainFilter;
+        var parts = r.Vertical is { } vertical
+            ? VerticalGraph.Build(vertical, screen + "[scr]", verticalFirst)
+            : new List<string> { screen + "[b0]" };
 
         int layer = 0;
         for (int i = 0; i < r.Cameras.Count; i++)
@@ -238,7 +262,14 @@ public static class StudioCommand
             layer++;
         }
 
-        string finish = gdi
+        if (r.Captions is { } captions)
+        {
+            double divider = r.Vertical is { Split: true } split ? split.TopHeight / (double)split.Height : 0.5;
+            parts.Add(CaptionFilter.Build(captions, $"[b{layer}]", $"[b{layer + 1}]", baseWidth, r.Vertical is { } vh ? vh.Height : gdi ? r.OutputHeight : r.Source.Area.Height, divider));
+            layer++;
+        }
+
+        string finish = r.Vertical is not null ? "format=nv12" : gdi
             ? $"scale={r.OutputWidth}:{r.OutputHeight}:force_original_aspect_ratio=decrease,pad={r.OutputWidth}:{r.OutputHeight}:(ow-iw)/2:(oh-ih)/2:black,format=nv12"
             : sameSize ? "format=nv12" : $"scale={r.OutputWidth}:{r.OutputHeight}:flags=bilinear,format=nv12";
         parts.Add($"[b{layer}]{finish}[v]");

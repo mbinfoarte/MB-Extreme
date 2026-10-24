@@ -32,7 +32,12 @@ internal sealed record StudioConfig(
     string? PixPayload = null,
     ImageFilter? Filter = null,
     IReadOnlyList<OverlayLayer>? Layers = null,
-    string? LayersKey = null);
+    string? LayersKey = null,
+    VerticalLayout? Vertical = null,
+    CaptionConfig? Captions = null);
+
+/// <summary>Legendas automáticas ao vivo: de onde vem a voz e como a legenda aparece.</summary>
+internal sealed record CaptionConfig(bool Microphone, int Size, CaptionPosition Position, CaptionColor Color, bool Uppercase);
 
 /// <summary>Mantém a sessão do estúdio viva enquanto você troca de página e cuida dos atalhos globais (salvar replay, gravar e transmitir).</summary>
 internal sealed class StudioController
@@ -47,6 +52,9 @@ internal sealed class StudioController
     private bool _autoSaving;
     private bool _saving, _toggling;
     private string? _ffmpeg;
+    private CaptionService? _captions;
+    private AudioInput? _captionInput;
+    private Action<byte[], int>? _captionFeed;
 
     public StudioController()
     {
@@ -86,19 +94,42 @@ internal sealed class StudioController
 
     public async Task StartAsync(string ffmpeg, StudioConfig config)
     {
-        var (width, height) = StudioCommand.FitOutput(config.Source.Area.Width, config.Source.Area.Height, config.OutputHeight);
+        var vertical = config.Vertical;
+        var (width, height) = vertical is null
+            ? StudioCommand.FitOutput(config.Source.Area.Width, config.Source.Area.Height, config.OutputHeight)
+            : (vertical.Width, vertical.Height);
         int fps = config.Fps;
         int bitrate = config.BitrateMbps > 0 ? config.BitrateMbps : FfmpegCommand.DefaultBitrateMbps(width, height, fps);
         int videoKbps = 0, audioKbps = config.AudioKbps, streamMax = StudioCommand.MaxStreamMbps;
         if (config.Stream is { } target)
         {
             // a transmissão segue o padrão da plataforma: resolução, quadros e taxa máximos, e o limite de banda escolhido
-            var plan = StreamPlan.Build(target.Service, height, fps, config.BitrateMbps, config.StreamCapMbps, config.AudioKbps);
-            if (plan.Height < height) (width, height) = StudioCommand.FitOutput(config.Source.Area.Width, config.Source.Area.Height, plan.Height);
+            // (no vertical, o "tamanho" da plataforma vale para o lado menor, a largura)
+            var plan = StreamPlan.Build(target.Service, vertical is null ? height : width, fps, config.BitrateMbps, config.StreamCapMbps, config.AudioKbps);
+            if (vertical is null)
+            {
+                if (plan.Height < height) (width, height) = StudioCommand.FitOutput(config.Source.Area.Width, config.Source.Area.Height, plan.Height);
+            }
+            else if (plan.Height < width)
+            {
+                vertical = vertical.ScaledToWidth(plan.Height);
+                (width, height) = (vertical.Width, vertical.Height);
+            }
             fps = plan.Fps;
             videoKbps = plan.VideoKbps;
             audioKbps = plan.AudioKbps;
             streamMax = (int)Math.Ceiling(plan.VideoKbps / 1000.0);
+        }
+
+        DisposeCaptions();
+        CaptionOverlay? captionOverlay = null;
+        if (config.Captions is { } captionConfig)
+        {
+            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "captions");
+            Directory.CreateDirectory(folder);
+            captionOverlay = new CaptionOverlay(Path.Combine(folder, "legenda1.txt"), Path.Combine(folder, "legenda2.txt"), CaptionFontFile(), captionConfig.Size,
+                captionConfig.Position, captionConfig.Color, captionConfig.Uppercase);
+            _captions = new CaptionService(captionOverlay, width);   // cria os arquivos antes do FFmpeg abrir
         }
 
         string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
@@ -119,6 +150,8 @@ internal sealed class StudioController
             Pix = config.Pix,
             Filter = config.Filter,
             Layers = config.Layers ?? Array.Empty<OverlayLayer>(),
+            Vertical = vertical,
+            Captions = captionOverlay,
             WorkingDirectory = Folder,
             RecordFile = config.Record ? "gravacao-" + stamp + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             RecordMp4 = config.Mp4,
@@ -127,7 +160,17 @@ internal sealed class StudioController
             ReplaySeconds = config.ReplaySeconds,
         };
 
-        await Session.StartAsync(ffmpeg, request, config.Audio);
+        try
+        {
+            await Session.StartAsync(ffmpeg, request, config.Audio);
+        }
+        catch
+        {
+            DisposeCaptions();
+            throw;
+        }
+
+        if (config.Captions is { } cc) AttachCaptions(cc);
         _ffmpeg = ffmpeg;
         Config = config;
         LastConfig = config;
@@ -161,6 +204,9 @@ internal sealed class StudioController
         }
         foreach (var cam in c.Cameras ?? Array.Empty<CameraOverlay>()) parts.Add($"cam:{cam.DeviceName}:{cam.Corner}:{cam.WidthPercent}:{cam.Frame}:{cam.Filter?.ToChain()}");
         parts.Add("filtro:" + c.Filter?.ToChain());
+        if (c.Vertical is { } v)
+            parts.Add($"vertical:{v.Width}x{v.Height}:{v.Split}:{v.TopPercent}:{v.Divider}:" + string.Join(",", v.Panes.Select(p => $"{p.Kind}/{p.Fit}/{p.Fx}/{p.Fy}/{p.Zoom}/{p.Source}")));
+        if (c.Captions is { } cap) parts.Add($"legenda:{cap.Microphone}:{cap.Size}:{cap.Position}:{cap.Color}:{cap.Uppercase}");
         foreach (var layer in c.Layers ?? Array.Empty<OverlayLayer>()) parts.Add($"camada:{layer.Kind}:{layer.Corner}:{layer.WidthPercent}:{layer.StartSeconds}:{layer.EveryMinutes}:{layer.ShowSeconds}");
         parts.Add("identidade:" + c.LayersKey);
         if (c.Pix is { } pix)
@@ -307,8 +353,59 @@ internal sealed class StudioController
     }
 
     /// <summary>Para tudo. Devolve o arquivo gravado, se havia.</summary>
+    /// <summary>Fonte das legendas: negrito e grosso lê melhor em tela de celular.</summary>
+    private static string CaptionFontFile()
+    {
+        string fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+        foreach (string name in new[] { "impact.ttf", "arialbd.ttf", "arial.ttf", "segoeuib.ttf" })
+        {
+            string path = Path.Combine(fonts, name);
+            if (File.Exists(path)) return path;
+        }
+        return Path.Combine(fonts, "arial.ttf");
+    }
+
+    private void AttachCaptions(CaptionConfig config)
+    {
+        if (_captions is not { } service) return;
+        var input = Session.CaptionInput(config.Microphone);
+        if (input is null)
+        {
+            Raise(config.Microphone ? "Legendas: ligue o microfone na aba Áudio para ouvir você." : "Legendas: ligue o som do PC na aba Áudio.", false);
+            return;
+        }
+
+        try
+        {
+            var engine = new VoskSpeech(SpeechModels.ModelPath(SpeechInstaller.Root));
+            var f = input.SourceFormat;
+            service.Attach(engine, new WaveFormatInfo(f.SampleRate, f.Channels, f.BitsPerSample, f.Encoding == NAudio.Wave.WaveFormatEncoding.IeeeFloat));
+            _captionInput = input;
+            _captionFeed = service.Feed;
+            input.Captured += _captionFeed;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // falta de biblioteca nativa, modelo faltando ou corrompido: o vídeo segue sem legenda
+            Raise("As legendas ao vivo não puderam começar: " + ex.Message, false);
+        }
+    }
+
+    private void DisposeCaptions()
+    {
+        if (_captionInput is not null && _captionFeed is not null) _captionInput.Captured -= _captionFeed;
+        _captionInput = null;
+        _captionFeed = null;
+        _captions?.Dispose();
+        _captions = null;
+    }
+
+    /// <summary>Última legenda mostrada no vídeo (para a pré-visualização).</summary>
+    public (string Line1, string Line2)? CaptionNow => _captions?.Shown;
+
     public string? Stop()
     {
+        DisposeCaptions();
         string? file = Session.Stop();   // o relógio dos lances se desliga sozinho no próximo tique (este método roda fora da interface)
         if (Config?.Replay == true) ReplayBuffer.ClearSegments(Path.Combine(Folder, ReplayFolder));
         return file;

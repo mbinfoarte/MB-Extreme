@@ -59,6 +59,9 @@ public sealed class StudioSession : IDisposable
 
     public bool HasMicrophone => _capture?.Microphone is not null;
 
+    /// <summary>Entrada de áudio para as legendas ao vivo (microfone ou som do PC).</summary>
+    public AudioInput? CaptionInput(bool microphone) => microphone ? _capture?.Microphone : _capture?.SystemSound;
+
     /// <summary>Volume atual de uma fonte (0 a 2); 0 também é "mudo". Mudar o volume vale na hora, sem reiniciar nada.</summary>
     public float GetVolume(bool microphone) => (microphone ? _capture?.Microphone : _capture?.SystemSound)?.Volume ?? 0f;
 

@@ -29,3 +29,6 @@ src/MBExtreme.LicenseServer/bin/
 src/MBExtreme.LicenseServer/obj/
 **/signing-key.pem
 **/licenses.db*
+
+# gerado na compilação a partir do Blender Open Data
+src/MBExtreme.App/Assets/hardware-index.json

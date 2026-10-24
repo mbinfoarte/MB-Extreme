@@ -40,3 +40,15 @@ Ideias e técnicas de outros projetos usados apenas como referência de estudo e
 ## FFmpeg (não incluído)
 - Uso: captura, codificação, transmissão e replay acelerados pela placa de vídeo. O MB Extreme **não distribui** o FFmpeg: ele é instalado pelo usuário (winget, pacote Gyan.FFmpeg) e o aplicativo apenas executa o programa.
 - Licença: LGPL/GPL conforme a compilação instalada. https://ffmpeg.org
+
+## Vosk (reconhecimento de voz das legendas)
+- Uso: legendas automáticas em tempo real, sem internet. O modelo de voz em português (vosk-model-small-pt) é baixado pelo usuário quando ele liga as legendas.
+- Licença: Apache 2.0 (biblioteca e modelo). https://alphacephei.com/vosk
+
+## QRCoder
+- Uso: gerar o QR do Pix na transmissão.
+- Licença: MIT. https://github.com/codebude/QRCoder
+
+## Blender Open Data (dados)
+- Uso: índice de velocidade de processadores e placas de vídeo, gerado na compilação a partir dos resultados públicos do Blender Benchmark, para mostrar a posição do PC do usuário. O MB Extreme só distribui o índice resumido (nome do modelo e nota), não os resultados originais.
+- Licença dos dados: Creative Commons Zero (CC0, domínio público). https://opendata.blender.org

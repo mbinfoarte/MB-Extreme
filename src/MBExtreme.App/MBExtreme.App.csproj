@@ -21,6 +21,11 @@
     <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
+  <!-- índice de CPUs e placas (gerado a partir do Blender Open Data na compilação); sem o arquivo, o app só não mostra a posição -->
+  <ItemGroup Condition="Exists('Assets\hardware-index.json')">
+    <None Include="Assets\hardware-index.json" Link="hardware-index.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />

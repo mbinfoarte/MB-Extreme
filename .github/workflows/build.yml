@@ -26,6 +26,10 @@ jobs:
       - name: Testes do servidor de licenças
         run: dotnet test tests/MBExtreme.LicenseServer.Tests/MBExtreme.LicenseServer.Tests.csproj -c Release
 
+      - name: Gerar o índice de hardware (Blender Open Data, CC0)
+        continue-on-error: true
+        run: dotnet run --project tools/MBExtreme.IndexTool/MBExtreme.IndexTool.csproj -c Release -- --download src/MBExtreme.App/Assets/hardware-index.json
+
       - name: Publicar app (Windows x64)
         run: dotnet publish src/MBExtreme.App/MBExtreme.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
 

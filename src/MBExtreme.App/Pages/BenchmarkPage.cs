@@ -375,6 +375,7 @@ public sealed class BenchmarkPage : ToolPageBase
             Item("Memória", $"{hw.TotalMemoryBytes / 1024.0 / 1024 / 1024:0.#} GB" + (hw.Memory.FirstOrDefault() is { ConfiguredMhz: > 0 } m ? $" a {m.ConfiguredMhz} MHz ({m.Type})" : ""));
             Item("Windows", $"{hw.Windows.Edition} {hw.Windows.DisplayVersion} (build {hw.Windows.Build})");
             panel.Children.Add(grid);
+            AddStanding(panel, hw);
 
             var advice = GameAdvisor.Recommend(hw);
             panel.Children.Add(new TextBlock { Text = $"Nível estimado para jogos: {advice.Tier}", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 2), Foreground = Brush("AccentBrush") });
@@ -384,6 +385,34 @@ public sealed class BenchmarkPage : ToolPageBase
         {
             panel.Children.Add(Muted("Não foi possível ler os dados do sistema."));
         }
+    }
+
+    private static HardwareIndex? _index;
+    private static bool _indexLoaded;
+
+    /// <summary>Posição do seu processador e da sua placa entre os modelos do Blender Open Data (se o índice veio junto do app).</summary>
+    private void AddStanding(StackPanel panel, MBExtreme.Core.Hardware.HardwareInventory hw)
+    {
+        if (!_indexLoaded)
+        {
+            _indexLoaded = true;
+            _index = HardwareIndex.Load(Path.Combine(AppContext.BaseDirectory, "hardware-index.json"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "hardware-index.json"));
+        }
+        if (_index is null) return;
+
+        var lines = new List<string>();
+        if (_index.Cpu(hw.Cpu.Name) is { } cpu) lines.Add($"Processador: mais rápido que {cpu.BeatsPercent:0}% dos {cpu.Models} modelos do índice");
+        var gpu = hw.Gpus.Select(g => _index.Gpu(g.Name)).FirstOrDefault(x => x is not null);
+        if (gpu is not null) lines.Add($"Placa de vídeo: mais rápida que {gpu.BeatsPercent:0}% dos {gpu.Models} modelos do índice");
+        if (lines.Count == 0)
+        {
+            panel.Children.Add(Muted("Seu processador e sua placa não estão no índice do Blender Open Data (modelos novos ou raros).", 11));
+            return;
+        }
+        panel.Children.Add(new TextBlock { Text = "Seu lugar entre os modelos (Blender Open Data)", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 2) });
+        foreach (var line in lines) panel.Children.Add(new TextBlock { Text = line, FontSize = 13, Foreground = Brush("AccentBrush") });
+        panel.Children.Add(Muted($"Medido em renderização (Blender Cycles), por modelo e não por quantidade de usuários; serve de referência, não de nota de jogos. Dados públicos (CC0) de {_index.Data.GeneratedAt:dd/MM/yyyy}.", 11));
     }
 
     private Border MonitoringCard(IReadOnlyList<SensorTrack> tracks, IReadOnlyList<PhaseMark>? phases)

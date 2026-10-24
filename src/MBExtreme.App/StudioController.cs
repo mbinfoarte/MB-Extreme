@@ -261,6 +261,9 @@ internal sealed class StudioController
     /// <summary>Muda o volume do som do PC ou do microfone na hora, sem reiniciar a captura.</summary>
     public void SetVolume(bool microphone, float volume) => Session.SetVolume(microphone, volume);
 
+    /// <summary>Muda o tratamento da voz do microfone na hora.</summary>
+    public void SetVoice(VoiceEffect effect) => Session.SetVoice(effect);
+
     public float GetVolume(bool microphone) => Session.GetVolume(microphone);
 
     // ---------------------------------------------------------------- atalhos globais

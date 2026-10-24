@@ -137,3 +137,13 @@ Aba **Vertical** do estúdio. Vale para gravar, transmitir e salvar o replay: tu
 2. Rastreamento do rosto/ação para o corte vertical seguir o jogador.
 3. Cenas verticais salvas (troca com atalho) e modelo de voz maior opcional.
 4. Exportar a legenda também em arquivo SRT junto da gravação.
+
+## Voz e imagem inspiradas no NVIDIA App / Broadcast
+
+Feito sem placa RTX e sem inteligência artificial:
+
+- **Voz do microfone** (aba Áudio, muda ao vivo): *Reduzir ruído* (filtro de graves, porta de ruído que abaixa o som entre as falas) e *Voz de estúdio* (também realça presença e corpo da voz, compressor e limitador).
+- **Vinheta** (escurece os cantos) e predefinições **Luz de estúdio** e **Retrato** na aba Imagem e em cada câmera.
+- **Câmera virtual do NVIDIA Broadcast**: aparece na lista de câmeras e traz fundo virtual, enquadramento automático e contato visual sem esforço do nosso app.
+
+Não feito (exige IA/RTX): fundo virtual próprio, enquadramento automático, contato visual, super resolução, geração de quadros, remoção de eco da sala. Ideias futuras: teste do microfone com medidor e gravação curta, luz-chave com gradiente (máscara radial), zoom e posição manuais por câmera.

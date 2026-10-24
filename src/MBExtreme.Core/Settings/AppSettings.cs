@@ -188,6 +188,11 @@ public sealed class AppSettings
 
     public int StudioFilterDenoise { get; set; }
 
+    public int StudioFilterVignette { get; set; }
+
+    /// <summary>Tratamento da voz do microfone: 0 = natural, 1 = reduzir ruído, 2 = voz de estúdio.</summary>
+    public int StudioVoiceEffect { get; set; }
+
     // ---- Pix com o QR do próprio banco
     public bool StudioPixUseOwn { get; set; }
 

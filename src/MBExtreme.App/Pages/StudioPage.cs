@@ -701,6 +701,12 @@ public sealed partial class StudioPage : ToolPageBase
             () => _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null,
             KnownGames));
 
+        _tabAudio.Children.Add(Field("Voz do microfone", Chips(new[] { "Natural", "Reduzir ruído", "Voz de estúdio" }, Math.Clamp(_s.StudioVoiceEffect, 0, 2), i =>
+        {
+            _s.StudioVoiceEffect = i;
+            _studio.SetVoice((VoiceEffect)i);   // vale na hora, mesmo com o estúdio no ar
+        })));
+        _tabAudio.Children.Add(Muted("Reduzir ruído corta ronco de ventilador e chiado e abaixa o som entre as falas; Voz de estúdio ainda realça a voz e nivela o volume. Não é a inteligência artificial do NVIDIA Broadcast: para ruído forte (teclado alto, vozes ao fundo) o resultado é mais simples. Eco da sala não é removido.", 11));
         _tabAudio.Children.Add(Field("Qualidade do áudio", Chips(AudioKbpsOptions.Select(k => k + " kbps").ToList(),
             Math.Max(0, Array.IndexOf(AudioKbpsOptions, _s.StudioAudioKbps)), i => { _s.StudioAudioKbps = AudioKbpsOptions[i]; UpdatePlan(); })));
         _tabAudio.Children.Add(Muted("160 kbps é o ideal para a maioria. Ao transmitir, a plataforma limita (Twitch até 160 kbps). Se desmarcar os dois, o vídeo sai sem áudio.", 11));
@@ -1039,7 +1045,7 @@ public sealed partial class StudioPage : ToolPageBase
 
     // ---------------------------------------------------------------- imagem (filtros)
 
-    private ImageFilter CurrentFilter() => new ImageFilter(_s.StudioFilterBrightness, _s.StudioFilterContrast, _s.StudioFilterSaturation, _s.StudioFilterGamma, _s.StudioFilterSharpness, _s.StudioFilterDenoise).Clamped();
+    private ImageFilter CurrentFilter() => new ImageFilter(_s.StudioFilterBrightness, _s.StudioFilterContrast, _s.StudioFilterSaturation, _s.StudioFilterGamma, _s.StudioFilterSharpness, _s.StudioFilterDenoise, false, _s.StudioFilterVignette).Clamped();
 
     private static ImageFilter PresetFilter(int preset, bool mirror)
     {
@@ -1061,12 +1067,12 @@ public sealed partial class StudioPage : ToolPageBase
 
         int current = ImageFilter.Presets.ToList().FindIndex(p => Math.Abs(p.Filter.Brightness - _s.StudioFilterBrightness) < 0.001 && Math.Abs(p.Filter.Contrast - _s.StudioFilterContrast) < 0.001
             && Math.Abs(p.Filter.Saturation - _s.StudioFilterSaturation) < 0.001 && Math.Abs(p.Filter.Gamma - _s.StudioFilterGamma) < 0.001
-            && Math.Abs(p.Filter.Sharpness - _s.StudioFilterSharpness) < 0.001 && p.Filter.Denoise == _s.StudioFilterDenoise);
+            && Math.Abs(p.Filter.Sharpness - _s.StudioFilterSharpness) < 0.001 && p.Filter.Denoise == _s.StudioFilterDenoise && p.Filter.Vignette == _s.StudioFilterVignette);
         _tabImage.Children.Add(Field("Predefinição", Chips(ImageFilter.Presets.Select(p => p.Name).ToList(), current, i =>
         {
             var f = ImageFilter.Presets[i].Filter;
             _s.StudioFilterBrightness = f.Brightness; _s.StudioFilterContrast = f.Contrast; _s.StudioFilterSaturation = f.Saturation;
-            _s.StudioFilterGamma = f.Gamma; _s.StudioFilterSharpness = f.Sharpness; _s.StudioFilterDenoise = f.Denoise;
+            _s.StudioFilterGamma = f.Gamma; _s.StudioFilterSharpness = f.Sharpness; _s.StudioFilterDenoise = f.Denoise; _s.StudioFilterVignette = f.Vignette;
             BuildImage();
         })));
         if (current >= 0) _tabImage.Children.Add(Field("", Muted(ImageFilter.Presets[current].Description, 11)));
@@ -1080,7 +1086,8 @@ public sealed partial class StudioPage : ToolPageBase
         _tabImage.Children.Add(Field("Cores (saturação)", Levels(saturation, _s.StudioFilterSaturation, v => _s.StudioFilterSaturation = v, v => $"{v:0.0}")));
         _tabImage.Children.Add(Field("Nitidez", Levels(sharp, _s.StudioFilterSharpness, v => _s.StudioFilterSharpness = v, v => v == 0 ? "desligada" : $"{v:0.0}")));
         _tabImage.Children.Add(Field("Reduzir chiado", Chips(new[] { "Desligado", "Leve", "Médio", "Forte" }, Math.Clamp(_s.StudioFilterDenoise, 0, 3), i => _s.StudioFilterDenoise = i)));
-        _tabImage.Children.Add(Muted("Para as câmeras, escolha a qualidade e o espelho na aba Câmeras (cada câmera tem o seu). Desfocar o fundo da câmera exige reconhecer a pessoa na imagem (um modelo de inteligência artificial) e ainda não existe aqui.", 11));
+        _tabImage.Children.Add(Field("Vinheta (escurece os cantos)", Chips(new[] { "Desligada", "Leve", "Média", "Forte" }, Math.Clamp(_s.StudioFilterVignette, 0, 3), i => _s.StudioFilterVignette = i)));
+        _tabImage.Children.Add(Muted("Para as câmeras, escolha a qualidade e o espelho na aba Câmeras (cada câmera tem o seu). Desfocar o fundo, enquadramento automático e contato visual exigem reconhecer a pessoa na imagem (inteligência artificial) e ainda não existem aqui. Quem tem placa NVIDIA pode usar o NVIDIA Broadcast: a \"câmera virtual\" dele aparece na lista de câmeras como qualquer outra.", 11));
     }
 
     /// <summary>Botões com alguns níveis de um ajuste; o mais próximo do valor atual fica marcado.</summary>
@@ -1977,7 +1984,7 @@ public sealed partial class StudioPage : ToolPageBase
         {
             string? outputId = _outputs.Selected > 0 && _outputs.Selected - 1 < _outList.Count ? _outList[_outputs.Selected - 1].Id : null;
             string? micId = _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null;
-            audio = new AudioConfig(_s.StudioSystemAudio, outputId, (float)_s.StudioSystemVolume, _s.StudioMicAudio, micId, (float)_s.StudioMicVolume);
+            audio = new AudioConfig(_s.StudioSystemAudio, outputId, (float)_s.StudioSystemVolume, _s.StudioMicAudio, micId, (float)_s.StudioMicVolume, (VoiceEffect)Math.Clamp(_s.StudioVoiceEffect, 0, 2));
         }
 
         var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,

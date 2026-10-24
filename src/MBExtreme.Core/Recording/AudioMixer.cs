@@ -8,6 +8,7 @@ namespace MBExtreme.Core.Recording;
 public sealed class AudioInput
 {
     private readonly BufferedWaveProvider _buffer;
+    private readonly VoiceProcessor _voice;
     private readonly VolumeSampleProvider _volume;
     private readonly PeakSampleProvider _meter;
 
@@ -26,7 +27,8 @@ public sealed class AudioInput
         if (samples.WaveFormat.Channels == 1) samples = new MonoToStereoSampleProvider(samples);
         else if (samples.WaveFormat.Channels > 2) samples = new FirstTwoChannelsProvider(samples);
         if (samples.WaveFormat.SampleRate != AudioMixer.SampleRate) samples = new WdlResamplingSampleProvider(samples, AudioMixer.SampleRate);
-        _volume = new VolumeSampleProvider(samples) { Volume = volume };
+        _voice = new VoiceProcessor(samples);
+        _volume = new VolumeSampleProvider(_voice) { Volume = volume };
         _meter = new PeakSampleProvider(_volume);
     }
 
@@ -34,6 +36,13 @@ public sealed class AudioInput
     public float TakePeak() => _meter.TakePeak();
 
     public string Name { get; }
+
+    /// <summary>Tratamento da voz (só faz sentido no microfone). Muda na hora.</summary>
+    public VoiceEffect Voice
+    {
+        get => _voice.Effect;
+        set => _voice.Effect = value;
+    }
 
     /// <summary>Formato do áudio como chega da captura.</summary>
     public WaveFormat SourceFormat { get; }

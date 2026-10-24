@@ -6,7 +6,7 @@ namespace MBExtreme.Core.Recording;
 
 public sealed record AudioConfig(
     bool CaptureSystem, string? OutputId, float SystemVolume,
-    bool CaptureMicrophone, string? MicrophoneId, float MicrophoneVolume)
+    bool CaptureMicrophone, string? MicrophoneId, float MicrophoneVolume, VoiceEffect Voice = VoiceEffect.Off)
 {
     public bool Any => CaptureSystem || CaptureMicrophone;
 }
@@ -56,6 +56,12 @@ public sealed class StudioSession : IDisposable
     public float TakeSystemPeak() => _capture?.SystemSound?.TakePeak() ?? 0f;
 
     public bool HasSystemAudio => _capture?.SystemSound is not null;
+
+    /// <summary>Muda o tratamento da voz do microfone com o estúdio no ar.</summary>
+    public void SetVoice(VoiceEffect effect)
+    {
+        if (_capture?.Microphone is { } mic) mic.Voice = effect;
+    }
 
     public bool HasMicrophone => _capture?.Microphone is not null;
 
@@ -128,6 +134,7 @@ public sealed class StudioSession : IDisposable
                 _mixer = new AudioMixer();
                 _capture = new AudioCapture(_mixer, audio.CaptureSystem, audio.OutputId, audio.SystemVolume,
                     audio.CaptureMicrophone, audio.MicrophoneId, audio.MicrophoneVolume);
+                if (_capture.Microphone is { } micInput) micInput.Voice = audio.Voice;
                 if (_capture.Warning is { } w) AddWarning(w);
                 if (_mixer.Inputs.Count == 0) throw new InvalidOperationException("nenhuma fonte de áudio disponível");
                 _pipe = new AudioPipe();

@@ -3,16 +3,16 @@ using System.Globalization;
 namespace MBExtreme.Core.Recording;
 
 /// <summary>Ajustes de imagem (cor, nitidez e ruído) aplicados no FFmpeg. Servem para a tela inteira e para cada câmera.</summary>
-public sealed record ImageFilter(double Brightness = 0, double Contrast = 1, double Saturation = 1, double Gamma = 1, double Sharpness = 0, int Denoise = 0, bool Mirror = false)
+public sealed record ImageFilter(double Brightness = 0, double Contrast = 1, double Saturation = 1, double Gamma = 1, double Sharpness = 0, int Denoise = 0, bool Mirror = false, int Vignette = 0)
 {
     public static readonly ImageFilter None = new();
 
     public bool IsNeutral => Math.Abs(Brightness) < 0.005 && Math.Abs(Contrast - 1) < 0.005 && Math.Abs(Saturation - 1) < 0.005 && Math.Abs(Gamma - 1) < 0.005
-                             && Sharpness < 0.05 && Denoise <= 0 && !Mirror;
+                             && Sharpness < 0.05 && Denoise <= 0 && !Mirror && Vignette <= 0;
 
     /// <summary>Limites que o FFmpeg aceita sem estragar a imagem.</summary>
     public ImageFilter Clamped() => new(Math.Clamp(Brightness, -0.3, 0.3), Math.Clamp(Contrast, 0.5, 1.8), Math.Clamp(Saturation, 0.0, 2.0),
-        Math.Clamp(Gamma, 0.6, 1.8), Math.Clamp(Sharpness, 0, 2), Math.Clamp(Denoise, 0, 3), Mirror);
+        Math.Clamp(Gamma, 0.6, 1.8), Math.Clamp(Sharpness, 0, 2), Math.Clamp(Denoise, 0, 3), Mirror, Math.Clamp(Vignette, 0, 3));
 
     private static string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
 
@@ -24,10 +24,11 @@ public sealed record ImageFilter(double Brightness = 0, double Contrast = 1, dou
         var parts = new List<string>();
         if (f.Mirror) parts.Add("hflip");
         bool color = Math.Abs(f.Brightness) >= 0.005 || Math.Abs(f.Contrast - 1) >= 0.005 || Math.Abs(f.Saturation - 1) >= 0.005 || Math.Abs(f.Gamma - 1) >= 0.005;
-        if (color || f.Sharpness >= 0.05 || f.Denoise > 0) parts.Add("format=yuv420p");
+        if (color || f.Sharpness >= 0.05 || f.Denoise > 0 || f.Vignette > 0) parts.Add("format=yuv420p");
         if (f.Denoise > 0) parts.Add(f.Denoise switch { 1 => "hqdn3d=2:1.5:3:2.5", 2 => "hqdn3d=4:3:6:4.5", _ => "hqdn3d=6:4:9:6" });
         if (color) parts.Add($"eq=brightness={N(f.Brightness)}:contrast={N(f.Contrast)}:saturation={N(f.Saturation)}:gamma={N(f.Gamma)}");
         if (f.Sharpness >= 0.05) parts.Add($"unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount={N(f.Sharpness)}:chroma_msize_x=5:chroma_msize_y=5:chroma_amount=0");
+        if (f.Vignette > 0) parts.Add($"vignette=angle={N(f.Vignette switch { 1 => 1.05, 2 => 0.75, _ => 0.55 })}:mode=forward");
         parts.Add("format=bgra");
         return string.Join(",", parts);
     }
@@ -39,6 +40,8 @@ public sealed record ImageFilter(double Brightness = 0, double Contrast = 1, dou
         ("Vívida", "Cores fortes e imagem mais viva; boa para jogos coloridos.", new ImageFilter(0.02, 1.12, 1.3, 1, 0.6)),
         ("Cinema", "Mais contraste, cores calmas e tons um pouco escuros.", new ImageFilter(0, 1.15, 0.9, 0.95, 0.3)),
         ("Nítida", "Realça os detalhes e tira um pouco do chiado da imagem.", new ImageFilter(0, 1.06, 1.0, 1, 1.2, 1)),
+        ("Luz de estúdio", "Clareia o rosto e dá brilho à imagem, como uma luz de apoio (para câmera em ambiente escuro).", new ImageFilter(0.06, 1.08, 1.05, 1.15, 0.5, 1)),
+        ("Retrato", "Luz de estúdio com cantos levemente escuros (vinheta) para destacar o rosto.", new ImageFilter(0.05, 1.08, 1.05, 1.12, 0.5, 1, false, 1)),
     };
 }
 

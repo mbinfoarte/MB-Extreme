@@ -10,21 +10,49 @@ public sealed record ManagedVolume(string Label, string FileSystem, long Size, l
 
 public sealed record ManagedPartition(
     int DiskNumber, int Number, char? Letter, long Offset, long Size, string Type,
-    bool IsSystem, bool IsBoot, bool IsHidden, ManagedVolume? Volume)
+    bool IsSystem, bool IsBoot, bool IsHidden, ManagedVolume? Volume, bool HasPageFile = false, bool IsActive = false)
 {
     public string Name => Letter is { } l ? $"{l}:" : "(sem letra)";
 
-    public string Title => Letter is null ? TypeText : $"{Letter}: {(string.IsNullOrWhiteSpace(Volume?.Label) ? "" : Volume!.Label)}".TrimEnd();
+    /// <summary>Como o Gerenciamento de Disco do Windows escreve: "Nome (C:)"; sem nome, "Disco Local (C:)".</summary>
+    public string Title => Letter is null
+        ? TypeText
+        : $"{(string.IsNullOrWhiteSpace(Volume?.Label) ? "Disco Local" : Volume!.Label)} ({Letter}:)";
+
+    public bool IsEfi => Type.Equals("System", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsRecovery => Type.Equals("Recovery", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsReserved => Type.Equals("Reserved", StringComparison.OrdinalIgnoreCase);
 
     public string TypeText => Type switch
     {
-        "System" => "Sistema (EFI)",
-        "Reserved" => "Reservada (MSR)",
-        "Recovery" => "Recuperação",
-        "Basic" or "IFS" or "Logical" or "FAT32" or "Primary" => "Dados",
-        "Extended" => "Estendida",
+        "System" => "Partição do Sistema EFI",
+        "Reserved" => "Partição Reservada (MSR)",
+        "Recovery" => "Partição de Recuperação",
+        "Logical" => "Partição Lógica",
+        "Extended" => "Partição Estendida",
+        "Basic" or "IFS" or "FAT32" or "Primary" => "Partição Primária",
         _ => Type.Length == 0 ? "Partição" : Type,
     };
+
+    /// <summary>Texto da coluna "Status" do Gerenciamento de Disco, por exemplo "Íntegro (Inicialização, Arquivo de Paginação, Despejo de Memória, Partição Primária)".</summary>
+    public string StatusText
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (IsBoot) parts.Add("Inicialização");
+            if (IsActive && !IsEfi) parts.Add("Ativa");
+            if (HasPageFile) parts.Add("Arquivo de Paginação");
+            if (IsBoot) parts.Add("Despejo de Memória");
+            parts.Add(TypeText);
+            return DiskText.Health(Volume?.Health) + " (" + string.Join(", ", parts) + ")";
+        }
+    }
+
+    /// <summary>"42% livre", como na lista de volumes do Windows.</summary>
+    public string FreePercentText => Volume is { Size: > 0 } v ? $"{100.0 * v.Free / v.Size:0}% livre" : "";
 }
 
 public sealed record ManagedDisk(
@@ -34,6 +62,40 @@ public sealed record ManagedDisk(
     public bool IsRaw => Style.Equals("RAW", StringComparison.OrdinalIgnoreCase);
 
     public string Title => $"Disco {Number} · {Name}";
+
+    /// <summary>"Básico" ou "Não inicializado" (o Windows também diz "Dinâmico", que este programa não gerencia).</summary>
+    public string KindText => IsRaw ? "Não inicializado" : "Básico";
+
+    public string StateText => IsOffline ? "Offline" : IsReadOnly ? "Somente leitura" : "Online";
+
+    /// <summary>A linha que fica sob o nome do disco: "Básico · GPT · 931,51 GB · Online".</summary>
+    public string SummaryText => string.Join(" · ", new[] { KindText, IsRaw ? "" : Style.ToUpperInvariant(), DiskText.Size(Size), StateText, Bus }.Where(t => t.Length > 0));
+}
+
+/// <summary>Textos no mesmo formato do Gerenciamento de Disco do Windows (tamanhos binários com duas casas, saúde em português).</summary>
+public static class DiskText
+{
+    public static string Size(long bytes)
+    {
+        const double kb = 1024, mb = kb * 1024, gb = mb * 1024, tb = gb * 1024;
+        var c = CultureInfo.GetCultureInfo("pt-BR");
+        return bytes switch
+        {
+            >= (long)tb => (bytes / tb).ToString("0.00", c) + " TB",
+            >= (long)gb => (bytes / gb).ToString("0.00", c) + " GB",
+            >= (long)mb => (bytes / mb).ToString("0", c) + " MB",
+            >= (long)kb => (bytes / kb).ToString("0", c) + " KB",
+            _ => bytes + " B",
+        };
+    }
+
+    public static string Health(string? health) => (health ?? "").Trim().ToLowerInvariant() switch
+    {
+        "healthy" or "" => "Íntegro",
+        "warning" => "Aviso",
+        "unhealthy" => "Não íntegro",
+        _ => health!,
+    };
 }
 
 /// <summary>Um trecho do disco: uma partição ou um espaço sem partição.</summary>
@@ -57,11 +119,12 @@ public static class DiskInventory
 
     public const string Script =
         "$vols=@{}; Get-Volume | Where-Object { $_.DriveLetter } | ForEach-Object { $vols[[string]$_.DriveLetter]=$_ }; " +
+        "$pf=@(Get-CimInstance Win32_PageFileUsage -ErrorAction SilentlyContinue | ForEach-Object { $_.Name.Substring(0,1).ToUpper() }); " +
         "$out=@(Get-Disk | ForEach-Object { $d=$_; [pscustomobject]@{ Number=$d.Number; Name=[string]$d.FriendlyName; Size=[int64]$d.Size; Style=[string]$d.PartitionStyle; Bus=[string]$d.BusType; " +
         "Health=[string]$d.HealthStatus; IsSystem=[bool]$d.IsSystem; IsBoot=[bool]$d.IsBoot; IsOffline=[bool]$d.IsOffline; IsReadOnly=[bool]$d.IsReadOnly; " +
         "Partitions=@(Get-Partition -DiskNumber $d.Number -ErrorAction SilentlyContinue | ForEach-Object { $p=$_; $l=''; if($p.DriveLetter){ $l=[string]$p.DriveLetter }; $v=$null; " +
         "if($l -and $vols.ContainsKey($l)){ $x=$vols[$l]; $v=[pscustomobject]@{ Label=[string]$x.FileSystemLabel; FileSystem=[string]$x.FileSystem; Size=[int64]$x.Size; Free=[int64]$x.SizeRemaining; Health=[string]$x.HealthStatus } }; " +
-        "[pscustomobject]@{ Number=$p.PartitionNumber; Letter=$l; Offset=[int64]$p.Offset; Size=[int64]$p.Size; Type=[string]$p.Type; IsSystem=[bool]$p.IsSystem; IsBoot=[bool]$p.IsBoot; IsHidden=[bool]$p.IsHidden; Volume=$v } }) } }); " +
+        "[pscustomobject]@{ Number=$p.PartitionNumber; Letter=$l; Offset=[int64]$p.Offset; Size=[int64]$p.Size; Type=[string]$p.Type; IsSystem=[bool]$p.IsSystem; IsBoot=[bool]$p.IsBoot; IsHidden=[bool]$p.IsHidden; IsActive=[bool]$p.IsActive; HasPageFile=($pf -contains $l.ToUpper()); Volume=$v } }) } }); " +
         "ConvertTo-Json -InputObject $out -Depth 6 -Compress";
 
     [SupportedOSPlatform("windows")]
@@ -90,7 +153,7 @@ public static class DiskInventory
                     if (p.TryGetProperty("Volume", out var v) && v.ValueKind == JsonValueKind.Object)
                         volume = new ManagedVolume(Str(v, "Label"), Str(v, "FileSystem"), Long(v, "Size"), Long(v, "Free"), Str(v, "Health"));
                     partitions.Add(new ManagedPartition(number, Int(p, "Number"), letterText.Length > 0 ? char.ToUpperInvariant(letterText[0]) : null,
-                        Long(p, "Offset"), Long(p, "Size"), Str(p, "Type"), Bool(p, "IsSystem"), Bool(p, "IsBoot"), Bool(p, "IsHidden"), volume));
+                        Long(p, "Offset"), Long(p, "Size"), Str(p, "Type"), Bool(p, "IsSystem"), Bool(p, "IsBoot"), Bool(p, "IsHidden"), volume, Bool(p, "HasPageFile"), Bool(p, "IsActive")));
                 }
             }
 
@@ -241,12 +304,7 @@ public static class DiskOps
         return bytes.ToString(CultureInfo.InvariantCulture);
     }
 
-    public static string FormatBytes(long bytes) => bytes switch
-    {
-        >= Gb => (bytes / (double)Gb).ToString("0.#", CultureInfo.CurrentCulture) + " GB",
-        >= Mb => (bytes / (double)Mb).ToString("0", CultureInfo.CurrentCulture) + " MB",
-        _ => bytes + " B",
-    };
+    public static string FormatBytes(long bytes) => DiskText.Size(bytes);
 
     public static DiskCommand Format(char letter, FileSystemKind fs, string label, bool full)
     {

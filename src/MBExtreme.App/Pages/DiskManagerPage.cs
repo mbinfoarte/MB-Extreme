@@ -94,7 +94,8 @@ public sealed class DiskManagerPage : ToolPageBase
         if (disk.IsReadOnly) title.Children.Add(Badge("Somente leitura", "WarnBrush"));
         if (disk.IsRaw) title.Children.Add(Badge("Disco novo (sem partições)", "WarnBrush"));
         panel.Children.Add(title);
-        panel.Children.Add(Muted($"{DiskOps.FormatBytes(disk.Size)} · {(disk.IsRaw ? "não inicializado" : disk.Style)} · {disk.Bus} · {(disk.Health.Length == 0 ? "saúde não informada" : "saúde: " + disk.Health)}", 12));
+        // mesmas informações do Gerenciamento de Disco: tipo, tamanho e estado
+        panel.Children.Add(Muted(disk.SummaryText + (DiskText.Health(disk.Health) is { } h && h != "Íntegro" ? " · " + h : ""), 12));
         return panel;
     }
 
@@ -108,7 +109,8 @@ public sealed class DiskManagerPage : ToolPageBase
     /// <summary>Barra com um bloco por partição ou espaço livre, largura proporcional ao tamanho (com um mínimo para caber o nome).</summary>
     private UIElement SegmentBar(ManagedDisk disk)
     {
-        var segments = DiskInventory.Segments(disk);
+        // o Windows não desenha a partição reservada da Microsoft (MSR)
+        var segments = DiskInventory.Segments(disk).Where(x => x.Partition is not { IsReserved: true }).ToList();
         var grid = new Grid { Height = 70 };
         if (segments.Count == 0)
         {
@@ -135,12 +137,12 @@ public sealed class DiskManagerPage : ToolPageBase
         bool isProtected = p is not null && DiskSafety.IsProtectedPartition(p);
 
         string title, sub;
-        if (p is null) { title = "Espaço livre"; sub = DiskOps.FormatBytes(segment.Size); }
-        else if (isProtected && p.Letter is null) { title = p.TypeText; sub = DiskOps.FormatBytes(p.Size); }
+        if (p is null) { title = DiskText.Size(segment.Size); sub = "Não alocado"; }
+        else if (p.Letter is null) { title = DiskText.Size(p.Size); sub = p.TypeText; }
         else
         {
             title = p.Title;
-            sub = DiskOps.FormatBytes(p.Size) + (string.IsNullOrEmpty(p.Volume?.FileSystem) ? "" : " · " + p.Volume!.FileSystem);
+            sub = DiskText.Size(p.Size) + (string.IsNullOrEmpty(p.Volume?.FileSystem) ? "" : " " + p.Volume!.FileSystem);
         }
 
         var texts = new StackPanel();
@@ -169,7 +171,7 @@ public sealed class DiskManagerPage : ToolPageBase
             Margin = new Thickness(0, 0, 4, 0),
             Cursor = System.Windows.Input.Cursors.Hand,
             Child = inner,
-            ToolTip = p is null ? $"Espaço sem partição: {DiskOps.FormatBytes(segment.Size)}" : $"{p.Name} · {p.TypeText} · {DiskOps.FormatBytes(p.Size)}",
+            ToolTip = p is null ? $"Não alocado: {DiskText.Size(segment.Size)}" : $"{p.Title} · {DiskText.Size(p.Size)}\n{p.StatusText}",
         };
         border.MouseLeftButtonUp += (_, _) =>
         {
@@ -191,10 +193,12 @@ public sealed class DiskManagerPage : ToolPageBase
         {
             panel.Children.Add(new TextBlock { Text = part.Letter is null ? part.TypeText : part.Title, FontSize = 15, FontWeight = FontWeights.SemiBold });
             var v = part.Volume;
-            string info = $"{part.TypeText} · {DiskOps.FormatBytes(part.Size)}";
-            if (v is not null)
-                info += $" · {v.FileSystem} · livre {DiskOps.FormatBytes(v.Free)} de {DiskOps.FormatBytes(v.Size)}" + (v.Health.Length > 0 ? " · " + v.Health : "");
+            string info = $"Partição {part.Number} · {DiskText.Size(part.Size)}";
+            if (v is not null && v.FileSystem.Length > 0) info += $" · {v.FileSystem}";
             panel.Children.Add(Muted(info, 12));
+            if (v is { Size: > 0 })
+                panel.Children.Add(Muted($"Capacidade {DiskText.Size(v.Size)} · Espaço livre {DiskText.Size(v.Free)} ({part.FreePercentText})", 12));
+            panel.Children.Add(Muted("Status: " + part.StatusText, 12));
 
             var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
             string? dataBlock = DiskSafety.CanChangeData(disk, part, SystemDrive, AppDrive);
@@ -217,8 +221,8 @@ public sealed class DiskManagerPage : ToolPageBase
         }
         else if (free is not null)
         {
-            panel.Children.Add(new TextBlock { Text = "Espaço livre", FontSize = 15, FontWeight = FontWeights.SemiBold });
-            panel.Children.Add(Muted($"{DiskOps.FormatBytes(free.Size)} sem partição. Crie uma partição para poder guardar arquivos nele.", 12));
+            panel.Children.Add(new TextBlock { Text = "Não alocado", FontSize = 15, FontWeight = FontWeights.SemiBold });
+            panel.Children.Add(Muted($"{DiskText.Size(free.Size)} não alocados (sem partição). Crie uma partição para poder guardar arquivos nele.", 12));
             string? block = DiskSafety.CanCreate(disk, free);
             var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
             buttons.Children.Add(Act("Criar partição…", block, () => _ = CreateAsync(disk, free), true));

@@ -70,6 +70,55 @@ public class GerenciadorDiscosTests
         Assert.All(DiskInventory.Segments(disk), s => Assert.False(s.IsFree && s.Size < 8 * DiskOps.Mb));
     }
 
+    // ---- textos iguais aos do Gerenciamento de Disco do Windows
+
+    [Theory]
+    [InlineData(104857600, "100 MB")]
+    [InlineData(16777216, "16 MB")]
+    [InlineData(511000000000, "475,91 GB")]
+    [InlineData(1000204886016, "931,51 GB")]
+    [InlineData(4000787030016, "3,64 TB")]
+    public void Tamanhos_seguem_o_formato_do_windows(long bytes, string expected) => Assert.Equal(expected, DiskText.Size(bytes));
+
+    [Fact]
+    public void Status_da_particao_do_windows_lista_inicializacao_paginacao_e_despejo()
+    {
+        var c = Disks()[0].Partitions[2] with { HasPageFile = true };
+        Assert.Equal("Íntegro (Inicialização, Arquivo de Paginação, Despejo de Memória, Partição Primária)", c.StatusText);
+        Assert.Equal("Windows (C:)", c.Title);
+        Assert.Equal("39% livre", c.FreePercentText);
+    }
+
+    [Fact]
+    public void Particoes_de_sistema_tem_o_nome_e_o_status_do_windows()
+    {
+        var efi = Disks()[0].Partitions[0];
+        Assert.Equal("Íntegro (Partição do Sistema EFI)", efi.StatusText);
+        Assert.Equal("Partição do Sistema EFI", efi.TypeText);
+        Assert.True(Disks()[0].Partitions[1].IsReserved);
+        var rec = efi with { Type = "Recovery" };
+        Assert.Equal("Íntegro (Partição de Recuperação)", rec.StatusText);
+        var logical = Disks()[1].Partitions[0] with { Type = "Logical", Volume = null };
+        Assert.Contains("Partição Lógica", logical.StatusText);
+    }
+
+    [Fact]
+    public void Volume_sem_nome_aparece_como_disco_local_e_saude_vem_em_portugues()
+    {
+        var p = Disks()[1].Partitions[0] with { Volume = Disks()[1].Partitions[0].Volume! with { Label = "" } };
+        Assert.Equal("Disco Local (D:)", p.Title);
+        Assert.Equal("Aviso", DiskText.Health("Warning"));
+        Assert.Equal("Não íntegro", DiskText.Health("Unhealthy"));
+    }
+
+    [Fact]
+    public void Resumo_do_disco_segue_o_formato_basico_estilo_tamanho_online()
+    {
+        Assert.Equal("Básico · GPT · 476,94 GB · Online · NVMe", Disks()[0].SummaryText);
+        Assert.Equal("Não inicializado · 29,80 GB · Online · USB", Disks()[2].SummaryText);
+        Assert.Equal("Offline", (Disks()[1] with { IsOffline = true }).StateText);
+    }
+
     // ---- segurança
 
     [Fact]

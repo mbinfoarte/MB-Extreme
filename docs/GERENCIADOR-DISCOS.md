@@ -21,7 +21,16 @@ Lê discos, partições e volumes com `Get-Disk`, `Get-Partition` e `Get-Volume`
 
 Antes de executar, cada operação mostra o que vai acontecer e o comando exato (e dá para ler o resultado na barra de status).
 
-### Proteções (`DiskSafety`)
+### Informações como no Gerenciamento de Disco do Windows
+
+- Cabeçalho do disco: "Disco 0 · Básico · GPT · 476,94 GB · Online" (ou "Não inicializado", "Offline", "Somente leitura").
+- Tamanhos no mesmo formato do Windows (unidade binária, duas casas: 931,51 GB, 3,64 TB, 100 MB).
+- Nome da partição: "Windows (C:)"; sem nome, "Disco Local (D:)".
+- Status: "Íntegro (Inicialização, Arquivo de Paginação, Despejo de Memória, Partição Primária)", "Íntegro (Partição do Sistema EFI)", "Íntegro (Partição de Recuperação)". O arquivo de paginação vem de `Win32_PageFileUsage`.
+- Espaço sem partição aparece como "Não alocado". A partição reservada da Microsoft (MSR) não é desenhada, como no Windows.
+- Capacidade, espaço livre e % livre por volume.
+
+## Proteções (`DiskSafety`)
 
 - O **disco do Windows** (sistema ou boot) não aceita formatar, excluir, trocar letra nem inicializar por aqui.
 - Partições de **sistema, reservada (MSR), recuperação e ocultas sem letra** nunca podem ser alteradas nem redimensionadas.

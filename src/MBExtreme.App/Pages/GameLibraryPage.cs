@@ -240,7 +240,8 @@ public sealed class GameLibraryPage : ToolPageBase
         {
             string? file = null;
             string appCache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "covers");
-            if (game.SteamAppId is { } appId)
+            file = CoverSearch.FindCustom(appCache, game.Id); // a capa que o usuário escolheu vale mais que a automática
+            if (file is null && game.SteamAppId is { } appId)
             {
                 file = await Task.Run(() => GameCovers.FindSteamLocal(_steamPath, appId));
                 file ??= await GameCovers.DownloadSteamAsync(Http, appId, appCache);
@@ -456,7 +457,23 @@ public sealed class GameLibraryPage : ToolPageBase
         }
 
         if (optimized) buttons.Children.Add(Tight(SmallButton("Desfazer", async (_, _) => await UndoAsync(game))));
+        var cover = Tight(SmallButton("Buscar capa", async (_, _) => await PickCoverAsync(game)));
+        cover.ToolTip = "Procura a capa deste jogo na internet para você escolher.";
+        buttons.Children.Add(cover);
         return buttons;
+    }
+
+    private async Task PickCoverAsync(InstalledGame game)
+    {
+        var picker = new CoverPickerWindow(Http, game.Name) { Owner = Window.GetWindow(this) };
+        if (picker.ShowDialog() != true || picker.Chosen is not { } chosen) return;
+        SetStatus("Baixando a capa...");
+        string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "covers");
+        string? file = await CoverSearch.SaveCustomAsync(Http, chosen, folder, game.Id);
+        if (file is null) { SetStatus("Não foi possível baixar essa capa. Tente outra.", "WarnBrush"); return; }
+        _coverImages.Remove(game.Id);
+        SetStatus($"Capa de {game.Name} atualizada.", "OkBrush");
+        RenderGrid();
     }
 
     /// <summary>Otimiza o jogo e a rede dele de uma vez (cada parte continua desfazível pelo "Desfazer").</summary>

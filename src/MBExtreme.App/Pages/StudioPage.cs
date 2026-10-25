@@ -452,7 +452,16 @@ public sealed partial class StudioPage : ToolPageBase
         _preview.SizeChanged += (_, _) => UpdateGhosts();
 
         var box = new StackPanel();
-        box.Children.Add(_previewHost);
+        // horizontal (a gravação normal) e, ao lado, o vertical que sai junto quando está ligado
+        var views = new Grid();
+        views.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        views.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        views.Children.Add(_previewHost);
+        Grid.SetColumn(_verticalLive, 1);
+        _verticalLive.Margin = new Thickness(12, 0, 0, 0);
+        _verticalLive.VerticalAlignment = VerticalAlignment.Top;
+        views.Children.Add(_verticalLive);
+        box.Children.Add(views);
         box.Children.Add(_previewNote);
 
         // o que capturar: botões pequenos embaixo da imagem
@@ -597,6 +606,8 @@ public sealed partial class StudioPage : ToolPageBase
             }
 
             _preview.Source = frame.Image;
+            _lastFrame = frame.Image;
+            UpdateVerticalLive();
             _previewNote.Text = frame.MostlyBlack
                 ? "A imagem saiu preta. Em jogos, use \"Recorte da tela\"; em programas comuns, \"Conteúdo da janela\"."
                 : "É assim que o vídeo vai sair (imagem reduzida, atualizada várias vezes por segundo).";

@@ -174,9 +174,79 @@ public sealed partial class StudioPage
         BuildVertical();
     }
 
+    private readonly Grid _verticalLive = new() { Visibility = Visibility.Collapsed };
+    private System.Windows.Media.Imaging.BitmapSource? _lastFrame;
+
+    /// <summary>Mostra, ao lado da imagem normal, como o vídeo vertical vai sair (aproximação feita com a mesma imagem da pré-visualização).</summary>
+    private void UpdateVerticalLive()
+    {
+        bool on = _s.StudioVerticalOn || _s.StudioVerticalCopy;
+        _verticalLive.Visibility = Vis(on && _lastFrame is not null);
+        if (!on || _lastFrame is null) return;
+
+        var layout = CurrentVerticalLayout();
+        const double height = 220;
+        double width = height * layout.Width / layout.Height;
+        var phone = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(2), BorderBrush = Brush("AccentBrush"), Background = Brushes.Black, ClipToBounds = true };
+        var stack = new Grid { ClipToBounds = true };
+        double topH = layout.Split ? height * layout.TopHeight / layout.Height : height;
+        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(topH, GridUnitType.Pixel) });
+        if (layout.Split) stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(height - topH, GridUnitType.Star) });
+        AddPane(stack, 0, layout.Top, width, topH);
+        if (layout.Split) AddPane(stack, 1, layout.Bottom, width, height - topH);
+        if (layout.Split && layout.Divider) stack.Children.Add(new Border { Height = 2, Background = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, topH - 1, 0, 0) });
+        phone.Child = stack;
+
+        _verticalLive.Children.Clear();
+        var column = new StackPanel();
+        column.Children.Add(new TextBlock { Text = "Vertical", FontSize = 11, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 0, 0, 3) });
+        column.Children.Add(phone);
+        _verticalLive.Children.Add(column);
+    }
+
+    private void AddPane(Grid grid, int row, VerticalPane pane, double w, double h)
+    {
+        FrameworkElement cell;
+        var frame = _lastFrame!;
+        if (pane.Kind == PaneKind.Screen)
+        {
+            double sa = frame.PixelWidth / (double)Math.Max(1, frame.PixelHeight), ca = w / Math.Max(1, h);
+            if (pane.Fit == PaneFit.Fit)
+            {
+                var layers = new Grid { ClipToBounds = true };
+                layers.Children.Add(new System.Windows.Controls.Image { Source = frame, Stretch = Stretch.UniformToFill, Opacity = 0.55, Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 14 } });
+                layers.Children.Add(new System.Windows.Controls.Image { Source = frame, Stretch = Stretch.Uniform });
+                cell = layers;
+            }
+            else
+            {
+                double vw = ca < sa ? ca / sa : 1, vh = ca < sa ? 1 : sa / ca;
+                double z = pane.Zoom / 100.0;
+                vw /= z; vh /= z;
+                double x = (1 - vw) * pane.Fx / 100.0, y = (1 - vh) * pane.Fy / 100.0;
+                cell = new Border { Background = new ImageBrush(frame) { Stretch = Stretch.Fill, ViewboxUnits = BrushMappingMode.RelativeToBoundingBox, Viewbox = new Rect(x, y, vw, vh) } };
+            }
+        }
+        else if (pane.Kind == PaneKind.Camera && pane.Source is { } cam && _camStills.TryGetValue(cam, out var still))
+        {
+            cell = new System.Windows.Controls.Image { Source = still, Stretch = Stretch.UniformToFill };
+        }
+        else
+        {
+            cell = new Border
+            {
+                Background = new SolidColorBrush(pane.Kind == PaneKind.Camera ? Color.FromRgb(0x2A, 0x3A, 0x55) : Color.FromRgb(0x3A, 0x2A, 0x4A)),
+                Child = new TextBlock { Text = pane.Kind == PaneKind.Camera ? "Câmera" : "Arquivo", Foreground = Brushes.White, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            };
+        }
+        Grid.SetRow(cell, row);
+        grid.Children.Add(cell);
+    }
+
     /// <summary>Desenho simples das duas partes na proporção do formato escolhido.</summary>
     private void RefreshVerticalMock()
     {
+        UpdateVerticalLive();
         var layout = _s.StudioVerticalOn || _s.StudioVerticalCopy ? CurrentVerticalLayout() : null;
         if (layout is null) return;
         _verticalMock.BorderBrush = Brush("AccentBrush");

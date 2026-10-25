@@ -24,10 +24,11 @@ public sealed class NetAnalyzerPage : ToolPageBase
         _stop = AddButton("Parar", (_, _) => Cts?.Cancel(), false);
         _stop.IsEnabled = false;
 
-        Body.Children.Add(Heading("Destino (endereço ou IP)"));
+        Body.Children.Add(Heading("Destino (site, endereço ou IP)"));
+        Body.Children.Add(Muted("Pode colar o endereço do navegador, como https://www.site.com/pagina; o programa usa só o nome do site."));
         Body.Children.Add(_host);
         Body.Children.Add(Heading("Modo"));
-        Body.Children.Add(Choice(new[] { "Ping", "TCPing", "MTR" }, _mode, i => _mode = i));
+        Body.Children.Add(Choice(new[] { "Ping", "TCPing", "MTR", "Site completo" }, _mode, i => _mode = i));
         Body.Children.Add(Heading("Porta (só TCPing)"));
         Body.Children.Add(_port);
         Body.Children.Add(Heading("Resultado"));
@@ -37,12 +38,14 @@ public sealed class NetAnalyzerPage : ToolPageBase
 
     private async Task RunAsync()
     {
-        string host = _host.Text.Trim();
-        if (!NetAnalyzer.IsValidHost(host))
+        var target = NetTarget.Parse(_host.Text);
+        if (target is null)
         {
-            SetStatus("Digite um endereço ou IP válido.", "WarnBrush");
+            SetStatus("Digite um site, endereço ou IP válido.", "WarnBrush");
             return;
         }
+        string host = target.Host;
+        if (target.Port is { } typedPort && _mode == 1) _port.Text = typedPort.ToString();
 
         if (_mode == 1 && (!int.TryParse(_port.Text, out int port) || port is < 1 or > 65535))
         {
@@ -60,7 +63,8 @@ public sealed class NetAnalyzerPage : ToolPageBase
 
         try
         {
-            if (_mode == 2) await RunTraceAsync(host, token);
+            if (_mode == 3) await RunSiteAsync(host, target.Port ?? 443, token);
+            else if (_mode == 2) await RunTraceAsync(host, token);
             else await RunPingAsync(host, token);
         }
         catch (OperationCanceledException)
@@ -102,6 +106,40 @@ public sealed class NetAnalyzerPage : ToolPageBase
 
             await Task.Delay(1000, token);
         }
+    }
+
+    /// <summary>Diagnóstico completo do site: endereços, ping (ou TCP), caminho salto a salto e o que isso significa.</summary>
+    private async Task RunSiteAsync(string host, int port, CancellationToken token)
+    {
+        var text = new StringBuilder();
+        _output.Text = "Procurando os endereços do site...";
+        var addresses = await NetTarget.ResolveAsync(host, token);
+        if (addresses.Count == 0)
+        {
+            _output.Text = $"Não consegui achar o endereço de \"{host}\". Confira o nome ou teste o DNS.";
+            return;
+        }
+
+        text.AppendLine($"Site: {host}");
+        text.AppendLine("Endereços: " + string.Join(", ", addresses.Take(6).Select(a => a.ToString())) + (addresses.Count > 6 ? $" (+{addresses.Count - 6})" : ""));
+        text.AppendLine($"Mede o caminho até: {addresses[0]}   ·   porta TCP: {port}");
+        _output.Text = text + "\nMedindo...";
+
+        var progress = new Progress<string>(m => _output.Text = text + "\n" + m);
+        var result = await RouteProbe.RunAsync(addresses[0].ToString(), port, 15, 6, progress, token);
+
+        text.AppendLine();
+        text.AppendLine($"Resultado: {result.Verdict}");
+        text.AppendLine($"Ping médio {result.Average:0.0} ms (mín {result.Min:0.0} · máx {result.Max:0.0}) · jitter {result.Jitter:0.0} ms · perda {result.LossPercent:0.#}%");
+        text.AppendLine();
+        foreach (var f in result.Findings)
+            text.AppendLine($"{(f.Level == FindingLevel.Bad ? "✖" : f.Level == FindingLevel.Warn ? "▲" : "•")} {f.Title}: {f.Detail}");
+        text.AppendLine();
+        text.AppendLine($"{"#",-3} {"Endereço",-32} {"Perda",6} {"Média",7} {"Jitter",7}");
+        foreach (var h in result.Hops)
+            text.AppendLine($"{h.Hop,-3} {h.Address,-32} {h.LossPercent,5:0}% {(h.Received > 0 ? h.Average.ToString("0.0") : "-"),7} {(h.Received > 0 ? h.Jitter.ToString("0.0") : "-"),7}");
+        _output.Text = text.ToString();
+        _chart.Values = null;
     }
 
     private async Task RunTraceAsync(string host, CancellationToken token)

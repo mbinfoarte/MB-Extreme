@@ -582,7 +582,21 @@ public sealed class GameLibraryPage : ToolPageBase
         var game = v.Game;
         var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
 
-        panel.Children.Add(Group("Jogo", v.Rows, () => OpenDetails(0)));
+        bool nvidia = _maker == GpuMaker.Nvidia;
+        panel.Children.Add(Group("Jogo", v.Rows.Where(r => r.Group != "Driver NVIDIA").ToList(), () => OpenDetails(0)));
+        if (nvidia)
+        {
+            // as configurações que antes só apareciam no Painel de Controle da NVIDIA, direto aqui
+            panel.Children.Add(Group("Placa de vídeo (NVIDIA)", v.Rows.Where(r => r.Group == "Driver NVIDIA").ToList(), () => OpenDetails(0)));
+            var adv = new CheckBox
+            {
+                Content = "Incluir ajustes avançados do driver (experimentais; cada um tem explicação e é desfeito pelo \"Desfazer\")",
+                IsChecked = _advanced, Foreground = Brush("TextBrush"), FontSize = 11.5, Margin = new Thickness(0, 6, 0, 0),
+            };
+            adv.Click += async (_, _) => { _advanced = adv.IsChecked == true; await RenderDetailAsync(game); };
+            panel.Children.Add(adv);
+            panel.Children.Add(Muted("Vale só para este jogo e é gravado no próprio driver, sem abrir o Painel de Controle da NVIDIA. \"Otimizar\" aplica tudo, guarda o valor de antes e \"Desfazer\" devolve.", 10.5));
+        }
         panel.Children.Add(Group("Rede", v.NetRows.Where(r => r.Recommended != "Precisa de servidor").ToList(), () => OpenDetails(1)));
 
         var more = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };

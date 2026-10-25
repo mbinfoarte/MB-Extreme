@@ -30,11 +30,25 @@ public sealed class SensorService : IDisposable
         }
     }
 
+    private static bool IsAdministrator { get; } = DetectAdmin();
+
+    private static bool DetectAdmin()
+    {
+        try
+        {
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            return new System.Security.Principal.WindowsPrincipal(identity).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { return false; }
+    }
+
     public SensorSnapshot Read()
     {
         if (_computer is null)
             return SensorSnapshot.Unavailable(_openError ?? "Sensores indisponíveis.");
 
+        bool cpuFound = false;
+        int cpuSensors = 0;
         double? cpuTemp = null, cpuLoad = null, cpuPower = null, cpuClock = null;
         double? gpuTemp = null, gpuLoad = null, gpuPower = null, gpuClock = null;
         var fans = new List<FanReading>();
@@ -45,12 +59,14 @@ public sealed class SensorService : IDisposable
             {
                 hardware.Update();
                 bool isCpu = hardware.HardwareType == HardwareType.Cpu;
+                if (isCpu) { cpuFound = true; cpuSensors += hardware.Sensors.Count(x => x.SensorType == SensorType.Temperature && x.Value is float t && SensorRules.IsValidTemperature(t)); }
                 bool isGpu = hardware.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel;
 
                 foreach (var sensor in hardware.Sensors)
                 {
                     if (sensor.Value is not float raw) continue;
                     double value = raw;
+                    if (sensor.SensorType == SensorType.Temperature && !SensorRules.IsValidTemperature(value)) continue; // 0 °C é leitura quebrada, não temperatura
                     string name = sensor.Name;
 
                     if (sensor.SensorType == SensorType.Fan && value > 0)
@@ -106,11 +122,40 @@ public sealed class SensorService : IDisposable
             return SensorSnapshot.Unavailable("Falha ao ler os sensores: " + ex.Message);
         }
 
-        string? message = cpuTemp is null
-            ? "Temperatura da CPU indisponível. Instale o driver PawnIO para ler os sensores da CPU."
-            : null;
+        string? message = null;
+        if (cpuTemp is null)
+        {
+            // leitura reserva: zona térmica do Windows (aproximada, mas não precisa de driver)
+            cpuTemp = ThermalZone.Read();
+            message = cpuTemp is null
+                ? SensorRules.WhyCpuTemperatureIsMissing(IsAdministrator, _openError, cpuFound, cpuSensors)
+                : "Temperatura aproximada (zona térmica do Windows); para a leitura exata do núcleo, rode como administrador e instale o PawnIO.";
+        }
         return new SensorSnapshot(true, message, cpuTemp, cpuLoad, cpuPower, cpuClock,
             gpuTemp, gpuLoad, gpuPower, gpuClock, fans);
+    }
+
+    /// <summary>Texto para o suporte: administrador, o que a biblioteca enxergou e cada sensor com valor.</summary>
+    public string Diagnose()
+    {
+        var text = new System.Text.StringBuilder();
+        text.AppendLine($"Administrador: {(IsAdministrator ? "sim" : "não")}");
+        text.AppendLine($"Sistema: {Environment.OSVersion.VersionString}");
+        if (_openError is not null) text.AppendLine("Erro ao abrir: " + _openError);
+        if (_computer is null) return text.ToString();
+        try
+        {
+            foreach (var hardware in Flatten(_computer.Hardware))
+            {
+                hardware.Update();
+                text.AppendLine($"\n[{hardware.HardwareType}] {hardware.Name} ({hardware.Sensors.Length} sensores)");
+                foreach (var sensor in hardware.Sensors)
+                    text.AppendLine($"  {sensor.SensorType,-12} {sensor.Name,-28} {(sensor.Value is float v ? v.ToString("0.##") : "sem valor")}");
+            }
+            text.AppendLine($"\nZona térmica do Windows: {(ThermalZone.Read() is { } z ? z + " °C" : "indisponível")}");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { text.AppendLine("Falha na leitura: " + ex.Message); }
+        return text.ToString();
     }
 
     private static bool IsPreferredCpuTemperature(string name) =>

@@ -441,6 +441,21 @@ public partial class DashboardPage : UserControl
         if (history.Count > HistoryLength) history.RemoveAt(0);
     }
 
+    private async void CopySensorDiagnosis_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var sensors = await AppServices.Sensors;
+            string text = await Task.Run(sensors.Diagnose);
+            Clipboard.SetText(text);
+            MessageBox.Show("O diagnóstico dos sensores foi copiado. Cole numa mensagem para o suporte da MB InfoArt.", "MB Extreme (Beta 01)", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException)
+        {
+            MessageBox.Show("Não foi possível copiar o diagnóstico: " + ex.Message, "MB Extreme (Beta 01)", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private void ScanButton_Click(object sender, RoutedEventArgs e) => MainWindow.Current?.Go("cleanup", autoStart: true);
 
     private void InstallSensorDriver_Click(object sender, RoutedEventArgs e)

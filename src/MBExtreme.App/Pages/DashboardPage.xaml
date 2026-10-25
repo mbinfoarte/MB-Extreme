@@ -21,10 +21,12 @@
             <!-- Aviso: sensores da CPU -->
             <Border x:Name="SensorHint" Style="{StaticResource Card}" Margin="0,18,0,0" Padding="18,14" Visibility="Collapsed">
                 <Grid>
-                    <TextBlock x:Name="SensorHintText" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,200,0"
+                    <TextBlock x:Name="SensorHintText" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,420,0"
                                Foreground="{StaticResource WarnBrush}" />
-                    <Button Content="Ativar sensores da CPU" Style="{StaticResource PrimaryButton}" Padding="18,8"
-                            HorizontalAlignment="Right" Click="InstallSensorDriver_Click" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Copiar diagnóstico" Style="{StaticResource GhostButton}" Padding="14,8" Margin="0,0,8,0" Click="CopySensorDiagnosis_Click" />
+                        <Button Content="Ativar sensores da CPU" Style="{StaticResource PrimaryButton}" Padding="18,8" Click="InstallSensorDriver_Click" />
+                    </StackPanel>
                 </Grid>
             </Border>
 

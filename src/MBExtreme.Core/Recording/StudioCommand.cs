@@ -141,7 +141,7 @@ public static class StudioCommand
             firstExtra += copyLayout.Panes.Count(p => p.Kind == PaneKind.File || (p.Kind == PaneKind.Camera && !shared(p)));
         }
         foreach (var camera in r.Cameras)
-            args.AddRange(new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + camera.DeviceName });
+            args.AddRange(CameraSource.InputArgs(camera.DeviceName));
         if (r.Pix is { } pixInput)
             args.AddRange(new[] { "-loop", "1", "-framerate", "5", "-i", pixInput.ImagePath });
         foreach (var layer in r.Layers)

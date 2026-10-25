@@ -99,7 +99,7 @@ public static class VerticalGraph
         {
             if (pane.Kind == PaneKind.Camera && shared?.Invoke(pane) == true) continue;   // a câmera já está aberta por outra parte do vídeo
             if (pane.Kind == PaneKind.Camera)
-                list.Add(new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + pane.Source });
+                list.Add(CameraSource.InputArgs(pane.Source!));
             else if (pane.Kind == PaneKind.File)
                 list.Add(VerticalPane.IsImage(pane.Source!)
                     ? new[] { "-loop", "1", "-framerate", Math.Clamp(fps, 5, 30).ToString(CultureInfo.InvariantCulture), "-i", pane.Source! }

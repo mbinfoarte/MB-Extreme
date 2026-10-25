@@ -497,10 +497,10 @@ public sealed partial class StudioPage : ToolPageBase
     /// <summary>Retângulos sobre a pré-visualização que mostram onde cada câmera e o QR do Pix vão aparecer.</summary>
     private void UpdateGhosts()
     {
-        var items = new List<(string Label, int Corner, double Percent, double Aspect)>();
+        var items = new List<(string Label, int Corner, double Percent, double Aspect, int Camera)>();
         for (int i = 0; i < _s.StudioCameras.Count; i++)
-            if (_s.StudioCameras[i].On) items.Add(($"Câmera {i + 1}", _s.StudioCameras[i].Corner, _s.StudioCameras[i].Percent, 9.0 / 16));
-        if (_s.StudioPixOn) items.Add(("Pix", _s.StudioPixCorner, _s.StudioPixPercent, 1.25));
+            if (_s.StudioCameras[i].On) items.Add(($"Câmera {i + 1}", _s.StudioCameras[i].Corner, _s.StudioCameras[i].Percent, 9.0 / 16, i));
+        if (_s.StudioPixOn) items.Add(("Pix", _s.StudioPixCorner, _s.StudioPixPercent, 1.25, -1));
 
         bool visible = _preview.Source is not null && _preview.ActualWidth > 40;
         while (_ghosts.Count > items.Count)
@@ -522,12 +522,13 @@ public sealed partial class StudioPage : ToolPageBase
 
         for (int i = 0; i < items.Count; i++)
         {
-            var (label, corner, percent, aspect) = items[i];
+            var (label, corner, percent, aspect, camera) = items[i];
             corner = Math.Clamp(corner, 0, 3);
             bool overlaps = items.Where((o, j) => j != i && Math.Clamp(o.Corner, 0, 3) == corner).Any();
             var ghost = _ghosts[i];
             ghost.Visibility = Vis(visible);
             ghost.BorderBrush = Brush(overlaps ? "WarnBrush" : "AccentBrush");
+            ghost.Background = CameraGhostBrush(camera) ?? new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)); // com o retrato da câmera, o usuário vê o que vai aparecer
             ghost.ToolTip = overlaps ? "Está no mesmo canto de outra camada: uma vai cobrir a outra." : null;
             if (ghost.Child is TextBlock text)
             {
@@ -804,7 +805,14 @@ public sealed partial class StudioPage : ToolPageBase
             top.Children.Add(remove);
             card.Children.Add(top);
 
-            card.Children.Add(Field("Dispositivo", CameraChoice(cam), 110));
+            var camImage = new Image { Stretch = Stretch.Uniform, Width = 256, Height = 144 };
+            var camNote = Muted("", 11.5);
+            var camBox = new Border { Width = 256, Height = 144, CornerRadius = new CornerRadius(8), Background = Brush("BgBrush"), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Child = camImage };
+            var camTest = SmallButton("Ver imagem da câmera", async (_, _) => await TestCameraAsync(cam, camImage, camNote));
+            camTest.Margin = new Thickness(0, 6, 0, 0);
+            card.Children.Add(Field("Dispositivo", CameraChoice(cam, () => _ = TestCameraAsync(cam, camImage, camNote)), 110));
+            card.Children.Add(Field("Imagem", new StackPanel { Children = { camBox, camTest, camNote } }, 110));
+            if (cam.Name is { Length: > 0 } && _camStills.TryGetValue(cam.Name, out var shown)) camImage.Source = shown;
             card.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(cam.Corner, 0, 3), c => { cam.Corner = c; UpdateGhosts(); }), 110));
             card.Children.Add(Field("Tamanho", Chips(CameraPercents.Select(p => p + "%").ToList(), Math.Max(0, Array.IndexOf(CameraPercents, cam.Percent)), c => { cam.Percent = CameraPercents[c]; UpdateGhosts(); }), 110));
             var frame = new CheckBox { Content = "Moldura amarela em volta", IsChecked = cam.Frame, Foreground = Brush("TextBrush") };
@@ -823,18 +831,20 @@ public sealed partial class StudioPage : ToolPageBase
         _cameraNote.Foreground = Brush("MutedBrush");
         (_cameraNote.Parent as Panel)?.Children.Remove(_cameraNote);
         _cameraNote.Text = "Os retângulos \"Câmera 1, 2...\" na pré-visualização mostram onde cada uma vai ficar (amarelo-escuro = dois no mesmo canto). A câmera precisa estar livre: feche outros programas que a usam. Câmeras virtuais (OBS, celular) aparecem na lista como qualquer outra. Dá para ligar e desligar câmeras com a transmissão no ar (a captura reinicia por alguns segundos).";
+        _tabCamera.Children.Add(BuildPhoneCameraCard());
         _tabCamera.Children.Add(_cameraNote);
     }
 
-    private UIElement CameraChoice(StudioCameraSetting cam)
+    private UIElement CameraChoice(StudioCameraSetting cam, Action? changed = null)
     {
+        if (CameraSource.IsStream(cam.Name)) return Muted("Câmera pela rede: " + CameraSource.Display(cam.Name!), 12);
         if (_cameraList.Count == 0)
             return Muted(_ffmpegPath is null ? "Instale o FFmpeg (aba Avançado) para procurar câmeras." : cam.Name is { Length: > 0 } ? cam.Name + " (clique em Procurar câmeras)" : "Clique em \"Procurar câmeras\".", 12);
         var names = _cameraList.ToList();
         if (cam.Name is { Length: > 0 } saved && !names.Contains(saved)) names.Insert(0, saved + " (não encontrada)");
         int selected = cam.Name is null ? -1 : Math.Max(0, names.FindIndex(n => n == cam.Name || n == cam.Name + " (não encontrada)"));
         if (selected < 0) { cam.Name = names[0]; selected = 0; }
-        return Chips(names, selected, i => cam.Name = names[i].Replace(" (não encontrada)", ""));
+        return Chips(names, selected, i => { cam.Name = names[i].Replace(" (não encontrada)", ""); changed?.Invoke(); });
     }
 
     private void AddCamera()

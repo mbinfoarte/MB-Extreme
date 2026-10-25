@@ -92,6 +92,9 @@ public sealed record PixOverlay(string ImagePath, CameraCorner Corner, int Width
 public sealed record CameraOverlay(string DeviceName, CameraCorner Corner, int WidthPercent, bool Frame, ImageFilter? Filter = null)
 {
     public static bool IsValidName(string? name) =>
+        CameraSource.IsStream(name) ? CameraSource.IsValidStream(name) : IsValidDeviceName(name);
+
+    private static bool IsValidDeviceName(string? name) =>
         !string.IsNullOrWhiteSpace(name) && name.Length <= 120 && name.IndexOfAny(new[] { '"', '\'', '|', '[', ']', '\\', ':', '=', ',', ';', '\r', '\n' }) < 0;
 
     public int ClampedPercent => Math.Clamp(WidthPercent, 10, 40);

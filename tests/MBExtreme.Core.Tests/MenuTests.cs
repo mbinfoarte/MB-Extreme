@@ -56,7 +56,23 @@ public class MenuTests
         Assert.Equal("studio", NavigationMap.ModuleOf("record")!.Key);
         Assert.Equal("studio", NavigationMap.ModuleOf("shorts")!.Key);
         Assert.Equal("studio", NavigationMap.ModuleOf("studio")!.Key);
-        foreach (string page in new[] { "gamefps", "bench", "stress", "compare", "fps" })
-            Assert.Equal("benchmark", NavigationMap.ModuleOf(page)!.Key);
+        foreach (string page in new[] { "gamefps", "bench", "stress", "compare", "fps", "sysinfo", "hardware", "bios", "netanalyzer" })
+            Assert.Equal("test", NavigationMap.ModuleOf(page)!.Key);
+    }
+
+    [Fact]
+    public void Otimizacao_reune_jogos_e_rede_e_o_windows_reune_dispositivos_ferramentas_e_drivers()
+    {
+        foreach (string page in new[] { "gamesettings", "tweaks-game", "latency", "dns", "net-tweaks", "cleanup" })
+            Assert.Equal("opt", NavigationMap.ModuleOf(page)!.Key);
+        foreach (string page in new[] { "devices", "diskmgr", "processes", "drivers", "programs", "driver-removal" })
+            Assert.Equal("win", NavigationMap.ModuleOf(page)!.Key);
+        Assert.Equal(new[] { "gamelibrary", "gameboost", "gameadvisor", "bottleneck" }, NavigationMap.Modules.First(m => m.Key == "games").Tiles.Select(t => t.Key));
+    }
+
+    [Fact]
+    public void Modulos_ficam_so_com_os_grupos_previstos()
+    {
+        Assert.Equal(new[] { "opt", "games", "studio", "test", "win", "sup", "lic" }, NavigationMap.Modules.Select(m => m.Key));
     }
 }

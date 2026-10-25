@@ -12,6 +12,9 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, UserControl> _pages = new();
     private readonly Dictionary<string, UserControl> _inner = new();
     private bool _suppressNav;
+    private string? _current;
+    private bool _backing;
+    private Stack<string> _history = new();
 
     public MainWindow()
     {
@@ -74,8 +77,14 @@ public partial class MainWindow : Window
 
     private void BuildMenu()
     {
-        AddNavItem("home", "Painel", "\uE80F", true);
-        foreach (var module in NavigationMap.Modules.Where(m => m.Key != "lic")) // a licença fica no cartão do cliente
+        // Início no topo, o resto em ordem alfabética e o Suporte por último.
+        AddNavItem("home", "Início", "\uE80F", true);
+        var pt = new System.Globalization.CultureInfo("pt-BR");
+        var ordered = NavigationMap.Modules
+            .Where(m => m.Key != "lic") // a licença fica no cartão do cliente
+            .OrderBy(m => m.Key == "sup" ? 1 : 0)
+            .ThenBy(m => m.Title, StringComparer.Create(pt, ignoreCase: true));
+        foreach (var module in ordered)
             AddNavItem(module.Key, module.Title, module.Icon, false);
     }
 
@@ -116,8 +125,30 @@ public partial class MainWindow : Window
     {
         // O evento dispara durante o carregamento do XAML, antes de ContentHost existir.
         if (_suppressNav || ContentHost is null) return;
-        if (sender is RadioButton { Tag: string key }) ShowPage(key);
+        if (sender is RadioButton { Tag: string key })
+        {
+            _history.Clear(); // clicar no menu lateral começa um caminho novo
+            ShowPage(key);
+        }
     }
+
+    /// <summary>Nome de uma tela para o botão Voltar.</summary>
+    internal static string LabelOf(string key) =>
+        key == "home" ? "Início" : NavigationMap.Modules.FirstOrDefault(m => m.Key == key)?.Title ?? NavigationMap.TileOf(key)?.Title ?? "Voltar";
+
+    /// <summary>Volta para a tela de onde o usuário veio (o Início, se ele chegou por lá; senão, o módulo da página).</summary>
+    internal void GoBack()
+    {
+        string target = _history.Count > 0 ? _history.Pop() : (_current is null ? "home" : NavigationMap.ModuleOf(_current)?.Key ?? "home");
+        if (target == _current) target = "home";
+        _backing = true;
+        try { Go(target); }
+        finally { _backing = false; }
+    }
+
+    /// <summary>Destino do botão Voltar na tela atual (para o rótulo).</summary>
+    private string BackTarget(string key) =>
+        _history.Count > 0 ? _history.Peek() : NavigationMap.ModuleOf(key)?.Key ?? "home";
 
     /// <summary>Atualiza o cartão do cliente: foto, nome, plano, dias restantes e o botão de ativar ou renovar.</summary>
     internal void UpdateFooter()
@@ -153,6 +184,14 @@ public partial class MainWindow : Window
 
     private void ShowPage(string key)
     {
+        if (!_backing && _current is not null && _current != key)
+        {
+            _history.Push(_current);
+            while (_history.Count > 30) _history = new Stack<string>(_history.Reverse().Skip(1)); // guarda só os últimos
+        }
+        _current = key;
+        if (key == "home") _history.Clear();
+
         // recurso do plano Pro sem licença válida: mostra o aviso no lugar da página (nunca com a aplicação desligada)
         if (!AppServices.License.IsAllowed(key))
         {
@@ -167,6 +206,11 @@ public partial class MainWindow : Window
         }
 
         ContentHost.Content = page;
+        if (page is SubPageHost host)
+        {
+            string target = BackTarget(key);
+            host.SetBack(LabelOf(target), GoBack);
+        }
     }
 
     private UserControl Create(string key)

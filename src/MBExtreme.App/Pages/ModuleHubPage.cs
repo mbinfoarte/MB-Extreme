@@ -9,9 +9,15 @@ internal sealed class ModuleHubPage : UserControl
 {
     public ModuleHubPage(Module module, Action<string> open)
     {
-        var tiles = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 24, 0, 0) };
-        foreach (var tile in module.Tiles)
-            tiles.Children.Add(BuildTile(tile, open));
+        var tiles = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
+        foreach (var group in module.Tiles.GroupBy(t => t.Section))
+        {
+            if (group.Key.Length > 0)
+                tiles.Children.Add(new TextBlock { Text = group.Key, FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(2, 18, 0, 8) });
+            var wrap = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, group.Key.Length > 0 ? 0 : 12, 0, 0) };
+            foreach (var tile in group) wrap.Children.Add(BuildTile(tile, open));
+            tiles.Children.Add(wrap);
+        }
 
         var header = new StackPanel { Orientation = Orientation.Horizontal };
         header.Children.Add(Icon(module.Icon, 30, 56));

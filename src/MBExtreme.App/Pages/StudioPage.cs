@@ -1496,6 +1496,7 @@ public sealed partial class StudioPage : ToolPageBase
         foreach (var element in new FrameworkElement[] { _specText, _netNow, _planText, _uploadResult, _chatId, _key, _remember, _customUrl })
             Detach(element);
         _tabStream.Children.Clear();
+        _tabStream.Children.Add(BuildOptimizeCard());
         _tabStream.Children.Add(Muted("Para transmitir, ligue o bloco \"Transmitir ao vivo\" no alto da tela. A codificação é feita na placa de vídeo, por isso pesa pouco no jogo.", 11));
         var service = CurrentService();
         int selected = Math.Max(0, Array.IndexOf(ServiceOrder, service));

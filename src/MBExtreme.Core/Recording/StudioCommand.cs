@@ -175,14 +175,14 @@ public static class StudioCommand
             int kbps = Math.Max(1000, r.Stream is null ? r.VideoKbps : Math.Min(r.VideoKbps, r.StreamMaxMbps * 1000));
             bitrate = kbps + "k";
             maxrate = (int)Math.Ceiling(kbps * maxFactor) + "k";
-            bufsize = kbps * 2 + "k";
+            bufsize = (r.Stream is null ? kbps * 2 : kbps) + "k";   // ao vivo, o reservatório é de 1 s: menos rajadas de envio, menos travadas na internet
         }
         else
         {
             int rate = Math.Max(2, r.Stream is null ? r.BitrateMbps : Math.Min(r.BitrateMbps, r.StreamMaxMbps));
             bitrate = rate + "M";
             maxrate = (int)Math.Ceiling(rate * maxFactor) + "M";
-            bufsize = rate * 2 + "M";
+            bufsize = (r.Stream is null ? rate * 2 : rate) + "M";
         }
 
         args.AddRange(new[] { "-map", complex is null ? "0:v" : "[v]", "-c:v", r.Encoder.FfmpegName });

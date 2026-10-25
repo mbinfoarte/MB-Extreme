@@ -77,9 +77,9 @@
                         <Grid>
                             <TextBlock Text="Uso da internet" FontSize="15" FontWeight="SemiBold" />
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <TextBlock Text="●" Foreground="#FFC400" Margin="0,0,4,0" />
+                                <TextBlock Text="━" Foreground="#FFC400" FontWeight="Bold" Margin="0,0,4,0" />
                                 <TextBlock Text="Download" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,14,0" />
-                                <TextBlock Text="●" Foreground="#E8E8EC" Margin="0,0,4,0" />
+                                <TextBlock Text="┅" Foreground="#34D17A" FontWeight="Bold" Margin="0,0,4,0" />
                                 <TextBlock Text="Envio" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                         </Grid>
@@ -142,11 +142,11 @@
                         <Grid>
                             <TextBlock Text="Energia" FontSize="15" FontWeight="SemiBold" />
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <TextBlock Text="●" Foreground="#FFC400" Margin="0,0,4,0" />
+                                <TextBlock Text="━" Foreground="#FFC400" FontWeight="Bold" Margin="0,0,4,0" />
                                 <TextBlock Text="Total" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,14,0" />
-                                <TextBlock Text="●" Foreground="#E8E8EC" Margin="0,0,4,0" />
+                                <TextBlock Text="━" Foreground="#FF5A5F" FontWeight="Bold" Margin="0,0,4,0" />
                                 <TextBlock Text="CPU" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,14,0" />
-                                <TextBlock Text="●" Foreground="#8E8E96" Margin="0,0,4,0" />
+                                <TextBlock Text="┅" Foreground="#34D17A" FontWeight="Bold" Margin="0,0,4,0" />
                                 <TextBlock Text="GPU" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                         </Grid>

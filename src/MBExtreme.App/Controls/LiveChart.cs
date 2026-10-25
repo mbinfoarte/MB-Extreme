@@ -56,6 +56,13 @@ public sealed class LiveChart : Grid
         SizeChanged += (_, _) => Draw(false);
     }
 
+    /// <summary>Linha tracejada em uma série: ajuda quem não distingue as cores (além da legenda).</summary>
+    public void SetDashed(int series, double dash = 4, double gap = 3)
+    {
+        if (series < 0 || series >= _series.Count) return;
+        _series[series].Line.StrokeDashArray = new DoubleCollection { dash, gap };
+    }
+
     /// <summary>Teto do eixo. Zero ou menos: ajusta ao maior valor visível.</summary>
     public double Maximum { get; set; }
 

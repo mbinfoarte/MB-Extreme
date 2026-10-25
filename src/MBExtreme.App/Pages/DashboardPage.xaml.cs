@@ -22,8 +22,8 @@ public partial class DashboardPage : UserControl
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly List<double> _downHistory = new();
     private readonly List<double> _upHistory = new();
-    private readonly LiveChart _netChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0xE8, 0xE8, 0xEC));
-    private readonly LiveChart _powerChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0xE8, 0xE8, 0xEC), Color.FromRgb(0x8E, 0x8E, 0x96));
+    private readonly LiveChart _netChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0x34, 0xD1, 0x7A));
+    private readonly LiveChart _powerChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0xFF, 0x5A, 0x5F), Color.FromRgb(0x34, 0xD1, 0x7A));
     private readonly List<double> _powerTotalHistory = new();
     private readonly List<double> _powerCpuHistory = new();
     private readonly List<double> _powerGpuHistory = new();
@@ -53,6 +53,8 @@ public partial class DashboardPage : UserControl
         RamCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("ram-detail");
         NetCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("netanalyzer");
         UpdateRamAuto();
+        _netChart.SetDashed(1);
+        _powerChart.SetDashed(2);
         _netChart.FormatMax = v => Rate(v * 125_000);
         NetChartHost.Child = _netChart;
         _powerChart.FormatMax = v => $"{v:0} W";

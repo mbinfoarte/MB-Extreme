@@ -6,8 +6,8 @@
         <Polygon x:Name="Area">
             <Polygon.Fill>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#55FFFFFF" Offset="0" />
-                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                    <GradientStop Color="#55FFC400" Offset="0" />
+                    <GradientStop Color="#00FFC400" Offset="1" />
                 </LinearGradientBrush>
             </Polygon.Fill>
         </Polygon>

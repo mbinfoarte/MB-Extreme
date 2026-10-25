@@ -193,6 +193,17 @@ public sealed class AppSettings
     /// <summary>Tratamento da voz do microfone: 0 = natural, 1 = reduzir ruído, 2 = voz de estúdio.</summary>
     public int StudioVoiceEffect { get; set; }
 
+    // tratamento profissional do áudio (ao vivo)
+    public bool StudioAudHighPass { get; set; }
+    public bool StudioAudGate { get; set; }
+    public double StudioAudGateDb { get; set; } = -45;
+    public bool StudioAudComp { get; set; }
+    public double StudioAudCompDb { get; set; } = -18;
+    public double StudioAudCompRatio { get; set; } = 3;
+    public double StudioAudMakeupDb { get; set; }
+    public bool StudioAudLimiter { get; set; } = true;
+    public double StudioAudCeilingDb { get; set; } = -1;
+
     // ---- Pix com o QR do próprio banco
     public bool StudioPixUseOwn { get; set; }
 

@@ -351,7 +351,13 @@ public class EstudioTests
         var buffer = new byte[12000 * AudioMixer.BytesPerFrame];
         mixer.Read(buffer, 12000);
         var (peak, _) = Stats(buffer, 12000);
-        Assert.InRange(peak, 30000, 32767);
+        Assert.InRange(peak, 28000, 29300);     // o limitador padrão (-1 dB) segura a soma abaixo de ≈29204
+
+        var open = new AudioMixer { Master = AudioProcessing.Safe with { Limiter = false } };
+        open.AddInput("a", format).Push(tone, tone.Length);
+        open.AddInput("b", format).Push(tone, tone.Length);
+        open.Read(buffer, 12000);
+        Assert.InRange(Stats(buffer, 12000).Item1, 30000, 32767);   // sem limitador, só o corte de segurança
     }
 
     [Fact]

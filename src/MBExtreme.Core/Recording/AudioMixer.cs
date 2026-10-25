@@ -9,6 +9,7 @@ public sealed class AudioInput
 {
     private readonly BufferedWaveProvider _buffer;
     private readonly VoiceProcessor _voice;
+    private readonly AudioChainProcessor _chain;
     private readonly VolumeSampleProvider _volume;
     private readonly PeakSampleProvider _meter;
 
@@ -28,7 +29,8 @@ public sealed class AudioInput
         else if (samples.WaveFormat.Channels > 2) samples = new FirstTwoChannelsProvider(samples);
         if (samples.WaveFormat.SampleRate != AudioMixer.SampleRate) samples = new WdlResamplingSampleProvider(samples, AudioMixer.SampleRate);
         _voice = new VoiceProcessor(samples);
-        _volume = new VolumeSampleProvider(_voice) { Volume = volume };
+        _chain = new AudioChainProcessor(_voice);
+        _volume = new VolumeSampleProvider(_chain) { Volume = volume };
         _meter = new PeakSampleProvider(_volume);
     }
 
@@ -42,6 +44,13 @@ public sealed class AudioInput
     {
         get => _voice.Effect;
         set => _voice.Effect = value;
+    }
+
+    /// <summary>Filtro de graves, porta de ruído e compressor desta fonte. Muda na hora.</summary>
+    public AudioProcessing Processing
+    {
+        get => _chain.Settings;
+        set => _chain.Settings = value;
     }
 
     /// <summary>Formato do áudio como chega da captura.</summary>
@@ -76,11 +85,23 @@ public sealed class AudioMixer
     private readonly List<AudioInput> _inputs = new();
     private float[] _floats = new float[SampleRate / 2];
     private volatile float _peak;
+    private readonly PeakLimiter _limiter = new(SampleRate);
+    private volatile AudioProcessing _master = AudioProcessing.Safe;
 
     /// <summary>Volume do momento (0 a 1) para o medidor da tela.</summary>
     public float Peak => _peak;
 
     public IReadOnlyList<AudioInput> Inputs => _inputs;
+
+    /// <summary>Limitador de volume do som final (o que vai para a gravação e para a live). Muda na hora.</summary>
+    public AudioProcessing Master
+    {
+        get => _master;
+        set => _master = value.Clamped();
+    }
+
+    /// <summary>Quanto o limitador está abaixando agora, em dB (0 = sem limitar).</summary>
+    public double LimiterReductionDb => _limiter.ReductionDb;
 
     public AudioInput AddInput(string name, WaveFormat format, float volume = 1f)
     {
@@ -102,6 +123,11 @@ public sealed class AudioMixer
 
         int read;
         lock (_mix) read = _mix.Read(_floats, 0, samples);
+
+        var master = _master;
+        float ceiling = master.Limiter ? Db.ToLinear(master.CeilingDb) : 1f;
+        if (master.Limiter)
+            for (int i = 0; i + 1 < Math.Min(read, samples); i += 2) _limiter.Process(ref _floats[i], ref _floats[i + 1], ceiling);
 
         float peak = 0;
         for (int i = 0; i < samples; i++)

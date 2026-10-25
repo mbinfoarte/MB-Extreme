@@ -6,7 +6,7 @@ namespace MBExtreme.Core.Recording;
 
 public sealed record AudioConfig(
     bool CaptureSystem, string? OutputId, float SystemVolume,
-    bool CaptureMicrophone, string? MicrophoneId, float MicrophoneVolume, VoiceEffect Voice = VoiceEffect.Off)
+    bool CaptureMicrophone, string? MicrophoneId, float MicrophoneVolume, VoiceEffect Voice = VoiceEffect.Off, AudioProcessing? Processing = null)
 {
     public bool Any => CaptureSystem || CaptureMicrophone;
 }
@@ -62,6 +62,16 @@ public sealed class StudioSession : IDisposable
     {
         if (_capture?.Microphone is { } mic) mic.Voice = effect;
     }
+
+    /// <summary>Muda o tratamento profissional (limitador, porta de ruído, compressor, filtro) com o estúdio no ar.</summary>
+    public void SetProcessing(AudioProcessing processing)
+    {
+        if (_mixer is { } mixer) mixer.Master = processing;
+        if (_capture?.Microphone is { } mic) mic.Processing = processing;
+    }
+
+    /// <summary>Quanto o limitador está abaixando o volume agora (dB).</summary>
+    public double LimiterReductionDb => _mixer?.LimiterReductionDb ?? 0;
 
     public bool HasMicrophone => _capture?.Microphone is not null;
 
@@ -135,6 +145,7 @@ public sealed class StudioSession : IDisposable
                 _capture = new AudioCapture(_mixer, audio.CaptureSystem, audio.OutputId, audio.SystemVolume,
                     audio.CaptureMicrophone, audio.MicrophoneId, audio.MicrophoneVolume);
                 if (_capture.Microphone is { } micInput) micInput.Voice = audio.Voice;
+                SetProcessing(audio.Processing ?? AudioProcessing.Safe);
                 if (_capture.Warning is { } w) AddWarning(w);
                 if (_mixer.Inputs.Count == 0) throw new InvalidOperationException("nenhuma fonte de áudio disponível");
                 _pipe = new AudioPipe();

@@ -43,16 +43,15 @@ internal sealed class AudioMixerPanel : StackPanel
         _micId = micId;
         _games = games;
 
-        Children.Add(Title("Mixer de áudio"));
-        Children.Add(Note("Os medidores mostram o som em tempo real. O volume do som do PC e do microfone vale na hora, até com a transmissão no ar."));
+        Children.Add(Title("Mixer de áudio (tempo real)"));
+        
         _system = MakeRow("Som do PC", 150, _s.StudioSystemVolume * 100, v => SetMain(false, v));
         _mic = MakeRow("Microfone", 150, _s.StudioMicVolume * 100, v => SetMain(true, v));
         Children.Add(_system.Container);
         Children.Add(_mic.Container);
 
         Children.Add(Title("Programas tocando agora"));
-        var hint = Note("Jogo, Discord, música e navegador são reconhecidos sozinhos. Aqui o volume de cada programa é o do Windows: o que você baixa aqui baixa também no seu fone. (O volume só para a transmissão exige capturar cada programa separado, previsto para uma próxima versão.)");
-        Children.Add(hint);
+        Children.Add(Note("O volume de cada programa aqui é o do Windows (baixar aqui baixa no seu fone também)."));
         Children.Add(_apps);
         _empty.Foreground = (System.Windows.Media.Brush)Application.Current.FindResource("MutedBrush");
         Children.Add(_empty);
@@ -62,7 +61,7 @@ internal sealed class AudioMixerPanel : StackPanel
         Unloaded += (_, _) => _timer.Stop();
     }
 
-    private static TextBlock Title(string text) => new() { Text = text, FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) };
+    private static TextBlock Title(string text) => new() { Text = text, FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 2) };
 
     private static TextBlock Note(string text) => new()
     {
@@ -72,7 +71,7 @@ internal sealed class AudioMixerPanel : StackPanel
 
     private Row MakeRow(string label, double max, double value, Action<double> changed, string? tag = null)
     {
-        var meter = new ProgressBar { Minimum = 0, Maximum = 1, Height = 8, Margin = new Thickness(0, 4, 0, 4) };
+        var meter = new ProgressBar { Minimum = 0, Maximum = 1, Height = 5, Margin = new Thickness(0, 3, 0, 3) };
         var slider = new Slider { Minimum = 0, Maximum = max, Value = Math.Min(max, value), SmallChange = 5, LargeChange = 10 };
         var percent = new TextBlock { Width = 46, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
         var mute = new Button { Content = "Mudo", Padding = new Thickness(9, 3, 9, 3), FontSize = 11.5, Margin = new Thickness(8, 0, 0, 0), Style = (Style)Application.Current.FindResource("GhostButton"), VerticalAlignment = VerticalAlignment.Center };
@@ -82,11 +81,11 @@ internal sealed class AudioMixerPanel : StackPanel
         middle.Children.Add(slider);
 
         var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        name.Children.Add(new TextBlock { Text = label, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        name.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
         if (!string.IsNullOrEmpty(tag)) name.Children.Add(new TextBlock { Text = tag, FontSize = 10.5, Foreground = (System.Windows.Media.Brush)Application.Current.FindResource("AccentBrush") });
 
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -100,7 +99,7 @@ internal sealed class AudioMixerPanel : StackPanel
 
         var container = new Border
         {
-            Style = (Style)Application.Current.FindResource("Card"), Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 4), Child = grid,
+            Style = (Style)Application.Current.FindResource("Card"), Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 0, 3), Child = grid,
         };
         var row = new Row { Meter = meter, Volume = slider, Percent = percent, Mute = mute, Container = container, Before = value > 0 ? value : 100 };
         percent.Text = $"{value:0}%";

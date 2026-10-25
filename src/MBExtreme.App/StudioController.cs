@@ -268,6 +268,11 @@ internal sealed class StudioController
     /// <summary>Muda o tratamento da voz do microfone na hora.</summary>
     public void SetVoice(VoiceEffect effect) => Session.SetVoice(effect);
 
+    /// <summary>Muda limitador, porta de ruído, compressor e filtro na hora.</summary>
+    public void SetProcessing(AudioProcessing processing) => Session.SetProcessing(processing);
+
+    public double LimiterReductionDb => Session.LimiterReductionDb;
+
     public float GetVolume(bool microphone) => Session.GetVolume(microphone);
 
     // ---------------------------------------------------------------- atalhos globais

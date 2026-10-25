@@ -788,6 +788,8 @@ public sealed partial class StudioPage : ToolPageBase
             () => _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null,
             KnownGames));
 
+        _audioPro = BuildAudioPro();
+        _tabAudio.Children.Add(_audioPro);
         _tabAudio.Children.Add(Field("Voz do microfone", Chips(new[] { "Natural", "Reduzir ruído", "Voz de estúdio" }, Math.Clamp(_s.StudioVoiceEffect, 0, 2), i =>
         {
             _s.StudioVoiceEffect = i;
@@ -2083,7 +2085,7 @@ public sealed partial class StudioPage : ToolPageBase
         {
             string? outputId = _outputs.Selected > 0 && _outputs.Selected - 1 < _outList.Count ? _outList[_outputs.Selected - 1].Id : null;
             string? micId = _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null;
-            audio = new AudioConfig(_s.StudioSystemAudio, outputId, (float)_s.StudioSystemVolume, _s.StudioMicAudio, micId, (float)_s.StudioMicVolume, (VoiceEffect)Math.Clamp(_s.StudioVoiceEffect, 0, 2));
+            audio = new AudioConfig(_s.StudioSystemAudio, outputId, (float)_s.StudioSystemVolume, _s.StudioMicAudio, micId, (float)_s.StudioMicVolume, (VoiceEffect)Math.Clamp(_s.StudioVoiceEffect, 0, 2), CurrentAudioProcessing());
         }
 
         var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
@@ -2263,6 +2265,7 @@ public sealed partial class StudioPage : ToolPageBase
         if (!running) _pending.Visibility = Visibility.Collapsed;
         RefreshMuteButtons();
         if (_s.StudioCaptionOn && _settingsTab == 1) RefreshCaptionNow();
+        if (_settingsTab == 3) RefreshLimiterNow();
         _live.Visibility = Vis(_studio.IsRunning);
         bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
         if (streaming && !_wasStreaming) { _viewers.Reset(); _hasStats = false; if (_s.StudioStatsOn) _ = RefreshStatsAsync(false); }

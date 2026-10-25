@@ -15,6 +15,46 @@ public sealed partial class StudioPage
     private LiveAdvice? _advice;
     private bool _optBusy;
 
+    // ---- indicador de gravação/ao vivo, só dentro do programa (nunca entra no vídeo)
+    private readonly Border _recBadge = new()
+    {
+        Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+        Margin = new Thickness(6), Padding = new Thickness(8, 3, 10, 3), CornerRadius = new CornerRadius(12), IsHitTestVisible = false,
+        Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(200, 0, 0, 0)),
+    };
+    private readonly System.Windows.Shapes.Ellipse _recDot = new() { Width = 10, Height = 10, Fill = System.Windows.Media.Brushes.Red, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _recText = new() { FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = System.Windows.Media.Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+    private bool _recBuilt;
+
+    private void BuildRecBadge()
+    {
+        if (_recBuilt) return;
+        _recBuilt = true;
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(_recDot);
+        row.Children.Add(_recText);
+        _recBadge.Child = row;
+        _previewHost.Children.Add(_recBadge);
+        var blink = new System.Windows.Media.Animation.DoubleAnimation(1, 0.15, TimeSpan.FromMilliseconds(600))
+        {
+            AutoReverse = true, RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+        };
+        _recDot.BeginAnimation(UIElement.OpacityProperty, blink);
+    }
+
+    /// <summary>Bolinha piscando com REC e o tempo (ou AO VIVO) em cima da pré-visualização. Fica só aqui: não vai para o vídeo.</summary>
+    private void RefreshRecBadge()
+    {
+        BuildRecBadge();
+        bool running = _studio.IsRunning;
+        _recBadge.Visibility = Vis(running);
+        if (!running) return;
+        var elapsed = DateTime.Now - _studio.Session.StartedAt;
+        var request = _studio.Session.Request;
+        string kind = request?.Stream is not null ? (request.RecordFile is not null ? "AO VIVO + REC" : "AO VIVO") : request?.RecordFile is not null ? "REC" : "REPLAY";
+        _recText.Text = $"{kind}  {(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+    }
+
     private UIElement BuildOptimizeCard()
     {
         var panel = new StackPanel();

@@ -2266,6 +2266,7 @@ public sealed partial class StudioPage : ToolPageBase
         RefreshMuteButtons();
         if (_s.StudioCaptionOn && _settingsTab == 1) RefreshCaptionNow();
         if (_settingsTab == 3) RefreshLimiterNow();
+        RefreshRecBadge();
         _live.Visibility = Vis(_studio.IsRunning);
         bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
         if (streaming && !_wasStreaming) { _viewers.Reset(); _hasStats = false; if (_s.StudioStatsOn) _ = RefreshStatsAsync(false); }

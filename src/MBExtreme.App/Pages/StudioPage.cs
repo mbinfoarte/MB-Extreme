@@ -60,6 +60,7 @@ public sealed partial class StudioPage : ToolPageBase
     private readonly List<Border> _ghosts = new();
     private readonly StackPanel _tabPix = new(), _tabStats = new(), _tabChannel = new(), _tabImage = new();
     private ChatPanel? _chatPanel;
+    private Expander? _chatExpander;
     private readonly TextBox _chName = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 40 };
     private readonly TextBox _chPresenter = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 40 };
     private readonly TextBox _chTagline = new() { Width = 360, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 60 };
@@ -164,7 +165,9 @@ public sealed partial class StudioPage : ToolPageBase
         BuildLive();
         BuildStatsCard();
         _chatPanel = new ChatPanel(() => (CurrentService(), _statsId.Text, _statsKey.Password));
-        Body.Children.Add(_chatPanel);
+        // O chat só ocupa espaço quando o usuário abre (ou quando a transmissão começa).
+        _chatExpander = new Expander { Header = "Chat ao vivo", Content = _chatPanel, IsExpanded = false, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 6, 0, 0) };
+        Body.Children.Add(_chatExpander);
         Body.Children.Add(_config);
         BuildSource();
         BuildTiles();
@@ -609,15 +612,55 @@ public sealed partial class StudioPage : ToolPageBase
 
     private void BuildSettings()
     {
-        var title = new TextBlock { Text = "Configurações", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) };
+        var title = new TextBlock { Text = "Configurações", FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 2) };
         _config.Children.Add(title);
         var tabs = new[] { _tabVideo, _tabVertical, _tabImage, _tabAudio, _tabCamera, _tabChannel, _tabPix, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced };
-        _config.Children.Add(Chips(new[] { "Vídeo", "Vertical", "Imagem", "Áudio", "Câmeras", "Canal", "Pix", "Transmissão", "Estatísticas", "Replay", "Atalhos", "Avançado" }, _settingsTab, i =>
+        // Abas agrupadas por assunto: cada linha tem um rótulo, e só uma aba fica marcada no total.
+        var groups = new (string Label, int[] Tabs)[]
         {
-            _settingsTab = i;
-            for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == i);
-            if (tabs[i] == _tabStream) UpdatePlan();
-        }));
+            ("Gravar", new[] { 0, 1, 2, 3, 4, 9 }),
+            ("Transmitir", new[] { 5, 6, 7, 8 }),
+            ("Programa", new[] { 10, 11 }),
+        };
+        string[] names = { "Vídeo", "Vertical", "Imagem", "Áudio", "Câmeras", "Canal", "Pix", "Transmissão", "Estatísticas", "Replay", "Atalhos", "Avançado" };
+        var buttons = new Button[tabs.Length];
+        void Paint()
+        {
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                buttons[i].Style = (Style)FindResource(i == _settingsTab ? "PrimaryButton" : "GhostButton");
+                buttons[i].Padding = new Thickness(10, 3, 10, 3);
+                buttons[i].FontSize = 12;
+            }
+        }
+
+        var menu = new StackPanel();
+        foreach (var (label, ids) in groups)
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 0) };
+            var tag = new TextBlock { Text = label, Width = 86, FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 5, 8, 0) };
+            DockPanel.SetDock(tag, Dock.Left);
+            row.Children.Add(tag);
+            var wrap = new WrapPanel();
+            foreach (int id in ids)
+            {
+                int index = id;
+                var button = new Button { Content = names[id], Margin = new Thickness(0, 0, 5, 5) };
+                button.Click += (_, _) =>
+                {
+                    _settingsTab = index;
+                    for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == index);
+                    Paint();
+                    if (tabs[index] == _tabStream) UpdatePlan();
+                };
+                buttons[id] = button;
+                wrap.Children.Add(button);
+            }
+            row.Children.Add(wrap);
+            menu.Children.Add(row);
+        }
+        Paint();
+        _config.Children.Add(CardOf(menu));
         for (int t = 0; t < tabs.Length; t++)
         {
             tabs[t].Visibility = Vis(t == _settingsTab);
@@ -2169,7 +2212,7 @@ public sealed partial class StudioPage : ToolPageBase
         _live.Visibility = Vis(_studio.IsRunning);
         bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
         if (streaming && !_wasStreaming) { _viewers.Reset(); _hasStats = false; if (_s.StudioStatsOn) _ = RefreshStatsAsync(false); }
-        if (streaming && !_wasStreaming && _s.StudioChatAuto && _chatPanel is { IsConnected: false }) _chatPanel.Connect();
+        if (streaming && !_wasStreaming && _s.StudioChatAuto && _chatPanel is { IsConnected: false }) { _chatPanel.Connect(); if (_chatExpander is not null) _chatExpander.IsExpanded = true; }
         if (!streaming && _wasStreaming && _chatPanel is { IsConnected: true }) _chatPanel.Disconnect();
         _wasStreaming = streaming;
         UpdateStatsVisibility();

@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using MBExtreme.Core.Recording;
 
 namespace MBExtreme.UI.Pages;
@@ -14,6 +17,7 @@ public sealed class ShortsPage : ToolPageBase
         public bool On = true;
         public string Name = "";
         public double Start, End;
+        public double Duration => End - Start;
         public TextBlock? State;
     }
 
@@ -26,6 +30,16 @@ public sealed class ShortsPage : ToolPageBase
     private readonly StackPanel _formatPanel = new();
     private readonly TextBlock _info = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
     private readonly List<Cut> _cuts = new();
+    private readonly Image _previewImage = new() { Stretch = Stretch.UniformToFill };
+    private readonly TextBlock _previewHint = new() { Foreground = Brushes.Gray, FontSize = 12, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+    private readonly Border _phone = new() { Width = 250, CornerRadius = new CornerRadius(22), BorderThickness = new Thickness(3), ClipToBounds = true, Background = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly Slider _scrub = new() { Minimum = 0, Maximum = 1, IsEnabled = false, SmallChange = 1, LargeChange = 10 };
+    private readonly TextBlock _scrubText = new() { FontSize = 12 };
+    private readonly TextBlock _previewInfo = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap };
+    private readonly DispatcherTimer _previewDelay = new() { Interval = TimeSpan.FromMilliseconds(450) };
+    private int _previewVersion;
+    private bool _previewBusy, _previewAgain, _scrubbing;
+    private Cut? _selected;
     private Button? _generate;
     private string? _ffmpeg;
     private string? _video;
@@ -34,30 +48,195 @@ public sealed class ShortsPage : ToolPageBase
     private bool _hasAudio, _busy;
     private int _suggestCount = 5;
 
-    public ShortsPage() : base("Vídeos curtos (Shorts e Reels)", "Escolha uma gravação longa e gere vários vídeos verticais prontos para o YouTube Shorts, Instagram Reels e TikTok.")
+    public ShortsPage() : base("Vídeos curtos (Shorts e Reels)", "Escolha uma gravação longa e gere vários vídeos verticais prontos para o YouTube Shorts, Instagram Reels e TikTok. A pré-visualização ao lado mostra como cada vídeo vai ficar.")
     {
         AddButton("Escolher vídeo...", (_, _) => PickVideo());
         AddButton("Abrir a pasta dos curtos", (_, _) => OpenFolder(), false);
 
-        Body.Children.Add(CardOf(_videoCard));
-        Body.Children.Add(Heading("Cortes"));
-        Body.Children.Add(CardOf(_cutsPanel));
-        Body.Children.Add(Heading("Formato do vídeo vertical"));
-        Body.Children.Add(CardOf(_formatPanel));
+        // duas colunas: os passos à esquerda e a pré-visualização sempre à vista à direita
+        var layout = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) });
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 300 });
+
+        var steps = new StackPanel();
+        steps.Children.Add(Step(1, "Vídeo", _videoCard));
+        steps.Children.Add(Step(2, "Cortes", _cutsPanel));
+        steps.Children.Add(Step(3, "Formato do vídeo vertical", _formatPanel));
+
         _generate = new Button { Content = "Gerar os vídeos curtos", Style = (Style)FindResource("PrimaryButton"), Margin = new Thickness(0, 4, 0, 8) };
         _generate.Click += async (_, _) => await GenerateAsync();
-        var cancel = new Button { Content = "Cancelar", Style = (Style)FindResource("GhostButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(12, 4, 0, 8) };
+        var cancel = new Button { Content = "Cancelar", Style = (Style)FindResource("GhostButton"), Margin = new Thickness(12, 4, 0, 8) };
         cancel.Click += (_, _) => Cts?.Cancel();
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         actions.Children.Add(_generate);
         actions.Children.Add(cancel);
-        Body.Children.Add(actions);
-        Body.Children.Add(Muted("Saem em MP4 com o áudio original, na pasta Vídeos\\MB Extreme\\Curtos. A legenda automática ainda não entra nos cortes (ela funciona ao gravar ou transmitir, na aba Vertical do estúdio).", 11));
+        var generateBox = new StackPanel();
+        generateBox.Children.Add(actions);
+        generateBox.Children.Add(Muted("Saem em MP4 com o áudio original, na pasta Vídeos\\MB Extreme\\Curtos. A legenda automática ainda não entra nos cortes (ela funciona ao gravar ou transmitir, na aba Vertical do estúdio).", 11));
+        steps.Children.Add(Step(4, "Gerar", generateBox));
+        layout.Children.Add(steps);
+
+        var side = BuildPreviewPanel();
+        Grid.SetColumn(side, 2);
+        layout.Children.Add(side);
+        Body.Children.Add(layout);
+
+        _previewDelay.Tick += async (_, _) => { _previewDelay.Stop(); await PreviewAsync(); };
+        _scrub.ValueChanged += (_, _) =>
+        {
+            _scrubText.Text = TimeText.Format(_scrub.Value) + " de " + TimeText.Format(_duration);
+            if (_scrubbing) SchedulePreview();
+        };
+        _scrub.PreviewMouseLeftButtonDown += (_, _) => _scrubbing = true;
+        _scrub.PreviewMouseLeftButtonUp += (_, _) => { _scrubbing = false; SchedulePreview(); };
 
         BuildVideoCard();
         BuildCuts();
         BuildFormat();
+        UpdatePhone();
         Loaded += async (_, _) => await Task.Run(() => _ffmpeg ??= FfmpegRecorder.Locate()).ContinueWith(_ => Dispatcher.Invoke(BuildVideoCard));
+        Unloaded += (_, _) => _previewDelay.Stop();
+    }
+
+    /// <summary>Cartão numerado, para a tela ler como uma sequência de passos.</summary>
+    private Border Step(int number, string title, UIElement content)
+    {
+        var stack = new StackPanel();
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        var badge = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Background = Brush("AccentBrush"), Margin = new Thickness(0, 0, 8, 0) };
+        badge.Child = new TextBlock { Text = number.ToString(), FontWeight = FontWeights.Bold, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        head.Children.Add(badge);
+        head.Children.Add(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        stack.Children.Add(head);
+        stack.Children.Add(content);
+        return CardOf(stack);
+    }
+
+    private Border BuildPreviewPanel()
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = "Pré-visualização", FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+
+        _phone.BorderBrush = Brush("BorderBrush");
+        var content = new Grid();
+        content.Children.Add(_previewImage);
+        _previewHint.Text = "Escolha um vídeo para ver aqui como o vertical vai ficar.";
+        content.Children.Add(_previewHint);
+        _phone.Child = content;
+        panel.Children.Add(_phone);
+
+        panel.Children.Add(new TextBlock { Text = "Momento do vídeo", FontSize = 12, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 12, 0, 2) });
+        panel.Children.Add(_scrub);
+        _scrubText.Foreground = Brush("MutedBrush");
+        panel.Children.Add(_scrubText);
+
+        var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var atCut = SmallButton("Ver o início do corte escolhido", (_, _) => { if (_selected is not null) GoTo(_selected.Start + Math.Min(2, _selected.Duration / 4)); });
+        atCut.Margin = new Thickness(0, 0, 8, 4);
+        atCut.Padding = new Thickness(10, 3, 10, 3);
+        atCut.FontSize = 11.5;
+        buttons.Children.Add(atCut);
+        var refresh = SmallButton("Atualizar", (_, _) => SchedulePreview());
+        refresh.Margin = new Thickness(0, 0, 0, 4);
+        refresh.Padding = new Thickness(10, 3, 10, 3);
+        refresh.FontSize = 11.5;
+        buttons.Children.Add(refresh);
+        panel.Children.Add(buttons);
+
+        _previewInfo.Foreground = Brush("MutedBrush");
+        _previewInfo.Text = "É o mesmo desenho do arquivo final, em tamanho reduzido. Clique num corte da lista para ver o começo dele, ou arraste o controle para olhar qualquer ponto do vídeo.";
+        panel.Children.Add(_previewInfo);
+        return CardOf(panel);
+    }
+
+    /// <summary>A moldura do celular acompanha a proporção do formato escolhido (9:16, 4:5 ou quadrado).</summary>
+    private void UpdatePhone()
+    {
+        var f = VerticalFormat.ByIndex(_s.ShortsFormat);
+        _phone.Width = 250;
+        _phone.Height = 250.0 * f.Height / f.Width;
+    }
+
+    private void GoTo(double seconds)
+    {
+        _scrubbing = false;
+        _scrub.Value = Math.Clamp(seconds, 0, Math.Max(1, _duration));
+        SchedulePreview();
+    }
+
+    /// <summary>Espera um instante depois da última mudança antes de montar a imagem (vários cliques seguidos viram uma prévia só).</summary>
+    private void SchedulePreview()
+    {
+        if (_video is null || _ffmpeg is null) return;
+        _previewDelay.Stop();
+        _previewDelay.Start();
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (_video is null || _ffmpeg is null) return;
+        if (_previewBusy) { _previewAgain = true; return; }
+        _previewBusy = true;
+        string ffmpeg = _ffmpeg;
+        try
+        {
+            do
+            {
+                _previewAgain = false;
+                int version = ++_previewVersion;
+                string png = Path.Combine(Path.GetTempPath(), "mbx-prev-" + Guid.NewGuid().ToString("N") + ".png");
+                IReadOnlyList<string> args;
+                try
+                {
+                    var request = new ShortsRequest(_video, new ShortSegment(0, 10, "prévia"), CurrentLayout(), PickEncoder(), "x.mp4", _hasAudio);
+                    args = ShortsCommand.PreviewArgs(request, _scrub.Value, png);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    ShowPreviewMessage(ex.Message);
+                    return;
+                }
+
+                var (code, _, err) = await Task.Run(() => Run(ffmpeg, args, CancellationToken.None));
+                try
+                {
+                    if (version != _previewVersion) continue;
+                    if (code == 0 && File.Exists(png))
+                    {
+                        var bitmap = new BitmapImage();
+                        bitmap.BeginInit();
+                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmap.UriSource = new Uri(png);
+                        bitmap.EndInit();
+                        bitmap.Freeze();
+                        _previewImage.Source = bitmap;
+                        _previewHint.Visibility = Visibility.Collapsed;
+                    }
+                    else
+                    {
+                        string firstLine = err.Split('\n').FirstOrDefault(l => l.Trim().Length > 0)?.Trim() ?? "o FFmpeg não devolveu a imagem";
+                        ShowPreviewMessage("Não foi possível montar a prévia: " + firstLine);
+                    }
+                }
+                finally
+                {
+                    try { if (File.Exists(png)) File.Delete(png); } catch (IOException) { }
+                }
+            }
+            while (_previewAgain);
+        }
+        finally
+        {
+            _previewBusy = false;
+        }
+    }
+
+    private void ShowPreviewMessage(string text)
+    {
+        _previewImage.Source = null;
+        _previewHint.Text = text;
+        _previewHint.Visibility = Visibility.Visible;
     }
 
     private static string OutputRoot => Path.Combine(StudioController.Folder, "Curtos");
@@ -166,8 +345,13 @@ public sealed class ShortsPage : ToolPageBase
         _hasAudio = MediaProbe.HasAudio(err);
         _cuts.Clear();
         SetStatus("Vídeo carregado. Sugira os cortes ou adicione na mão.", "OkBrush");
+        _selected = null;
+        _scrub.Maximum = Math.Max(1, _duration);
+        _scrub.IsEnabled = true;
+        _scrub.Value = Math.Min(_duration / 3, 30);
         BuildVideoCard();
         BuildCuts();
+        SchedulePreview();
     }
 
     private static readonly VerticalLayout TestLayout = new(1080, 1920, false, 50, new VerticalPane(PaneKind.Screen, PaneFit.Fit), new VerticalPane(PaneKind.Screen), false);
@@ -209,7 +393,7 @@ public sealed class ShortsPage : ToolPageBase
 
         foreach (var cut in _cuts.ToList())
         {
-            var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 0) };
             for (int i = 0; i < 6; i++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = i == 1 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
             var on = new CheckBox { IsChecked = cut.On, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
             on.Click += (_, _) => cut.On = on.IsChecked == true;
@@ -231,7 +415,19 @@ public sealed class ShortsPage : ToolPageBase
             remove.Padding = new Thickness(8, 3, 8, 3);
             Grid.SetColumn(remove, 5);
             row.Children.Add(remove);
-            _cutsPanel.Children.Add(row);
+            var holder = new Border
+            {
+                Child = row, Padding = new Thickness(4), Margin = new Thickness(0, 2, 0, 2), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1),
+                BorderBrush = Brush(ReferenceEquals(cut, _selected) ? "AccentBrush" : "BorderBrush"),
+            };
+            holder.MouseLeftButtonUp += (_, e) =>
+            {
+                if (e.OriginalSource is System.Windows.Controls.Primitives.TextBoxBase or TextBox) return;
+                _selected = cut;
+                foreach (var other in _cutsPanel.Children.OfType<Border>()) other.BorderBrush = Brush(ReferenceEquals(other, holder) ? "AccentBrush" : "BorderBrush");
+                GoTo(cut.Start + Math.Min(2, cut.Duration / 4));
+            };
+            _cutsPanel.Children.Add(holder);
         }
     }
 
@@ -288,13 +484,13 @@ public sealed class ShortsPage : ToolPageBase
         _formatPanel.Children.Clear();
         var formats = VerticalFormat.All;
         int fi = Math.Clamp(_s.ShortsFormat, 0, formats.Count - 1);
-        _formatPanel.Children.Add(Field("Tamanho", Chips(formats.Select(f => f.Name).ToList(), fi, i => _s.ShortsFormat = i)));
-        _formatPanel.Children.Add(Field("Montagem", Chips(new[] { "Inteira, com fundo desfocado", "Preencher (corta as bordas)", "Dividida: jogo em cima e recorte embaixo" }, Math.Clamp(_s.ShortsMode, 0, 2), i => { _s.ShortsMode = i; BuildFormat(); })));
+        _formatPanel.Children.Add(Field("Tamanho", Chips(formats.Select(f => f.Name).ToList(), fi, i => { _s.ShortsFormat = i; UpdatePhone(); })));
+        _formatPanel.Children.Add(Field("Montagem", Chips(new[] { "Inteira, com fundo desfocado", "Preencher (corta as bordas)", "Dividida: jogo em cima e recorte embaixo" }, Math.Clamp(_s.ShortsMode, 0, 2), i => { _s.ShortsMode = i; BuildFormat(); SchedulePreview(); })));
         if (_s.ShortsMode == 1)
-            _formatPanel.Children.Add(Field("Parte que fica", Chips(new[] { "Esquerda", "Centro", "Direita" }, _s.ShortsFocus < 25 ? 0 : _s.ShortsFocus > 75 ? 2 : 1, i => _s.ShortsFocus = new[] { 0, 50, 100 }[i])));
+            _formatPanel.Children.Add(Field("Parte que fica", Chips(new[] { "Esquerda", "Centro", "Direita" }, _s.ShortsFocus < 25 ? 0 : _s.ShortsFocus > 75 ? 2 : 1, i => { _s.ShortsFocus = new[] { 0, 50, 100 }[i]; SchedulePreview(); })));
         if (_s.ShortsMode == 2)
         {
-            _formatPanel.Children.Add(Field("Recorte de baixo", Chips(new[] { "Canto superior esquerdo", "Canto superior direito", "Canto inferior esquerdo", "Canto inferior direito" }, Math.Clamp(_s.ShortsCorner, 0, 3), i => _s.ShortsCorner = i)));
+            _formatPanel.Children.Add(Field("Recorte de baixo", Chips(new[] { "Canto superior esquerdo", "Canto superior direito", "Canto inferior esquerdo", "Canto inferior direito" }, Math.Clamp(_s.ShortsCorner, 0, 3), i => { _s.ShortsCorner = i; SchedulePreview(); })));
             _formatPanel.Children.Add(Field("", new TextBlock { Text = "Mostra o vídeo inteiro em cima e, embaixo, o canto escolhido aproximado (por exemplo, a câmera do apresentador ou o minimapa).", FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = Brush("MutedBrush") }));
         }
         _formatPanel.Children.Add(Field("Quadros por segundo", Chips(new[] { "30 fps", "60 fps" }, _s.ShortsFps >= 60 ? 1 : 0, i => _s.ShortsFps = i == 1 ? 60 : 30)));

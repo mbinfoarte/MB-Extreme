@@ -33,7 +33,8 @@ internal static class NavigationMap
             new("gameadvisor", "Assistente de jogo", "Configurações ideais para o seu hardware.", "\uE770"),
             new("bottleneck", "Monitor de gargalos", "O que limita o seu FPS: placa, processador, memória, disco ou calor.", "\uE9D9"),
         }),
-        new("record", "Gravação e transmissão", "Grave a tela, transmita ao vivo e salve replays.", "\uE714", new Tile[]
+        // a chave do módulo não pode ser igual à de nenhuma página (antes, "record" era as duas e o atalho abria o próprio menu em vez do estúdio)
+        new("studio", "Gravação e transmissão", "Grave a tela, transmita ao vivo, salve replays e crie vídeos curtos.", "\uE714", new Tile[]
         {
             new("record", "Gravação e transmissão", "Grave, transmita ao vivo e salve replays, com áudio, câmera e escolha de janela.", "\uE714"),
             new("shorts", "Vídeos curtos (Shorts e Reels)", "Corte um vídeo longo em vários vídeos verticais, na mão ou pelos momentos mais fortes.", "\uE8B2"),

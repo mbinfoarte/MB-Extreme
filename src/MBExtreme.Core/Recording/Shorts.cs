@@ -182,6 +182,26 @@ public static class ShortsCommand
         return args;
     }
 
+    /// <summary>
+    /// Uma imagem só (PNG) do vídeo vertical num ponto do vídeo, em tamanho reduzido, montada pelo mesmo desenho do arquivo final.
+    /// Serve para mostrar a pré-visualização antes de gerar os vídeos.
+    /// </summary>
+    public static IReadOnlyList<string> PreviewArgs(ShortsRequest r, double atSeconds, string outputPng, int previewWidth = 360)
+    {
+        if (r.InputFile.IndexOfAny(Bad) >= 0 || string.IsNullOrWhiteSpace(r.InputFile)) throw new InvalidOperationException("O vídeo escolhido tem caracteres que o FFmpeg não aceita no nome.");
+        if (string.IsNullOrWhiteSpace(outputPng) || outputPng.IndexOfAny(Bad) >= 0) throw new InvalidOperationException("O arquivo da prévia não é válido.");
+        if (r.Layout.Validate() is { } layoutProblem) throw new InvalidOperationException(layoutProblem);
+        if (r.Layout.Panes.Any(p => p.Kind == PaneKind.Camera)) throw new InvalidOperationException("Num vídeo já gravado não há câmera ao vivo: use a tela (o próprio vídeo) ou uma imagem/vídeo de fundo.");
+
+        var layout = r.Layout.ScaledToWidth(Math.Clamp(previewWidth, 120, 1080));
+        var args = new List<string> { "-hide_banner", "-loglevel", "error", "-nostats", "-y", "-ss", N(Math.Max(0, atSeconds)), "-i", r.InputFile };
+        foreach (var input in VerticalGraph.ExtraInputs(layout, 1, realtime: false)) args.AddRange(input);
+        var parts = VerticalGraph.Build(layout, "[0:v]format=bgra[scr]", 1);
+        parts.Add("[b0]format=rgb24[v]");
+        args.AddRange(new[] { "-filter_complex", string.Join(";", parts), "-map", "[v]", "-frames:v", "1", "-f", "image2", outputPng });
+        return args;
+    }
+
     /// <summary>Nome de arquivo seguro: sem acentos problemáticos nem caracteres que o Windows recusa.</summary>
     public static string SafeName(string text)
     {

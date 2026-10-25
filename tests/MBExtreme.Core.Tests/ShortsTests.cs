@@ -158,4 +158,35 @@ public class ShortsTests
     [InlineData("a/b\\c:d", "a-b-c-d")]
     [InlineData("???", "corte")]
     public void Nome_de_arquivo_seguro(string text, string expected) => Assert.Equal(expected, ShortsCommand.SafeName(text));
+
+    [Fact]
+    public void Previa_e_um_quadro_reduzido_montado_pelo_mesmo_desenho()
+    {
+        var r = new ShortsRequest(@"C:\Videos\jogo.mkv", new ShortSegment(0, 10, "x"), Split, Nvenc, "x.mp4", true);
+        var a = ShortsCommand.PreviewArgs(r, 83.5, @"C:\tmp\prev.png").ToList();
+        Assert.Equal("83.5", a[a.IndexOf("-ss") + 1]);
+        Assert.Equal(@"C:\Videos\jogo.mkv", a[a.IndexOf("-i") + 1]);
+        Assert.Equal("1", a[a.IndexOf("-frames:v") + 1]);
+        Assert.Equal(@"C:\tmp\prev.png", a[^1]);
+        Assert.DoesNotContain("-c:a", a);
+        Assert.DoesNotContain("-re", a);
+        string g = a[a.IndexOf("-filter_complex") + 1];
+        Assert.Contains("pad=360:640:0:0:black", g);                       // 1080x1920 reduzido para 360 de largura
+        Assert.EndsWith("[b0]format=rgb24[v]", g);
+        Assert.Contains("[scr]split=2[sa][sb]", g);
+    }
+
+    [Fact]
+    public void Previa_com_fundo_em_video_nao_usa_tempo_real_e_recusa_entradas_ruins()
+    {
+        var layout = Split with { Bottom = new VerticalPane(PaneKind.File, Source: @"C:\f\fundo.mp4") };
+        var a = ShortsCommand.PreviewArgs(new ShortsRequest("a.mp4", new ShortSegment(0, 10, "x"), layout, Nvenc, "b.mp4", true), -5, "p.png", 99999).ToList();
+        Assert.Contains("-stream_loop", a);
+        Assert.DoesNotContain("-re", a);
+        Assert.Equal("0", a[a.IndexOf("-ss") + 1]);                         // tempo negativo vira zero
+        Assert.Contains("pad=1080:1920", a[a.IndexOf("-filter_complex") + 1]);   // largura máxima do formato
+        Assert.Throws<InvalidOperationException>(() => ShortsCommand.PreviewArgs(new ShortsRequest("a';b.mp4", new ShortSegment(0, 10, "x"), Fit, Nvenc, "b.mp4", true), 1, "p.png"));
+        Assert.Throws<InvalidOperationException>(() => ShortsCommand.PreviewArgs(new ShortsRequest("a.mp4", new ShortSegment(0, 10, "x"), Fit, Nvenc, "b.mp4", true), 1, "p;.png"));
+        Assert.Throws<InvalidOperationException>(() => ShortsCommand.PreviewArgs(new ShortsRequest("a.mp4", new ShortSegment(0, 10, "x"), Split with { Bottom = new VerticalPane(PaneKind.Camera, Source: "Cam") }, Nvenc, "b.mp4", true), 1, "p.png"));
+    }
 }

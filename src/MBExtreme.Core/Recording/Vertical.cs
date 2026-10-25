@@ -92,7 +92,7 @@ public sealed record VerticalLayout(int Width, int Height, bool Split, int TopPe
 public static class VerticalGraph
 {
     /// <summary>Entradas extras do FFmpeg (câmera ou arquivo de cada parte), na ordem em que as partes aparecem.</summary>
-    public static IReadOnlyList<string[]> ExtraInputs(VerticalLayout layout, int fps, Func<VerticalPane, bool>? shared = null)
+    public static IReadOnlyList<string[]> ExtraInputs(VerticalLayout layout, int fps, Func<VerticalPane, bool>? shared = null, bool realtime = true)
     {
         var list = new List<string[]>();
         foreach (var pane in layout.Panes)
@@ -103,7 +103,7 @@ public static class VerticalGraph
             else if (pane.Kind == PaneKind.File)
                 list.Add(VerticalPane.IsImage(pane.Source!)
                     ? new[] { "-loop", "1", "-framerate", Math.Clamp(fps, 5, 30).ToString(CultureInfo.InvariantCulture), "-i", pane.Source! }
-                    : new[] { "-stream_loop", "-1", "-re", "-i", pane.Source! });
+                    : realtime ? new[] { "-stream_loop", "-1", "-re", "-i", pane.Source! } : new[] { "-stream_loop", "-1", "-i", pane.Source! });
         }
         return list;
     }

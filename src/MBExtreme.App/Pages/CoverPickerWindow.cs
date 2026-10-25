@@ -17,12 +17,18 @@ internal sealed class CoverPickerWindow : Window
 
     public CoverCandidate? Chosen { get; private set; }
 
-    public CoverPickerWindow(HttpClient http, string gameName)
+    /// <summary>O usuário pediu para voltar à capa automática.</summary>
+    public bool RemoveCustom { get; private set; }
+
+    private readonly MBExtreme.Core.Settings.AppSettings _settings;
+
+    public CoverPickerWindow(HttpClient http, string gameName, MBExtreme.Core.Settings.AppSettings settings, bool hasCustom)
     {
         _http = http;
+        _settings = settings;
         Title = "Buscar capa";
         Width = 640;
-        Height = 560;
+        Height = 640;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = (Brush)Application.Current.FindResource("BgBrush");
         Foreground = (Brush)Application.Current.FindResource("TextBrush");
@@ -41,9 +47,26 @@ internal sealed class CoverPickerWindow : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.Children.Add(bar);
-        var hint = new TextBlock { Text = "Clique na capa que você quer usar na biblioteca. Se o jogo não aparece, tente só uma parte do nome.", Margin = new Thickness(16, 8, 16, 0), TextWrapping = TextWrapping.Wrap, Foreground = _status.Foreground };
-        Grid.SetRow(hint, 1);
-        grid.Children.Add(hint);
+        var info = new StackPanel { Margin = new Thickness(16, 8, 16, 0) };
+        info.Children.Add(new TextBlock { Text = "Clique na capa que você quer usar. Aparecem as da loja da Steam e, com a chave gratuita do SteamGridDB, também as de jogos de outras lojas (EA, Epic, Ubisoft, Battle.net...).", TextWrapping = TextWrapping.Wrap, Foreground = _status.Foreground });
+        var keyRow = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var saveKey = new Button { Content = "Salvar chave", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(8, 0, 0, 0) };
+        DockPanel.SetDock(saveKey, Dock.Right);
+        var key = new TextBox { Text = _settings.SteamGridDbKey, Padding = new Thickness(6, 3, 6, 3), ToolTip = "Chave gratuita: steamgriddb.com > seu perfil > Preferências > API" };
+        saveKey.Click += async (_, _) => { _settings.SteamGridDbKey = key.Text.Trim(); _settings.Save(); await SearchAsync(); };
+        keyRow.Children.Add(saveKey);
+        keyRow.Children.Add(new TextBlock { Text = "Chave do SteamGridDB:", Foreground = _status.Foreground, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        keyRow.Children.Add(key);
+        info.Children.Add(keyRow);
+        info.Children.Add(new TextBlock { Text = "Para pegar a chave: entre em steamgriddb.com, abra seu perfil, Preferências, API.", FontSize = 11, Foreground = _status.Foreground, Margin = new Thickness(0, 3, 0, 0) });
+        if (hasCustom)
+        {
+            var auto = new Button { Content = "Voltar à capa automática", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(12, 4, 12, 4), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) };
+            auto.Click += (_, _) => { RemoveCustom = true; DialogResult = true; };
+            info.Children.Add(auto);
+        }
+        Grid.SetRow(info, 1);
+        grid.Children.Add(info);
         var body = new StackPanel { Margin = new Thickness(16) };
         body.Children.Add(_results);
         body.Children.Add(_status);
@@ -59,35 +82,56 @@ internal sealed class CoverPickerWindow : Window
     {
         _results.Children.Clear();
         _status.Text = "Procurando...";
-        var found = await CoverSearch.SearchAsync(_http, _query.Text);
-        if (found.Count == 0)
+        string name = _query.Text.Trim();
+        var steam = await CoverSearch.SearchAsync(_http, name);
+        var grid = await SteamGridDb.SearchAsync(_http, _settings.SteamGridDbKey, name);
+        if (steam.Count == 0 && grid.Count == 0)
         {
-            _status.Text = "Nada encontrado (ou sem internet). Tente outro nome, por exemplo só a primeira palavra.";
+            _status.Text = string.IsNullOrWhiteSpace(_settings.SteamGridDbKey)
+                ? "Nada encontrado na Steam. Para jogos de outras lojas, coloque a chave gratuita do SteamGridDB acima. Também ajuda tentar só a primeira palavra do nome."
+                : "Nada encontrado (ou sem internet). Tente só a primeira palavra do nome.";
             return;
         }
         _status.Text = "";
-        foreach (var candidate in found)
+        if (steam.Count > 0) AddHeading("Loja da Steam");
+        foreach (var candidate in steam) AddCandidate(candidate);
+        if (grid.Count > 0) AddHeading("SteamGridDB (todas as lojas)");
+        foreach (var candidate in grid) AddCandidate(candidate);
+    }
+
+    private void AddHeading(string text)
+    {
+        var heading = new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 6), Width = 560 };
+        _results.Children.Add(heading);
+    }
+
+    private void AddCandidate(CoverCandidate candidate)
+    {
+        var image = new Border { Width = 120, Height = 180, CornerRadius = new CornerRadius(8), Background = (Brush)Application.Current.FindResource("Surface2Brush") };
+        void Load(string url, bool allowFallback)
         {
-            var image = new Border { Width = 120, Height = 180, CornerRadius = new CornerRadius(8), Background = (Brush)Application.Current.FindResource("Surface2Brush") };
             try
             {
                 var bmp = new BitmapImage();
                 bmp.BeginInit();
-                bmp.UriSource = new Uri(candidate.ImageUrl);
+                bmp.UriSource = new Uri(url);
                 bmp.DecodePixelWidth = 240;
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
                 bmp.EndInit();
                 image.Background = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
+                // jogos antigos da Steam não têm a capa vertical: mostra a imagem larga da loja no lugar
+                if (allowFallback && candidate.DownloadUrl is null)
+                    bmp.DownloadFailed += (_, _) => Load($"https://cdn.cloudflare.steamstatic.com/steam/apps/{candidate.AppId}/header.jpg", false);
             }
             catch (Exception ex) when (ex is UriFormatException or NotSupportedException or InvalidOperationException) { }
-
-            var stack = new StackPanel { Width = 120 };
-            stack.Children.Add(image);
-            stack.Children.Add(new TextBlock { Text = candidate.Name, FontSize = 11, TextWrapping = TextWrapping.Wrap, MaxHeight = 32, Margin = new Thickness(0, 4, 0, 0) });
-            var button = new Button { Content = stack, Margin = new Thickness(0, 0, 10, 10), Padding = new Thickness(4), Background = Brushes.Transparent, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
-            var chosen = candidate;
-            button.Click += (_, _) => { Chosen = chosen; DialogResult = true; };
-            _results.Children.Add(button);
         }
+        Load(candidate.ImageUrl, true);
+
+        var stack = new StackPanel { Width = 120 };
+        stack.Children.Add(image);
+        stack.Children.Add(new TextBlock { Text = candidate.Name, FontSize = 11, TextWrapping = TextWrapping.Wrap, MaxHeight = 32, Margin = new Thickness(0, 4, 0, 0) });
+        var button = new Button { Content = stack, Margin = new Thickness(0, 0, 10, 10), Padding = new Thickness(4), Background = Brushes.Transparent, BorderThickness = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        button.Click += (_, _) => { Chosen = candidate; DialogResult = true; };
+        _results.Children.Add(button);
     }
 }

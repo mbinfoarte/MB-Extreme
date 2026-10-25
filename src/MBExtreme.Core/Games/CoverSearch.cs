@@ -5,7 +5,13 @@ using System.Text.Json;
 namespace MBExtreme.Core.Games;
 
 /// <summary>Uma capa encontrada na internet para o usuário escolher.</summary>
-public sealed record CoverCandidate(string AppId, string Name, string ImageUrl);
+public sealed record CoverCandidate(string AppId, string Name, string ImageUrl, string? DownloadUrl = null)
+{
+    /// <summary>Só endereços https do próprio SteamGridDB são baixados (a lista vem da internet, então não se confia no que ela traz).</summary>
+    public static bool IsAllowedDownload(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps
+        && (u.Host == "steamgriddb.com" || u.Host.EndsWith(".steamgriddb.com", StringComparison.OrdinalIgnoreCase));
+}
 
 /// <summary>Busca capas na loja da Steam pelo nome (sem chave, sem conta) e guarda a escolhida como capa do jogo na biblioteca.</summary>
 public static class CoverSearch
@@ -28,6 +34,7 @@ public static class CoverSearch
             foreach (var item in items.EnumerateArray())
             {
                 if (!item.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.Number) continue;
+                if (item.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() is { Length: > 0 } kind && kind != "app") continue; // trilhas sonoras e DLC não servem
                 string appId = id.GetInt64().ToString();
                 string name = item.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() ?? appId : appId;
                 list.Add(new CoverCandidate(appId, name, CoverUrl(appId)));
@@ -57,12 +64,13 @@ public static class CoverSearch
     /// <summary>Baixa a capa escolhida (se a vertical não existir, usa a imagem larga) e guarda como a capa do jogo.</summary>
     public static async Task<string?> SaveCustomAsync(HttpClient http, CoverCandidate candidate, string folder, string gameId, CancellationToken stop = default)
     {
-        if (!candidate.AppId.All(char.IsDigit) || candidate.AppId.Length is 0 or > 12) return null;
+        bool grid = candidate.DownloadUrl is not null;
+        if (grid ? !CoverCandidate.IsAllowedDownload(candidate.DownloadUrl) : !candidate.AppId.All(char.IsDigit) || candidate.AppId.Length is 0 or > 12) return null;
         try
         {
             Directory.CreateDirectory(Path.Combine(folder, "custom"));
             byte[]? data = null;
-            foreach (string url in new[] { CoverUrl(candidate.AppId), HeaderUrl(candidate.AppId) })
+            foreach (string url in grid ? new[] { candidate.DownloadUrl! } : new[] { CoverUrl(candidate.AppId), HeaderUrl(candidate.AppId) })
             {
                 try { data = await http.GetByteArrayAsync(url, stop); if (data.Length >= 1000) break; data = null; }
                 catch (HttpRequestException) { data = null; }

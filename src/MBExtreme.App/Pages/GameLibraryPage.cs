@@ -465,10 +465,19 @@ public sealed class GameLibraryPage : ToolPageBase
 
     private async Task PickCoverAsync(InstalledGame game)
     {
-        var picker = new CoverPickerWindow(Http, game.Name) { Owner = Window.GetWindow(this) };
-        if (picker.ShowDialog() != true || picker.Chosen is not { } chosen) return;
-        SetStatus("Baixando a capa...");
         string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "covers");
+        var picker = new CoverPickerWindow(Http, game.Name, AppServices.Settings, CoverSearch.FindCustom(folder, game.Id) is not null) { Owner = Window.GetWindow(this) };
+        if (picker.ShowDialog() != true) return;
+        if (picker.RemoveCustom)
+        {
+            CoverSearch.RemoveCustom(folder, game.Id);
+            _coverImages.Remove(game.Id);
+            SetStatus($"{game.Name} voltou a usar a capa automática.", "OkBrush");
+            RenderGrid();
+            return;
+        }
+        if (picker.Chosen is not { } chosen) return;
+        SetStatus("Baixando a capa...");
         string? file = await CoverSearch.SaveCustomAsync(Http, chosen, folder, game.Id);
         if (file is null) { SetStatus("Não foi possível baixar essa capa. Tente outra.", "WarnBrush"); return; }
         _coverImages.Remove(game.Id);

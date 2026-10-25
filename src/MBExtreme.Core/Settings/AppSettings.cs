@@ -252,6 +252,9 @@ public sealed class AppSettings
 
     public int ShortsMbps { get; set; } = 12;
 
+    /// <summary>Chave gratuita do SteamGridDB (steamgriddb.com), para achar capas de jogos que não são da Steam.</summary>
+    public string SteamGridDbKey { get; set; } = "";
+
     // ---- legendas automáticas ao vivo
     public bool StudioCaptionOn { get; set; }
 

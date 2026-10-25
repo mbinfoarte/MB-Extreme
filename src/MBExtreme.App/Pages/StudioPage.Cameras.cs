@@ -82,10 +82,11 @@ public sealed partial class StudioPage
     private async Task ReleaseCameraFeedsAsync()
     {
         _feedsSuspended = true;
-        bool any = _feeds.Count > 0;
-        foreach (var feed in _feeds.Values) feed.Dispose();
+        var running = _feeds.Values.ToList();
         _feeds.Clear();
-        if (any) await Task.Delay(500);
+        if (running.Count == 0) return;
+        await Task.Run(() => { foreach (var feed in running) feed.StopAndWait(); });
+        await Task.Delay(300);   // margem para o Windows liberar o dispositivo
     }
 
     private void StopAllFeeds()

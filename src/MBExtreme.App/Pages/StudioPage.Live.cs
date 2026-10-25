@@ -24,6 +24,10 @@ public sealed partial class StudioPage
         var run = SmallButton("Medir e otimizar a live", async (_, _) => await OptimizeLiveAsync(), true);
         run.Margin = new Thickness(0, 0, 8, 4);
         row.Children.Add(run);
+        var light = SmallButton("Modo leve para live (melhor codificador)", async (_, _) => await ApplyLightModeAsync());
+        light.Margin = new Thickness(0, 0, 8, 4);
+        light.ToolTip = "Escolhe o melhor codificador da sua placa de vídeo e uma qualidade que pesa pouco no jogo.";
+        row.Children.Add(light);
         _optApply = SmallButton("Aplicar a recomendação", (_, _) => ApplyAdvice());
         _optApply.Margin = new Thickness(0, 0, 8, 4);
         _optApply.Visibility = Vis(_advice is not null);
@@ -59,6 +63,39 @@ public sealed partial class StudioPage
             return wifi && !wired;
         }
         catch (NetworkInformationException) { return false; }
+    }
+
+    /// <summary>Um clique: detecta a placa, escolhe o melhor codificador e deixa a live leve (esforço rápido, resolução e quadros que o PC aguenta).</summary>
+    private async Task ApplyLightModeAsync()
+    {
+        if (_studio.IsRunning) { _optText.Text = "Pare a transmissão para trocar o codificador; depois use o modo leve e inicie de novo."; return; }
+        if (_encoders.Count == 0)
+        {
+            _optText.Text = "Detectando os codificadores da placa de vídeo...";
+            await DetectAsync();
+        }
+        if (_encoders.Count == 0) { _optText.Text = "Nenhum codificador de placa de vídeo funcionou. Atualize o driver da placa (NVIDIA, AMD ou Intel) e tente de novo."; return; }
+
+        int currentHeight = Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height;
+        var plan = LiveLight.Plan(_encoders, _tier, CurrentService(), currentHeight, _s.StudioFps);
+        _encoderIndex = plan.EncoderIndex;
+        _s.StudioEncoderQuality = plan.QualityIndex;
+        int index = Array.FindIndex(Resolutions, r => r.Height == plan.Height);
+        if (index >= 0) _s.StudioResolution = index;
+        _s.StudioFps = plan.Fps;
+        _s.StudioBitrateMbps = 0;
+        var caps = CapOptions.Where(c => c > 0 && c <= plan.CapMbps).ToList();
+        _s.StudioStreamCapMbps = caps.Count > 0 ? caps.Max() : CapOptions.First(c => c > 0);
+        BuildVideo();
+        BuildStream();
+        UpdatePlan();
+        var heavy = new List<string>();
+        if (_s.StudioVerticalOn || _s.StudioVerticalCopy) heavy.Add("vídeo vertical");
+        if (_s.StudioCaptionOn) heavy.Add("legendas ao vivo");
+        if (!CurrentFilter().IsNeutral) heavy.Add("filtros de imagem");
+        string extra = heavy.Count > 0 ? "\nAtenção: estão ligados " + string.Join(", ", heavy) + ", que usam o processador. Se a live pesar, desligue." : "";
+        _optText.Text = "✓ Modo leve aplicado.\n• " + string.Join("\n• ", plan.Notes) + extra;
+        SetStatus("Modo leve aplicado.", "OkBrush");
     }
 
     private async Task OptimizeLiveAsync()

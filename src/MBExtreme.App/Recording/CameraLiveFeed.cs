@@ -119,5 +119,21 @@ internal sealed class CameraLiveFeed : IDisposable
         process.Dispose();
     }
 
+    /// <summary>Para o vídeo e espera o FFmpeg fechar de verdade: só assim o Windows libera a câmera para a gravação.</summary>
+    public void StopAndWait()
+    {
+        _generation++;
+        var process = _process;
+        _process = null;
+        if (process is null) return;
+        try
+        {
+            if (!process.HasExited) process.Kill(true);
+            process.WaitForExit(2000);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+        process.Dispose();
+    }
+
     public void Dispose() => Stop();
 }

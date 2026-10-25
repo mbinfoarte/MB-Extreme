@@ -50,6 +50,17 @@ public static class CameraSource
         return args;
     }
 
+    /// <summary>Vídeo ao vivo da câmera para a pré-visualização: imagens JPEG pequenas, com os mesmos filtros da gravação (<paramref name="chain"/>).</summary>
+    public static IReadOnlyList<string> LiveArgs(string source, string? chain, int fps = 15, int width = 480)
+    {
+        var args = new List<string> { "-hide_banner", "-loglevel", "error", "-nostats" };
+        if (IsStream(source)) args.AddRange(new[] { "-rw_timeout", "8000000" });
+        args.AddRange(InputArgs(source));
+        string filters = (string.IsNullOrEmpty(chain) ? "" : chain + ",") + $"scale={Math.Clamp(width, 160, 960)}:-2,format=yuvj420p";
+        args.AddRange(new[] { "-an", "-vf", filters, "-r", Math.Clamp(fps, 5, 30).ToString(CultureInfo.InvariantCulture), "-f", "image2pipe", "-c:v", "mjpeg", "-q:v", "5", "pipe:1" });
+        return args;
+    }
+
     /// <summary>Explica em português o motivo mais provável de a câmera não abrir, a partir do que o FFmpeg disse.</summary>
     public static string Explain(string source, string ffmpegMessage)
     {

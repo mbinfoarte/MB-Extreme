@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -17,77 +15,83 @@ public sealed partial class StudioPage
 
     private bool CameraBusyWithRecording => _studio.IsRunning || AppServices.Recorder.IsRecording;
 
-    /// <summary>Tira uma imagem da câmera e mostra no cartão; se falhar, diz o motivo.</summary>
-    private async Task TestCameraAsync(StudioCameraSetting cam, Image target, TextBlock note)
+    private readonly Dictionary<StudioCameraSetting, MBExtreme.UI.Recording.CameraLiveFeed> _feeds = new();
+    private readonly Dictionary<StudioCameraSetting, ImageBrush> _liveBrushes = new();
+    private readonly Dictionary<StudioCameraSetting, TextBlock> _camNotes = new();
+    private readonly Dictionary<StudioCameraSetting, string> _failedSignature = new();
+    private bool _feedsSuspended;
+
+    private ImageBrush LiveBrush(StudioCameraSetting cam)
     {
-        string? source = cam.Name;
-        if (string.IsNullOrWhiteSpace(source) || !CameraOverlay.IsValidName(source))
+        if (!_liveBrushes.TryGetValue(cam, out var brush)) _liveBrushes[cam] = brush = new ImageBrush { Stretch = Stretch.Uniform };
+        return brush;
+    }
+
+    /// <summary>
+    /// Mantém o vídeo ao vivo de cada câmera ligada (e de todas, na aba Câmeras) enquanto a câmera está livre. Quando algo muda
+    /// (câmera, filtro, espelho), o vídeo é reaberto na hora com o novo ajuste.
+    /// </summary>
+    private void SyncCameraFeeds()
+    {
+        bool allowed = IsLoaded && !_feedsSuspended && !CameraBusyWithRecording && _ffmpegPath is not null;
+        var wanted = new Dictionary<StudioCameraSetting, string>();
+        if (allowed)
+            foreach (var cam in _s.StudioCameras)
+                if (CameraOverlay.IsValidName(cam.Name) && (cam.On || _settingsTab == 4))
+                    wanted[cam] = cam.Name + "|" + (PresetFilter(cam.Preset, cam.Mirror).ToChain() ?? "");
+
+        foreach (var cam in _feeds.Keys.ToList())
         {
-            note.Text = "Escolha a câmera (ou o endereço do celular) para ver a imagem.";
-            return;
+            if (wanted.ContainsKey(cam)) continue;
+            _feeds[cam].Dispose();
+            _feeds.Remove(cam);
         }
 
-        if (_camStills.TryGetValue(source, out var cached)) target.Source = cached;
-        if (CameraBusyWithRecording)
+        foreach (var (cam, signature) in wanted)
         {
-            note.Text = "A câmera está sendo usada pela gravação ou transmissão agora; mostrando a última imagem. Pare para testar de novo.";
-            return;
-        }
-
-        _ffmpegPath ??= await Task.Run(FfmpegRecorder.Locate);
-        if (_ffmpegPath is null) { note.Text = "Instale o FFmpeg (aba Avançado) para ver a câmera."; return; }
-
-        note.Text = "Abrindo a câmera...";
-        string ffmpeg = _ffmpegPath;
-        string png = Path.Combine(Path.GetTempPath(), "mbx-cam-" + Guid.NewGuid().ToString("N") + ".png");
-        var (ok, error) = await Task.Run(() => GrabStill(ffmpeg, source, png));
-        try
-        {
-            if (ok && File.Exists(png))
+            if (_feeds.TryGetValue(cam, out var current))
             {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(png);
-                bitmap.EndInit();
-                bitmap.Freeze();
-                _camStills[source] = bitmap;
-                target.Source = bitmap;
-                note.Text = "Câmera funcionando. A imagem é um retrato de agora; a gravação mostra o vídeo em movimento.";
+                if (current.Signature == signature) continue;
+                current.Dispose();
+                _feeds.Remove(cam);
+            }
+            if (_failedSignature.TryGetValue(cam, out var failed) && failed == signature) continue; // já falhou assim: espera o usuário mudar algo ou pedir de novo
+
+            var feed = new MBExtreme.UI.Recording.CameraLiveFeed(signature);
+            feed.Frame += image =>
+            {
+                LiveBrush(cam).ImageSource = image;
+                if (cam.Name is not null) _camStills[cam.Name] = image;
+                if (_camNotes.TryGetValue(cam, out var note)) note.Text = "Câmera ao vivo.";
+            };
+            feed.Failed += message =>
+            {
+                _failedSignature[cam] = signature;
+                if (cam.Name is not null) _camStills.Remove(cam.Name);
+                LiveBrush(cam).ImageSource = null;
+                if (_camNotes.TryGetValue(cam, out var note)) note.Text = CameraSource.Explain(cam.Name ?? "", message) + " (clique em \"Tentar de novo\")";
                 UpdateGhosts();
-            }
-            else
-            {
-                note.Text = CameraSource.Explain(source, error);
-            }
-        }
-        finally
-        {
-            try { if (File.Exists(png)) File.Delete(png); } catch (IOException) { }
+            };
+            _feeds[cam] = feed;
+            if (_camNotes.TryGetValue(cam, out var starting)) starting.Text = "Abrindo a câmera...";
+            feed.Start(_ffmpegPath!, cam.Name!, PresetFilter(cam.Preset, cam.Mirror).ToChain());
         }
     }
 
-    private static (bool Ok, string Error) GrabStill(string ffmpeg, string source, string png)
+    /// <summary>Solta as câmeras (para a gravação poder usá-las) e espera o Windows liberar os dispositivos.</summary>
+    private async Task ReleaseCameraFeedsAsync()
     {
-        var info = new ProcessStartInfo(ffmpeg) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
-        foreach (string a in CameraSource.StillArgs(source, png)) info.ArgumentList.Add(a);
-        try
-        {
-            using var process = Process.Start(info);
-            if (process is null) return (false, "não foi possível iniciar o FFmpeg");
-            var error = process.StandardError.ReadToEndAsync();
-            process.StandardOutput.ReadToEndAsync();
-            if (!process.WaitForExit(15000))
-            {
-                try { process.Kill(true); } catch (InvalidOperationException) { }
-                return (false, "timed out");
-            }
-            return (process.ExitCode == 0, error.GetAwaiter().GetResult());
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            return (false, ex.Message);
-        }
+        _feedsSuspended = true;
+        bool any = _feeds.Count > 0;
+        foreach (var feed in _feeds.Values) feed.Dispose();
+        _feeds.Clear();
+        if (any) await Task.Delay(500);
+    }
+
+    private void StopAllFeeds()
+    {
+        foreach (var feed in _feeds.Values) feed.Dispose();
+        _feeds.Clear();
     }
 
     /// <summary>Retrato (se já existir) para o retângulo da câmera na pré-visualização.</summary>
@@ -95,7 +99,7 @@ public sealed partial class StudioPage
     {
         if (cameraIndex < 0 || cameraIndex >= _s.StudioCameras.Count) return null;
         string? name = _s.StudioCameras[cameraIndex].Name;
-        return name is not null && _camStills.TryGetValue(name, out var still) ? new ImageBrush(still) { Stretch = Stretch.UniformToFill } : null;
+        return name is not null && _camStills.ContainsKey(name) ? LiveBrush(_s.StudioCameras[cameraIndex]) : null;
     }
 
     /// <summary>Cartão da câmera do celular: aceita o endereço de vídeo que um aplicativo de câmera por Wi-Fi mostra.</summary>

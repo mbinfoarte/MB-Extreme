@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using MBExtreme.Core.Apps;
@@ -110,8 +111,9 @@ public sealed partial class StudioPage : ToolPageBase
     private readonly TextBlock _tileRecordState = new(), _tileStreamState = new(), _tileReplayState = new();
     private readonly System.Windows.Controls.Image _preview = new() { Stretch = Stretch.Uniform, MaxHeight = 220, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBlock _previewNote = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
-    private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private bool _previewBusy;
+    private int _syncTick;
     private readonly TextBlock _health = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _engineStatus = new() { TextWrapping = TextWrapping.Wrap };
     private readonly StackPanel _qualityEncoder = new();
@@ -198,7 +200,11 @@ public sealed partial class StudioPage : ToolPageBase
         {
             if (_s.StudioStatsOn && _studio.IsRunning && _studio.Config?.Stream is not null) await RefreshStatsAsync(false);
         };
-        _previewTimer.Tick += async (_, _) => await UpdatePreviewAsync();
+        _previewTimer.Tick += async (_, _) =>
+        {
+            if (++_syncTick % 3 == 0) SyncCameraFeeds();
+            await UpdatePreviewAsync();
+        };
         Loaded += async (_, _) =>
         {
             _timer.Start();
@@ -213,6 +219,7 @@ public sealed partial class StudioPage : ToolPageBase
             _timer.Stop();
             _statsTimer.Stop();
             _previewTimer.Stop();
+            StopAllFeeds();
             _studio.Notice -= OnNotice;
         };
     }
@@ -546,8 +553,13 @@ public sealed partial class StudioPage : ToolPageBase
             }
 
             double width = _preview.ActualWidth * Math.Clamp(percent, 8, 40) / 100.0;
+            bool live = camera >= 0 && CameraGhostBrush(camera) is not null;
+            if (live && _s.StudioCameras[camera].Name is { } liveName && _camStills.TryGetValue(liveName, out var liveFrame) && liveFrame.PixelWidth > 0)
+                aspect = liveFrame.PixelHeight / (double)liveFrame.PixelWidth;   // a proporção verdadeira da câmera, como vai aparecer no vídeo
             ghost.Width = Math.Max(24, width);
             ghost.Height = Math.Max(14, width * aspect);
+            if (ghost.Child is TextBlock label2) label2.Visibility = Vis(!live);
+            if (live && !overlaps) ghost.BorderBrush = _s.StudioCameras[camera].Frame ? Brush("AccentBrush") : Brushes.Transparent;
             ghost.Margin = new Thickness(Math.Max(4, _preview.ActualWidth / 80));
             ghost.HorizontalAlignment = corner is 0 or 2 ? HorizontalAlignment.Left : HorizontalAlignment.Right;
             ghost.VerticalAlignment = corner is 0 or 1 ? VerticalAlignment.Top : VerticalAlignment.Bottom;
@@ -568,11 +580,30 @@ public sealed partial class StudioPage : ToolPageBase
             : new PixelRect(0, 0, ScreenInfo.Primary.Width, ScreenInfo.Primary.Height);
     }
 
+    /// <summary>Mostra na pré-visualização o efeito dos filtros da aba Imagem (brilho, contraste, cor, gama e vinheta), na hora.</summary>
+    private BitmapSource ApplyScreenFilter(BitmapSource source)
+    {
+        var filter = CurrentFilter();
+        if (filter.IsNeutral) return source;
+        try
+        {
+            var converted = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+            int w = converted.PixelWidth, h = converted.PixelHeight, stride = w * 4;
+            var pixels = new byte[stride * h];
+            converted.CopyPixels(pixels, stride, 0);
+            ColorPreview.Apply(pixels, w, h, stride, filter);
+            var result = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, pixels, stride);
+            result.Freeze();
+            return result;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException) { return source; }
+    }
+
     private async Task UpdatePreviewAsync()
     {
         if (_previewBusy || AppServices.Recorder.IsRecording) return;
         // com o estúdio ligado a imagem atualiza só uma vez por segundo, para pesar pouco no jogo
-        if (_studio.IsRunning && ++_previewTick % 4 != 0) return;
+        if (_studio.IsRunning && ++_previewTick % 10 != 0) return;
         _previewBusy = true;
         try
         {
@@ -605,8 +636,9 @@ public sealed partial class StudioPage : ToolPageBase
                 return;
             }
 
-            _preview.Source = frame.Image;
-            _lastFrame = frame.Image;
+            var shown = ApplyScreenFilter(frame.Image);
+            _preview.Source = shown;
+            _lastFrame = shown;
             UpdateVerticalLive();
             _previewNote.Text = frame.MostlyBlack
                 ? "A imagem saiu preta. Em jogos, use \"Recorte da tela\"; em programas comuns, \"Conteúdo da janela\"."
@@ -816,16 +848,14 @@ public sealed partial class StudioPage : ToolPageBase
             top.Children.Add(remove);
             card.Children.Add(top);
 
-            var camImage = new Image { Stretch = Stretch.Uniform, Width = 256, Height = 144 };
             var camNote = Muted("", 11.5);
-            var camBox = new Border { Width = 256, Height = 144, CornerRadius = new CornerRadius(8), Background = Brush("BgBrush"), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Child = camImage };
-            var camTest = SmallButton("Ver imagem da câmera", async (_, _) => await TestCameraAsync(cam, camImage, camNote));
-            camTest.Margin = new Thickness(0, 6, 0, 0);
-            card.Children.Add(Field("Dispositivo", CameraChoice(cam, () => _ = TestCameraAsync(cam, camImage, camNote)), 110));
-            card.Children.Add(Field("Imagem", new StackPanel { Children = { camBox, camTest, camNote } }, 110));
-            if (cam.Name is { Length: > 0 } && _camStills.TryGetValue(cam.Name, out var shown)) camImage.Source = shown;
-            card.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(cam.Corner, 0, 3), c => { cam.Corner = c; UpdateGhosts(); }), 110));
-            card.Children.Add(Field("Tamanho", Chips(CameraPercents.Select(p => p + "%").ToList(), Math.Max(0, Array.IndexOf(CameraPercents, cam.Percent)), c => { cam.Percent = CameraPercents[c]; UpdateGhosts(); }), 110));
+            _camNotes[cam] = camNote;
+            var camBox = new Border { Width = 256, Height = 144, CornerRadius = new CornerRadius(8), Background = LiveBrush(cam), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left };
+            var camRetry = SmallButton("Tentar de novo", (_, _) => { _failedSignature.Remove(cam); if (_feeds.Remove(cam, out var old)) old.Dispose(); SyncCameraFeeds(); });
+            camRetry.Margin = new Thickness(0, 6, 0, 0);
+            camNote.Text = CameraBusyWithRecording ? "A câmera está sendo usada pela gravação ou transmissão agora; o vídeo ao vivo volta quando você parar." : _ffmpegPath is null ? "Instale o FFmpeg (aba Avançado) para ver a câmera." : "";
+            card.Children.Add(Field("Dispositivo", CameraChoice(cam, () => { _failedSignature.Remove(cam); SyncCameraFeeds(); }), 110));
+            card.Children.Add(Field("Ao vivo", new StackPanel { Children = { camBox, camRetry, camNote } }, 110));
             var frame = new CheckBox { Content = "Moldura amarela em volta", IsChecked = cam.Frame, Foreground = Brush("TextBrush") };
             frame.Click += (_, _) => cam.Frame = frame.IsChecked == true;
             card.Children.Add(Field("Moldura", frame, 110));
@@ -1915,6 +1945,7 @@ public sealed partial class StudioPage : ToolPageBase
 
         _start.IsEnabled = false;
         SetStatus("Iniciando...");
+        await ReleaseCameraFeedsAsync();   // a gravação precisa da câmera livre
         try
         {
             await _studio.StartAsync(_ffmpegPath, config);
@@ -1929,6 +1960,7 @@ public sealed partial class StudioPage : ToolPageBase
             SetStatus("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, target), "BadBrush");
         }
 
+        _feedsSuspended = false;   // se não iniciou, o vídeo ao vivo das câmeras volta
         RefreshState();
     }
 

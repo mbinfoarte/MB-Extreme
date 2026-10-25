@@ -253,6 +253,7 @@ public partial class MainWindow : Window
         "devices" => new DevicesPage(),
         "ghosts" => new GhostDevicesPage(),
         "gamesettings" => new GameSettingsPage(),
+        "software" => new SoftwareHubPage(),
         "drivers" => new DriversPage(),
         "programs" => new ProgramsPage(),
         "hardware" => new HardwarePage(),

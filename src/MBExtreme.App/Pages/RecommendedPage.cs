@@ -16,7 +16,7 @@ public sealed class RecommendedPage : ToolPageBase
         "Ferramentas gratuitas que combinam com o MB Extreme. Cada uma diz para que serve; a instalação usa o winget, o instalador oficial da Microsoft, e não traz anúncios nem programas extras.")
     {
         AddButton("Verificar o que já está instalado", async (_, _) => await CheckAsync(), false);
-        AddButton("Programas e atualizações", (_, _) => MainWindow.Current?.Go("programs"), false);
+        AddButton("Programas e atualizações", (_, _) => MainWindow.Current?.Go("software"), false);
 
         foreach (var app in RecommendedApps.All)
         {

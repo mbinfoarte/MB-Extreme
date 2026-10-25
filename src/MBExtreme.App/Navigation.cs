@@ -74,16 +74,13 @@ internal static class NavigationMap
             new("repair", "Reparo do Windows", "SFC, DISM, CHKDSK e correções de Windows Update, loja e rede.", "\uE90F", "Discos e dispositivos"),
             new("devices", "Dispositivos conectados", "Lista de USB e de todo o hardware.", "\uE88E", "Discos e dispositivos"),
             new("ghosts", "Cache de portas USB", "Remove registros de USB que não existem mais.", "\uE74D", "Discos e dispositivos"),
+            new("software", "Drivers e programas", "Atualize drivers e programas, instale ferramentas e remova o driver de vídeo, tudo num lugar só.", "\uE896", "Drivers e programas"),
             new("processes", "Processos", "Quem usa memória e processador, com encerramento seguro.", "\uE9D9", "Ferramentas"),
             new("largefiles", "Arquivos grandes", "Ache o que está ocupando espaço.", "\uE8B7", "Ferramentas"),
             new("duplicates", "Arquivos duplicados", "Cópias idênticas e espaço recuperável.", "\uE8C8", "Ferramentas"),
             new("cleanextras", "Pastas vazias e atalhos inválidos", "Limpeza de lixo que sobra no perfil.", "\uE74D", "Ferramentas"),
             new("shredder", "Destruir arquivos", "Apaga de forma definitiva, sem recuperação.", "\uE74D", "Ferramentas"),
             new("autoshutdown", "Desligamento automático", "Desliga ou reinicia o PC no horário.", "\uE7E8", "Ferramentas"),
-            new("drivers", "Drivers", "Placa de vídeo (NVIDIA, AMD, Intel) e Windows Update.", "\uE950", "Drivers e programas"),
-            new("driver-removal", "Remover driver de vídeo", "Remoção completa do driver NVIDIA, AMD ou Intel para reinstalar limpo.", "\uE74D", "Drivers e programas"),
-            new("programs", "Programas", "Atualize e instale ferramentas pelo winget.", "\uE896", "Drivers e programas"),
-            new("recommended", "Programas recomendados", "Ferramentas gratuitas que combinam com o MB Extreme.", "\uE734", "Drivers e programas"),
         }),
         new("sup", "Suporte", "Ajuda do suporte da MB InfoArt por acesso remoto.", "\uE8F2", new Tile[]
         {

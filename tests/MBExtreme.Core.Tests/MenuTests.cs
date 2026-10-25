@@ -65,7 +65,7 @@ public class MenuTests
     {
         foreach (string page in new[] { "gamesettings", "tweaks-game", "latency", "dns", "net-tweaks", "cleanup" })
             Assert.Equal("opt", NavigationMap.ModuleOf(page)!.Key);
-        foreach (string page in new[] { "devices", "diskmgr", "processes", "drivers", "programs", "driver-removal" })
+        foreach (string page in new[] { "devices", "diskmgr", "processes", "software" })
             Assert.Equal("win", NavigationMap.ModuleOf(page)!.Key);
         Assert.Equal(new[] { "gamelibrary", "gameboost", "gameadvisor", "bottleneck" }, NavigationMap.Modules.First(m => m.Key == "games").Tiles.Select(t => t.Key));
     }

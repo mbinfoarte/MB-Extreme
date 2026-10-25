@@ -303,7 +303,7 @@ public partial class MainWindow : Window
             "TRIM do SSD, hibernação, último acesso e nomes curtos do NTFS. Cada ajuste mostra o risco e pode ser desfeito.",
             TweakCategory.Storage),
         "net-tweaks" => new TweaksPage("Otimizações de rede",
-            "Ajustes do Windows que afetam a rede. O ganho varia; meça o ping antes e depois no Painel.",
+            "Ajustes do Windows que afetam a rede. O ganho varia; meça o ping antes e depois no Início.",
             TweakCategory.Network),
         "privacy" => new TweaksPage("Privacidade",
             "Anúncios, histórico, Copilot, Cortana e SmartScreen.",

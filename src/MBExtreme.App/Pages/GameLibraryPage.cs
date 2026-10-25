@@ -104,16 +104,6 @@ public sealed class GameLibraryPage : ToolPageBase
     private void FitSplit()
     {
         _split.Height = Math.Max(440, ActualHeight - 300);
-        if (_expanded && _selected is not null)
-        {
-            // detalhes: o painel ocupa o lugar da grade de capas
-            _gridColumn.Width = new GridLength(0);
-            _gapColumn.Width = new GridLength(0);
-            _sideColumn.Width = new GridLength(1, GridUnitType.Star);
-            if (_gridScroll is not null) _gridScroll.Visibility = Visibility.Collapsed;
-            return;
-        }
-
         _gridColumn.Width = new GridLength(1, GridUnitType.Star);
         _gapColumn.Width = new GridLength(14);
         _sideColumn.Width = new GridLength(ActualWidth < 1050 ? 340 : 430);
@@ -122,7 +112,7 @@ public sealed class GameLibraryPage : ToolPageBase
 
     private void ShowPlaceholder()
     {
-        _expanded = false;
+        _inline = -1;
         _view = null;
         FitSplit();
         _sideTop.Children.Clear();
@@ -222,9 +212,15 @@ public sealed class GameLibraryPage : ToolPageBase
         if (settings.OptimizedAt is not null)
             root.Children.Add(new Border
             {
-                Background = Brush("AccentBrush"), CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(6),
+                // fundo amarelo e raio preto (ícone da fonte do Windows, para não virar emoji colorido)
+                Background = Brush("AccentBrush"), CornerRadius = new CornerRadius(12), Width = 24, Height = 24, Margin = new Thickness(6),
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-                Child = new TextBlock { Text = "⚡", FontSize = 11, Foreground = System.Windows.Media.Brushes.Black }, ToolTip = "Otimizado pelo MB Extreme",
+                Child = new TextBlock
+                {
+                    Text = "\uE945", FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"), FontSize = 13, Foreground = System.Windows.Media.Brushes.Black,
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                },
+                ToolTip = "Otimizado pelo MB Extreme",
             });
 
         var card = new Border
@@ -332,7 +328,7 @@ public sealed class GameLibraryPage : ToolPageBase
         IReadOnlyList<SettingRow> Rows, IReadOnlyList<SettingRow> NetRows, RequirementReport? Requirements = null);
 
     private GameView? _view;
-    private bool _expanded;
+    private int _inline = -1; // detalhe aberto dentro do painel (-1 = nenhum)
     private int _detailTab;
 
     private async Task RenderDetailAsync(InstalledGame game)
@@ -382,33 +378,34 @@ public sealed class GameLibraryPage : ToolPageBase
         _sideTop.Children.Clear();
         _detail.Children.Clear();
 
-        if (_expanded)
-        {
-            var back = SmallButton("‹  Voltar", (_, _) => { _expanded = false; Paint(); });
-            back.Margin = new Thickness(0, 0, 0, 8);
-            back.HorizontalAlignment = HorizontalAlignment.Left;
-            _sideTop.Children.Add(back);
-        }
-
         _sideTop.Children.Add(BuildHeader(v));
         _sideTop.Children.Add(BuildActions(v));
-
-        if (_expanded)
-        {
-            _sideTop.Children.Add(Chips(new[] { "Ajustes do jogo", "Rede e rota", "Desempenho (FPS)", "Requisitos" }, _detailTab, i => { _detailTab = i; Paint(); }));
-            _detail.Children.Add(DetailSection(v));
-            return;
-        }
 
         _tab = Math.Clamp(_tab, 0, 1);
         _sideTop.Children.Add(Chips(new[] { "Resumo", "Otimização" }, _tab, i => { _tab = i; Paint(); }));
         _detail.Children.Add(_tab == 0 ? SummaryPanel(v) : OptimizePanel(v));
+        if (_inline >= 0)
+        {
+            // detalhes abrem aqui mesmo, logo abaixo, sem trocar a tela
+            string[] names = { "Ajustes do jogo", "Rede e rota", "Desempenho (FPS)", "Requisitos" };
+            _detailTab = _inline;
+            var head = new Grid { Margin = new Thickness(0, 14, 0, 0) };
+            head.ColumnDefinitions.Add(new ColumnDefinition());
+            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            head.Children.Add(new TextBlock { Text = names[Math.Clamp(_inline, 0, 3)], FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            var close = SmallButton("Recolher", (_, _) => { _inline = -1; Paint(); });
+            close.Padding = new Thickness(10, 3, 10, 3);
+            close.FontSize = 11.5;
+            Grid.SetColumn(close, 1);
+            head.Children.Add(close);
+            _detail.Children.Add(head);
+            _detail.Children.Add(DetailSection(v));
+        }
     }
 
     private void OpenDetails(int detailTab)
     {
-        _expanded = true;
-        _detailTab = detailTab;
+        _inline = _inline == detailTab ? -1 : detailTab;
         Paint();
     }
 
@@ -568,15 +565,6 @@ public sealed class GameLibraryPage : ToolPageBase
         var game = v.Game;
         var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
 
-        panel.Children.Add(new TextBlock { Text = "Tipo de jogo", FontSize = 12, FontWeight = FontWeights.SemiBold });
-        var profiles = GameProfiles.All.ToList();
-        panel.Children.Add(Chips(profiles.Select(p => p.Title.Split('(')[0].Trim()).ToList(), Math.Max(0, profiles.FindIndex(p => p.Key == v.Profile.Key)), i =>
-        {
-            AppServices.GameLibrary.Update(game.Id, s => { s.ProfileKey = profiles[i].Key; if (game.ExeName is not null) s.ExeName = game.ExeName; });
-            _ = RenderDetailAsync(game);
-        }));
-        panel.Children.Add(Muted(v.Profile.Description, 11));
-
         panel.Children.Add(Group("Jogo", v.Rows, () => OpenDetails(0)));
         panel.Children.Add(Group("Rede", v.NetRows.Where(r => r.Recommended != "Precisa de servidor").ToList(), () => OpenDetails(1)));
 
@@ -588,7 +576,7 @@ public sealed class GameLibraryPage : ToolPageBase
             more.Children.Add(Tight(SmallButton(applied ? "Prioridade alta: ligada" : "Prioridade alta de CPU", (_, _) => TogglePriority(game, applied), applied)));
         }
         if (game.Launcher == GameLauncher.Manual)
-            more.Children.Add(Tight(SmallButton("Remover da lista", (_, _) => { AppServices.GameLibrary.RemoveManual(game.LaunchTarget ?? ""); _selected = null; _expanded = false; _ = ScanAsync(); })));
+            more.Children.Add(Tight(SmallButton("Remover da lista", (_, _) => { AppServices.GameLibrary.RemoveManual(game.LaunchTarget ?? ""); _selected = null; _inline = -1; _ = ScanAsync(); })));
         panel.Children.Add(more);
         return panel;
     }

@@ -64,7 +64,7 @@ public sealed class FansPage : ToolPageBase
         if (service is null)
         {
             _list.Children.Clear();
-            _list.Children.Add(Row("Sensores indisponíveis", (AppServices.Fans.Error ?? "Execute o MB Extreme como administrador.") + " Em alguns PCs é preciso instalar o driver PawnIO (veja o Painel).", null, "WarnBrush"));
+            _list.Children.Add(Row("Sensores indisponíveis", (AppServices.Fans.Error ?? "Execute o MB Extreme como administrador.") + " Em alguns PCs é preciso instalar o driver PawnIO (veja o Início).", null, "WarnBrush"));
             return;
         }
 

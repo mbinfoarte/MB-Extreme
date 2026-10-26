@@ -30,7 +30,6 @@ public sealed partial class StudioPage : ToolPageBase
     private static readonly int[] ReplayOptions = { 30, 60, 120, 300 };
     private static readonly int[] AudioKbpsOptions = { 96, 128, 160, 192, 256, 320 };
     private static readonly int[] CapOptions = { 0, 3, 4, 5, 6, 8, 10, 15, 20 };
-    private static readonly int[] CameraPercents = { 15, 20, 25, 30 };
     private static readonly string[] CornerNames = { "↖ Superior esquerdo", "↗ Superior direito", "↙ Inferior esquerdo", "↘ Inferior direito" };
     private static readonly (string Name, double Value)[] Volumes = { ("Mudo", 0), ("50%", 0.5), ("100%", 1), ("150%", 1.5) };
     private static readonly int[] AviRates = { 10, 15, 30 };
@@ -54,7 +53,6 @@ public sealed partial class StudioPage : ToolPageBase
     private readonly TextBlock _specText = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
     private readonly TextBlock _hotkeyNote = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _uploadResult = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
-    private readonly TextBlock _cameraNote = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11 };
     private readonly TextBlock _liveNet = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
     private readonly StackPanel _liveButtons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Grid _previewHost = new() { HorizontalAlignment = HorizontalAlignment.Left };
@@ -151,12 +149,14 @@ public sealed partial class StudioPage : ToolPageBase
     private int _tier = 2;
 
     public StudioPage() : base("Gravação e transmissão",
-        "Estúdio completo: grave a tela inteira ou só a janela do jogo, transmita ao vivo (Twitch, YouTube, Facebook ou outro servidor), ponha a sua câmera no canto e guarde os melhores momentos com o replay. A captura e a codificação usam a placa de vídeo (NVIDIA, AMD ou Intel). Os vídeos ficam em Vídeos\\MB Extreme.")
+        "Grave, transmita ao vivo e salve replays, com cenas, câmeras e áudio. Os vídeos ficam em Vídeos\\MB Extreme.")
     {
         _start = AddButton("Iniciar", async (_, _) => await BeginAsync());
         _stop = AddButton("Parar", async (_, _) => await EndAsync(), false);
         _saveReplay = AddButton("Salvar replay", async (_, _) => await _studio.SaveReplayAsync(), false);
         AddButton("Abrir pasta", (_, _) => OpenFolder(), false);
+        _start.Visibility = Visibility.Collapsed;   // o botão grande da coluna da direita faz Iniciar e Parar
+        _stop.Visibility = Visibility.Collapsed;
 
         _windows = new PickList(this, 130);
         _mics = new PickList(this, 110);
@@ -329,9 +329,12 @@ public sealed partial class StudioPage : ToolPageBase
     private void BuildTiles()
     {
         var column = new StackPanel();
+        column.Children.Add(BuildBigStart());
         column.Children.Add(MakeTile(_tileReplay, _tileReplayState, "replay", "Replay instantâneo", "Guarda os últimos segundos", () => { _outReplay = !_outReplay; }));
         column.Children.Add(MakeTile(_tileRecord, _tileRecordState, "record", "Gravar", "Salva em Vídeos\\MB Extreme", () => { _outRecord = !_outRecord; }));
         column.Children.Add(MakeTile(_tileStream, _tileStreamState, "stream", "Transmitir ao vivo", "Twitch, YouTube, Facebook ou RTMP", () => { _outStream = !_outStream; }));
+        Detach(_statsCard);
+        column.Children.Add(_statsCard);
         Grid.SetColumn(column, 1);
         _top.Children.Add(column);
         RefreshTiles();
@@ -369,6 +372,11 @@ public sealed partial class StudioPage : ToolPageBase
                 Line("M3.2,3.4 L3.2,8.2 L8,8.2");
                 Line("M12,7.6 L12,12 L15.2,13.8");
                 break;
+            case "gear":
+                Line("M12,8.6 A3.4,3.4 0 1 1 11.99,8.6 Z");
+                Line("M12,2.5 L12,5.2 M12,18.8 L12,21.5 M2.5,12 L5.2,12 M18.8,12 L21.5,12");
+                Line("M5.3,5.3 L7.2,7.2 M16.8,16.8 L18.7,18.7 M5.3,18.7 L7.2,16.8 M16.8,7.2 L18.7,5.3");
+                break;
             case "record":
                 Line("M12,3 A9,9 0 1 1 11.99,3 Z");
                 Dot("M12,7.5 A4.5,4.5 0 1 1 11.99,7.5 Z");
@@ -389,7 +397,7 @@ public sealed partial class StudioPage : ToolPageBase
     {
         tile.Style = (Style)FindResource("Card");
         tile.Margin = new Thickness(0, 0, 0, 6);
-        tile.Padding = new Thickness(12, 7, 12, 7);
+        tile.Padding = new Thickness(12, 5, 12, 5);
         tile.Cursor = System.Windows.Input.Cursors.Hand;
 
         var (icon, strokes, fills) = BuildIcon(kind);
@@ -448,10 +456,10 @@ public sealed partial class StudioPage : ToolPageBase
     {
         // pré-visualização à esquerda (com a escolha do que capturar logo abaixo) e os três blocos à direita
         _top = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.35, GridUnitType.Star) });
-        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 250 });
+        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.2, GridUnitType.Star) });
+        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 260, MaxWidth = 380 });
 
-        _preview.MaxHeight = 230;
+        _preview.MaxHeight = 380;
         _previewNote.Foreground = Brush("MutedBrush");
         _previewNote.FontSize = 11;
 
@@ -654,64 +662,6 @@ public sealed partial class StudioPage : ToolPageBase
 
     // ---- configurações em abas
 
-    private void BuildSettings()
-    {
-        var title = new TextBlock { Text = "Configurações", FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 2) };
-        _config.Children.Add(title);
-        var tabs = new[] { _tabVideo, _tabVertical, _tabImage, _tabAudio, _tabCamera, _tabChannel, _tabPix, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced };
-        // Abas agrupadas por assunto: cada linha tem um rótulo, e só uma aba fica marcada no total.
-        var groups = new (string Label, int[] Tabs)[]
-        {
-            ("Gravar", new[] { 0, 1, 2, 3, 4, 9 }),
-            ("Transmitir", new[] { 5, 6, 7, 8 }),
-            ("Programa", new[] { 10, 11 }),
-        };
-        string[] names = { "Vídeo", "Vertical", "Imagem", "Áudio", "Câmeras", "Canal", "Pix", "Transmissão", "Estatísticas", "Replay", "Atalhos", "Avançado" };
-        var buttons = new Button[tabs.Length];
-        void Paint()
-        {
-            for (int i = 0; i < buttons.Length; i++)
-            {
-                buttons[i].Style = (Style)FindResource(i == _settingsTab ? "PrimaryButton" : "GhostButton");
-                buttons[i].Padding = new Thickness(10, 3, 10, 3);
-                buttons[i].FontSize = 12;
-            }
-        }
-
-        var menu = new StackPanel();
-        foreach (var (label, ids) in groups)
-        {
-            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 0) };
-            var tag = new TextBlock { Text = label, Width = 86, FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 5, 8, 0) };
-            DockPanel.SetDock(tag, Dock.Left);
-            row.Children.Add(tag);
-            var wrap = new WrapPanel();
-            foreach (int id in ids)
-            {
-                int index = id;
-                var button = new Button { Content = names[id], Margin = new Thickness(0, 0, 5, 5) };
-                button.Click += (_, _) =>
-                {
-                    _settingsTab = index;
-                    for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == index);
-                    Paint();
-                    if (tabs[index] == _tabStream) UpdatePlan();
-                };
-                buttons[id] = button;
-                wrap.Children.Add(button);
-            }
-            row.Children.Add(wrap);
-            menu.Children.Add(row);
-        }
-        Paint();
-        _config.Children.Add(CardOf(menu));
-        for (int t = 0; t < tabs.Length; t++)
-        {
-            tabs[t].Visibility = Vis(t == _settingsTab);
-            _config.Children.Add(tabs[t]);
-        }
-    }
-
     private void BuildEngine()
     {
         _tabAdvanced.Children.Add(Heading("Programa de gravação"));
@@ -754,11 +704,17 @@ public sealed partial class StudioPage : ToolPageBase
 
     private void BuildAudio()
     {
+        _tabAudio.Children.Add(new AudioMixerPanel(_s, _studio,
+            () => _outputs.Selected > 0 && _outputs.Selected - 1 < _outList.Count ? _outList[_outputs.Selected - 1].Id : null,
+            () => _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null,
+            KnownGames, OpenAudioFilters));
+
         var columns = new Grid { Margin = new Thickness(0, 4, 0, 4) };
         columns.ColumnDefinitions.Add(new ColumnDefinition());
         columns.ColumnDefinitions.Add(new ColumnDefinition());
 
-        var system = Check("Som do PC (jogo, música, Discord...)");
+        var system = Check("Gravar o som do PC");
+        system.ToolTip = "Jogo, música, Discord: tudo que toca no PC.";
         system.IsChecked = _s.StudioSystemAudio;
         system.Click += (_, _) => _s.StudioSystemAudio = system.IsChecked == true;
         var left = new StackPanel();
@@ -770,7 +726,7 @@ public sealed partial class StudioPage : ToolPageBase
         leftCard.Padding = new Thickness(10, 8, 10, 8);
         columns.Children.Add(leftCard);
 
-        var mic = Check("Microfone (sua voz)");
+        var mic = Check("Gravar o microfone");
         mic.IsChecked = _s.StudioMicAudio;
         mic.Click += (_, _) => _s.StudioMicAudio = mic.IsChecked == true;
         var right = new StackPanel();
@@ -783,22 +739,23 @@ public sealed partial class StudioPage : ToolPageBase
         Grid.SetColumn(rightCard, 1);
         columns.Children.Add(rightCard);
         _tabAudio.Children.Add(columns);
-        _tabAudio.Children.Add(new AudioMixerPanel(_s, _studio,
-            () => _outputs.Selected > 0 && _outputs.Selected - 1 < _outList.Count ? _outList[_outputs.Selected - 1].Id : null,
-            () => _mics.Selected > 0 && _mics.Selected - 1 < _micList.Count ? _micList[_mics.Selected - 1].Id : null,
-            KnownGames));
 
-        _audioPro = BuildAudioPro();
-        _tabAudio.Children.Add(_audioPro);
-        _tabAudio.Children.Add(Field("Voz do microfone", Chips(new[] { "Natural", "Reduzir ruído", "Voz de estúdio" }, Math.Clamp(_s.StudioVoiceEffect, 0, 2), i =>
+        _audioProHost.Child = BuildAudioPro();
+        _audioFilters.Children.Clear();
+        _audioFilters.Children.Add(_audioProHost);
+        var voice = Field("Voz do microfone", Chips(new[] { "Natural", "Reduzir ruído", "Voz de estúdio" }, Math.Clamp(_s.StudioVoiceEffect, 0, 2), i =>
         {
             _s.StudioVoiceEffect = i;
             _studio.SetVoice((VoiceEffect)i);   // vale na hora, mesmo com o estúdio no ar
-        })));
-        _tabAudio.Children.Add(Muted("Reduzir ruído corta ronco de ventilador e chiado e abaixa o som entre as falas; Voz de estúdio ainda realça a voz e nivela o volume. Não é a inteligência artificial do NVIDIA Broadcast: para ruído forte (teclado alto, vozes ao fundo) o resultado é mais simples. Eco da sala não é removido.", 11));
-        _tabAudio.Children.Add(Field("Qualidade do áudio", Chips(AudioKbpsOptions.Select(k => k + " kbps").ToList(),
-            Math.Max(0, Array.IndexOf(AudioKbpsOptions, _s.StudioAudioKbps)), i => { _s.StudioAudioKbps = AudioKbpsOptions[i]; UpdatePlan(); })));
-        _tabAudio.Children.Add(Muted("160 kbps é o ideal para a maioria. Ao transmitir, a plataforma limita (Twitch até 160 kbps). Se desmarcar os dois, o vídeo sai sem áudio.", 11));
+        }), 130);
+        voice.Margin = new Thickness(0, 10, 0, 0);
+        voice.ToolTip = "Reduzir ruído corta ronco de ventilador e chiado e abaixa o som entre as falas; Voz de estúdio ainda realça a voz e nivela o volume. Para ruído forte (teclado alto, vozes ao fundo) o resultado é mais simples que o do NVIDIA Broadcast. Eco da sala não é removido.";
+        _audioFilters.Children.Add(voice);
+
+        var quality = Field("Qualidade do áudio", Chips(AudioKbpsOptions.Select(k => k + " kbps").ToList(),
+            Math.Max(0, Array.IndexOf(AudioKbpsOptions, _s.StudioAudioKbps)), i => { _s.StudioAudioKbps = AudioKbpsOptions[i]; UpdatePlan(); }));
+        quality.ToolTip = "160 kbps é o ideal para a maioria. Ao transmitir, a plataforma limita (Twitch até 160 kbps). Se desmarcar o som do PC e o microfone, o vídeo sai sem áudio.";
+        _tabAudio.Children.Add(quality);
         RefreshAudioDevices();
     }
 
@@ -817,7 +774,7 @@ public sealed partial class StudioPage : ToolPageBase
     private void RebuildCameras()
     {
         _tabCamera.Children.Clear();
-        var head = new WrapPanel { Margin = new Thickness(0, 2, 0, 4) };
+        var head = new WrapPanel { Margin = new Thickness(0, 2, 0, 6) };
         var find = SmallButton("Procurar câmeras", async (_, _) => await FindCamerasAsync());
         find.Margin = new Thickness(0, 0, 8, 4);
         head.Children.Add(find);
@@ -825,59 +782,102 @@ public sealed partial class StudioPage : ToolPageBase
         add.Margin = new Thickness(0, 0, 8, 4);
         add.IsEnabled = _s.StudioCameras.Count < StudioCommand.MaxCameras;
         head.Children.Add(add);
-        head.Children.Add(Muted($"Até {StudioCommand.MaxCameras} câmeras ao mesmo tempo, cada uma num canto. Cada câmera física só pode aparecer uma vez.", 11));
+        var phone = SmallButton("Celular como câmera", (_, _) => ShowEditor("Usar o celular como câmera", BuildPhoneCameraCard() as FrameworkElement ?? new StackPanel()));
+        phone.Margin = new Thickness(0, 0, 8, 4);
+        head.Children.Add(phone);
+        head.Children.Add(Help($"Até {StudioCommand.MaxCameras} câmeras ao mesmo tempo, cada uma num canto; cada câmera física só aparece uma vez. " +
+            "Os retângulos na pré-visualização mostram onde cada uma vai ficar (laranja = duas no mesmo canto). A câmera precisa estar livre: feche outros programas que a usam. " +
+            "Câmeras virtuais (OBS, NVIDIA Broadcast, celular) aparecem na lista como qualquer outra. Dá para ligar e desligar com a transmissão no ar (a captura reinicia por alguns segundos)."));
         _tabCamera.Children.Add(head);
 
         if (_s.StudioCameras.Count == 0)
             _tabCamera.Children.Add(Muted("Nenhuma câmera adicionada. Clique em \"Procurar câmeras\" e depois em \"+ Adicionar câmera\".", 12));
 
+        // câmeras lado a lado, cada uma num cartão baixo
+        var row = new WrapPanel();
         for (int i = 0; i < _s.StudioCameras.Count; i++)
         {
             int index = i;
             var cam = _s.StudioCameras[i];
-            var card = new StackPanel();
 
-            var top = new Grid();
-            top.ColumnDefinitions.Add(new ColumnDefinition());
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var on = new CheckBox { Content = $"Câmera {i + 1} ligada", IsChecked = cam.On, FontWeight = FontWeights.SemiBold, Foreground = Brush("TextBrush") };
-            on.Click += (_, _) => { cam.On = on.IsChecked == true; UpdateGhosts(); };
-            top.Children.Add(on);
-            var remove = SmallButton("Remover", (_, _) => { _s.StudioCameras.RemoveAt(index); RebuildCameras(); UpdateGhosts(); });
-            remove.Padding = new Thickness(10, 3, 10, 3);
-            remove.FontSize = 11.5;
-            Grid.SetColumn(remove, 1);
-            top.Children.Add(remove);
-            card.Children.Add(top);
-
-            var camNote = Muted("", 11.5);
+            var camNote = Muted("", 10.5);
+            camNote.MaxWidth = 150;
             _camNotes[cam] = camNote;
-            var camBox = new Border { Width = 256, Height = 144, CornerRadius = new CornerRadius(8), Background = LiveBrush(cam), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left };
-            var camRetry = SmallButton("Tentar de novo", (_, _) => { _failedSignature.Remove(cam); if (_feeds.Remove(cam, out var old)) old.Dispose(); SyncCameraFeeds(); });
-            camRetry.Margin = new Thickness(0, 6, 0, 0);
-            camNote.Text = CameraBusyWithRecording ? "A câmera está sendo usada pela gravação ou transmissão agora; o vídeo ao vivo volta quando você parar." : _ffmpegPath is null ? "Instale o FFmpeg (aba Avançado) para ver a câmera." : "";
-            card.Children.Add(Field("Dispositivo", CameraChoice(cam, () => { _failedSignature.Remove(cam); SyncCameraFeeds(); }), 110));
-            card.Children.Add(Field("Ao vivo", new StackPanel { Children = { camBox, camRetry, camNote } }, 110));
-            card.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(cam.Corner, 0, 3), c => { cam.Corner = c; UpdateGhosts(); }), 110));
-            card.Children.Add(Field("Tamanho", Chips(CameraPercents.Select(p => p + "%").ToList(), Math.Max(0, Array.IndexOf(CameraPercents, cam.Percent)), c => { cam.Percent = CameraPercents[c]; UpdateGhosts(); }), 110));
-            var frame = new CheckBox { Content = "Moldura amarela em volta", IsChecked = cam.Frame, Foreground = Brush("TextBrush") };
-            frame.Click += (_, _) => cam.Frame = frame.IsChecked == true;
-            card.Children.Add(Field("Moldura", frame, 110));
-            card.Children.Add(Field("Qualidade da imagem", Chips(ImageFilter.Presets.Select(p => p.Name).ToList(), Math.Clamp(cam.Preset, 0, ImageFilter.Presets.Count - 1), c => cam.Preset = c), 110));
-            var mirror = new CheckBox { Content = "Espelhar (como um espelho)", IsChecked = cam.Mirror, Foreground = Brush("TextBrush") };
-            mirror.Click += (_, _) => cam.Mirror = mirror.IsChecked == true;
-            card.Children.Add(Field("Espelho", mirror, 110));
+            camNote.Text = CameraBusyWithRecording ? "Em uso pela gravação agora." : _ffmpegPath is null ? "Instale o FFmpeg (Programa › Avançado)." : "";
+            var camBox = new Border { Width = 150, Height = 84, CornerRadius = new CornerRadius(6), Background = LiveBrush(cam), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1) };
+            var left = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
+            left.Children.Add(camBox);
+            left.Children.Add(camNote);
 
-            var border = CardOf(card);
-            border.Padding = new Thickness(12, 8, 12, 6);
-            _tabCamera.Children.Add(border);
+            var right = new StackPanel();
+            var top = new DockPanel();
+            var remove = SmallButton("Remover", (_, _) => { _s.StudioCameras.RemoveAt(index); RebuildCameras(); UpdateGhosts(); });
+            remove.Padding = new Thickness(8, 2, 8, 2);
+            remove.FontSize = 11;
+            DockPanel.SetDock(remove, Dock.Right);
+            top.Children.Add(remove);
+            var on = new CheckBox { Content = $"Câmera {i + 1}", IsChecked = cam.On, FontWeight = FontWeights.SemiBold, Foreground = Brush("TextBrush"), VerticalAlignment = VerticalAlignment.Center };
+            on.Click += (_, _) => { cam.On = on.IsChecked == true; UpdateGhosts(); SyncScene(); };
+            top.Children.Add(on);
+            right.Children.Add(top);
+            var device = CameraChoice(cam, () => { _failedSignature.Remove(cam); SyncCameraFeeds(); });
+            if (device is FrameworkElement fe) fe.Margin = new Thickness(0, 4, 0, 2);
+            right.Children.Add(device);
+
+            // canto (quadradinho 2x2) e tamanho (barra), numa linha só
+            var place = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var corners = CornerPicker(cam.Corner, c => { cam.Corner = c; UpdateGhosts(); });
+            corners.Margin = new Thickness(0, 0, 10, 0);
+            DockPanel.SetDock(corners, Dock.Left);
+            place.Children.Add(corners);
+            var sizeText = new TextBlock { Width = 36, FontSize = 12, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            DockPanel.SetDock(sizeText, Dock.Right);
+            place.Children.Add(sizeText);
+            var size = new Slider { Minimum = 8, Maximum = 30, Value = Math.Clamp(cam.Percent, 8, 30), TickFrequency = 1, IsSnapToTickEnabled = true, VerticalAlignment = VerticalAlignment.Center, ToolTip = "Tamanho da câmera (largura em % da tela)" };
+            sizeText.Text = $"{size.Value:0}%";
+            size.ValueChanged += (_, _) => { cam.Percent = (int)size.Value; sizeText.Text = $"{size.Value:0}%"; UpdateGhosts(); };
+            place.Children.Add(size);
+            right.Children.Add(place);
+
+            var more = SmallButton("Ajustes", (_, _) => ShowEditor($"Câmera {index + 1}: ajustes", CameraExtras(cam)));
+            more.Padding = new Thickness(8, 2, 8, 2);
+            more.FontSize = 11;
+            more.HorizontalAlignment = HorizontalAlignment.Left;
+            more.Margin = new Thickness(0, 4, 0, 0);
+            more.ToolTip = "Moldura, qualidade da imagem e espelho.";
+            right.Children.Add(more);
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.Children.Add(left);
+            Grid.SetColumn(right, 1);
+            grid.Children.Add(right);
+            var border = CardOf(grid);
+            border.Width = 440;
+            border.Padding = new Thickness(10, 8, 10, 8);
+            border.Margin = new Thickness(0, 0, 10, 10);
+            border.CornerRadius = new CornerRadius(12);
+            row.Children.Add(border);
         }
+        _tabCamera.Children.Add(row);
+    }
 
-        _cameraNote.Foreground = Brush("MutedBrush");
-        (_cameraNote.Parent as Panel)?.Children.Remove(_cameraNote);
-        _cameraNote.Text = "Os retângulos \"Câmera 1, 2...\" na pré-visualização mostram onde cada uma vai ficar (amarelo-escuro = dois no mesmo canto). A câmera precisa estar livre: feche outros programas que a usam. Câmeras virtuais (OBS, celular) aparecem na lista como qualquer outra. Dá para ligar e desligar câmeras com a transmissão no ar (a captura reinicia por alguns segundos).";
-        _tabCamera.Children.Add(BuildPhoneCameraCard());
-        _tabCamera.Children.Add(_cameraNote);
+    /// <summary>Moldura, qualidade da imagem, espelho e "tentar de novo" de uma câmera (ficam na janela Ajustes para o cartão ficar baixo).</summary>
+    private FrameworkElement CameraExtras(StudioCameraSetting cam)
+    {
+        var panel = new StackPanel();
+        var frame = new CheckBox { Content = "Moldura em volta da câmera", IsChecked = cam.Frame, Foreground = Brush("TextBrush") };
+        frame.Click += (_, _) => { cam.Frame = frame.IsChecked == true; UpdateGhosts(); };
+        panel.Children.Add(Field("Moldura", frame, 130));
+        panel.Children.Add(Field("Qualidade da imagem", Chips(ImageFilter.Presets.Select(p => p.Name).ToList(), Math.Clamp(cam.Preset, 0, ImageFilter.Presets.Count - 1), c => cam.Preset = c), 130));
+        var mirror = new CheckBox { Content = "Espelhar (como um espelho)", IsChecked = cam.Mirror, Foreground = Brush("TextBrush") };
+        mirror.Click += (_, _) => cam.Mirror = mirror.IsChecked == true;
+        panel.Children.Add(Field("Espelho", mirror, 130));
+        var retry = SmallButton("Tentar ligar a imagem de novo", (_, _) => { _failedSignature.Remove(cam); if (_feeds.Remove(cam, out var old)) old.Dispose(); SyncCameraFeeds(); });
+        retry.HorizontalAlignment = HorizontalAlignment.Left;
+        panel.Children.Add(Field("Imagem ao vivo", retry, 130));
+        return panel;
     }
 
     private UIElement CameraChoice(StudioCameraSetting cam, Action? changed = null)
@@ -927,18 +927,13 @@ public sealed partial class StudioPage : ToolPageBase
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition());
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(new TextBlock { Text = "Estatísticas da transmissão", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        var refresh = SmallButton("Atualizar", async (_, _) => await RefreshStatsAsync(true));
-        refresh.Padding = new Thickness(10, 3, 10, 3);
-        refresh.FontSize = 11.5;
-        var open = SmallButton("Abrir o painel da plataforma", (_, _) => OpenManagePage());
-        open.Padding = new Thickness(10, 3, 10, 3);
-        open.FontSize = 11.5;
-        buttons.Children.Add(refresh);
-        buttons.Children.Add(open);
-        Grid.SetColumn(buttons, 1);
-        head.Children.Add(buttons);
+        head.Children.Add(new TextBlock { Text = "Público", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var open = SmallButton("Painel", (_, _) => OpenManagePage());
+        open.Padding = new Thickness(8, 2, 8, 2);
+        open.FontSize = 11;
+        open.ToolTip = "Abre o painel da live na plataforma (título, categoria, privacidade).";
+        Grid.SetColumn(open, 1);
+        head.Children.Add(open);
         panel.Children.Add(head);
 
         panel.Children.Add(_statsViewers);
@@ -946,14 +941,14 @@ public sealed partial class StudioPage : ToolPageBase
         _statsTitle.Foreground = Brush("TextBrush");
         _statsError.Foreground = Brush("WarnBrush");
         _viewerChart.FormatMax = v => $"{v:0}";
-        panel.Children.Add(_statsLine);
         panel.Children.Add(_viewerChart);
-        panel.Children.Add(_statsTitle);
+        panel.Children.Add(_statsLine);
         panel.Children.Add(_statsError);
+        _viewerChart.Height = 50;
 
         _statsCard.Style = (Style)FindResource("Card");
-        _statsCard.Padding = new Thickness(14, 10, 14, 10);
-        _statsCard.Margin = new Thickness(0, 8, 0, 0);
+        _statsCard.Padding = new Thickness(12, 8, 12, 8);
+        _statsCard.Margin = new Thickness(0, 4, 0, 0);
         _statsCard.Child = panel;
         Body.Children.Add(_statsCard);
     }
@@ -963,11 +958,11 @@ public sealed partial class StudioPage : ToolPageBase
         _tabStats.Children.Clear();
         foreach (var box in new FrameworkElement[] { _statsKey, _statsId, _twitchId, _twitchSecret, _statsTest }) Detach(box);
 
-        var on = Check("Mostrar as estatísticas da transmissão", "Espectadores agora, visualizações, curtidas, comentários, pico e média, com um gráfico, na tela do estúdio.");
+        var on = Check("Mostrar o público na coluna da direita", "Quem assiste agora e o total de visualizações, com um gráfico pequeno.");
         on.IsChecked = _s.StudioStatsOn;
         on.Click += (_, _) => { _s.StudioStatsOn = on.IsChecked == true; UpdateStatsVisibility(); };
         _tabStats.Children.Add(on);
-        _tabStats.Children.Add(Muted("Os números vêm das APIs oficiais das plataformas, com uma chave do SEU canal (grátis). Ficam sem login e sem enviar nada seu para nós.", 11));
+        _tabStats.Children.Add(Muted("Precisa da chave do SEU canal (grátis), em Programa › Contas e chaves.", 11));
 
         _syncingId = true;
         _statsId.Text = _s.StudioChatId;
@@ -975,33 +970,7 @@ public sealed partial class StudioPage : ToolPageBase
         _statsId.TextChanged -= StatsIdChanged;
         _statsId.TextChanged += StatsIdChanged;
         _tabStats.Children.Add(Field("Canal ou live", _statsId, 140));
-        _tabStats.Children.Add(Muted("YouTube: código ou endereço da live (aparece depois de v= ou no painel de transmissão). Twitch: nome do seu canal. É o mesmo campo do chat, na aba Transmissão.", 11));
-
-        // YouTube
-        _tabStats.Children.Add(Heading("YouTube"));
-        if (SecretStore.Unprotect(_s.StudioYouTubeKeyProtected) is { } savedKey) _statsKey.Password = savedKey;
-        _statsKey.PasswordChanged -= StatsSecretChanged;
-        _statsKey.PasswordChanged += StatsSecretChanged;
-        _tabStats.Children.Add(Field("Chave de API", _statsKey, 140));
-        var how = SmallButton("Como criar a chave (Google Cloud)", (_, _) => OpenWeb("https://console.cloud.google.com/apis/credentials"));
-        how.Margin = new Thickness(0, 0, 0, 4);
-        _tabStats.Children.Add(Field("", how, 140));
-        _tabStats.Children.Add(Muted("Crie um projeto, ative a \"YouTube Data API v3\" e gere uma chave de API. O limite grátis (10.000 unidades por dia) dá para consultar a cada 15 segundos o dia inteiro. A chave fica guardada protegida pelo Windows, só para o seu usuário.", 11));
-
-        // Twitch
-        _tabStats.Children.Add(Heading("Twitch"));
-        _twitchId.Text = _s.StudioTwitchClientId;
-        _twitchId.TextChanged -= TwitchIdChanged;
-        _twitchId.TextChanged += TwitchIdChanged;
-        _tabStats.Children.Add(Field("Client ID", _twitchId, 140));
-        if (SecretStore.Unprotect(_s.StudioTwitchSecretProtected) is { } savedSecret) _twitchSecret.Password = savedSecret;
-        _twitchSecret.PasswordChanged -= StatsSecretChanged;
-        _twitchSecret.PasswordChanged += StatsSecretChanged;
-        _tabStats.Children.Add(Field("Segredo (Client Secret)", _twitchSecret, 140));
-        var twitchHow = SmallButton("Como criar o aplicativo (Twitch Developers)", (_, _) => OpenWeb("https://dev.twitch.tv/console/apps"));
-        twitchHow.Margin = new Thickness(0, 0, 0, 4);
-        _tabStats.Children.Add(Field("", twitchHow, 140));
-        _tabStats.Children.Add(Muted("Registre um aplicativo (categoria \"Application Integration\"), copie o Client ID e gere um segredo. A Twitch informa espectadores, título e jogo; não informa visualizações totais por esta consulta.", 11));
+        _statsId.ToolTip = "YouTube: código ou endereço da live (aparece depois de v= ou no painel de transmissão). Twitch: nome do seu canal. É o mesmo campo do chat.";
 
         var test = SmallButton("Testar agora", async (_, _) => await RefreshStatsAsync(true));
         test.Margin = new Thickness(0, 10, 0, 0);
@@ -1010,13 +979,12 @@ public sealed partial class StudioPage : ToolPageBase
         _statsTest.Foreground = Brush("MutedBrush");
         _tabStats.Children.Add(_statsTest);
 
-        _tabStats.Children.Add(Heading("Configurações da transmissão"));
-        _tabStats.Children.Add(Muted("Título, categoria, privacidade, latência e atraso da live são mudados no painel da própria plataforma: o botão \"Abrir o painel da plataforma\" leva direto para ele. O MB Extreme mostra aqui o título e a categoria atuais. Mudá-los de dentro do programa exigiria entrar na sua conta do Google ou da Twitch com um aplicativo aprovado por eles, o que ainda não existe.", 11));
         var manage = SmallButton("Abrir o painel da plataforma", (_, _) => OpenManagePage());
         manage.HorizontalAlignment = HorizontalAlignment.Left;
         manage.Margin = new Thickness(0, 4, 0, 0);
         _tabStats.Children.Add(manage);
-        _tabStats.Children.Add(Muted("Facebook e outros servidores: a plataforma só libera estatísticas para aplicativos aprovados por ela; abra o painel para ver.", 11));
+        manage.ToolTip = "Título, categoria, privacidade e atraso da live mudam no painel da plataforma. Facebook e outros servidores só mostram números lá.";
+        BuildAccounts();
     }
 
     private void StatsIdChanged(object? sender, TextChangedEventArgs e)
@@ -1084,8 +1052,8 @@ public sealed partial class StudioPage : ToolPageBase
         {
             _viewers.Add(now);
             _viewerChart.Update(_viewers.Values.ToList());
-            _statsViewers.Text = $"● {Count(now)} espectador{(now == 1 ? "" : "es")} agora";
-            _statsViewers.FontSize = 26;
+            _statsViewers.Text = $"● {Count(now)} assistindo agora";
+            _statsViewers.FontSize = 22;
             _statsViewers.Foreground = Brush("OkBrush");
         }
         else
@@ -1096,16 +1064,14 @@ public sealed partial class StudioPage : ToolPageBase
         }
 
         var parts = new List<string>();
+        // só o essencial, como no painel da live do YouTube: quem assiste agora e o total de visualizações
         if (stats.TotalViews is not null) parts.Add($"{Count(stats.TotalViews)} visualizações");
-        if (stats.Likes is not null) parts.Add($"{Count(stats.Likes)} curtidas");
-        if (stats.Comments is not null) parts.Add($"{Count(stats.Comments)} comentários");
-        if (_viewers.Values.Count > 0) parts.Add($"pico {Count(_viewers.Peak)} · média {_viewers.Average:0}");
-        if (stats.StartedAt is { } started && stats.IsLive) parts.Add($"no ar há {DateTime.Now - started:hh\\:mm\\:ss}");
+        else if (_viewers.Values.Count > 0) parts.Add($"pico de {Count(_viewers.Peak)} assistindo");
         _statsLine.Text = string.Join("  ·  ", parts);
 
         string title = stats.Title.Length == 0 ? "" : stats.Title + (stats.Category.Length > 0 ? " · " + stats.Category : "");
         _statsTitle.Text = title;
-        _statsTitle.Visibility = Vis(title.Length > 0);
+        _statsTitle.Visibility = Visibility.Collapsed;
         _statsTest.Text = "✓ " + stats.Platform + " respondeu" + (stats.IsLive ? " (ao vivo)." : " (canal fora do ar).");
         _statsTest.Foreground = Brush("OkBrush");
         UpdateStatsVisibility();
@@ -1207,15 +1173,16 @@ public sealed partial class StudioPage : ToolPageBase
         _tabChannel.Children.Clear();
         foreach (var box in new FrameworkElement[] { _chName, _chPresenter, _chTagline, _introPreview, _lowerPreview, _logoPreview }) Detach(box);
 
-        _tabChannel.Children.Add(Muted("Cadastre o canal uma vez: o nome, quem apresenta, uma frase e o logo. Com isso o programa desenha a entrada, a faixa com o nome e a marca d'água que aparecem por cima do vídeo, com as cores do canal.", 11));
+        // ---- identidade
+        var identity = new StackPanel();
+        identity.Children.Add(Muted("Cadastre o canal uma vez: com isso o programa desenha a entrada, a faixa com o nome e a marca d'água, com as cores do canal.", 11));
         _chName.Text = _s.StudioChannelName;
         _chPresenter.Text = _s.StudioPresenter;
         _chTagline.Text = _s.StudioTagline;
         foreach (var box in new[] { _chName, _chPresenter, _chTagline }) { box.TextChanged -= ChannelChanged; box.TextChanged += ChannelChanged; }
-        _tabChannel.Children.Add(Field("Nome do canal", _chName, 140));
-        _tabChannel.Children.Add(Field("Apresentador", _chPresenter, 140));
-        _tabChannel.Children.Add(Field("Frase do canal", _chTagline, 140));
-
+        identity.Children.Add(Field("Nome do canal", _chName, 140));
+        identity.Children.Add(Field("Apresentador", _chPresenter, 140));
+        identity.Children.Add(Field("Frase do canal", _chTagline, 140));
         var logoRow = new WrapPanel();
         var pick = SmallButton("Escolher o logo...", (_, _) => PickLogo());
         pick.Margin = new Thickness(0, 0, 8, 4);
@@ -1223,45 +1190,53 @@ public sealed partial class StudioPage : ToolPageBase
         var clear = SmallButton("Tirar o logo", (_, _) => { _s.StudioChannelLogo = null; RefreshChannelPreview(); });
         clear.Margin = new Thickness(0, 0, 8, 4);
         logoRow.Children.Add(clear);
-        _tabChannel.Children.Add(Field("Logo", logoRow, 140));
-        _tabChannel.Children.Add(Field("Cor do canal", Chips(OverlayArt.Themes.Select(t => t.Name).ToList(), Math.Clamp(_s.StudioChannelTheme, 0, OverlayArt.Themes.Length - 1), i => { _s.StudioChannelTheme = i; RefreshChannelPreview(); }), 140));
+        identity.Children.Add(Field("Logo", logoRow, 140));
+        identity.Children.Add(Field("Cor do canal", Chips(OverlayArt.Themes.Select(t => t.Name).ToList(), Math.Clamp(_s.StudioChannelTheme, 0, OverlayArt.Themes.Length - 1), i => { _s.StudioChannelTheme = i; RefreshChannelPreview(); }), 140));
 
         // ---- entrada
-        _tabChannel.Children.Add(Heading("Entrada do canal"));
+        var introPanel = new StackPanel();
         var intro = new CheckBox { Content = "Mostrar o cartão de abertura quando a transmissão começar", IsChecked = _s.StudioIntroOn, Foreground = Brush("TextBrush") };
         intro.Click += (_, _) => _s.StudioIntroOn = intro.IsChecked == true;
-        _tabChannel.Children.Add(intro);
+        introPanel.Children.Add(intro);
         int[] introStart = { 1, 3, 5 };
         int[] introShow = { 5, 8, 12 };
-        _tabChannel.Children.Add(Field("Aparece depois de", Chips(introStart.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(introStart, _s.StudioIntroStart)), i => _s.StudioIntroStart = introStart[i]), 140));
-        _tabChannel.Children.Add(Field("Fica na tela por", Chips(introShow.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(introShow, _s.StudioIntroSeconds)), i => _s.StudioIntroSeconds = introShow[i]), 140));
-        _tabChannel.Children.Add(_introPreview);
+        introPanel.Children.Add(Field("Aparece depois de", Chips(introStart.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(introStart, _s.StudioIntroStart)), i => _s.StudioIntroStart = introStart[i]), 140));
+        introPanel.Children.Add(Field("Fica na tela por", Chips(introShow.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(introShow, _s.StudioIntroSeconds)), i => _s.StudioIntroSeconds = introShow[i]), 140));
+        introPanel.Children.Add(_introPreview);
 
         // ---- faixa do apresentador
-        _tabChannel.Children.Add(Heading("Faixa com o nome"));
+        var lowerPanel = new StackPanel();
         var lower = new CheckBox { Content = "Mostrar a faixa com o nome do apresentador e do canal", IsChecked = _s.StudioLowerOn, Foreground = Brush("TextBrush") };
         lower.Click += (_, _) => _s.StudioLowerOn = lower.IsChecked == true;
-        _tabChannel.Children.Add(lower);
+        lowerPanel.Children.Add(lower);
         int[] lowerStart = { 5, 15, 30, 60 };
         int[] lowerEvery = { 0, 5, 10, 20 };
         int[] lowerShow = { 6, 8, 12 };
-        _tabChannel.Children.Add(Field("Primeira vez", Chips(lowerStart.Select(v => $"{v} s").ToList(), Math.Max(0, Array.IndexOf(lowerStart, _s.StudioLowerStart)), i => _s.StudioLowerStart = lowerStart[i]), 140));
-        _tabChannel.Children.Add(Field("Repetir", Chips(lowerEvery.Select(v => v == 0 ? "Só uma vez" : $"a cada {v} min").ToList(), Math.Max(0, Array.IndexOf(lowerEvery, _s.StudioLowerEveryMinutes)), i => _s.StudioLowerEveryMinutes = lowerEvery[i]), 140));
-        _tabChannel.Children.Add(Field("Fica na tela por", Chips(lowerShow.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(lowerShow, _s.StudioLowerSeconds)), i => _s.StudioLowerSeconds = lowerShow[i]), 140));
-        _tabChannel.Children.Add(Field("Canto", Chips(CornerNames, Math.Clamp(_s.StudioLowerCorner, 0, 3), i => _s.StudioLowerCorner = i), 140));
-        _tabChannel.Children.Add(_lowerPreview);
+        lowerPanel.Children.Add(Field("Primeira vez", Chips(lowerStart.Select(v => $"{v} s").ToList(), Math.Max(0, Array.IndexOf(lowerStart, _s.StudioLowerStart)), i => _s.StudioLowerStart = lowerStart[i]), 140));
+        lowerPanel.Children.Add(Field("Repetir", Chips(lowerEvery.Select(v => v == 0 ? "Só uma vez" : $"a cada {v} min").ToList(), Math.Max(0, Array.IndexOf(lowerEvery, _s.StudioLowerEveryMinutes)), i => _s.StudioLowerEveryMinutes = lowerEvery[i]), 140));
+        lowerPanel.Children.Add(Field("Fica na tela por", Chips(lowerShow.Select(v => v + " s").ToList(), Math.Max(0, Array.IndexOf(lowerShow, _s.StudioLowerSeconds)), i => _s.StudioLowerSeconds = lowerShow[i]), 140));
+        lowerPanel.Children.Add(Field("Canto", Chips(CornerNames, Math.Clamp(_s.StudioLowerCorner, 0, 3), i => _s.StudioLowerCorner = i), 140));
+        lowerPanel.Children.Add(_lowerPreview);
 
         // ---- marca d'água
-        _tabChannel.Children.Add(Heading("Marca d'água (logo)"));
+        var logoPanel = new StackPanel();
         var logo = new CheckBox { Content = "Deixar o logo sempre num canto do vídeo", IsChecked = _s.StudioLogoOn, Foreground = Brush("TextBrush") };
         logo.Click += (_, _) => _s.StudioLogoOn = logo.IsChecked == true;
-        _tabChannel.Children.Add(logo);
+        logoPanel.Children.Add(logo);
         int[] logoSizes = { 5, 8, 12 };
-        _tabChannel.Children.Add(Field("Canto", Chips(CornerNames, Math.Clamp(_s.StudioLogoCorner, 0, 3), i => _s.StudioLogoCorner = i), 140));
-        _tabChannel.Children.Add(Field("Tamanho", Chips(logoSizes.Select(v => v + "%").ToList(), Math.Max(0, Array.IndexOf(logoSizes, _s.StudioLogoPercent)), i => _s.StudioLogoPercent = logoSizes[i]), 140));
-        _tabChannel.Children.Add(_logoPreview);
+        logoPanel.Children.Add(Field("Canto", Chips(CornerNames, Math.Clamp(_s.StudioLogoCorner, 0, 3), i => _s.StudioLogoCorner = i), 140));
+        logoPanel.Children.Add(Field("Tamanho", Chips(logoSizes.Select(v => v + "%").ToList(), Math.Max(0, Array.IndexOf(logoSizes, _s.StudioLogoPercent)), i => _s.StudioLogoPercent = logoSizes[i]), 140));
+        logoPanel.Children.Add(_logoPreview);
 
-        _tabChannel.Children.Add(Muted("A entrada e a faixa seguem o relógio da transmissão (por exemplo, a faixa volta sozinha de 10 em 10 minutos); mostrar na hora, por botão, ainda exige reiniciar a captura. Para ver o resultado, ligue as opções e use \"Aplicar agora\" ou inicie a transmissão. Aparecem na gravação e no replay também.", 11));
+        foreach (var panel in new[] { introPanel, lowerPanel, logoPanel })
+            panel.Children.Add(Muted("Segue o relógio da transmissão e aparece também na gravação e no replay. Com o estúdio no ar, entra ao usar \"Aplicar agora\".", 11));
+
+        var cards = new WrapPanel();
+        cards.Children.Add(SummaryCard("Identidade", null, _s.StudioChannelName.Length > 0 ? _s.StudioChannelName : "Nome, apresentador, frase, logo e cor do canal.", identity, "Editar", BuildChannel));
+        cards.Children.Add(SummaryCard("Abertura", _s.StudioIntroOn, $"Cartão de entrada, {_s.StudioIntroSeconds} s na tela.", introPanel, "Editar", BuildChannel));
+        cards.Children.Add(SummaryCard("Faixa com nome", _s.StudioLowerOn, _s.StudioLowerEveryMinutes == 0 ? "Aparece uma vez, no rodapé." : $"Volta a cada {_s.StudioLowerEveryMinutes} min.", lowerPanel, "Editar", BuildChannel));
+        cards.Children.Add(SummaryCard("Logo", _s.StudioLogoOn, _s.StudioChannelLogo is null ? "Sua marca num canto da tela (escolha o logo em Identidade)." : $"Num canto, {_s.StudioLogoPercent}% da tela.", logoPanel, "Editar", BuildChannel));
+        _tabChannel.Children.Add(cards);
         RefreshChannelPreview();
     }
 
@@ -1343,7 +1318,7 @@ public sealed partial class StudioPage : ToolPageBase
 
         var on = Check("Mostrar o QR do Pix na transmissão", "O QR aparece num canto do vídeo (na transmissão, na gravação e no replay) para o público apoiar a live.");
         on.IsChecked = _s.StudioPixOn;
-        on.Click += (_, _) => { _s.StudioPixOn = on.IsChecked == true; UpdateGhosts(); };
+        on.Click += (_, _) => { _s.StudioPixOn = on.IsChecked == true; UpdateGhosts(); BuildPixCard(); };
         _tabPix.Children.Add(on);
 
         _tabPix.Children.Add(Field("Origem do QR", Chips(new[] { "Gerar pela minha chave Pix", "Usar o QR do meu banco" }, _s.StudioPixUseOwn ? 1 : 0, i => { _s.StudioPixUseOwn = i == 1; BuildPix(); }), 130));
@@ -1360,6 +1335,7 @@ public sealed partial class StudioPage : ToolPageBase
             _tabPix.Children.Add(Muted("Use o QR que o seu banco gera (do aplicativo, o do Pix \"Receber\" ou o de cobrança fixa). O programa só coloca uma moldura com o nome do canal e a legenda; ele não altera nem lê o QR, e quem paga confere o nome do recebedor no banco. Escolha um QR que não expira (o dinâmico deixa de valer).", 11));
             AddPixPositionFields();
             RefreshPix();
+            BuildPixCard();
             return;
         }
 
@@ -1393,6 +1369,7 @@ public sealed partial class StudioPage : ToolPageBase
         _pixStatus.Margin = new Thickness(0, 2, 0, 4);
         _tabPix.Children.Add(_pixStatus);
         _tabPix.Children.Add(_pixPreview);
+        BuildPixCard();
         _tabPix.Children.Add(Muted("Este é o Pix estático: o dinheiro cai direto na sua conta, sem intermediário e sem taxa do MB Extreme. Em compensação o programa NÃO fica sabendo quando alguém paga (o banco é quem avisa), então não há alerta automático na tela com o nome e o valor do apoiador. Esse alerta, como nos serviços de \"live pix\", exige um provedor de pagamentos que confirme cada Pix e um servidor para avisar a transmissão; está descrito em docs/ESTUDIO-GRAVACAO-TRANSMISSAO.md.", 11));
         RefreshPix();
     }
@@ -1497,11 +1474,10 @@ public sealed partial class StudioPage : ToolPageBase
 
     private void BuildStream()
     {
-        foreach (var element in new FrameworkElement[] { _specText, _netNow, _planText, _uploadResult, _chatId, _key, _remember, _customUrl })
+        foreach (var element in new FrameworkElement[] { _specText, _netNow, _planText, _uploadResult, _chatId, _customUrl })
             Detach(element);
         _tabStream.Children.Clear();
         _tabStream.Children.Add(BuildOptimizeCard());
-        _tabStream.Children.Add(Muted("Para transmitir, ligue o bloco \"Transmitir ao vivo\" no alto da tela. A codificação é feita na placa de vídeo, por isso pesa pouco no jogo.", 11));
         var service = CurrentService();
         int selected = Math.Max(0, Array.IndexOf(ServiceOrder, service));
         _tabStream.Children.Add(Field("Plataforma", Chips(new[] { "Twitch", "YouTube", "Facebook", "Outro servidor (RTMP)" }, selected, i =>
@@ -1550,18 +1526,7 @@ public sealed partial class StudioPage : ToolPageBase
         _customUrl.Text = _s.StudioCustomUrl;
         _customUrl.Visibility = Vis(service == StreamService.Custom);
         _tabStream.Children.Add(_customUrl);
-        _tabStream.Children.Add(Muted("Chave de transmissão (Twitch: painel do criador > Configurações > Transmissão; YouTube: Transmitir ao vivo > Chave; Facebook: Produtor de transmissões ao vivo). Kick e outras: use \"Outro servidor\" com o endereço que a plataforma informa. Quem tem a chave transmite no seu canal: não mostre nem compartilhe.", 11));
-        if (!_keyLoaded)
-        {
-            _keyLoaded = true;
-            if (SecretStore.Unprotect(_s.StudioProtectedKey) is { } saved)
-            {
-                _key.Password = saved;
-                _remember.IsChecked = true;
-            }
-        }
-        _tabStream.Children.Add(_key);
-        _tabStream.Children.Add(_remember);
+        _customUrl.ToolTip = "Endereço do servidor (Kick e outras plataformas informam). A chave fica em Programa › Contas e chaves.";
 
         // chat
         var chatRow = new WrapPanel();
@@ -1576,11 +1541,11 @@ public sealed partial class StudioPage : ToolPageBase
         openChat.Margin = new Thickness(0, 0, 0, 4);
         chatRow.Children.Add(openChat);
         _tabStream.Children.Add(Field(Muted("Chat da transmissão", 12), chatRow));
-        _tabStream.Children.Add(Muted(ChatLinks.Supports(service)
+        _chatId.ToolTip = ChatLinks.Supports(service)
             ? ChatLinks.Prompt(service) + ". O chat abre numa janela própria, que você pode deixar ao lado do jogo ou em outro monitor."
-            : ChatLinks.Prompt(service) + ".", 11));
-        _tabStream.Children.Add(Muted("A transmissão usa H.264, taxa constante e quadro-chave a cada 2 s. A chave nunca aparece em mensagens nem em arquivos de relatório.", 11));
+            : ChatLinks.Prompt(service) + ".";
         UpdatePlan();
+        if (_tabAccounts.Children.Count > 0) BuildAccounts();   // o nome da plataforma aparece na chave
     }
 
     private void ChatIdChanged(object? sender, TextChangedEventArgs e)
@@ -2138,6 +2103,8 @@ public sealed partial class StudioPage : ToolPageBase
         }
 
         bool different = StudioController.Signature(wanted) != StudioController.Signature(running);
+        // no modo estúdio, a cena nova na prévia entra no ar pelo botão Transição (não pela barra)
+        if (_s.StudioSceneStudioMode && _airScene is not null && _airScene != CurrentScene) different = false;
         _pendingText.Text = "Você mudou configurações que só entram no ar reiniciando a captura. Aplicar agora faz a transmissão reconectar por alguns segundos e a gravação continuar em um arquivo novo; o replay recomeça vazio.";
         _pendingButton.IsEnabled = true;
         _pending.Visibility = Vis(different);
@@ -2269,6 +2236,8 @@ public sealed partial class StudioPage : ToolPageBase
         if (_s.StudioCaptionOn && _settingsTab == 1) RefreshCaptionNow();
         if (_settingsTab == 3) RefreshLimiterNow();
         RefreshRecBadge();
+        RefreshBigStart();
+        RebuildScenesUi();
         _live.Visibility = Vis(_studio.IsRunning);
         bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
         if (streaming && !_wasStreaming) { _viewers.Reset(); _hasStats = false; if (_s.StudioStatsOn) _ = RefreshStatsAsync(false); }

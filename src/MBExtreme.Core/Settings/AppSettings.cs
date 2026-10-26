@@ -104,6 +104,14 @@ public sealed class AppSettings
     /// <summary>Câmeras do estúdio (até três). Substitui as opções de uma câmera só, que ficam apenas para migrar.</summary>
     public List<StudioCameraSetting> StudioCameras { get; set; } = new();
 
+    // ---- cenas (cada cena guarda as suas fontes)
+    public List<StudioSceneSetting> StudioScenes { get; set; } = new();
+
+    public int StudioSceneIndex { get; set; }
+
+    /// <summary>Modo estúdio: escolher uma cena só mostra na prévia; ela entra no ar com "Transição".</summary>
+    public bool StudioSceneStudioMode { get; set; }
+
     // ---- Pix (QR estático "apoie a live")
     public bool StudioPixOn { get; set; }
 
@@ -397,4 +405,37 @@ public sealed class StudioCameraSetting
 
     /// <summary>Ligada: aparece no vídeo. Desligada: fica na lista, mas não é aberta.</summary>
     public bool On { get; set; } = true;
+}
+
+/// <summary>O que pode aparecer numa cena do estúdio.</summary>
+public enum StudioSceneItemKind
+{
+    /// <summary>A tela ou a janela capturada (o fundo da cena).</summary>
+    Capture,
+    Camera,
+    Pix,
+    Intro,
+    LowerThird,
+    Logo,
+}
+
+/// <summary>Uma fonte dentro de uma cena: o tipo, qual câmera (quando é câmera), se está oculta (olho) e se está travada (cadeado).</summary>
+public sealed class StudioSceneItem
+{
+    public StudioSceneItemKind Kind { get; set; }
+
+    /// <summary>Nome da câmera (só para <see cref="StudioSceneItemKind.Camera"/>).</summary>
+    public string? Camera { get; set; }
+
+    public bool Hidden { get; set; }
+
+    public bool Locked { get; set; }
+}
+
+/// <summary>Uma cena guardada: o nome e as fontes dela, na ordem da lista.</summary>
+public sealed class StudioSceneSetting
+{
+    public string Name { get; set; } = "Cena";
+
+    public List<StudioSceneItem> Items { get; set; } = new();
 }

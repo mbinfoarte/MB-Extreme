@@ -41,8 +41,7 @@ public sealed partial class StudioPage
     private UIElement BuildAudioPro()
     {
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = "Áudio profissional", FontSize = 14, FontWeight = FontWeights.SemiBold });
-        panel.Children.Add(Muted("Deixa o áudio limpo e sem estourar. Tudo vale na hora, mesmo com a live no ar: mexa e ouça.", 11.5));
+        panel.Children.Add(Muted("Muda na hora, mesmo com a live no ar: mexa e ouça.", 11.5));
 
         var presets = Chips(new[] { "Padrão (só limitador)", "Voz limpa (live)", "Podcast" }, -1, i =>
         {
@@ -85,17 +84,13 @@ public sealed partial class StudioPage
         return card;
     }
 
-    private void RebuildAudioPro()
-    {
-        if (_audioPro is null) return;
-        int at = _tabAudio.Children.IndexOf(_audioPro);
-        if (at < 0) return;
-        _tabAudio.Children.RemoveAt(at);
-        _audioPro = BuildAudioPro();
-        _tabAudio.Children.Insert(at, _audioPro);
-    }
+    private void RebuildAudioPro() => _audioProHost.Child = BuildAudioPro();
 
-    private UIElement? _audioPro;
+    /// <summary>A janela "Filtro" do mixer: limitador, porta de ruído, compressor, filtro de graves e o efeito de voz.</summary>
+    private void OpenAudioFilters() => ShowEditor("Filtros de áudio", _audioFilters, width: 560);
+
+    private readonly Border _audioProHost = new();
+    private readonly StackPanel _audioFilters = new();
 
     /// <summary>Mostra quanto o limitador está abaixando o volume agora.</summary>
     private void RefreshLimiterNow()

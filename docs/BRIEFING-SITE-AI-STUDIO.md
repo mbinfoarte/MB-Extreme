@@ -1,4 +1,4 @@
-# Briefing do site MB Extreme (para colar no Google AI Studio)
+# Briefing do Hub MB InfoArte e do site do MB Extreme (para colar no Google AI Studio)
 
 > Como usar: copie **a seção 0** (prompt curto) como instrução principal e depois cole as seções que quiser detalhar (1 a 9), uma por vez. Tudo abaixo é a estrutura real que o servidor já tem; onde algo ainda não existe, está marcado **[A CONSTRUIR]**.
 
@@ -10,7 +10,43 @@ Crie o site de lançamento do **MB Extreme**, um programa para Windows 10/11 (64
 
 Visual: **tema escuro, preto e amarelo**, igual ao aplicativo. Fundo `#050505`, cartões `#0E0E11` e `#141418`, linhas `#26262C`, texto `#F2F2F4`, texto secundário `#9A9AA3`, **amarelo da marca `#FFC400`** (botões principais e destaques, texto escuro sobre o amarelo), verde `#3DDC97` (ok), laranja `#FFA94D` (aviso), vermelho `#FF5A5F` (erro). Cantos arredondados (12 a 18 px), brilho amarelo suave nos destaques, tipografia Segoe UI/Inter, layout responsivo (mobile primeiro), acessível (contraste, foco visível, rótulos nos campos) e rápido (sem bibliotecas pesadas).
 
-Páginas: Início (landing), Planos, Download, Afiliados, Entrar, Criar conta, Minha conta, Painel do afiliado, Termos, Privacidade. Siga as seções abaixo para o conteúdo e o comportamento de cada uma. Não invente números, depoimentos ou selos que não estejam neste briefing.
+Páginas do MB Extreme (ficam sob `/extreme` dentro do Hub, ver seção 0.1): Início da landing, Planos, Download, Afiliados, Entrar, Criar conta, Minha conta, Painel do afiliado, Termos, Privacidade. Siga as seções abaixo para o conteúdo e o comportamento de cada uma. Não invente números, depoimentos ou selos que não estejam neste briefing.
+
+---
+
+## 0.1 Hub MB InfoArte (portal com vários softwares)
+
+**Nome:** Hub MB InfoArte. É o portal da empresa; cada software tem a sua própria landing page. (Confirme a grafia: o programa hoje mostra "MB InfoArt".)
+
+**Prompt do Hub (cole depois do prompt principal):** Crie o **Hub MB InfoArte**, o portal da empresa de software MB InfoArte. A página inicial apresenta a empresa em poucas linhas e mostra um **cartão por software**, cada um com ícone, nome, uma frase do que faz, para quem é e o botão "Conhecer". Os softwares são **MB Extreme** (otimizador de PC para jogos, já em beta), **ArtSys** [PREENCHER: o que faz e para quem], **MB Lab** [PREENCHER: o que faz e para quem] e um **quarto software em desenvolvimento**, mostrado como "Em breve", com um campo de e-mail para ser avisado do lançamento. Cada software tem a sua **própria landing page**, com identidade visual própria dentro da marca da empresa (mesma família de tipografia e componentes, cor de destaque própria de cada produto). O menu do Hub tem: Softwares (lista), Sobre a MB InfoArte, Suporte, Entrar. O rodapé do Hub tem Termos, Privacidade, Suporte e redes sociais. O site tem **uma conta única** (a "Conta MB InfoArte") em que a pessoa vê todos os seus softwares e assinaturas.
+
+**Mapa de endereços (sugestão):**
+
+| Endereço | O que é |
+|---|---|
+| `/` | Hub: apresentação da empresa e cartões dos softwares |
+| `/extreme` | Landing do MB Extreme |
+| `/extreme/planos`, `/extreme/download`, `/extreme/afiliados` | Planos, download e afiliados do MB Extreme |
+| `/artsys` | Landing do ArtSys [PREENCHER] |
+| `/mblab` | Landing do MB Lab [PREENCHER] |
+| `/em-breve` ou cartão no Hub | Quarto software (lista de espera) |
+| `/entrar`, `/criar-conta`, `/conta` | Conta única do Hub (servidor) |
+| `/termos`, `/privacidade`, `/suporte` | Comuns a todos os softwares (com a parte específica de cada um) |
+
+**Regras do Hub:**
+- Cada landing tem **um único objetivo**: baixar ou assinar aquele software. Não misture preços, regras de teste e reembolso entre produtos.
+- Cada produto tem **título, descrição e imagem de compartilhamento próprios** (para o Google e as redes sociais).
+- A página de cada software tem um **link discreto "Outros softwares da MB InfoArte"** de volta ao Hub.
+- O cartão do Hub e a landing usam a **mesma cor de destaque** do produto. O MB Extreme usa preto e amarelo `#FFC400`; defina uma cor para cada um dos outros e mantenha o fundo escuro como base comum.
+- A página de conta mostra **uma linha por software**: nome, plano, situação, computadores ou dispositivos ativados e botão de gerenciar assinatura.
+
+**O que o servidor precisa ganhar para atender vários softwares [A CONSTRUIR]:**
+1. Campo **produto** em planos, assinaturas, licenças, chaves de ativação e afiliados (hoje tudo assume o MB Extreme).
+2. Um **produto separado no Stripe** para cada software, cada um com os seus preços; o servidor escolhe o preço pelo par produto + período.
+3. A licença assinada ganha a informação do produto; cada programa só aceita a licença do seu produto.
+4. `GET /v1/app/latest?product=extreme` (atualização dentro do programa por produto).
+5. Afiliados: decidir se a comissão vale por produto ou para o Hub inteiro (a sugestão é por produto, com o mesmo nível de afiliado em todos).
+6. Lista de espera do quarto software (e-mail + produto), com aviso de LGPD.
 
 ---
 

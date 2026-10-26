@@ -27,6 +27,7 @@ public sealed class ServerFixture : WebApplicationFactory<Program>
         builder.UseSetting("Remote:Technicians", "tecnico@exemplo.com");
         builder.UseSetting("Admin:Emails", "admin@exemplo.com");
         builder.UseSetting("Stripe:WebhookSecret", "whsec_segredo_de_teste");
+        builder.UseSetting("Updates:PublishToken", "token-de-atualizacao-com-mais-de-16");
     }
 
     protected override void Dispose(bool disposing)

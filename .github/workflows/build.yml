@@ -31,7 +31,7 @@ jobs:
         run: dotnet run --project tools/MBExtreme.IndexTool/MBExtreme.IndexTool.csproj -c Release -- --download src/MBExtreme.App/Assets/hardware-index.json
 
       - name: Publicar app (Windows x64)
-        run: dotnet publish src/MBExtreme.App/MBExtreme.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
+        run: dotnet publish src/MBExtreme.App/MBExtreme.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:Version=0.9.${{ github.run_number }}" -o out
 
       - name: Assinar o aplicativo
         if: env.HAS_CERT == 'true'
@@ -52,7 +52,7 @@ jobs:
           Copy-Item payload.zip MBExtreme-Beta-portatil-win-x64.zip
 
       - name: Gerar o instalador (.exe)
-        run: dotnet publish src/MBExtreme.Installer/MBExtreme.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:PayloadZip=${{ github.workspace }}\payload.zip" -o setup
+        run: dotnet publish src/MBExtreme.Installer/MBExtreme.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:Version=0.9.${{ github.run_number }}" "-p:PayloadZip=${{ github.workspace }}\payload.zip" -o setup
 
       - name: Assinar o instalador
         if: env.HAS_CERT == 'true'
@@ -78,3 +78,18 @@ jobs:
           --target "${{ github.sha }}"
           --title "MB Extreme (Beta 01) - compilação ${{ github.run_number }}"
           --notes "MB Extreme (Beta 01), compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador). MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes."
+
+      - name: Avisar o servidor da nova versão (atualização dentro do programa)
+        continue-on-error: true
+        shell: pwsh
+        env:
+          UPDATE_URL: ${{ vars.MBX_SERVER_URL }}
+          UPDATE_TOKEN: ${{ secrets.MBX_UPDATE_TOKEN }}
+          DOWNLOAD_BASE: ${{ vars.MBX_DOWNLOAD_BASE }}
+        run: |
+          if (-not $env:UPDATE_URL -or -not $env:UPDATE_TOKEN) { Write-Host "Servidor de atualizacao nao configurado; pulando."; exit 0 }
+          $setup = "setup\MBExtreme-Beta-Setup.exe"
+          $sha = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+          $base = if ($env:DOWNLOAD_BASE) { $env:DOWNLOAD_BASE.TrimEnd('/') } else { "https://github.com/${{ github.repository }}/releases/download/beta-${{ github.run_number }}" }
+          $manifest = @{ build = [int]"${{ github.run_number }}"; version = "0.9.${{ github.run_number }}"; url = "$base/MBExtreme-Beta-Setup.exe"; sha256 = $sha; size = (Get-Item $setup).Length; notes = "Nova compilação do MB Extreme."; minimumBuild = 0 } | ConvertTo-Json
+          Invoke-RestMethod -Method Post -Uri "$($env:UPDATE_URL.TrimEnd('/'))/v1/admin/app/latest" -Headers @{ Authorization = "Bearer $env:UPDATE_TOKEN" } -ContentType "application/json" -Body $manifest

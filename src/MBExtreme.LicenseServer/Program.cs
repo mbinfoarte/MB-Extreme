@@ -385,6 +385,28 @@ app.MapPost("/affiliate/payout", async (HttpContext c) =>
 
 app.MapGet("/v1/public-key", () => Results.Text(signing.PublicKey));
 
+// ---- atualização dentro do programa: o app pergunta qual é a compilação mais nova; o CI publica o manifesto com um token próprio
+string updatePath = Path.Combine(dataDir, "latest.json");
+string updateToken = config["Updates:PublishToken"] ?? "";
+app.MapGet("/v1/app/latest", () =>
+{
+    string? json = File.Exists(updatePath) ? File.ReadAllText(updatePath) : null;
+    return MBExtreme.Core.Update.AppUpdates.Parse(json) is null ? Results.NotFound() : Results.Text(json!, "application/json");
+});
+app.MapPost("/v1/admin/app/latest", async (HttpContext c) =>
+{
+    if (updateToken.Length < 16) return Results.NotFound();   // desligado sem token configurado
+    string given = c.Request.Headers.Authorization.ToString().Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase).Trim();
+    if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(given), System.Text.Encoding.UTF8.GetBytes(updateToken)))
+        return Results.Json(new { message = "Não autorizado." }, statusCode: 403);
+    using var reader = new StreamReader(c.Request.Body);
+    string json = await reader.ReadToEndAsync();
+    if (json.Length > 20_000 || MBExtreme.Core.Update.AppUpdates.Parse(json) is null)
+        return Results.Json(new { message = "Manifesto inválido (precisa de build, url https e sha256)." }, statusCode: 400);
+    await File.WriteAllTextAsync(updatePath, json);
+    return Results.Json(new { ok = true });
+});
+
 app.MapPost("/v1/device/code", async (HttpContext c) =>
 {
     if (!limiter.Allow("code|" + Ip(c), 20 * limitScale, TimeSpan.FromMinutes(10))) return Results.StatusCode(429);

@@ -12,6 +12,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, UserControl> _pages = new();
     private readonly Dictionary<string, UserControl> _inner = new();
     private bool _suppressNav;
+    private UpdateController? _updates;
     private string? _current;
     private bool _backing;
     private Stack<string> _history = new();
@@ -29,6 +30,8 @@ public partial class MainWindow : Window
             AppServices.Studio.ApplyHotkeys(AppServices.Settings);
         };
         Go("home");
+        _updates = new UpdateController(RootGrid, ContentHost);
+        Loaded += async (_, _) => await _updates.CheckAsync();
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
         AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(() => { UpdateFooter(); _ = AppServices.ProLock.CheckAsync(); }));

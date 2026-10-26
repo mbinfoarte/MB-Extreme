@@ -16,7 +16,7 @@ Páginas do MB Extreme (ficam sob `/extreme` dentro do Hub, ver seção 0.1): In
 
 ## 0.1 Hub MB InfoArte (portal com vários softwares)
 
-**Nome:** Hub MB InfoArte. É o portal da empresa; cada software tem a sua própria landing page. (Confirme a grafia: o programa hoje mostra "MB InfoArt".)
+**Nome:** Hub MB InfoArte. Endereço principal: **https://mbinfoarte.com.br/**. É o portal da empresa; cada software tem a sua própria landing page. Sites que já existem: **ArtiSys** em https://www.artisys.com.br/ e **MB Print Lab** em https://mbprintlab.com.br/ (o Hub pode apontar para eles ou ter páginas próprias; a decidir). (Confirme a grafia: o programa hoje mostra "MB InfoArt", e o domínio usa "mbinfoarte".)
 
 **Prompt do Hub (cole depois do prompt principal):** Crie o **Hub MB InfoArte**, o portal da empresa de software MB InfoArte. A página inicial apresenta a empresa em poucas linhas e mostra um **cartão por software**, cada um com ícone, nome, uma frase do que faz, para quem é e o botão "Conhecer". Os softwares são **MB Extreme** (otimizador de PC para jogos, já em beta), **ArtSys** [PREENCHER: o que faz e para quem], **MB Lab** [PREENCHER: o que faz e para quem] e um **quarto software em desenvolvimento**, mostrado como "Em breve", com um campo de e-mail para ser avisado do lançamento. Cada software tem a sua **própria landing page**, com identidade visual própria dentro da marca da empresa (mesma família de tipografia e componentes, cor de destaque própria de cada produto). O menu do Hub tem: Softwares (lista), Sobre a MB InfoArte, Suporte, Entrar. O rodapé do Hub tem Termos, Privacidade, Suporte e redes sociais. O site tem **uma conta única** (a "Conta MB InfoArte") em que a pessoa vê todos os seus softwares e assinaturas.
 

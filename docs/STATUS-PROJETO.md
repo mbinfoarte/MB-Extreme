@@ -18,6 +18,7 @@ Pendências, em ordem sugerida:
 Atualização dentro do programa: configurar `Updates:PublishToken` no servidor, `MBX_SERVER_URL` / `MBX_UPDATE_TOKEN` / `MBX_DOWNLOAD_BASE` no GitHub, e hospedar os instaladores em endereço público (ver `docs/ATUALIZACAO-NO-PROGRAMA.md`).
 
 ## Frente B: Hub MB InfoArte e landing pages
+Endereços informados: Hub https://mbinfoarte.com.br/ · ArtiSys https://www.artisys.com.br/ · MB Print Lab https://mbprintlab.com.br/ (não foi possível abri-los do ambiente do assistente; faltam as descrições).
 Briefing pronto: `docs/BRIEFING-SITE-AI-STUDIO.md` (também em página de cópia). O visual será feito no Google AI Studio e depois ligado ao servidor.
 
 Pendências:

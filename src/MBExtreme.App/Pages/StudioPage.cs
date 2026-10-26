@@ -858,6 +858,8 @@ public sealed partial class StudioPage : ToolPageBase
             camNote.Text = CameraBusyWithRecording ? "A câmera está sendo usada pela gravação ou transmissão agora; o vídeo ao vivo volta quando você parar." : _ffmpegPath is null ? "Instale o FFmpeg (aba Avançado) para ver a câmera." : "";
             card.Children.Add(Field("Dispositivo", CameraChoice(cam, () => { _failedSignature.Remove(cam); SyncCameraFeeds(); }), 110));
             card.Children.Add(Field("Ao vivo", new StackPanel { Children = { camBox, camRetry, camNote } }, 110));
+            card.Children.Add(Field("Posição", Chips(CornerNames, Math.Clamp(cam.Corner, 0, 3), c => { cam.Corner = c; UpdateGhosts(); }), 110));
+            card.Children.Add(Field("Tamanho", Chips(CameraPercents.Select(p => p + "%").ToList(), Math.Max(0, Array.IndexOf(CameraPercents, cam.Percent)), c => { cam.Percent = CameraPercents[c]; UpdateGhosts(); }), 110));
             var frame = new CheckBox { Content = "Moldura amarela em volta", IsChecked = cam.Frame, Foreground = Brush("TextBrush") };
             frame.Click += (_, _) => cam.Frame = frame.IsChecked == true;
             card.Children.Add(Field("Moldura", frame, 110));

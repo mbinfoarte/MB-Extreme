@@ -176,4 +176,33 @@ public sealed record StudioRequest
     public CaptionOverlay? Captions { get; init; }
 
     public bool AnyOutput => RecordFile is not null || Stream is not null || ReplayFolder is not null;
+
+    /// <summary>
+    /// Cenas montadas ao mesmo tempo (troca sem reiniciar). Cada cena aponta para uma captura de <see cref="SceneCaptures"/>,
+    /// para câmeras de <see cref="Cameras"/>, para o <see cref="Pix"/> e para camadas de <see cref="Layers"/>.
+    /// </summary>
+    public IReadOnlyList<SceneLayout> Scenes { get; init; } = Array.Empty<SceneLayout>();
+
+    /// <summary>Capturas usadas pelas cenas (telas e janelas, sem repetir).</summary>
+    public IReadOnlyList<CaptureSource> SceneCaptures { get; init; } = Array.Empty<CaptureSource>();
+
+    /// <summary>Cena que começa no ar.</summary>
+    public int ActiveScene { get; init; }
+
+    /// <summary>Esmaecer exige uma etapa a mais (mistura de duas imagens); cortar é instantâneo.</summary>
+    public SceneTransition Transition { get; init; }
+
+    /// <summary>Gera também uma imagem pequena do que está no ar (para a tela "No ar" do programa).</summary>
+    public bool ProgramView { get; init; }
+
+    /// <summary>Cano nomeado da imagem "No ar" (preenchido pela sessão).</summary>
+    public string? ProgramPipe { get; init; }
+
+    /// <summary>As cenas trocam sem reiniciar: duas ou mais cenas e sem vídeo vertical (o vertical tem a sua própria montagem).</summary>
+    public bool LiveScenes => Scenes.Count > 1 && Vertical is null && VerticalCopy is null;
 }
+
+public enum SceneTransition { Cut, Fade }
+
+/// <summary>Uma cena para a troca ao vivo: qual captura é o fundo e o que vai por cima (índices das listas do pedido).</summary>
+public sealed record SceneLayout(string Name, int Capture, IReadOnlyList<int> Cameras, bool Pix, IReadOnlyList<int> Layers);

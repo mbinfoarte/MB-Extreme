@@ -92,7 +92,13 @@ public static class StudioScenes
     {
         switch (item.Kind)
         {
-            case StudioSceneItemKind.Capture: return "Tela ou janela capturada";
+            case StudioSceneItemKind.Capture:
+                return item.CaptureMode switch
+                {
+                    1 => $"Tela {item.Display + 1}",
+                    2 or 3 => "Janela: " + (string.IsNullOrWhiteSpace(item.WindowTitle) ? item.WindowProcess : item.WindowTitle),
+                    _ => "Tela ou janela (a de baixo da prévia)",
+                };
             case StudioSceneItemKind.Camera:
                 int index = s.StudioCameras.FindIndex(c => c.Name == item.Camera);
                 string name = CameraSource.IsStream(item.Camera) ? "celular" : item.Camera ?? "";
@@ -103,6 +109,22 @@ public static class StudioScenes
             default: return "Logo";
         }
     }
+
+    /// <summary>
+    /// Acha a janela de uma cena entre as abertas: pelo programa e, se ele tiver várias, pela que tem o mesmo título (ou a maior).
+    /// </summary>
+    public static WindowInfo? FindWindow(StudioSceneItem item, IReadOnlyList<WindowInfo> windows)
+    {
+        if (string.IsNullOrWhiteSpace(item.WindowProcess)) return null;
+        var same = windows.Where(w => string.Equals(w.ProcessName, item.WindowProcess, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (same.Count == 0) return null;
+        return same.FirstOrDefault(w => string.Equals(w.Title, item.WindowTitle, StringComparison.Ordinal))
+               ?? same.OrderByDescending(w => (long)w.Bounds.Width * w.Bounds.Height).First();
+    }
+
+    /// <summary>Cenas que podem ficar montadas juntas (troca sem reiniciar).</summary>
+    public static bool CanGoLive(AppSettings s, bool vertical) =>
+        s.StudioScenesLive && !vertical && s.StudioScenes.Count > 1 && s.StudioScenes.Count <= StudioCommand.MaxLiveScenes;
 
     /// <summary>"Cena nova", "Cena nova 2", ... sem repetir nome.</summary>
     public static string NextName(IEnumerable<string> existing)

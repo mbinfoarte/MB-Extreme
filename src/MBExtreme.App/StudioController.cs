@@ -35,7 +35,16 @@ internal sealed record StudioConfig(
     string? LayersKey = null,
     VerticalLayout? Vertical = null,
     CaptionConfig? Captions = null,
-    VerticalLayout? VerticalCopy = null);
+    VerticalLayout? VerticalCopy = null,
+    IReadOnlyList<CaptureSource>? SceneCaptures = null,
+    IReadOnlyList<SceneLayout>? Scenes = null,
+    int ActiveScene = 0,
+    SceneTransition Transition = SceneTransition.Cut,
+    bool ProgramView = false)
+{
+    /// <summary>Várias cenas montadas juntas: trocar de cena não reinicia a captura.</summary>
+    public bool LiveScenes => Scenes is { Count: > 1 } && Vertical is null && VerticalCopy is null;
+}
 
 /// <summary>Legendas automáticas ao vivo: de onde vem a voz e como a legenda aparece.</summary>
 internal sealed record CaptionConfig(bool Microphone, int Size, CaptionPosition Position, CaptionColor Color, bool Uppercase);
@@ -161,6 +170,11 @@ internal sealed class StudioController
             Stream = config.Stream,
             ReplayFolder = config.Replay ? ReplayFolder : null,
             ReplaySeconds = config.ReplaySeconds,
+            SceneCaptures = config.SceneCaptures ?? Array.Empty<CaptureSource>(),
+            Scenes = config.Scenes ?? Array.Empty<SceneLayout>(),
+            ActiveScene = config.ActiveScene,
+            Transition = config.Transition,
+            ProgramView = config.ProgramView,
         };
 
         try
@@ -190,12 +204,24 @@ internal sealed class StudioController
         await StartAsync(ffmpeg, next);
     }
 
-    /// <summary>Texto que muda sempre que algo que exige reiniciar a captura muda. A chave de transmissão entra só como resumo (nunca em texto).</summary>
+    /// <summary>Troca a cena no ar sem reiniciar (só quando as cenas estão montadas juntas). Devolve false se não deu.</summary>
+    public async Task<bool> SwitchSceneAsync(int scene, SceneTransition wanted)
+    {
+        if (Config is not { LiveScenes: true } config) return false;
+        bool ok = await Session.SwitchSceneAsync(scene, wanted);
+        if (ok) Config = config with { ActiveScene = scene, Source = config.SceneCaptures![config.Scenes![scene].Capture] };
+        return ok;
+    }
+
+    private static string Describe(CaptureSource s) => $"{s.Kind}:{s.DisplayIndex}:{s.Area.X},{s.Area.Y},{s.Area.Width},{s.Area.Height}:{s.WindowTitle}";
+
+    /// <summary>Texto que muda sempre que algo que exige reiniciar a captura muda. A chave de transmissão entra só como resumo (nunca em texto).
+    /// Com as cenas montadas juntas, a cena no ar não entra: trocar de cena não reinicia.</summary>
     public static string Signature(StudioConfig c)
     {
         var parts = new List<string>
         {
-            c.Source.Kind.ToString(), c.Source.DisplayIndex.ToString(), $"{c.Source.Area.X},{c.Source.Area.Y},{c.Source.Area.Width},{c.Source.Area.Height}", c.Source.WindowTitle ?? "",
+            c.LiveScenes ? "cenas:" + string.Join(";", c.SceneCaptures!.Select(Describe)) : Describe(c.Source),
             c.OutputHeight.ToString(), c.Fps.ToString(), c.Encoder.FfmpegName, c.BitrateMbps.ToString(), c.Record.ToString(), c.Mp4.ToString(),
             c.Replay.ToString(), c.ReplaySeconds.ToString(), c.StreamCapMbps.ToString(), c.AudioKbps.ToString(), c.Quality.ToString(),
             c.Audio is null ? "sem-audio" : $"{c.Audio.CaptureSystem}:{c.Audio.OutputId}:{c.Audio.CaptureMicrophone}:{c.Audio.MicrophoneId}",
@@ -213,6 +239,12 @@ internal sealed class StudioController
         if (c.Captions is { } cap) parts.Add($"legenda:{cap.Microphone}:{cap.Size}:{cap.Position}:{cap.Color}:{cap.Uppercase}");
         foreach (var layer in c.Layers ?? Array.Empty<OverlayLayer>()) parts.Add($"camada:{layer.Kind}:{layer.Corner}:{layer.WidthPercent}:{layer.StartSeconds}:{layer.EveryMinutes}:{layer.ShowSeconds}");
         parts.Add("identidade:" + c.LayersKey);
+        if (c.LiveScenes)
+        {
+            parts.Add($"troca:{c.Transition}");
+            foreach (var scene in c.Scenes!) parts.Add($"cena:{scene.Capture}:{string.Join(",", scene.Cameras)}:{scene.Pix}:{string.Join(",", scene.Layers)}");
+        }
+        parts.Add("no-ar:" + c.ProgramView);
         if (c.Pix is { } pix)
         {
             byte[] pixHash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(c.PixPayload ?? ""));

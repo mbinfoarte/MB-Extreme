@@ -21,6 +21,8 @@ public sealed class StudioSession : IDisposable
     private AudioMixer? _mixer;
     private AudioCapture? _capture;
     private AudioPipe? _pipe;
+    private ProgramFeed? _program;
+    private readonly SemaphoreSlim _commandGate = new(1, 1);
     private CancellationTokenSource? _pumpCts;
     private Task? _pump;
     private string _ffmpeg = "";
@@ -89,6 +91,48 @@ public sealed class StudioSession : IDisposable
 
     public StudioRequest? Request => _request;
 
+    /// <summary>Última imagem do que está no ar (JPEG pequeno) e o número dela; null antes da primeira.</summary>
+    public (byte[] Jpeg, long Number)? ProgramFrame => _program?.Latest;
+
+    /// <summary>Cena que está no ar agora (troca ao vivo).</summary>
+    public int ActiveScene { get; private set; }
+
+    /// <summary>
+    /// Troca a cena com o FFmpeg rodando, sem reiniciar: manda os comandos para o seletor e a mistura.
+    /// Devolve false se o FFmpeg não foi montado com as cenas ao vivo ou se não deu para escrever.
+    /// </summary>
+    public async Task<bool> SwitchSceneAsync(int scene, SceneTransition wanted)
+    {
+        var request = _request;
+        var process = _process;
+        if (request is not { LiveScenes: true } || process is null || process.HasExited) return false;
+        if (scene < 0 || scene >= request.Scenes.Count) return false;
+        if (scene == ActiveScene) return true;
+
+        await _commandGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            foreach (var command in SceneSwitch.Plan(request.Transition, wanted, scene))
+            {
+                if (command.DelayMs > 0) await Task.Delay(command.DelayMs).ConfigureAwait(false);
+                if (process.HasExited) return false;
+                // "c" pede um comando; o FFmpeg lê a linha inteira em seguida
+                await process.StandardInput.WriteAsync("c" + command.Line + "\n").ConfigureAwait(false);
+                await process.StandardInput.FlushAsync().ConfigureAwait(false);
+            }
+            ActiveScene = scene;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
+        {
+            return false;
+        }
+        finally
+        {
+            _commandGate.Release();
+        }
+    }
+
     public string? RecordPath => _request?.RecordFile is { } f ? Path.Combine(_request.WorkingDirectory, f) : null;
 
     public string? ReplayPath => _request?.ReplayFolder is { } f ? Path.Combine(_request.WorkingDirectory, f) : null;
@@ -117,12 +161,12 @@ public sealed class StudioSession : IDisposable
         {
             try
             {
-                await LaunchAsync(request, withAudio ? audio : null).ConfigureAwait(false);
+                await LaunchWithProgramAsync(request, withAudio ? audio : null).ConfigureAwait(false);
             }
             catch (AudioUnavailableException ex)
             {
                 AddWarning(ex.Message + " Gravando sem áudio.");
-                await LaunchAsync(request, null).ConfigureAwait(false);
+                await LaunchWithProgramAsync(request, null).ConfigureAwait(false);
             }
         }
         finally
@@ -133,10 +177,45 @@ public sealed class StudioSession : IDisposable
 
     private sealed class AudioUnavailableException(string message) : Exception(message);
 
+    /// <summary>Com a imagem "No ar", e, se o FFmpeg não aceitar o canal dela, de novo sem (o vídeo é o que importa).</summary>
+    private async Task LaunchWithProgramAsync(StudioRequest request, AudioConfig? audio)
+    {
+        if (!request.ProgramView)
+        {
+            await LaunchAsync(request, audio).ConfigureAwait(false);
+            return;
+        }
+
+        try
+        {
+            await LaunchAsync(request, audio).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException) when (_program is not null)
+        {
+            AddWarning("A imagem \"No ar\" não pôde ser aberta; o estúdio segue sem ela.");
+            await LaunchAsync(request with { ProgramView = false }, audio).ConfigureAwait(false);
+        }
+    }
+
     private async Task LaunchAsync(StudioRequest request, AudioConfig? audio)
     {
         StopAudio();
-        var effective = request;
+        StopProgram();
+        var effective = request with { ProgramPipe = null };
+        ActiveScene = request.ActiveScene;
+        if (request.ProgramView)
+        {
+            try
+            {
+                _program = new ProgramFeed();
+                _program.BeginWait();
+                effective = effective with { ProgramPipe = _program.Path };
+            }
+            catch (IOException)
+            {
+                StopProgram();
+            }
+        }
         if (audio is not null)
         {
             try
@@ -223,6 +302,7 @@ public sealed class StudioSession : IDisposable
         {
             KillProcess();
             StopAudio();
+            StopProgram();
             _request = null;
             throw;
         }
@@ -232,6 +312,7 @@ public sealed class StudioSession : IDisposable
     {
         if (string.IsNullOrWhiteSpace(line)) return;
         string text = StudioCommand.MaskSecrets(line.Trim(), target);
+        if (SceneSwitch.IsCommandEcho(text)) return;   // eco da troca de cena: não é erro
         LastMessage = text;
         if (text.Contains("Slave muxer", StringComparison.OrdinalIgnoreCase) && text.Contains("fail", StringComparison.OrdinalIgnoreCase))
         {
@@ -286,6 +367,7 @@ public sealed class StudioSession : IDisposable
         string? file = RecordPath;
         KillProcess();
         StopAudio();
+        StopProgram();
         return file is not null && File.Exists(file) ? file : null;
     }
 
@@ -300,6 +382,12 @@ public sealed class StudioSession : IDisposable
         }
         catch (Exception ex) when (ex is InvalidOperationException or Win32Exception) { }
         process.Dispose();
+    }
+
+    private void StopProgram()
+    {
+        _program?.Dispose();
+        _program = null;
     }
 
     private void StopAudio()

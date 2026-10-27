@@ -46,6 +46,11 @@ public sealed partial class StudioPage
         _transition.Style = (Style)FindResource("PrimaryButton");
         _transition.Click += async (_, _) => await TransitionAsync();
         scenes.Children.Add(_transition);
+        var transition = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        transition.Children.Add(new TextBlock { Text = "Troca:", FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 4) });
+        transition.Children.Add(Chips(new[] { "Cortar", "Esmaecer" }, Math.Clamp(_s.StudioSceneTransition, 0, 1), i => { _s.StudioSceneTransition = i; _s.Save(); }));
+        transition.ToolTip = "Cortar troca na hora. Esmaecer passa de uma cena para a outra em meio segundo (usa um pouco mais o processador).";
+        scenes.Children.Add(transition);
         _studioMode.Click += (_, _) =>
         {
             _s.StudioSceneStudioMode = !_s.StudioSceneStudioMode;
@@ -215,13 +220,35 @@ public sealed partial class StudioPage
         if (changed && _studio.IsRunning && !_s.StudioSceneStudioMode) await TransitionAsync();
     }
 
+    /// <summary>
+    /// Põe no ar a cena escolhida. Com as cenas montadas juntas, só o seletor do FFmpeg muda (corte ou esmaecer, sem reiniciar).
+    /// Se a montagem mudou (fonte nova, cena nova), a captura reinicia uma vez com tudo atualizado.
+    /// </summary>
     private async Task TransitionAsync()
     {
         if (!_studio.IsRunning) return;
+        var target = CurrentScene;
+        var previous = _airScene;
         var (wanted, _) = BuildConfig(write: false);
         bool same = wanted is not null && _studio.Config is { } running && StudioController.Signature(wanted) == StudioController.Signature(running);
-        if (!same) await ApplyAsync();   // cenas com as mesmas fontes trocam sem reiniciar nada
-        if (_studio.IsRunning) _airScene = CurrentScene;
+        if (same && _studio.Config is { LiveScenes: true })
+        {
+            if (await _studio.SwitchSceneAsync(_s.StudioScenes.IndexOf(target), (SceneTransition)Math.Clamp(_s.StudioSceneTransition, 0, 1)))
+            {
+                _airScene = target;
+                SetStatus($"No ar: {target.Name}", "OkBrush");
+            }
+            else SetStatus("Não foi possível trocar a cena agora. Tente de novo.", "WarnBrush");
+        }
+        else if (same)
+        {
+            _airScene = target;   // as duas cenas têm as mesmas fontes: nada muda no vídeo
+        }
+        else
+        {
+            _airScene = target;   // a montagem nova já começa nesta cena
+            if (!await ApplyAsync()) _airScene = previous;
+        }
         RebuildScenesUi();
     }
 
@@ -242,7 +269,11 @@ public sealed partial class StudioPage
         var copy = new StudioSceneSetting
         {
             Name = StudioScenes.CleanName(from.Name + " (cópia)") ?? StudioScenes.NextName(_s.StudioScenes.Select(x => x.Name)),
-            Items = from.Items.Select(i => new StudioSceneItem { Kind = i.Kind, Camera = i.Camera, Hidden = i.Hidden, Locked = i.Locked }).ToList(),
+            Items = from.Items.Select(i => new StudioSceneItem
+            {
+                Kind = i.Kind, Camera = i.Camera, Hidden = i.Hidden, Locked = i.Locked,
+                CaptureMode = i.CaptureMode, Display = i.Display, WindowProcess = i.WindowProcess, WindowTitle = i.WindowTitle,
+            }).ToList(),
         };
         _s.StudioScenes.Insert(index + 1, copy);
         _s.StudioSceneIndex = index + 1;
@@ -331,7 +362,7 @@ public sealed partial class StudioPage
                 ShowEditor("Pix na live", _tabPix, () => { BuildPix(); UpdateGhosts(); });
                 break;
             case StudioSceneItemKind.Capture:
-                SetStatus("A tela ou a janela se escolhe logo abaixo da prévia (Capturar: Tela inteira ou Janela de um programa).");
+                ShowEditor("Tela ou janela desta cena", CaptureEditor(item), SceneChanged, 560);
                 break;
             default:
                 _selectTab?.Invoke(5);

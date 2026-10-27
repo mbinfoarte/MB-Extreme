@@ -112,6 +112,15 @@ public sealed class AppSettings
     /// <summary>Modo estúdio: escolher uma cena só mostra na prévia; ela entra no ar com "Transição".</summary>
     public bool StudioSceneStudioMode { get; set; }
 
+    /// <summary>Trocar de cena sem reiniciar (todas as cenas ficam montadas; pesa um pouco mais).</summary>
+    public bool StudioScenesLive { get; set; } = true;
+
+    /// <summary>0 = cortar, 1 = esmaecer.</summary>
+    public int StudioSceneTransition { get; set; }
+
+    /// <summary>Mostra a imagem "No ar" (uma cópia pequena do vídeo final) na tela do estúdio.</summary>
+    public bool StudioProgramView { get; set; } = true;
+
     // ---- Pix (QR estático "apoie a live")
     public bool StudioPixOn { get; set; }
 
@@ -430,6 +439,18 @@ public sealed class StudioSceneItem
     public bool Hidden { get; set; }
 
     public bool Locked { get; set; }
+
+    /// <summary>Só para a captura: 0 = a escolha de baixo da prévia, 1 = uma tela, 2 = uma janela (recorte da tela, bom para jogos), 3 = uma janela pelo conteúdo (GDI).</summary>
+    public int CaptureMode { get; set; }
+
+    /// <summary>Tela escolhida (CaptureMode 1).</summary>
+    public int Display { get; set; }
+
+    /// <summary>Programa da janela escolhida (CaptureMode 2 e 3): é por ele que a janela é achada de novo.</summary>
+    public string? WindowProcess { get; set; }
+
+    /// <summary>Título da janela quando foi escolhida (ajuda a achar a certa quando o programa tem várias).</summary>
+    public string? WindowTitle { get; set; }
 }
 
 /// <summary>Uma cena guardada: o nome e as fontes dela, na ordem da lista.</summary>

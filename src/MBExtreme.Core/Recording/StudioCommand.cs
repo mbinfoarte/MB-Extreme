@@ -9,6 +9,10 @@ public static class StudioCommand
     public const int MaxStreamMbps = 8;
     public const int MaxCameras = 3;
     public const int MaxLayers = 4;
+    public const int MaxLiveScenes = 6;
+
+    /// <summary>Tamanho e ritmo da imagem pequena "No ar" (leve: só para conferir na tela do programa).</summary>
+    private const string ProgramChain = "fps=8,scale=480:-2,format=yuvj420p";
 
     private static readonly Regex SafeKey = new(@"^[A-Za-z0-9_\-.~%=&?]+$", RegexOptions.Compiled);
 
@@ -75,6 +79,26 @@ public static class StudioCommand
             if (!CaptionOverlay.IsValidPath(c.Line1File) || !CaptionOverlay.IsValidPath(c.Line2File) || !CaptionOverlay.IsValidPath(c.FontFile))
                 return "O caminho da legenda ou da fonte tem caracteres que não são aceitos.";
         }
+        if (r.ProgramPipe is { } pipe && (!pipe.StartsWith(@"\\.\pipe\", StringComparison.Ordinal) || pipe.IndexOfAny(new[] { '"', '|', '\'', ';', '[', ']', ' ' }) >= 0))
+            return "O canal da imagem \"No ar\" não é válido.";
+        if (r.LiveScenes && ValidateScenes(r) is { } sceneProblem) return sceneProblem;
+        return null;
+    }
+
+    private static string? ValidateScenes(StudioRequest r)
+    {
+        if (r.Scenes.Count > MaxLiveScenes) return $"A troca de cena sem reiniciar funciona com até {MaxLiveScenes} cenas.";
+        if (r.SceneCaptures.Count == 0) return "As cenas não têm tela nem janela para capturar.";
+        if (r.ActiveScene < 0 || r.ActiveScene >= r.Scenes.Count) return "A cena inicial não existe.";
+        foreach (var capture in r.SceneCaptures)
+            if (capture.Kind == SourceKind.WindowGdi && string.IsNullOrWhiteSpace(capture.WindowTitle)) return "Uma janela usada numa cena não tem título.";
+        foreach (var scene in r.Scenes)
+        {
+            if (scene.Capture < 0 || scene.Capture >= r.SceneCaptures.Count) return $"A cena \"{scene.Name}\" não tem tela ou janela válida.";
+            if (scene.Cameras.Any(i => i < 0 || i >= r.Cameras.Count) || scene.Cameras.Distinct().Count() != scene.Cameras.Count) return $"A cena \"{scene.Name}\" tem uma câmera inválida.";
+            if (scene.Layers.Any(i => i < 0 || i >= r.Layers.Count) || scene.Layers.Distinct().Count() != scene.Layers.Count) return $"A cena \"{scene.Name}\" tem uma camada inválida.";
+            if (scene.Pix && r.Pix is null) return $"A cena \"{scene.Name}\" usa o Pix, mas ele não está configurado.";
+        }
         return null;
     }
 
@@ -95,6 +119,31 @@ public static class StudioCommand
 
         var args = new List<string> { "-hide_banner", "-loglevel", "warning", "-nostats", "-progress", "pipe:1", "-y" };
         int fps = Math.Clamp(r.Fps, 5, 240);
+        bool audio = r.Audio is not null;
+        string? filter = null;
+        string? complex;
+        if (r.LiveScenes) complex = LiveScenesGraph(args, r, fps);
+        else (filter, complex) = SingleSceneInputs(args, r, fps);
+
+        // ---- imagem "No ar": uma cópia pequena do vídeo final, em JPEG, para a tela do programa
+        string videoMap = complex is null ? "0:v" : "[v]";
+        if (r.ProgramPipe is not null)
+        {
+            if (complex is not null) complex += $";[v]split=2[vo][pvsrc];[pvsrc]{ProgramChain}[pv]";
+            else if (filter is not null) complex = $"[0:v]{filter}[vf];[vf]split=2[vo][pvsrc];[pvsrc]{ProgramChain}[pv]";
+            else complex = $"[0:v]split=2[vo][pvsrc];[pvsrc]fps=8,hwdownload,format=bgra,scale=480:-2,format=yuvj420p[pv]";   // quadros na placa: só a cópia pequena desce
+            filter = null;
+            videoMap = "[vo]";
+        }
+        if (filter is not null) args.AddRange(new[] { "-vf", filter });
+        if (complex is not null) args.AddRange(new[] { "-filter_complex", complex });
+        AddEncodingAndOutputs(args, r, fps, audio, videoMap);
+        return args;
+    }
+
+    /// <summary>Entradas e filtros do modo de uma cena só (o caminho mais leve: sem câmeras nem camadas, os quadros nem saem da placa de vídeo).</summary>
+    private static (string? Filter, string? Complex) SingleSceneInputs(List<string> args, StudioRequest r, int fps)
+    {
         var src = r.Source;
         bool gdi = src.Kind == SourceKind.WindowGdi;
         bool sameSize = !gdi && r.OutputWidth == src.Area.Width && r.OutputHeight == src.Area.Height;
@@ -115,14 +164,7 @@ public static class StudioCommand
 
         // ---- áudio
         bool audio = r.Audio is not null;
-        if (audio)
-        {
-            args.AddRange(new[]
-            {
-                "-f", "s16le", "-ar", "48000", "-ac", "2", "-thread_queue_size", "4096",
-                "-use_wallclock_as_timestamps", "1", "-i", r.Audio!.PipePath,
-            });
-        }
+        if (audio) AddAudioInput(args, r);
 
         // ---- câmeras e QR do Pix (entradas extras, depois do vídeo e do áudio)
         int firstExtra = audio ? 2 : 1;
@@ -164,9 +206,18 @@ public static class StudioCommand
                 ? "hwdownload,format=bgra,format=nv12"
                 : $"hwdownload,format=bgra,scale={r.OutputWidth}:{r.OutputHeight}:flags=bilinear,format=nv12";
         }
-        if (filter is not null) args.AddRange(new[] { "-vf", filter });
-        if (complex is not null) args.AddRange(new[] { "-filter_complex", complex });
+        return (filter, complex);
+    }
 
+    private static void AddAudioInput(List<string> args, StudioRequest r) => args.AddRange(new[]
+    {
+        "-f", "s16le", "-ar", "48000", "-ac", "2", "-thread_queue_size", "4096",
+        "-use_wallclock_as_timestamps", "1", "-i", r.Audio!.PipePath,
+    });
+
+    /// <summary>Codificação (uma vez só) e as saídas: arquivo, transmissão e replay pelo tee; cópia vertical e imagem "No ar" à parte.</summary>
+    private static void AddEncodingAndOutputs(List<string> args, StudioRequest r, int fps, bool audio, string videoMap)
+    {
         // ---- codificação
         double maxFactor = r.Stream is null ? 1.5 : 1.0;
         string bitrate, maxrate, bufsize;
@@ -185,7 +236,7 @@ public static class StudioCommand
             bufsize = (r.Stream is null ? rate * 2 : rate) + "M";
         }
 
-        args.AddRange(new[] { "-map", complex is null ? "0:v" : "[v]", "-c:v", r.Encoder.FfmpegName });
+        args.AddRange(new[] { "-map", videoMap, "-c:v", r.Encoder.FfmpegName });
         args.AddRange(QualityArgs(r.Encoder, r.Quality));
         args.AddRange(new[]
         {
@@ -222,7 +273,155 @@ public static class StudioCommand
                 ? new[] { "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof", verticalFile }
                 : new[] { "-f", "matroska", verticalFile });
         }
-        return args;
+
+        if (r.ProgramPipe is { } programPipe)
+            args.AddRange(new[] { "-map", "[pv]", "-c:v", "mjpeg", "-q:v", "8", "-f", "mjpeg", "-flush_packets", "1", programPipe });
+    }
+
+    // ---------------------------------------------------------------- cenas ao vivo
+
+    /// <summary>Telas pela placa (ddagrab) abrem uma vez por monitor; uma janela "recortada" é um corte da tela dela. Janelas pelo GDI abrem cada uma.</summary>
+    public static string CaptureGroupKey(CaptureSource c) => c.Kind == SourceKind.WindowGdi ? "gdi:" + c.WindowTitle : "tela:" + c.DisplayIndex;
+
+    private static string Fan(IReadOnlyList<string> labels) => labels.Count == 1 ? labels[0] : $",split={labels.Count}{string.Concat(labels)}";
+
+    /// <summary>
+    /// Todas as cenas montadas ao mesmo tempo e um seletor no fim (streamselect): trocar de cena é só mudar o seletor, sem reiniciar.
+    /// Com esmaecer, dois seletores (a cena que sai e a que entra) passam por uma mistura (mix) cujos pesos mudam aos poucos.
+    /// Cada câmera, o Pix e cada camada abrem uma vez e são copiados (split) para as cenas que os usam.
+    /// </summary>
+    private static string LiveScenesGraph(List<string> args, StudioRequest r, int fps)
+    {
+        int w = r.OutputWidth, h = r.OutputHeight;
+        var groupKeys = new List<string>();
+        var captureGroup = new int[r.SceneCaptures.Count];
+        for (int i = 0; i < r.SceneCaptures.Count; i++)
+        {
+            string key = CaptureGroupKey(r.SceneCaptures[i]);
+            int index = groupKeys.IndexOf(key);
+            if (index < 0) { groupKeys.Add(key); index = groupKeys.Count - 1; }
+            captureGroup[i] = index;
+        }
+
+        // ---- entradas: a primeira captura, o áudio (sempre a entrada 1), as outras capturas, câmeras, Pix e camadas
+        int next = 0;
+        var groupInput = new int[groupKeys.Count];
+        for (int g = 0; g < groupKeys.Count; g++)
+        {
+            var first = r.SceneCaptures[Array.IndexOf(captureGroup, g)];
+            if (first.Kind == SourceKind.WindowGdi)
+                args.AddRange(new[] { "-f", "gdigrab", "-framerate", fps.ToString(), "-draw_mouse", "1", "-i", "title=" + first.WindowTitle });
+            else
+                args.AddRange(new[] { "-f", "lavfi", "-i", $"ddagrab=output_idx={first.DisplayIndex}:framerate={fps}:draw_mouse=1" });
+            groupInput[g] = next++;
+            if (g == 0 && r.Audio is not null) { AddAudioInput(args, r); next++; }
+        }
+        int camBase = next;
+        foreach (var camera in r.Cameras) args.AddRange(CameraSource.InputArgs(camera.DeviceName));
+        next += r.Cameras.Count;
+        int pixInput = -1;
+        if (r.Pix is { } pixImage)
+        {
+            args.AddRange(new[] { "-loop", "1", "-framerate", "5", "-i", pixImage.ImagePath });
+            pixInput = next++;
+        }
+        int layerBase = next;
+        foreach (var layer in r.Layers) args.AddRange(new[] { "-loop", "1", "-framerate", "25", "-i", layer.ImagePath });
+
+        var parts = new List<string>();
+        int margin = Math.Max(8, w / 80);
+        string mainFilter = r.Filter?.ToChain() is { } chain ? "," + chain : "";
+        List<string> Users(Func<SceneLayout, bool> uses, string suffix) =>
+            r.Scenes.Select((scene, index) => (scene, index)).Where(x => uses(x.scene)).Select(x => $"[s{x.index}{suffix}]").ToList();
+
+        // ---- capturas: desce da placa uma vez por monitor e copia para cada recorte usado
+        var used = Enumerable.Range(0, r.SceneCaptures.Count).Where(ci => r.Scenes.Any(s => s.Capture == ci)).ToList();
+        for (int g = 0; g < groupKeys.Count; g++)
+        {
+            var captures = used.Where(ci => captureGroup[ci] == g).ToList();
+            if (captures.Count == 0) { parts.Add($"[{groupInput[g]}:v]nullsink"); continue; }
+            bool gdi = r.SceneCaptures[captures[0]].Kind == SourceKind.WindowGdi;
+            string download = $"[{groupInput[g]}:v]" + (gdi ? "format=bgra" : "hwdownload,format=bgra");
+            parts.Add(download + Fan(captures.Select(c => $"[cap{c}]").ToList()));
+        }
+        foreach (int ci in used)
+        {
+            var capture = r.SceneCaptures[ci];
+            string crop = capture.Kind == SourceKind.WindowRegion ? $",crop={capture.Area.Width}:{capture.Area.Height}:{capture.Area.X}:{capture.Area.Y}" : "";
+            parts.Add($"[cap{ci}]null{crop}{mainFilter},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
+                      + Fan(Users(s => s.Capture == ci, "b0")));
+        }
+
+        // ---- câmeras, Pix e camadas: uma vez cada, copiadas para as cenas que usam
+        for (int i = 0; i < r.Cameras.Count; i++)
+        {
+            int index = i;
+            var camera = r.Cameras[i];
+            var users = Users(s => s.Cameras.Contains(index), "c" + i);
+            if (users.Count == 0) { parts.Add($"[{camBase + i}:v]nullsink"); continue; }
+            int width = Math.Max(2, w * camera.ClampedPercent / 100);
+            width -= width % 2;
+            string camFilter = camera.Filter?.ToChain() is { } camChain ? "," + camChain : "";
+            parts.Add($"[{camBase + i}:v]scale={width}:-2,format=bgra{camFilter}" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "") + Fan(users));
+        }
+        if (r.Pix is { } pix)
+        {
+            var users = Users(s => s.Pix, "pix");
+            int width = Math.Max(2, w * pix.ClampedPercent / 100);
+            width -= width % 2;
+            parts.Add(users.Count == 0 ? $"[{pixInput}:v]nullsink" : $"[{pixInput}:v]scale={width}:-2,format=bgra" + Fan(users));
+        }
+        for (int i = 0; i < r.Layers.Count; i++)
+        {
+            int index = i;
+            var users = Users(s => s.Layers.Contains(index), "l" + i);
+            if (users.Count == 0) { parts.Add($"[{layerBase + i}:v]nullsink"); continue; }
+            int width = Math.Max(2, w * r.Layers[i].ClampedPercent / 100);
+            width -= width % 2;
+            parts.Add(LayerBody(r.Layers[i], layerBase + i, width) + Fan(users));
+        }
+
+        // ---- cada cena: a captura e, por cima, as câmeras, o Pix e as camadas dela
+        for (int sn = 0; sn < r.Scenes.Count; sn++)
+        {
+            var scene = r.Scenes[sn];
+            int k = 0;
+            foreach (int ci in scene.Cameras)
+                parts.Add($"[s{sn}b{k}][s{sn}c{ci}]overlay={CameraPosition(r.Cameras[ci].Corner, margin)}:shortest=0[s{sn}b{++k}]");
+            if (scene.Pix && r.Pix is { } p)
+            {
+                string enable = p.EveryMinutes > 0 ? $":enable='lt(mod(t,{p.EveryMinutes * 60}),{Math.Clamp(p.ShowSeconds, 3, p.EveryMinutes * 60)})'" : "";
+                parts.Add($"[s{sn}b{k}][s{sn}pix]overlay={CameraPosition(p.Corner, margin)}{enable}:shortest=0[s{sn}b{++k}]");
+            }
+            foreach (int li in scene.Layers)
+                parts.Add($"[s{sn}b{k}][s{sn}l{li}]overlay={LayerPlacement(r.Layers[li], margin)}:shortest=0[s{sn}b{++k}]");
+            parts.Add($"[s{sn}b{k}]null[s{sn}]");
+        }
+
+        // ---- seletor de cena (e a mistura do esmaecer)
+        int n = r.Scenes.Count;
+        int active = Math.Clamp(r.ActiveScene, 0, n - 1);
+        if (r.Transition == SceneTransition.Fade)
+        {
+            // dois seletores (a cena que sai e a que entra) e a mistura das duas; fora da troca, os dois mostram a mesma cena
+            for (int sn = 0; sn < n; sn++) parts.Add($"[s{sn}]split=2[s{sn}x][s{sn}y]");
+            parts.Add(string.Concat(Enumerable.Range(0, n).Select(sn => $"[s{sn}x]")) + $"streamselect@{SceneSwitch.SelectOut}=inputs={n}:map={active}[ska]");
+            parts.Add(string.Concat(Enumerable.Range(0, n).Select(sn => $"[s{sn}y]")) + $"streamselect@{SceneSwitch.SelectIn}=inputs={n}:map={active}[skb]");
+            parts.Add($"[ska][skb]mix@{SceneSwitch.Mix}=inputs=2:weights='1 0':scale=1[sel]");
+        }
+        else
+        {
+            parts.Add(string.Concat(Enumerable.Range(0, n).Select(sn => $"[s{sn}]")) + $"streamselect@{SceneSwitch.Select}=inputs={n}:map={active}[sel]");
+        }
+
+        string last = "[sel]";
+        if (r.Captions is { } captions)
+        {
+            parts.Add(CaptionFilter.Build(captions, "[sel]", "[selc]", w, h, 0.5));
+            last = "[selc]";
+        }
+        parts.Add($"{last}format=nv12[v]");
+        return string.Join(";", parts);
     }
 
     /// <summary>Esforço do codificador conforme a marca da placa (NVENC p2/p4/p6, AMF speed/balanced/quality, Quick Sync veryfast/medium/slower).</summary>
@@ -331,7 +530,9 @@ public static class StudioCommand
     private static string N(double v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>A entrada do canal esmaece ao aparecer e ao sair; a faixa e o logo só são redimensionados (a faixa entra deslizando pela posição).</summary>
-    private static string LayerChain(OverlayLayer layer, int input, int width, int index)
+    private static string LayerChain(OverlayLayer layer, int input, int width, int index) => LayerBody(layer, input, width) + $"[l{index}]";
+
+    private static string LayerBody(OverlayLayer layer, int input, int width)
     {
         string chain = $"[{input}:v]scale={width}:-2,format=bgra";
         if (layer.Kind == OverlayKind.Intro)
@@ -340,7 +541,7 @@ public static class StudioCommand
             chain += $",fade=t=in:st={N(layer.StartSeconds)}:d={N(fade)}:alpha=1,fade=t=out:st={N(layer.StartSeconds + layer.Show - fade)}:d={N(fade)}:alpha=1";
         }
 
-        return chain + $"[l{index}]";
+        return chain;
     }
 
     /// <summary>Posição e janela de tempo da camada. As expressões usam o relógio do vídeo (t), então não é preciso reiniciar nada para a faixa repetir.</summary>

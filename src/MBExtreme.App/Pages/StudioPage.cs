@@ -188,6 +188,7 @@ public sealed partial class StudioPage : ToolPageBase
         BuildReplaySettings();
         BuildShortcuts();
         BuildCompat();
+        BuildSceneOptions();
 
         var filesTitle = Heading("Gravações e replays");
         filesTitle.FontSize = 13;
@@ -203,6 +204,7 @@ public sealed partial class StudioPage : ToolPageBase
         _previewTimer.Tick += async (_, _) =>
         {
             if (++_syncTick % 3 == 0) SyncCameraFeeds();
+            RefreshProgramView();
             await UpdatePreviewAsync();
         };
         Loaded += async (_, _) =>
@@ -469,10 +471,14 @@ public sealed partial class StudioPage : ToolPageBase
         var box = new StackPanel();
         // horizontal (a gravação normal) e, ao lado, o vertical que sai junto quando está ligado
         var views = new Grid();
+        views.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         views.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         views.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         views.Children.Add(_previewHost);
-        Grid.SetColumn(_verticalLive, 1);
+        var program = BuildProgramBox();
+        Grid.SetColumn(program, 1);
+        views.Children.Add(program);
+        Grid.SetColumn(_verticalLive, 2);
         _verticalLive.Margin = new Thickness(12, 0, 0, 0);
         _verticalLive.VerticalAlignment = VerticalAlignment.Top;
         views.Children.Add(_verticalLive);
@@ -617,7 +623,20 @@ public sealed partial class StudioPage : ToolPageBase
         {
             PixelRect area;
             IntPtr? gdi = null;
-            if (_sourceTab == 0)
+            if (SceneGrabTarget() is { } own)
+            {
+                // a cena escolhida tem a sua própria tela ou janela
+                if (own.Problem is not null)
+                {
+                    _preview.Source = null;
+                    _previewNote.Text = own.Problem;
+                    UpdateGhosts();
+                    return;
+                }
+                area = own.Area;
+                gdi = own.Gdi;
+            }
+            else if (_sourceTab == 0)
             {
                 area = CurrentArea();
             }
@@ -1277,21 +1296,24 @@ public sealed partial class StudioPage : ToolPageBase
     }
 
     /// <summary>Desenha as camadas ligadas e devolve a lista para o FFmpeg (a escrita em disco só ao iniciar ou aplicar).</summary>
-    private List<OverlayLayer> BuildLayers(bool write)
+    private List<OverlayLayer> BuildLayers(bool write) => BuildLayers(write, _s.StudioIntroOn, _s.StudioLowerOn, _s.StudioLogoOn);
+
+    /// <summary>As camadas pedidas, sempre na ordem entrada, faixa, logo.</summary>
+    private List<OverlayLayer> BuildLayers(bool write, bool intro, bool lower, bool logo)
     {
         var layers = new List<OverlayLayer>();
         var profile = Profile();
-        if (_s.StudioIntroOn)
+        if (intro)
         {
             if (write) OverlayArt.SavePng(OverlayArt.RenderIntro(profile), OverlayPath("intro.png"));
             layers.Add(new OverlayLayer(OverlayKind.Intro, OverlayPath("intro.png"), CameraCorner.TopLeft, 46, _s.StudioIntroStart, 0, _s.StudioIntroSeconds));
         }
-        if (_s.StudioLowerOn)
+        if (lower)
         {
             if (write) OverlayArt.SavePng(OverlayArt.RenderLowerThird(profile), OverlayPath("lower.png"));
             layers.Add(new OverlayLayer(OverlayKind.LowerThird, OverlayPath("lower.png"), (CameraCorner)Math.Clamp(_s.StudioLowerCorner, 0, 3), 38, _s.StudioLowerStart, _s.StudioLowerEveryMinutes, _s.StudioLowerSeconds));
         }
-        if (_s.StudioLogoOn)
+        if (logo)
         {
             if (write) OverlayArt.SavePng(OverlayArt.RenderLogo(profile), OverlayPath("logo.png"));
             layers.Add(new OverlayLayer(OverlayKind.Logo, OverlayPath("logo.png"), (CameraCorner)Math.Clamp(_s.StudioLogoCorner, 0, 3), _s.StudioLogoPercent, 0, 0, 0));
@@ -1981,6 +2003,20 @@ public sealed partial class StudioPage : ToolPageBase
             if (source is null) return (null, "A janela está fora da área visível das telas.");
         }
 
+        // ---- cenas: cada uma pode ter a sua tela ou janela; com várias, todas ficam montadas para trocar sem reiniciar
+        var fallback = source;
+        var sceneCapture = ResolveCapture(SceneCaptureItem(CurrentScene), fallback, displays, out string? captureProblem);
+        if (sceneCapture is null) return (null, captureProblem);
+        source = sceneCapture;
+        LivePlan? live = null;
+        if (StudioScenes.CanGoLive(_s, CurrentVertical() is not null || CurrentVerticalCopy() is not null))
+        {
+            var (plan, planProblem) = PlanLiveScenes(fallback, displays);
+            if (plan is null) return (null, planProblem);
+            live = plan;
+            source = plan.Captures[plan.Scenes[plan.Active].Capture];
+        }
+
         // ---- codificador
         var encoder = _encoders[Math.Min(_encoderIndex, _encoders.Count - 1)];
 
@@ -1996,7 +2032,7 @@ public sealed partial class StudioPage : ToolPageBase
 
         // ---- câmeras
         var cameras = new List<CameraOverlay>();
-        foreach (var cam in _s.StudioCameras.Where(c => c.On))
+        foreach (var cam in live?.CameraSettings ?? _s.StudioCameras.Where(c => c.On).ToList())
         {
             if (!CameraOverlay.IsValidName(cam.Name)) return (null, "Escolha a câmera na aba Câmeras (clique em Procurar câmeras) ou desligue-a.");
             var camFilter = PresetFilter(cam.Preset, cam.Mirror);
@@ -2006,7 +2042,7 @@ public sealed partial class StudioPage : ToolPageBase
         // ---- Pix
         PixOverlay? pix = null;
         string? pixPayload = null;
-        if (_s.StudioPixOn)
+        if (live?.Pix ?? _s.StudioPixOn)
         {
             if (_s.StudioPixUseOwn)
             {
@@ -2034,7 +2070,7 @@ public sealed partial class StudioPage : ToolPageBase
 
         // ---- identidade do canal e filtro de imagem
         List<OverlayLayer> layers;
-        try { layers = BuildLayers(write); }
+        try { layers = live is { } lp ? BuildLayers(write, lp.Intro, lp.Lower, lp.Logo) : BuildLayers(write); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { return (null, "Não foi possível preparar as camadas do canal: " + ex.Message); }
         var imageFilter = CurrentFilter();
 
@@ -2058,7 +2094,8 @@ public sealed partial class StudioPage : ToolPageBase
         var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
             _s.StudioFps, encoder, _s.StudioBitrateMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
             _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), cameras, pix, pixPayload,
-            imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey(), vertical, captions, verticalCopy);
+            imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey(), vertical, captions, verticalCopy,
+            live?.Captures, live?.Layouts(layers), live?.Active ?? 0, (SceneTransition)Math.Clamp(_s.StudioSceneTransition, 0, 1), _s.StudioProgramView);
         return (config, null);
     }
 
@@ -2110,14 +2147,15 @@ public sealed partial class StudioPage : ToolPageBase
         _pending.Visibility = Vis(different);
     }
 
-    private async Task ApplyAsync()
+    /// <summary>Reinicia a captura com o que está na tela. Devolve true quando aplicou.</summary>
+    private async Task<bool> ApplyAsync()
     {
-        if (!_studio.IsRunning || _applying) return;
+        if (!_studio.IsRunning || _applying) return false;
         var (config, error) = BuildConfig(write: true);
         if (config is null)
         {
             SetStatus(error ?? "Não foi possível aplicar.", "WarnBrush");
-            return;
+            return false;
         }
 
         if (!_restartWarned)
@@ -2125,7 +2163,7 @@ public sealed partial class StudioPage : ToolPageBase
             var ask = MessageBox.Show(
                 "Para aplicar, o MB Extreme reinicia a captura:\n\n• a transmissão sai do ar por alguns segundos e reconecta sozinha;\n• a gravação continua num arquivo novo (o anterior fica salvo);\n• o replay instantâneo recomeça vazio.\n\nMudar o volume do microfone e do som do PC e mutar não precisa reiniciar. Aplicar agora?",
                 "Aplicar mudanças ao vivo", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (ask != MessageBoxResult.Yes) return;
+            if (ask != MessageBoxResult.Yes) return false;
             _restartWarned = true;
         }
 
@@ -2133,10 +2171,12 @@ public sealed partial class StudioPage : ToolPageBase
         _applying = true;
         _pending.Visibility = Visibility.Collapsed;
         SetStatus("Aplicando as mudanças...");
+        bool applied = false;
         try
         {
             await _studio.RestartAsync(config);
             SetStatus("Mudanças aplicadas. " + config.Source.Description, "OkBrush");
+            applied = true;
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Win32Exception)
         {
@@ -2149,6 +2189,7 @@ public sealed partial class StudioPage : ToolPageBase
 
         RefreshState();
         RefreshFiles();
+        return applied;
     }
 
     private void ToggleMute(bool microphone, bool mute)

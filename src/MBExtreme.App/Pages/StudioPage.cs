@@ -59,7 +59,6 @@ public sealed partial class StudioPage : ToolPageBase
     private readonly List<Border> _ghosts = new();
     private readonly StackPanel _tabPix = new(), _tabStats = new(), _tabChannel = new(), _tabImage = new();
     private ChatPanel? _chatPanel;
-    private Expander? _chatExpander;
     private readonly TextBox _chName = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 40 };
     private readonly TextBox _chPresenter = new() { Width = 260, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 40 };
     private readonly TextBox _chTagline = new() { Width = 360, HorizontalAlignment = HorizontalAlignment.Left, MaxLength = 60 };
@@ -155,21 +154,19 @@ public sealed partial class StudioPage : ToolPageBase
         _stop = AddButton("Parar", async (_, _) => await EndAsync(), false);
         _saveReplay = AddButton("Salvar replay", async (_, _) => await _studio.SaveReplayAsync(), false);
         AddButton("Abrir pasta", (_, _) => OpenFolder(), false);
-        _start.Visibility = Visibility.Collapsed;   // o botão grande da coluna da direita faz Iniciar e Parar
-        _stop.Visibility = Visibility.Collapsed;
+        HideHeader();   // o topo é desenhado pela página, como na maquete: título, REC e AO VIVO
 
         _windows = new PickList(this, 130);
         _mics = new PickList(this, 110);
         _outputs = new PickList(this, 110);
         _remember = new CheckBox { Content = "Lembrar a chave neste PC (protegida pelo Windows, só este usuário lê)", Foreground = Brush("TextBrush"), Margin = new Thickness(0, 8, 0, 0) };
 
-        Body.Children.Add(_live);
+        Body.Margin = new Thickness(0);
+        Body.Children.Add(BuildTopBar());
         BuildLive();
         BuildStatsCard();
+        // o chat abre numa janela própria (pelo cartão Extras ou sozinho quando a live começa)
         _chatPanel = new ChatPanel(() => (CurrentService(), _statsId.Text, _statsKey.Password));
-        // O chat só ocupa espaço quando o usuário abre (ou quando a transmissão começa).
-        _chatExpander = new Expander { Header = "Chat ao vivo", Content = _chatPanel, IsExpanded = false, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 6, 0, 0) };
-        Body.Children.Add(_chatExpander);
         Body.Children.Add(_config);
         BuildSource();
         BuildTiles();
@@ -190,9 +187,7 @@ public sealed partial class StudioPage : ToolPageBase
         BuildCompat();
         BuildSceneOptions();
 
-        var filesTitle = Heading("Gravações e replays");
-        filesTitle.FontSize = 13;
-        Body.Children.Add(filesTitle);
+        Body.Children.Add(BuildFilesHeader());
         Body.Children.Add(_files);
 
         _studio.Notice += OnNotice;
@@ -330,11 +325,23 @@ public sealed partial class StudioPage : ToolPageBase
 
     private void BuildTiles()
     {
+        // coluna de controle, como na maquete: Iniciar, o tempo, as três saídas, o público
         var column = new StackPanel();
         column.Children.Add(BuildBigStart());
-        column.Children.Add(MakeTile(_tileReplay, _tileReplayState, "replay", "Replay instantâneo", "Guarda os últimos segundos", () => { _outReplay = !_outReplay; }));
-        column.Children.Add(MakeTile(_tileRecord, _tileRecordState, "record", "Gravar", "Salva em Vídeos\\MB Extreme", () => { _outRecord = !_outRecord; }));
-        column.Children.Add(MakeTile(_tileStream, _tileStreamState, "stream", "Transmitir ao vivo", "Twitch, YouTube, Facebook ou RTMP", () => { _outStream = !_outStream; }));
+        column.Children.Add(_timerText);
+        var outputs = new StackPanel();
+        outputs.Children.Add(MakeTile(_tileRecord, _tileRecordState, "record", "Gravar", "Salva no computador", () => { _outRecord = !_outRecord; }));
+        outputs.Children.Add(MakeTile(_tileStream, _tileStreamState, "stream", "Transmitir", "Envia para YouTube / Twitch", () => { _outStream = !_outStream; }));
+        outputs.Children.Add(MakeTile(_tileReplay, _tileReplayState, "replay", "Replay", "Guarda os últimos segundos", () => { _outReplay = !_outReplay; }));
+        var outputsCard = CardOf(outputs);
+        outputsCard.Padding = new Thickness(8);
+        outputsCard.CornerRadius = new CornerRadius(12);
+        outputsCard.Margin = new Thickness(0, 0, 0, 12);
+        column.Children.Add(outputsCard);
+        Detach(_saveReplay);
+        _saveReplay.Margin = new Thickness(0, 0, 0, 12);
+        _saveReplay.HorizontalAlignment = HorizontalAlignment.Stretch;
+        column.Children.Add(_saveReplay);
         Detach(_statsCard);
         column.Children.Add(_statsCard);
         Grid.SetColumn(column, 1);
@@ -395,32 +402,34 @@ public sealed partial class StudioPage : ToolPageBase
         return (new Viewbox { Width = 30, Height = 30, Child = canvas, VerticalAlignment = VerticalAlignment.Center }, strokes, fills);
     }
 
+    private readonly Dictionary<Border, (Border Track, System.Windows.Shapes.Ellipse Knob)> _tileSwitches = new();
+
+    /// <summary>Uma linha de saída como na maquete: nome, uma frase e a chave liga/desliga à direita. A linha inteira é clicável.</summary>
     private Border MakeTile(Border tile, TextBlock state, string kind, string title, string hint, Action toggle)
     {
-        tile.Style = (Style)FindResource("Card");
-        tile.Margin = new Thickness(0, 0, 0, 6);
-        tile.Padding = new Thickness(12, 5, 12, 5);
-        tile.Cursor = System.Windows.Input.Cursors.Hand;
-
-        var (icon, strokes, fills) = BuildIcon(kind);
-        _tileIcons[tile] = (kind, strokes, fills);
-        icon.Margin = new Thickness(0, 0, 12, 0);
-
-        var text = new StackPanel();
-        text.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold });
-        text.Children.Add(Muted(hint, 11));
-        state.FontSize = 12;
-        state.FontWeight = FontWeights.SemiBold;
-        state.Margin = new Thickness(0, 2, 0, 0);
-        text.Children.Add(state);
+        _ = kind;
+        state.Visibility = Visibility.Collapsed;
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold });
+        text.Children.Add(new TextBlock { Text = hint, FontSize = 12, Foreground = Brush("MutedBrush") });
+        var knob = new System.Windows.Shapes.Ellipse { Width = 16, Height = 16, Margin = new Thickness(3, 0, 3, 0), VerticalAlignment = VerticalAlignment.Center };
+        var track = new Border { Width = 40, Height = 22, CornerRadius = new CornerRadius(11), Child = knob, VerticalAlignment = VerticalAlignment.Center };
+        _tileSwitches[tile] = (track, knob);
 
         var row = new Grid();
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.Children.Add(icon);
-        Grid.SetColumn(text, 1);
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.Children.Add(text);
+        Grid.SetColumn(track, 1);
+        row.Children.Add(track);
+
         tile.Child = row;
+        tile.MinHeight = 56;
+        tile.Padding = new Thickness(12, 8, 12, 8);
+        tile.Margin = new Thickness(0, 0, 0, 4);
+        tile.CornerRadius = new CornerRadius(10);
+        tile.BorderThickness = new Thickness(1);
+        tile.Cursor = System.Windows.Input.Cursors.Hand;
         tile.MouseLeftButtonUp += (_, _) =>
         {
             if (AppServices.Recorder.IsRecording) return;
@@ -434,20 +443,19 @@ public sealed partial class StudioPage : ToolPageBase
 
     private void RefreshTiles()
     {
-        void Paint(Border tile, TextBlock state, bool on)
+        void Paint(Border tile, bool on)
         {
-            state.Text = on ? "● Ligado" : "Desligado";
-            state.Foreground = Brush(on ? "OkBrush" : "MutedBrush");
-            tile.BorderBrush = Brush(on ? "AccentBrush" : "BorderBrush");
-            tile.BorderThickness = new Thickness(on ? 2 : 1);
-            if (!_tileIcons.TryGetValue(tile, out var icon)) return;
-            foreach (var shape in icon.Strokes) shape.Stroke = Brush(on ? "AccentBrush" : "MutedBrush");
-            foreach (var shape in icon.Fills) shape.Fill = Brush(on ? (icon.Kind == "record" ? "BadBrush" : "AccentBrush") : "MutedBrush");
+            tile.Background = on ? Frozen(Color.FromRgb(0x24, 0x21, 0x0F)) : Brushes.Transparent;
+            tile.BorderBrush = on ? Yellow : Brushes.Transparent;
+            if (!_tileSwitches.TryGetValue(tile, out var sw)) return;
+            sw.Track.Background = on ? Yellow : Frozen(Color.FromRgb(0x3A, 0x3A, 0x40));
+            sw.Knob.Fill = on ? Ink : Frozen(Color.FromRgb(0xD8, 0xD8, 0xDC));
+            sw.Knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         }
 
-        Paint(_tileRecord, _tileRecordState, _outRecord);
-        Paint(_tileStream, _tileStreamState, _outStream);
-        Paint(_tileReplay, _tileReplayState, _outReplay);
+        Paint(_tileRecord, _outRecord);
+        Paint(_tileStream, _outStream);
+        Paint(_tileReplay, _outReplay);
     }
 
     // ---- origem com pré-visualização
@@ -456,38 +464,25 @@ public sealed partial class StudioPage : ToolPageBase
 
     private void BuildSource()
     {
-        // pré-visualização à esquerda (com a escolha do que capturar logo abaixo) e os três blocos à direita
-        _top = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.2, GridUnitType.Star) });
-        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 260, MaxWidth = 380 });
+        // como na maquete: a prévia grande à esquerda e a coluna de controle fixa à direita
+        _top = new Grid { Margin = new Thickness(0, 6, 0, 0) };
+        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320) });
 
-        _preview.MaxHeight = 380;
+        _preview.MaxHeight = 440;
         _previewNote.Foreground = Brush("MutedBrush");
         _previewNote.FontSize = 11;
-
         _previewHost.Children.Add(_preview);
         _preview.SizeChanged += (_, _) => UpdateGhosts();
 
-        var box = new StackPanel();
-        // horizontal (a gravação normal) e, ao lado, o vertical que sai junto quando está ligado
-        var views = new Grid();
-        views.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        views.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        views.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        views.Children.Add(_previewHost);
-        var program = BuildProgramBox();
-        Grid.SetColumn(program, 1);
-        views.Children.Add(program);
-        Grid.SetColumn(_verticalLive, 2);
-        _verticalLive.Margin = new Thickness(12, 0, 0, 0);
-        _verticalLive.VerticalAlignment = VerticalAlignment.Top;
-        views.Children.Add(_verticalLive);
-        box.Children.Add(views);
-        box.Children.Add(_previewNote);
+        var previewCard = CardOf(BuildPreviewArea());
+        previewCard.Padding = new Thickness(14, 12, 14, 10);
+        previewCard.Margin = new Thickness(0, 0, 16, 0);
+        previewCard.CornerRadius = new CornerRadius(12);
+        _top.Children.Add(previewCard);
 
-        // o que capturar: botões pequenos embaixo da imagem
-        var capture = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        capture.Children.Add(new TextBlock { Text = "Capturar:", FontWeight = FontWeights.SemiBold, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 5) });
+        // o que capturar fica numa janela pequena (botão na linha de baixo da prévia)
+        var capture = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
         capture.Children.Add(Chips(new[] { "Tela inteira", "Janela de um programa" }, _sourceTab, i =>
         {
             _sourceTab = i;
@@ -495,13 +490,12 @@ public sealed partial class StudioPage : ToolPageBase
             _windowPanel.Visibility = Vis(i == 1);
             if (i == 1) RefreshWindows();
             UpdatePlan();
+            RefreshCaptureButton();
         }));
-        box.Children.Add(capture);
-
+        _capturePanel.Children.Add(capture);
         _displayPanel.Children.Add(_displayHost);
         _displayPanel.Visibility = Vis(_sourceTab == 0);
-        box.Children.Add(_displayPanel);
-
+        _capturePanel.Children.Add(_displayPanel);
         _windowPanel.Visibility = Vis(_sourceTab == 1);
         _windowPanel.Children.Add(_windows);
         var windowRow = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
@@ -513,14 +507,14 @@ public sealed partial class StudioPage : ToolPageBase
         windowRow.Children.Add(new TextBlock { Text = "Modo:", FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 4) });
         windowRow.Children.Add(Chips(new[] { "Recorte da tela (jogos)", "Conteúdo da janela" }, _windowMode, i => _windowMode = i));
         _windowPanel.Children.Add(windowRow);
-        box.Children.Add(_windowPanel);
-
-        var previewCard = CardOf(box);
-        previewCard.Padding = new Thickness(10, 8, 10, 6);
-        previewCard.Margin = new Thickness(0, 0, 10, 0);
-        _top.Children.Add(previewCard);
+        _capturePanel.Children.Add(_windowPanel);
+        _capturePanel.Children.Add(Muted("Esta é a captura padrão. Cada cena pode ter a sua própria tela ou janela (Fontes › ⋯ › Propriedades).", 11));
+        _windows.Picked += _ => RefreshCaptureButton();
 
         _config.Children.Add(_top);
+        Detach(_pending);
+        _pending.Margin = new Thickness(0, 10, 0, 0);
+        _config.Children.Add(_pending);
         RefreshDisplays();
     }
 
@@ -940,34 +934,44 @@ public sealed partial class StudioPage : ToolPageBase
 
     // ---------------------------------------------------------------- estatísticas da transmissão
 
+    private readonly TextBlock _statsViewsNumber = new() { FontSize = 14, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right };
+
+    /// <summary>Público, como na maquete: quem assiste agora (grande, amarelo), um gráfico pequeno e as visualizações.</summary>
     private void BuildStatsCard()
     {
         var panel = new StackPanel();
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition());
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(new TextBlock { Text = "Público", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        var open = SmallButton("Painel", (_, _) => OpenManagePage());
-        open.Padding = new Thickness(8, 2, 8, 2);
-        open.FontSize = 11;
-        open.ToolTip = "Abre o painel da live na plataforma (título, categoria, privacidade).";
-        Grid.SetColumn(open, 1);
-        head.Children.Add(open);
-        panel.Children.Add(head);
+        Grid Line(string label, TextBlock value)
+        {
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition());
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.Children.Add(new TextBlock { Text = label, FontSize = 13, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
+            Grid.SetColumn(value, 1);
+            g.Children.Add(value);
+            return g;
+        }
 
-        panel.Children.Add(_statsViewers);
-        _statsLine.Foreground = Brush("MutedBrush");
-        _statsTitle.Foreground = Brush("TextBrush");
-        _statsError.Foreground = Brush("WarnBrush");
+        _statsViewers.FontSize = 26;
+        _statsViewers.FontWeight = FontWeights.Bold;
+        _statsViewers.Foreground = Yellow;
+        _statsViewers.HorizontalAlignment = HorizontalAlignment.Right;
+        _statsViewers.Text = "—";
+        _statsViewsNumber.Text = "—";
+        panel.Children.Add(Line("Assistindo agora", _statsViewers));
         _viewerChart.FormatMax = v => $"{v:0}";
+        _viewerChart.Height = 60;
+        _viewerChart.Margin = new Thickness(0, 6, 0, 6);
         panel.Children.Add(_viewerChart);
+        panel.Children.Add(Line("Visualizações", _statsViewsNumber));
+        _statsLine.Foreground = Brush("MutedBrush");
+        _statsError.Foreground = Brush("WarnBrush");
         panel.Children.Add(_statsLine);
         panel.Children.Add(_statsError);
-        _viewerChart.Height = 50;
 
         _statsCard.Style = (Style)FindResource("Card");
-        _statsCard.Padding = new Thickness(12, 8, 12, 8);
-        _statsCard.Margin = new Thickness(0, 4, 0, 0);
+        _statsCard.Padding = new Thickness(14, 12, 14, 12);
+        _statsCard.CornerRadius = new CornerRadius(12);
+        _statsCard.Margin = new Thickness(0);
         _statsCard.Child = panel;
         Body.Children.Add(_statsCard);
     }
@@ -1071,22 +1075,23 @@ public sealed partial class StudioPage : ToolPageBase
         {
             _viewers.Add(now);
             _viewerChart.Update(_viewers.Values.ToList());
-            _statsViewers.Text = $"● {Count(now)} assistindo agora";
-            _statsViewers.FontSize = 22;
-            _statsViewers.Foreground = Brush("OkBrush");
+            _statsViewers.Text = Count(now);
+            _statsViewers.FontSize = 26;
+            _statsViewers.Foreground = Yellow;
         }
         else
         {
-            _statsViewers.Text = stats.IsLive ? "● No ar (a plataforma ainda não informou espectadores)" : "Fora do ar na plataforma";
-            _statsViewers.FontSize = 16;
-            _statsViewers.Foreground = Brush(stats.IsLive ? "OkBrush" : "MutedBrush");
+            _statsViewers.Text = "—";
+            _statsViewers.FontSize = 26;
+            _statsViewers.Foreground = Brush("MutedBrush");
+            _statsLine.Text = stats.IsLive ? "A plataforma ainda não informou quem assiste." : "Fora do ar na plataforma.";
         }
 
         var parts = new List<string>();
         // só o essencial, como no painel da live do YouTube: quem assiste agora e o total de visualizações
-        if (stats.TotalViews is not null) parts.Add($"{Count(stats.TotalViews)} visualizações");
-        else if (_viewers.Values.Count > 0) parts.Add($"pico de {Count(_viewers.Peak)} assistindo");
-        _statsLine.Text = string.Join("  ·  ", parts);
+        _statsViewsNumber.Text = Count(stats.TotalViews);
+        if (stats.TotalViews is null && _viewers.Values.Count > 0) parts.Add($"pico de {Count(_viewers.Peak)} assistindo");
+        if (stats.IsLive && stats.Viewers is not null) _statsLine.Text = string.Join("  ·  ", parts);
 
         string title = stats.Title.Length == 0 ? "" : stats.Title + (stats.Category.Length > 0 ? " · " + stats.Category : "");
         _statsTitle.Text = title;
@@ -1104,7 +1109,7 @@ public sealed partial class StudioPage : ToolPageBase
         _statsTest.Foreground = Brush("WarnBrush");
         if (!_hasStats && _studio.IsRunning && _studio.Config?.Stream is not null)
         {
-            _statsViewers.Text = "Estatísticas indisponíveis";
+            _statsViewers.Text = "—";
             _statsViewers.Foreground = Brush("MutedBrush");
             _statsLine.Text = "";
             _statsTitle.Visibility = Visibility.Collapsed;
@@ -1876,7 +1881,8 @@ public sealed partial class StudioPage : ToolPageBase
             : new List<string> { $"Tela principal · {ScreenInfo.Primary.Width}×{ScreenInfo.Primary.Height}" };
         _displayIndex = Math.Clamp(_displayIndex, 0, names.Count - 1);
         _displayHost.Children.Clear();
-        _displayHost.Children.Add(Chips(names, _displayIndex, i => { _displayIndex = i; UpdatePlan(); }));
+        _displayHost.Children.Add(Chips(names, _displayIndex, i => { _displayIndex = i; UpdatePlan(); RefreshCaptureButton(); }));
+        RefreshCaptureButton();
     }
 
     private void RefreshWindows()
@@ -2271,6 +2277,8 @@ public sealed partial class StudioPage : ToolPageBase
         _start.IsEnabled = !running;
         _stop.IsEnabled = running;
         _saveReplay.IsEnabled = _studio.IsRunning && _studio.Config?.Replay == true;
+        _saveReplay.Visibility = Vis(_saveReplay.IsEnabled);
+        RefreshTopBar();
         // com o estúdio ligado as configurações continuam editáveis: o que exige reiniciar aparece na barra "Aplicar agora"
         if (!running) _pending.Visibility = Visibility.Collapsed;
         RefreshMuteButtons();
@@ -2282,7 +2290,7 @@ public sealed partial class StudioPage : ToolPageBase
         _live.Visibility = Vis(_studio.IsRunning);
         bool streaming = _studio.IsRunning && _studio.Config?.Stream is not null;
         if (streaming && !_wasStreaming) { _viewers.Reset(); _hasStats = false; if (_s.StudioStatsOn) _ = RefreshStatsAsync(false); }
-        if (streaming && !_wasStreaming && _s.StudioChatAuto && _chatPanel is { IsConnected: false }) { _chatPanel.Connect(); if (_chatExpander is not null) _chatExpander.IsExpanded = true; }
+        if (streaming && !_wasStreaming && _s.StudioChatAuto && _chatPanel is { IsConnected: false }) { _chatPanel.Connect(); ShowChatWindow(); }
         if (!streaming && _wasStreaming && _chatPanel is { IsConnected: true }) _chatPanel.Disconnect();
         _wasStreaming = streaming;
         UpdateStatsVisibility();
@@ -2303,6 +2311,7 @@ public sealed partial class StudioPage : ToolPageBase
             RefreshFiles();
         }
 
+        RefreshInfoLine();
         if (++_tickCount % 2 == 0) UpdatePending();
         var session = _studio.Session;
         if (session.EndedUnexpectedly)

@@ -13,9 +13,8 @@ public sealed partial class StudioPage
     private readonly StackPanel _sceneList = new();
     private readonly StackPanel _sourceList = new();
     private readonly TextBlock _sourcesTitle = new() { FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-    private readonly TextBlock _airText = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
-    private readonly Button _transition = new() { Content = "Transição ›", Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly Button _studioMode = new() { Content = "Modo estúdio", Margin = new Thickness(0, 0, 6, 0), FontSize = 11.5 };
+    private readonly Button _transition = new() { Content = "Transição ›" };
+    private readonly Button _studioMode = new() { Content = "Modo estúdio" };
     private StudioSceneSetting? _airScene;
 
     private StudioSceneSetting CurrentScene => StudioScenes.EnsureCurrent(_s);
@@ -31,7 +30,6 @@ public sealed partial class StudioPage
         var scenes = new StackPanel();
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
         var tools = new StackPanel { Orientation = Orientation.Horizontal };
-        tools.Children.Add(_studioMode);
         tools.Children.Add(Glyph("", "Nova cena (começa vazia)", AddScene));
         tools.Children.Add(Glyph("", "Remover a cena escolhida", RemoveScene));
         tools.Children.Add(Glyph("", "Subir a cena", () => MoveScene(-1)));
@@ -41,23 +39,6 @@ public sealed partial class StudioPage
         head.Children.Add(new TextBlock { Text = "Cenas", FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         scenes.Children.Add(head);
         scenes.Children.Add(_sceneList);
-        _airText.Foreground = Brush("MutedBrush");
-        scenes.Children.Add(_airText);
-        _transition.Style = (Style)FindResource("PrimaryButton");
-        _transition.Click += async (_, _) => await TransitionAsync();
-        scenes.Children.Add(_transition);
-        var transition = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
-        transition.Children.Add(new TextBlock { Text = "Troca:", FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 4) });
-        transition.Children.Add(Chips(new[] { "Cortar", "Esmaecer" }, Math.Clamp(_s.StudioSceneTransition, 0, 1), i => { _s.StudioSceneTransition = i; _s.Save(); }));
-        transition.ToolTip = "Cortar troca na hora. Esmaecer passa de uma cena para a outra em meio segundo (usa um pouco mais o processador).";
-        scenes.Children.Add(transition);
-        _studioMode.Click += (_, _) =>
-        {
-            _s.StudioSceneStudioMode = !_s.StudioSceneStudioMode;
-            _s.Save();
-            RebuildScenesUi();
-        };
-        _studioMode.ToolTip = "Ligado: clicar numa cena só mostra ela na prévia para você ajeitar; ela vai ao ar quando você clicar em Transição. Desligado: a cena entra no ar na hora.";
         var scenesCard = CardOf(scenes);
         scenesCard.Padding = new Thickness(12, 10, 12, 10);
         scenesCard.Margin = new Thickness(0, 0, 10, 0);
@@ -106,8 +87,8 @@ public sealed partial class StudioPage
         else if (_airScene is null || !_s.StudioScenes.Contains(_airScene)) _airScene = current;
 
         _studioMode.Style = (Style)FindResource(_s.StudioSceneStudioMode ? "PrimaryButton" : "GhostButton");
-        _studioMode.Padding = new Thickness(9, 3, 9, 3);
-        _studioMode.FontSize = 11.5;
+        _studioMode.Padding = new Thickness(14, 4, 14, 4);
+        _studioMode.FontSize = 12.5;
 
         _sceneList.Children.Clear();
         for (int i = 0; i < _s.StudioScenes.Count; i++)
@@ -144,11 +125,7 @@ public sealed partial class StudioPage
             _sceneList.Children.Add(item);
         }
 
-        _airText.Text = running
-            ? $"No ar agora: {_airScene?.Name}" + (_airScene != current ? $" · na prévia: {current.Name}" : "")
-            : _s.StudioSceneStudioMode ? "Modo estúdio ligado: a cena escolhida entra no ar com Transição." : "";
-        _airText.Visibility = Vis(_airText.Text.Length > 0);
-        _transition.Visibility = Vis(running && _s.StudioSceneStudioMode && _airScene != current);
+        RefreshStudioLayout();
 
         RebuildSources();
     }

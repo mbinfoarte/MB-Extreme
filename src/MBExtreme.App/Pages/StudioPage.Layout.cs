@@ -85,14 +85,15 @@ public sealed partial class StudioPage
             int group = i;
             bigRow.ColumnDefinitions.Add(new ColumnDefinition());
             var (icon, strokes, fills) = BuildIcon(groups[i].Icon);
-            icon.Margin = new Thickness(0, 0, 10, 0);
-            var label = new TextBlock { Text = groups[i].Label, FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            icon.Margin = new Thickness(0, 0, 0, 6);
+            icon.HorizontalAlignment = HorizontalAlignment.Center;
+            var label = new TextBlock { Text = groups[i].Label, FontSize = 16, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center };
+            var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             content.Children.Add(icon);
             content.Children.Add(label);
             var tile = new Border
             {
-                CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(10, 12, 10, 12),
+                CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(10, 12, 10, 12), MinHeight = 84,
                 Margin = new Thickness(i == 0 ? 0 : 5, 0, i == groups.Length - 1 ? 0 : 5, 0), Cursor = System.Windows.Input.Cursors.Hand, Child = content,
             };
             tile.MouseLeftButtonUp += (_, _) => Show(lastTab[group]);
@@ -102,8 +103,15 @@ public sealed partial class StudioPage
         }
 
         _config.Children.Add(bigRow);
-        _config.Children.Add(subRow);
-        foreach (var tab in tabs) _config.Children.Add(tab);
+        // o painel do ícone escolhido num cartão só, como na maquete: as abas em cima e o conteúdo embaixo
+        var panel = new StackPanel();
+        subRow.Margin = new Thickness(0, 0, 0, 10);
+        panel.Children.Add(subRow);
+        foreach (var tab in tabs) panel.Children.Add(tab);
+        var panelCard = CardOf(panel);
+        panelCard.Padding = new Thickness(14);
+        panelCard.CornerRadius = new CornerRadius(12);
+        _config.Children.Add(panelCard);
         _selectTab = Show;
         Show(_settingsTab);
     }
@@ -278,9 +286,13 @@ public sealed partial class StudioPage
         var auto = new CheckBox { Content = "Abrir e conectar o chat sozinho quando a live começar", IsChecked = _s.StudioChatAuto, Foreground = Brush("TextBrush") };
         auto.Click += (_, _) => _s.StudioChatAuto = auto.IsChecked == true;
         chat.Children.Add(auto);
-        var openChat = SmallButton("Abrir o chat agora", (_, _) => OpenChat());
+        var chatHere = SmallButton("Abrir o chat aqui no programa", (_, _) => { Window.GetWindow(chat)?.Close(); ShowChatWindow(); }, true);
+        chatHere.HorizontalAlignment = HorizontalAlignment.Left;
+        chatHere.Margin = new Thickness(0, 8, 0, 0);
+        chat.Children.Add(chatHere);
+        var openChat = SmallButton("Abrir no navegador", (_, _) => OpenChat());
         openChat.HorizontalAlignment = HorizontalAlignment.Left;
-        openChat.Margin = new Thickness(0, 8, 0, 0);
+        openChat.Margin = new Thickness(0, 6, 0, 0);
         chat.Children.Add(openChat);
         chat.Children.Add(Muted("O canal ou a live do chat ficam em Transmitir › Conexão.", 11));
         cards.Children.Add(SummaryCard("Chat ao vivo", _s.StudioChatAuto, "Mostra o chat e destaca as perguntas para você responder.", chat, "Configurar", BuildExtras));

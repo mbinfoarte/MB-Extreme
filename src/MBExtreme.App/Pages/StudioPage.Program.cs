@@ -12,19 +12,23 @@ namespace MBExtreme.UI.Pages;
 public sealed partial class StudioPage
 {
     private readonly Image _programImage = new() { Stretch = Stretch.Uniform };
-    private readonly Border _programBox = new() { Visibility = Visibility.Collapsed, Width = 340, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
-    private readonly TextBlock _programTitle = new() { FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly Border _programBox = new() { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Top };
+    private readonly TextBlock _programTitle = new() { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 0, 6) };
+    private readonly Border _programFrame = new() { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(2), ClipToBounds = true, MinHeight = 120 };
+    private readonly TextBlock _programEmpty = new() { Text = "Fora do ar", FontSize = 13, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private long _programShown;
 
     private FrameworkElement BuildProgramBox()
     {
-        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
-        head.Children.Add(new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Brushes.Red, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
-        head.Children.Add(_programTitle);
         var panel = new StackPanel();
-        panel.Children.Add(head);
-        panel.Children.Add(new Border { CornerRadius = new CornerRadius(6), BorderBrush = Brushes.Red, BorderThickness = new Thickness(2), Child = _programImage, ClipToBounds = true });
+        _programTitle.Foreground = Brush("MutedBrush");
+        panel.Children.Add(_programTitle);
+        _programEmpty.Foreground = Brush("MutedBrush");
+        _programFrame.Background = Frozen(Color.FromRgb(0x1C, 0x1C, 0x20));
+        _programFrame.Child = new Grid { Children = { _programEmpty, _programImage } };
+        panel.Children.Add(_programFrame);
         _programBox.Child = panel;
+        RefreshProgramTitle();
         _programBox.ToolTip = "O que está saindo agora na gravação e na live (imagem reduzida). A prévia ao lado mostra a cena escolhida.";
         return _programBox;
     }
@@ -32,11 +36,20 @@ public sealed partial class StudioPage
     /// <summary>Mostra a última imagem do que está no ar (o FFmpeg manda umas 8 por segundo).</summary>
     private void RefreshProgramView()
     {
-        var frame = _studio.IsRunning && _s.StudioProgramView ? _studio.Session.ProgramFrame : null;
-        _programBox.Visibility = Vis(frame is not null);
+        bool running = _studio.IsRunning;
+        _programFrame.BorderBrush = running ? Frozen(Color.FromRgb(0xFF, 0x4D, 0x4D)) : Yellow;
+        RefreshProgramTitle();
+        var frame = running && _s.StudioProgramView ? _studio.Session.ProgramFrame : null;
+        if (frame is null)
+        {
+            _programImage.Source = null;
+            _programEmpty.Text = running ? (_s.StudioProgramView ? "Carregando a imagem..." : "Imagem \"No ar\" desligada (Programa › Avançado)") : "Fora do ar";
+            _programEmpty.Visibility = Visibility.Visible;
+            return;
+        }
+        _programEmpty.Visibility = Visibility.Collapsed;
         if (frame is not { } f || f.Number == _programShown) return;
         _programShown = f.Number;
-        _programTitle.Text = "No ar" + (_airScene is { } air ? " · " + air.Name : "");
         try
         {
             var image = new BitmapImage();
@@ -48,6 +61,14 @@ public sealed partial class StudioPage
             _programImage.Source = image;
         }
         catch (Exception ex) when (ex is NotSupportedException or IOException or InvalidOperationException) { }   // um quadro ruim: espera o próximo
+    }
+
+    private void RefreshProgramTitle()
+    {
+        _programTitle.Inlines.Clear();
+        _programTitle.Inlines.Add(new System.Windows.Documents.Run("No ar: "));
+        string name = _studio.IsRunning ? (_airScene ?? CurrentScene).Name : "—";
+        _programTitle.Inlines.Add(new System.Windows.Documents.Run(name) { FontWeight = FontWeights.SemiBold, Foreground = Yellow });
     }
 
     // ---------------------------------------------------------------- tela ou janela de cada cena

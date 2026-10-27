@@ -20,14 +20,16 @@ public abstract class ToolPageBase : UserControl
     protected ToolPageBase(string title, string description)
     {
         var root = new StackPanel { Margin = new Thickness(40, 32, 40, 32) };
-        root.Children.Add(new TextBlock { Text = title, FontSize = 28, FontWeight = FontWeights.SemiBold });
-        root.Children.Add(new TextBlock
+        _title = new TextBlock { Text = title, FontSize = 28, FontWeight = FontWeights.SemiBold };
+        root.Children.Add(_title);
+        _description = new TextBlock
         {
             Text = description,
             Margin = new Thickness(0, 4, 0, 18),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush("MutedBrush"),
-        });
+        };
+        root.Children.Add(_description);
         Buttons.Orientation = Orientation.Horizontal;
         root.Children.Add(Buttons);
         root.Children.Add(_status);
@@ -49,6 +51,17 @@ public abstract class ToolPageBase : UserControl
     }
 
     protected virtual void OnProgressClosed() { }
+
+    private readonly TextBlock _title;
+    private readonly TextBlock _description;
+
+    /// <summary>Para páginas que desenham o próprio topo: esconde o título grande, a descrição e a linha de botões.</summary>
+    protected void HideHeader()
+    {
+        _title.Visibility = Visibility.Collapsed;
+        _description.Visibility = Visibility.Collapsed;
+        Buttons.Visibility = Visibility.Collapsed;
+    }
 
     private bool _loadingNow;
 

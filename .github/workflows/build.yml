@@ -64,10 +64,14 @@ jobs:
           & $signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 setup\MBExtreme-Beta-Setup.exe
           if ($LASTEXITCODE -ne 0) { throw "Falha ao assinar o instalador" }
 
+      # cópia extra do instalador nas Actions: o lançamento (abaixo) já publica os arquivos,
+      # então, se o espaço de artefatos do GitHub encher, a compilação segue mesmo assim
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: MBExtreme-Beta-instalador
           path: setup/MBExtreme-Beta-Setup.exe
+          retention-days: 1
 
       - name: Publicar o MB Extreme (Beta 01)
         env:

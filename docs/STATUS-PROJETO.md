@@ -1,14 +1,14 @@
 # Status do projeto (duas frentes separadas)
 
-Atualizado em 26/10/2026. Use este arquivo para retomar o trabalho sem depender do histórico da conversa.
+Atualizado em 27/10/2026. Use este arquivo para retomar o trabalho sem depender do histórico da conversa.
 
 ## Frente A: Aplicativo MB Extreme (Windows, .NET 8, WPF)
-**Publicado até o beta-38.** Em commits locais, ainda sem subir: atualização dentro do programa (`d3741d8`).
+**Publicado até o beta-38.** Em commits locais, ainda sem subir (vão no beta-39): atualização dentro do programa, posição e tamanho das câmeras de volta, novo layout do estúdio (Gravar/Transmitir/Programa), cenas com fontes próprias, troca de cena ao vivo sem reiniciar (cortar/esmaecer), imagem "No ar", tela ou janela por cena e envio de vídeos ao YouTube.
 
 Pendências, em ordem sugerida:
 1. Testar o beta-38 no PC: Modo leve da live, Otimizar a live, vídeo ao vivo das câmeras (inclusive celular por endereço de rede), áudio profissional, bolinha REC, grupo NVIDIA da biblioteca, capas com SteamGridDB.
-2. Tela de Início menor (precisa de prints do usuário) e reorganização do layout do estúdio.
-3. Estúdio: cenas salvas com "Transmitir agora" (modo estúdio real exige compositor próprio; ver `docs/PESQUISA-ESTUDIO-OBS.md`).
+2. Tela de Início menor (precisa de prints do usuário).
+3. Testar no PC o estúdio novo: troca de cena ao vivo (ddagrab de verdade, câmeras), imagem "No ar", janela por cena e o envio ao YouTube (precisa do ID do cliente OAuth "App para computador" no projeto do Google Cloud do usuário).
 4. Teste automático de peso da live (roda alguns segundos e escolhe a configuração mais leve).
 5. Resizable BAR e importar/exportar `.nip` (perfis NVIDIA); interruptor por item do driver.
 6. Análise de rota por site: documento de pesquisa e melhorias.

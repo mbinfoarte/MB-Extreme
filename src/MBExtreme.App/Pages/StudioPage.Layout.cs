@@ -288,6 +288,7 @@ public sealed partial class StudioPage
         cards.Children.Add(SummaryCard("Legendas ao vivo", _s.StudioCaptionOn, "Escreve na tela o que você fala, em tempo real.", "Configurar", () => _selectTab?.Invoke(1)));
         cards.Children.Add(SummaryCard("Clipes automáticos", _s.StudioAutoClip, "Salva sozinho os melhores lances pelo som da partida.", "Configurar", () => _selectTab?.Invoke(9)));
         cards.Children.Add(SummaryCard("Vídeos curtos (Shorts)", null, "Corta trechos de um vídeo longo em vídeos verticais.", "Abrir", () => MainWindow.Current?.Go("shorts")));
+        cards.Children.Add(SummaryCard("Enviar vídeo ao YouTube", YouTubeConnected, YouTubeConnected ? "Manda uma gravação ou um clipe direto para o seu canal." : "Conecte a conta uma vez em Programa › Contas e chaves.", "Enviar", () => OpenUploadDialog()));
         _tabExtras.Children.Add(cards);
     }
 
@@ -350,5 +351,7 @@ public sealed partial class StudioPage
         twitchHow.Margin = new Thickness(0, 0, 8, 4);
         twitchHow.ToolTip = "Registre um aplicativo (categoria \"Application Integration\"), copie o Client ID e gere um segredo. A Twitch informa espectadores, mas não as visualizações totais.";
         _tabAccounts.Children.Add(Field("", twitchHow, 170));
+
+        AddYouTubeAccount(_tabAccounts);
     }
 }

@@ -315,6 +315,17 @@ public sealed class AppSettings
 
     public string StudioTwitchClientId { get; set; } = "";
 
+    // ---- envio de vídeos para o YouTube (projeto do Google Cloud da própria pessoa)
+    public string StudioYtClientId { get; set; } = "";
+
+    public string? StudioYtSecretProtected { get; set; }
+
+    /// <summary>Token de renovação do Google, protegido pelo Windows (só este usuário lê).</summary>
+    public string? StudioYtRefreshProtected { get; set; }
+
+    /// <summary>0 = privado, 1 = não listado, 2 = público.</summary>
+    public int StudioYtPrivacy { get; set; }
+
     /// <summary>Segredo do aplicativo da Twitch do próprio usuário, protegido pelo Windows.</summary>
     public string? StudioTwitchSecretProtected { get; set; }
 

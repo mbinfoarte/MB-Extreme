@@ -2411,7 +2411,7 @@ public sealed partial class StudioPage : ToolPageBase
         grid.Children.Add(text);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var (label, action, primary) in new (string, Action, bool)[] { ("Abrir", () => Open(file), true), ("Excluir", () => Delete(file), false) })
+        foreach (var (label, action, primary) in new (string, Action, bool)[] { ("Abrir", () => Open(file), true), ("Enviar", () => OpenUploadDialog(file), false), ("Excluir", () => Delete(file), false) })
         {
             var button = new Button { Content = label, Style = (Style)FindResource(primary ? "PrimaryButton" : "GhostButton"), Padding = new Thickness(10, 3, 10, 3), FontSize = 11, Margin = new Thickness(6, 0, 0, 0) };
             var act = action;

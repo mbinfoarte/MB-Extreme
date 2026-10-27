@@ -121,6 +121,20 @@ public sealed class AppSettings
     /// <summary>Mostra a imagem "No ar" (uma cópia pequena do vídeo final) na tela do estúdio.</summary>
     public bool StudioProgramView { get; set; } = true;
 
+    // ---- live vertical ao mesmo tempo (Instagram, TikTok, YouTube...)
+    public bool StudioVLiveOn { get; set; }
+
+    /// <summary>0 Instagram, 1 TikTok, 2 YouTube, 3 outro servidor.</summary>
+    public int StudioVLivePlatform { get; set; }
+
+    public string StudioVLiveUrl { get; set; } = "";
+
+    /// <summary>Chave da live vertical, protegida pelo Windows.</summary>
+    public string? StudioVLiveKeyProtected { get; set; }
+
+    /// <summary>Plataforma principal escolhida pelo atalho (0 nenhum, 1 Instagram, 2 TikTok): usa "Outro servidor" com o endereço dela.</summary>
+    public int StudioStreamPreset { get; set; }
+
     // ---- Pix (QR estático "apoie a live")
     public bool StudioPixOn { get; set; }
 

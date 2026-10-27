@@ -14,7 +14,7 @@ public sealed partial class StudioPage
     private static readonly SolidColorBrush Ink = Frozen(Color.FromRgb(0x0B, 0x0B, 0x0C));
 
     private readonly StackPanel _tabExtras = new(), _tabAccounts = new(), _tabPixCard = new();
-    private readonly Button _bigStart = new() { Height = 54, FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8), HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly Button _bigStart = new() { Height = 42, FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8), HorizontalAlignment = HorizontalAlignment.Stretch };
     private Action<int>? _selectTab;
     private bool _startBusy, _accountsLoaded;
 
@@ -85,15 +85,16 @@ public sealed partial class StudioPage
             int group = i;
             bigRow.ColumnDefinitions.Add(new ColumnDefinition());
             var (icon, strokes, fills) = BuildIcon(groups[i].Icon);
-            icon.Margin = new Thickness(0, 0, 0, 6);
-            icon.HorizontalAlignment = HorizontalAlignment.Center;
-            var label = new TextBlock { Text = groups[i].Label, FontSize = 16, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center };
-            var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            // ícone ao lado do nome, menor: os três botões ocupam uma faixa baixa
+            icon.Margin = new Thickness(0, 0, 8, 0);
+            if (icon is Viewbox box) { box.Width = 20; box.Height = 20; }
+            var label = new TextBlock { Text = groups[i].Label, FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             content.Children.Add(icon);
             content.Children.Add(label);
             var tile = new Border
             {
-                CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(10, 12, 10, 12), MinHeight = 84,
+                CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(10, 7, 10, 7), MinHeight = 40,
                 Margin = new Thickness(i == 0 ? 0 : 5, 0, i == groups.Length - 1 ? 0 : 5, 0), Cursor = System.Windows.Input.Cursors.Hand, Child = content,
             };
             tile.MouseLeftButtonUp += (_, _) => Show(lastTab[group]);

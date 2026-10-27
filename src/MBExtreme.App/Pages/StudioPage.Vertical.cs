@@ -46,8 +46,8 @@ public sealed partial class StudioPage
     /// <summary>Quadro vertical escolhido, ou null com o modo desligado.</summary>
     private VerticalLayout? CurrentVertical() => _s.StudioVerticalOn ? CurrentVerticalLayout() : null;
 
-    /// <summary>Cópia vertical gravada junto com o vídeo normal (só com a gravação ligada e o modo vertical principal desligado).</summary>
-    private VerticalLayout? CurrentVerticalCopy() => !_s.StudioVerticalOn && _s.StudioVerticalCopy && _outRecord ? CurrentVerticalLayout() : null;
+    /// <summary>Cópia vertical junto com o vídeo normal ("Os dois"): vai para o arquivo (com a gravação ligada) e/ou para a live vertical.</summary>
+    private VerticalLayout? CurrentVerticalCopy() => !_s.StudioVerticalOn && _s.StudioVerticalCopy && (_outRecord || VerticalLiveWanted) ? CurrentVerticalLayout() : null;
 
     private VerticalLayout CurrentVerticalLayout()
     {
@@ -67,11 +67,11 @@ public sealed partial class StudioPage
 
         _tabVertical.Children.Add(Muted("Grava, transmite e salva o replay já no formato vertical (Shorts, Reels, TikTok): a tela é montada em tempo real, com o mesmo áudio, câmeras, filtros, canal e Pix das outras abas. Sem edição depois.", 11));
         var on = new CheckBox { Content = "Usar vídeo vertical", IsChecked = _s.StudioVerticalOn, FontWeight = FontWeights.SemiBold, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 6, 0, 4) };
-        on.Click += (_, _) => { _s.StudioVerticalOn = on.IsChecked == true; BuildVertical(); UpdatePlan(); };
+        on.Click += (_, _) => { _s.StudioVerticalOn = on.IsChecked == true; BuildVertical(); UpdatePlan(); RefreshLayoutChips(); RefreshStudioLayout(); UpdateVerticalLive(); };
         _tabVertical.Children.Add(on);
 
         var copy = new CheckBox { Content = "Gravar também uma cópia vertical, ao mesmo tempo que o vídeo normal", IsChecked = _s.StudioVerticalCopy, IsEnabled = !_s.StudioVerticalOn, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 2, 0, 2) };
-        copy.Click += (_, _) => { _s.StudioVerticalCopy = copy.IsChecked == true; BuildVertical(); };
+        copy.Click += (_, _) => { _s.StudioVerticalCopy = copy.IsChecked == true; BuildVertical(); RefreshLayoutChips(); RefreshStudioLayout(); UpdateVerticalLive(); };
         _tabVertical.Children.Add(copy);
         _tabVertical.Children.Add(Muted(_s.StudioVerticalOn
             ? "A cópia vale quando o vídeo principal é o normal (horizontal)."
@@ -185,9 +185,9 @@ public sealed partial class StudioPage
         if (!on || _lastFrame is null) return;
 
         var layout = CurrentVerticalLayout();
-        const double height = 220;
+        double height = _s.StudioVerticalOn ? 380 : 250;   // "Vertical": o vertical é o vídeo, aparece grande; "Os dois": ao lado da prévia
         double width = height * layout.Width / layout.Height;
-        var phone = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(2), BorderBrush = Brush("AccentBrush"), Background = Brushes.Black, ClipToBounds = true };
+        var phone = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(2), BorderBrush = Yellow, Background = Brushes.Black, ClipToBounds = true };
         var stack = new Grid { ClipToBounds = true };
         double topH = layout.Split ? height * layout.TopHeight / layout.Height : height;
         stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(topH, GridUnitType.Pixel) });
@@ -199,7 +199,9 @@ public sealed partial class StudioPage
 
         _verticalLive.Children.Clear();
         var column = new StackPanel();
-        column.Children.Add(new TextBlock { Text = "Vertical", FontSize = 11, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 0, 0, 3) });
+        string where = VerticalLiveWanted && !_s.StudioVerticalOn ? " · live no " + VerticalLive.For((VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3)).Name
+            : _s.StudioVerticalOn && _s.StudioStreamPreset is 1 or 2 ? " · live no " + (_s.StudioStreamPreset == 1 ? "Instagram" : "TikTok") : "";
+        column.Children.Add(new TextBlock { Text = "Vertical 9:16" + where, FontSize = 12, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 0, 0, 4) });
         column.Children.Add(phone);
         _verticalLive.Children.Add(column);
     }

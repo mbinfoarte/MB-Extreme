@@ -40,7 +40,9 @@ internal sealed record StudioConfig(
     IReadOnlyList<SceneLayout>? Scenes = null,
     int ActiveScene = 0,
     SceneTransition Transition = SceneTransition.Cut,
-    bool ProgramView = false)
+    bool ProgramView = false,
+    StreamTarget? VerticalStream = null,
+    VerticalPlatform VerticalPlatform = VerticalPlatform.Instagram)
 {
     /// <summary>Várias cenas montadas juntas: trocar de cena não reinicia a captura.</summary>
     public bool LiveScenes => Scenes is { Count: > 1 } && Vertical is null && VerticalCopy is null;
@@ -162,7 +164,12 @@ internal sealed class StudioController
             Layers = config.Layers ?? Array.Empty<OverlayLayer>(),
             Vertical = vertical,
             Captions = captionOverlay,
-            VerticalCopy = config.Record ? config.VerticalCopy : null,
+            VerticalCopy = config.VerticalCopy is { } copy && (config.Record || config.VerticalStream is not null)
+                ? (config.VerticalStream is null ? copy : VerticalLive.Fit(copy, config.VerticalPlatform))
+                : null,
+            VerticalStream = config.VerticalCopy is null ? null : config.VerticalStream,
+            VerticalStreamKbps = VerticalLive.For(config.VerticalPlatform).VideoKbps,
+            VerticalFps = config.VerticalStream is null ? 0 : Math.Min(fps, VerticalLive.For(config.VerticalPlatform).Fps),
             VerticalFile = config.Record && config.VerticalCopy is not null ? "gravacao-" + stamp + "-vertical" + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             WorkingDirectory = Folder,
             RecordFile = config.Record ? "gravacao-" + stamp + FfmpegCommand.ExtensionFor(config.Mp4) : null,
@@ -245,6 +252,11 @@ internal sealed class StudioController
             foreach (var scene in c.Scenes!) parts.Add($"cena:{scene.Capture}:{string.Join(",", scene.Cameras)}:{scene.Pix}:{string.Join(",", scene.Layers)}");
         }
         parts.Add("no-ar:" + c.ProgramView);
+        if (c.VerticalStream is { } vt)
+        {
+            byte[] vhash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(vt.FullUrl));
+            parts.Add($"live-vertical:{c.VerticalPlatform}:{Convert.ToHexString(vhash, 0, 6)}");
+        }
         if (c.Pix is { } pix)
         {
             byte[] pixHash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(c.PixPayload ?? ""));
@@ -375,7 +387,7 @@ internal sealed class StudioController
             StudioConfig next;
             if (action == StudioAction.ToggleRecord)
             {
-                next = last with { Record = true, Stream = null };
+                next = last with { Record = true, Stream = null, VerticalStream = null };
             }
             else
             {

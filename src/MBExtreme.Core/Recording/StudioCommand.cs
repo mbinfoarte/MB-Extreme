@@ -68,8 +68,14 @@ public static class StudioCommand
         if (r.VerticalCopy is { } copy)
         {
             if (r.Vertical is not null) return "A cópia vertical não vale quando o vídeo principal já é vertical.";
-            if (r.RecordFile is null) return "A cópia vertical é gravada junto com a gravação: ligue a opção Gravar.";
-            if (string.IsNullOrWhiteSpace(r.VerticalFile) || r.VerticalFile.IndexOfAny(new[] { '"', '|', '\'', ';', '[', ']' }) >= 0) return "O arquivo da cópia vertical não é válido.";
+            if (r.VerticalFile is null && r.VerticalStream is null) return "O vídeo vertical precisa ir para algum lugar: ligue Gravar ou a live vertical.";
+            if (r.VerticalFile is not null && r.RecordFile is null) return "A cópia vertical é gravada junto com a gravação: ligue a opção Gravar.";
+            if (r.VerticalFile is not null && (string.IsNullOrWhiteSpace(r.VerticalFile) || r.VerticalFile.IndexOfAny(new[] { '"', '|', '\'', ';', '[', ']' }) >= 0)) return "O arquivo da cópia vertical não é válido.";
+            if (r.VerticalStream is { } vs)
+            {
+                if (r.Encoder.Codec != VideoCodec.H264) return "A live vertical exige H.264. Escolha um codificador H.264.";
+                if (ValidateTarget(vs, "live vertical") is { } vsProblem) return vsProblem;
+            }
             if (copy.Validate() is { } cp) return cp;
             var names = copy.Panes.Where(p => p.Kind == PaneKind.Camera).Select(p => p.Source ?? "").ToList();
             if (names.Count == 2 && string.Equals(names[0], names[1], StringComparison.OrdinalIgnoreCase)) return "As duas partes da cópia vertical usam a mesma câmera; escolha câmeras diferentes.";
@@ -103,13 +109,28 @@ public static class StudioCommand
     }
 
     /// <summary>Troca a chave de transmissão por pontos em qualquer texto (mensagens de erro do FFmpeg, por exemplo).</summary>
-    public static string MaskSecrets(string text, StreamTarget? target)
+    public static string MaskSecrets(string text, params StreamTarget?[] targets)
     {
-        if (target is null) return text;
-        if (target.FullUrl.Length > 0) text = text.Replace(target.FullUrl, "••••");
-        if (target.Service == StreamService.Custom && target.PathSecret is { Length: > 0 } secret) text = text.Replace(secret, "••••");
-        if (target.Key.Length >= 4) text = text.Replace(target.Key, "••••");
+        foreach (var target in targets)
+        {
+            if (target is null) continue;
+            if (target.FullUrl.Length > 0) text = text.Replace(target.FullUrl, "••••");
+            if (target.Service == StreamService.Custom && target.PathSecret is { Length: > 0 } secret) text = text.Replace(secret, "••••");
+            if (target.Key.Length >= 4) text = text.Replace(target.Key, "••••");
+        }
         return text;
+    }
+
+    /// <summary>Problema com um destino de transmissão (chave e endereço), ou null.</summary>
+    private static string? ValidateTarget(StreamTarget s, string what)
+    {
+        if (s.Key.Length == 0 && s.Service != StreamService.Custom) return $"Informe a chave da {what}.";
+        if (s.Key.Length > 0 && !SafeKey.IsMatch(s.Key)) return $"A chave da {what} tem caracteres que não são aceitos. Copie de novo, sem espaços.";
+        string url = s.BaseUrl;
+        if (!url.StartsWith("rtmp://", StringComparison.OrdinalIgnoreCase) && !url.StartsWith("rtmps://", StringComparison.OrdinalIgnoreCase))
+            return $"O endereço do servidor da {what} precisa começar com rtmp:// ou rtmps://.";
+        if (url.IndexOfAny(new[] { '|', '[', ']', '"', ' ', '\'' }) >= 0) return $"O endereço do servidor da {what} tem caracteres inválidos.";
+        return null;
     }
 
     public static IReadOnlyList<string> Build(StudioRequest r)
@@ -261,17 +282,42 @@ public static class StudioCommand
         }
         args.AddRange(new[] { "-f", "tee", string.Join("|", outputs) });
 
-        // ---- cópia vertical: segunda saída (arquivo próprio) com a mesma captura e o mesmo áudio
-        if (r.VerticalCopy is { } verticalCopy && r.VerticalFile is { } verticalFile)
+        // ---- cópia vertical: segunda saída com a mesma captura e o mesmo áudio: arquivo próprio e/ou a live vertical (Instagram, TikTok...)
+        if (r.VerticalCopy is { } verticalCopy && (r.VerticalFile is not null || r.VerticalStream is not null))
         {
-            int copyMbps = Math.Clamp(FfmpegCommand.DefaultBitrateMbps(verticalCopy.Width, verticalCopy.Height, fps), 4, 30);
+            int copyFps = r.VerticalFps > 0 ? Math.Clamp(r.VerticalFps, 10, 60) : fps;
             args.AddRange(new[] { "-map", "[vv]", "-c:v", r.Encoder.FfmpegName });
             args.AddRange(QualityArgs(r.Encoder, r.Quality));
-            args.AddRange(new[] { "-b:v", copyMbps + "M", "-maxrate", (int)Math.Ceiling(copyMbps * 1.5) + "M", "-bufsize", copyMbps * 2 + "M", "-g", (fps * 2).ToString(), "-flags", "+global_header" });
-            if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", Math.Clamp(r.AudioKbps, 64, 320) + "k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
-            args.AddRange(r.RecordMp4
-                ? new[] { "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof", verticalFile }
-                : new[] { "-f", "matroska", verticalFile });
+            if (r.VerticalStream is not null)
+            {
+                // ao vivo: taxa constante e reservatório de 1 s, como a live principal
+                int kbps = Math.Clamp(r.VerticalStreamKbps, 1000, 9000);
+                args.AddRange(new[] { "-b:v", kbps + "k", "-maxrate", kbps + "k", "-bufsize", kbps + "k" });
+            }
+            else
+            {
+                int copyMbps = Math.Clamp(FfmpegCommand.DefaultBitrateMbps(verticalCopy.Width, verticalCopy.Height, copyFps), 4, 30);
+                args.AddRange(new[] { "-b:v", copyMbps + "M", "-maxrate", (int)Math.Ceiling(copyMbps * 1.5) + "M", "-bufsize", copyMbps * 2 + "M" });
+            }
+            args.AddRange(new[] { "-g", (copyFps * 2).ToString(), "-flags", "+global_header" });
+            if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", Math.Clamp(r.VerticalStream is null ? r.AudioKbps : Math.Min(r.AudioKbps, 128), 64, 320) + "k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
+
+            if (r.VerticalStream is null)
+            {
+                // só o arquivo: saída direta, como sempre foi
+                args.AddRange(r.RecordMp4
+                    ? new[] { "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof", r.VerticalFile! }
+                    : new[] { "-f", "matroska", r.VerticalFile! });
+            }
+            else
+            {
+                // com a live vertical: arquivo (se gravando) e servidor pelo tee; se a live cair, o arquivo continua
+                var verticalOutputs = new List<string>();
+                if (r.VerticalFile is { } verticalFile)
+                    verticalOutputs.Add((r.RecordMp4 ? "[f=mp4:movflags=frag_keyframe+empty_moov+default_base_moof]" : "[f=matroska]") + verticalFile);
+                verticalOutputs.Add("[f=flv:flvflags=no_duration_filesize:onfail=ignore]" + r.VerticalStream.FullUrl);
+                args.AddRange(new[] { "-f", "tee", string.Join("|", verticalOutputs) });
+            }
         }
 
         if (r.ProgramPipe is { } programPipe)
@@ -463,7 +509,7 @@ public static class StudioCommand
                 return index >= 0 ? $"[cv{index}]" : null;
             }
             parts.AddRange(VerticalGraph.Build(copy, "[vsrc]null[v_scr]", copyFirst, "v_", SharedLabel));
-            parts.Add("[v_b0]format=nv12[vv]");
+            parts.Add(r.VerticalFps > 0 ? $"[v_b0]fps={Math.Clamp(r.VerticalFps, 10, 60)},format=nv12[vv]" : "[v_b0]format=nv12[vv]");
         }
         else parts = new List<string> { screen + "[b0]" };
 
@@ -576,6 +622,6 @@ public static class StudioCommand
     public static string Describe(StudioRequest r, string ffmpeg = "ffmpeg")
     {
         string text = ffmpeg + " " + string.Join(" ", Build(r).Select(a => a.Contains(' ') ? "\"" + a + "\"" : a));
-        return MaskSecrets(text, r.Stream);
+        return MaskSecrets(text, r.Stream, r.VerticalStream);
     }
 }

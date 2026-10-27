@@ -172,6 +172,15 @@ public sealed record StudioRequest
     /// <summary>Arquivo (relativo à pasta de trabalho) da cópia vertical.</summary>
     public string? VerticalFile { get; init; }
 
+    /// <summary>Live vertical ao mesmo tempo que a horizontal (Instagram, TikTok, YouTube...): a cópia vertical também vai para este servidor.</summary>
+    public StreamTarget? VerticalStream { get; init; }
+
+    /// <summary>Taxa de vídeo da live vertical (kbps).</summary>
+    public int VerticalStreamKbps { get; init; } = 4000;
+
+    /// <summary>Quadros por segundo da cópia vertical (0 = os mesmos do vídeo principal).</summary>
+    public int VerticalFps { get; init; }
+
     /// <summary>Legendas automáticas queimadas no vídeo em tempo real (vertical ou não).</summary>
     public CaptionOverlay? Captions { get; init; }
 

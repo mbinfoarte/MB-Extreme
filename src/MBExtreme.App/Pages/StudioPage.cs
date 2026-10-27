@@ -410,10 +410,10 @@ public sealed partial class StudioPage : ToolPageBase
         _ = kind;
         state.Visibility = Visibility.Collapsed;
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold });
-        text.Children.Add(new TextBlock { Text = hint, FontSize = 12, Foreground = Brush("MutedBrush") });
-        var knob = new System.Windows.Shapes.Ellipse { Width = 16, Height = 16, Margin = new Thickness(3, 0, 3, 0), VerticalAlignment = VerticalAlignment.Center };
-        var track = new Border { Width = 40, Height = 22, CornerRadius = new CornerRadius(11), Child = knob, VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = title, FontSize = 13.5, FontWeight = FontWeights.SemiBold });
+        text.Children.Add(new TextBlock { Text = hint, FontSize = 11, Foreground = Brush("MutedBrush") });
+        var knob = new System.Windows.Shapes.Ellipse { Width = 14, Height = 14, Margin = new Thickness(3, 0, 3, 0), VerticalAlignment = VerticalAlignment.Center };
+        var track = new Border { Width = 34, Height = 20, CornerRadius = new CornerRadius(10), Child = knob, VerticalAlignment = VerticalAlignment.Center };
         _tileSwitches[tile] = (track, knob);
 
         var row = new Grid();
@@ -424,8 +424,8 @@ public sealed partial class StudioPage : ToolPageBase
         row.Children.Add(track);
 
         tile.Child = row;
-        tile.MinHeight = 56;
-        tile.Padding = new Thickness(12, 8, 12, 8);
+        tile.MinHeight = 44;
+        tile.Padding = new Thickness(10, 5, 10, 5);
         tile.Margin = new Thickness(0, 0, 0, 4);
         tile.CornerRadius = new CornerRadius(10);
         tile.BorderThickness = new Thickness(1);
@@ -951,7 +951,7 @@ public sealed partial class StudioPage : ToolPageBase
             return g;
         }
 
-        _statsViewers.FontSize = 26;
+        _statsViewers.FontSize = 22;
         _statsViewers.FontWeight = FontWeights.Bold;
         _statsViewers.Foreground = Yellow;
         _statsViewers.HorizontalAlignment = HorizontalAlignment.Right;
@@ -1507,14 +1507,24 @@ public sealed partial class StudioPage : ToolPageBase
         _tabStream.Children.Add(BuildOptimizeCard());
         var service = CurrentService();
         int selected = Math.Max(0, Array.IndexOf(ServiceOrder, service));
-        _tabStream.Children.Add(Field("Plataforma", Chips(new[] { "Twitch", "YouTube", "Facebook", "Outro servidor (RTMP)" }, selected, i =>
+        if (service == StreamService.Custom && _s.StudioStreamPreset is 1 or 2) selected = 3 + _s.StudioStreamPreset;
+        _tabStream.Children.Add(Field("Plataforma", Chips(new[] { "Twitch", "YouTube", "Facebook", "Outro servidor (RTMP)", "Instagram (vertical)", "TikTok (vertical)" }, selected, i =>
         {
+            if (i >= 4)
+            {
+                // Instagram e TikTok: "outro servidor" com o endereço da plataforma e o vídeo principal na vertical
+                ChooseVerticalPlatform(i - 3);
+                return;
+            }
+            _s.StudioStreamPreset = 0;
             _s.StudioStreamService = (int)ServiceOrder[i];
             // o limite de banda escolhido pode ser maior que o máximo da nova plataforma
             int max = PlatformSpecs.For(ServiceOrder[i]).MaxVideoKbps / 1000;
             if (_s.StudioStreamCapMbps > max) _s.StudioStreamCapMbps = 0;
             BuildStream();
         })));
+
+        _tabStream.Children.Add(BuildVerticalLiveCard());
 
         // padrões da plataforma
         _specText.Foreground = Brush("TextBrush");
@@ -1934,7 +1944,8 @@ public sealed partial class StudioPage : ToolPageBase
         var target = config.Stream;
         if (target is not null)
         {
-            if (MessageBox.Show($"Começar a transmitir ao vivo para {target.DisplayName}?\n\nQuem estiver assistindo verá exatamente o que está sendo capturado.",
+            string extra = config.VerticalStream is not null ? $" e, na vertical, no {VerticalLive.For(config.VerticalPlatform).Name}" : "";
+            if (MessageBox.Show($"Começar a transmitir ao vivo para {target.DisplayName}{extra}?\n\nQuem estiver assistindo verá exatamente o que está sendo capturado.",
                     "Transmissão ao vivo", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         }
 
@@ -1955,7 +1966,7 @@ public sealed partial class StudioPage : ToolPageBase
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Win32Exception)
         {
-            SetStatus("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, target), "BadBrush");
+            SetStatus("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, target, config.VerticalStream), "BadBrush");
         }
 
         _feedsSuspended = false;   // se não iniciou, o vídeo ao vivo das câmeras volta
@@ -2085,6 +2096,14 @@ public sealed partial class StudioPage : ToolPageBase
         if (vertical?.Validate() is { } verticalProblem) return (null, verticalProblem);
         var verticalCopy = CurrentVerticalCopy();
         if (verticalCopy?.Validate() is { } copyProblem) return (null, copyProblem);
+        StreamTarget? verticalTarget = null;
+        if (VerticalLiveWanted && !_s.StudioVerticalOn)
+        {
+            if (!_s.StudioVerticalCopy) return (null, "A live vertical sai junto com a horizontal: escolha \"Os dois\" na prévia (ou desligue a live vertical em Transmitir › Conexão).");
+            if (VerticalLiveKey().Length == 0) return (null, "Falta a chave da live vertical (Transmitir › Conexão › Live vertical).");
+            if (encoder.Codec != VideoCodec.H264) return (null, "A live vertical exige um codificador H.264.");
+            verticalTarget = VerticalLive.Target((VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3), _s.StudioVLiveUrl, VerticalLiveKey());
+        }
         var captions = CurrentCaptions();
         if (captions is not null && !SpeechInstaller.IsInstalled) return (null, "Baixe o modelo de voz na aba Vertical para usar as legendas.");
 
@@ -2101,7 +2120,8 @@ public sealed partial class StudioPage : ToolPageBase
             _s.StudioFps, encoder, _s.StudioBitrateMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
             _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), cameras, pix, pixPayload,
             imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey(), vertical, captions, verticalCopy,
-            live?.Captures, live?.Layouts(layers), live?.Active ?? 0, (SceneTransition)Math.Clamp(_s.StudioSceneTransition, 0, 1), _s.StudioProgramView);
+            live?.Captures, live?.Layouts(layers), live?.Active ?? 0, (SceneTransition)Math.Clamp(_s.StudioSceneTransition, 0, 1), _s.StudioProgramView,
+            verticalCopy is not null ? verticalTarget : null, (VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3));
         return (config, null);
     }
 
@@ -2186,7 +2206,7 @@ public sealed partial class StudioPage : ToolPageBase
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Win32Exception)
         {
-            SetStatus("Não foi possível aplicar (o estúdio parou): " + StudioCommand.MaskSecrets(ex.Message, config.Stream), "BadBrush");
+            SetStatus("Não foi possível aplicar (o estúdio parou): " + StudioCommand.MaskSecrets(ex.Message, config.Stream, config.VerticalStream), "BadBrush");
         }
         finally
         {

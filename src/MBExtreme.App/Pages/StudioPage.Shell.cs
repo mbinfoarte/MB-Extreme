@@ -11,7 +11,7 @@ namespace MBExtreme.UI.Pages;
 /// </summary>
 public sealed partial class StudioPage
 {
-    private readonly TextBlock _timerText = new() { FontSize = 28, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 12), Visibility = Visibility.Collapsed };
+    private readonly TextBlock _timerText = new() { FontSize = 22, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 12), Visibility = Visibility.Collapsed };
     private readonly StackPanel _capturePanel = new();
     private readonly TextBlock _infoLine = new() { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
     private readonly Button _captureButton = new() { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
@@ -21,7 +21,6 @@ public sealed partial class StudioPage
     private readonly StackPanel _transitionColumn = new() { Width = 140, Margin = new Thickness(12, 26, 12, 0), VerticalAlignment = VerticalAlignment.Top };
     private readonly Border _verticalWrap = new() { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 0, 0, 0) };
     private Grid? _views;
-    private int _previewLayout = 2;
     private Window? _chatWindow;
 
     private FrameworkElement BuildTopBar()
@@ -37,7 +36,7 @@ public sealed partial class StudioPage
         DockPanel.SetDock(back, Dock.Left);
         bar.Children.Add(back);
 
-        var title = new TextBlock { Text = "Estúdio", FontSize = 24, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock { Text = "Estúdio", FontSize = 20, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
         DockPanel.SetDock(title, Dock.Left);
         bar.Children.Add(title);
 
@@ -75,7 +74,8 @@ public sealed partial class StudioPage
         // cabeçalho: "Prévia", Horizontal / Vertical / Os dois e Modo estúdio
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
         var right = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-        right.Children.Add(Chips(new[] { "Horizontal", "Vertical", "Os dois" }, _previewLayout, i => { _previewLayout = i; RefreshStudioLayout(); }));
+        right.Children.Add(_layoutChipsHost);
+        RefreshLayoutChips();
         _studioMode.Margin = new Thickness(0, 2, 0, 5);
         _studioMode.Click += (_, _) =>
         {
@@ -161,8 +161,8 @@ public sealed partial class StudioPage
         _previewLabel.Inlines.Clear();
         _previewLabel.Inlines.Add(new System.Windows.Documents.Run("Prévia: "));
         _previewLabel.Inlines.Add(new System.Windows.Documents.Run(CurrentScene.Name) { FontWeight = FontWeights.SemiBold, Foreground = Brush("TextBrush") });
-        _previewHost.Visibility = Vis(studio || _previewLayout != 1);
-        _verticalWrap.Visibility = Vis(!studio && _previewLayout != 0);
+        _previewHost.Visibility = Vis(studio || PreviewLayout != 1);
+        _verticalWrap.Visibility = Vis(!studio && PreviewLayout != 0);
         _transition.IsEnabled = _studio.IsRunning && _airScene != CurrentScene;
     }
 

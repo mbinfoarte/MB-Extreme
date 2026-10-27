@@ -262,7 +262,7 @@ public sealed class StudioSession : IDisposable
         };
         _request = effective;
         LastMessage = null;
-        process.ErrorDataReceived += (_, e) => OnError(e.Data, effective.Stream);
+        process.ErrorDataReceived += (_, e) => OnError(e.Data, effective.Stream, effective.VerticalStream);
         process.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) Progress.Feed(e.Data); };
         process.BeginErrorReadLine();
         process.BeginOutputReadLine();
@@ -308,10 +308,10 @@ public sealed class StudioSession : IDisposable
         }
     }
 
-    private void OnError(string? line, StreamTarget? target)
+    private void OnError(string? line, StreamTarget? target, StreamTarget? verticalTarget)
     {
         if (string.IsNullOrWhiteSpace(line)) return;
-        string text = StudioCommand.MaskSecrets(line.Trim(), target);
+        string text = StudioCommand.MaskSecrets(line.Trim(), target, verticalTarget);
         if (SceneSwitch.IsCommandEcho(text)) return;   // eco da troca de cena: não é erro
         LastMessage = text;
         if (text.Contains("Slave muxer", StringComparison.OrdinalIgnoreCase) && text.Contains("fail", StringComparison.OrdinalIgnoreCase))

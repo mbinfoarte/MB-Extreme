@@ -1881,6 +1881,7 @@ public sealed partial class StudioPage : ToolPageBase
             var note = Muted("Sem suporte nesta placa ou neste FFmpeg: " + string.Join(", ", missing) + ".", 11);
             _qualityEncoder.Children.Add(note);
         }
+        BuildVertical();   // a gravação vertical lista os mesmos codificadores
     }
 
     private void RefreshDisplays()
@@ -2116,12 +2117,30 @@ public sealed partial class StudioPage : ToolPageBase
             audio = new AudioConfig(_s.StudioSystemAudio, outputId, (float)_s.StudioSystemVolume, _s.StudioMicAudio, micId, (float)_s.StudioMicVolume, (VoiceEffect)Math.Clamp(_s.StudioVoiceEffect, 0, 2), CurrentAudioProcessing());
         }
 
+        // ---- qualidade da gravação vertical (redes sociais): codificador, quadros, taxa ou qualidade constante próprios
+        var vEncoder = _encoders.FirstOrDefault(e => e.FfmpegName == _s.StudioVRecEncoder);
+        EncoderQuality? vEffort = _s.StudioVRecEffort >= 0 ? (EncoderQuality)Math.Clamp(_s.StudioVRecEffort, 0, 2) : null;
+        var mainEncoder = encoder;
+        int mainFps = _s.StudioFps, mainMbps = _s.StudioBitrateMbps, mainQuality = 0;
+        var mainEffort = (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2);
+        if (vertical is not null && target is null)
+        {
+            // o vídeo principal é o vertical e só está gravando: valem as escolhas da gravação vertical
+            if (vEncoder is not null) mainEncoder = vEncoder;
+            if (_s.StudioVRecFps > 0) mainFps = _s.StudioVRecFps;
+            if (_s.StudioVRecMbps > 0) mainMbps = _s.StudioVRecMbps;
+            mainQuality = _s.StudioVRecQuality;
+            if (vEffort is { } effort) mainEffort = effort;
+        }
+
         var config = new StudioConfig(source, game, Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height,
-            _s.StudioFps, encoder, _s.StudioBitrateMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
-            _s.StudioStreamCapMbps, _s.StudioAudioKbps, (EncoderQuality)Math.Clamp(_s.StudioEncoderQuality, 0, 2), cameras, pix, pixPayload,
+            mainFps, mainEncoder, mainMbps, _outRecord, _s.StudioMp4, target, _outReplay, _s.StudioReplaySeconds, _s.StudioReplayBeep, audio,
+            _s.StudioStreamCapMbps, _s.StudioAudioKbps, mainEffort, cameras, pix, pixPayload,
             imageFilter.IsNeutral ? null : imageFilter, layers, LayersKey(), vertical, captions, verticalCopy,
             live?.Captures, live?.Layouts(layers), live?.Active ?? 0, (SceneTransition)Math.Clamp(_s.StudioSceneTransition, 0, 1), _s.StudioProgramView,
-            verticalCopy is not null ? verticalTarget : null, (VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3));
+            verticalCopy is not null ? verticalTarget : null, (VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3),
+            vEncoder, _s.StudioVRecMbps, _s.StudioVRecQuality, vEffort, _s.StudioVRecFps, mainQuality,
+            _s.StudioVRecPostMp4 && (vertical is not null || verticalCopy is not null));
         return (config, null);
     }
 

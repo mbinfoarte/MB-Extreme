@@ -100,6 +100,7 @@ public sealed partial class StudioPage
             _tabVertical.Children.Add(Muted("Como vai ficar (esquema):", 11));
             _tabVertical.Children.Add(_verticalMock);
             RefreshVerticalMock();
+            _tabVertical.Children.Add(BuildVerticalQuality());
         }
 
         BuildCaptionSection();

@@ -135,6 +135,28 @@ public sealed class AppSettings
     /// <summary>Plataforma principal escolhida pelo atalho (0 nenhum, 1 Instagram, 2 TikTok): usa "Outro servidor" com o endereço dela.</summary>
     public int StudioStreamPreset { get; set; }
 
+    // ---- gravação vertical para redes sociais (qualidade própria)
+    /// <summary>Destino escolhido (0 Shorts, 1 Reels, 2 TikTok, 3 Máxima); -1 = personalizado.</summary>
+    public int StudioVRecTarget { get; set; } = -1;
+
+    /// <summary>Codificador da gravação vertical (nome no FFmpeg); vazio = o do vídeo principal.</summary>
+    public string StudioVRecEncoder { get; set; } = "";
+
+    /// <summary>Quadros por segundo do vertical; 0 = os mesmos do vídeo principal.</summary>
+    public int StudioVRecFps { get; set; }
+
+    /// <summary>Taxa do vertical em Mbps; 0 = automática.</summary>
+    public int StudioVRecMbps { get; set; }
+
+    /// <summary>Qualidade constante: 0 desligada, 1 alta, 2 muito alta, 3 máxima.</summary>
+    public int StudioVRecQuality { get; set; }
+
+    /// <summary>Esforço do codificador do vertical; -1 = o do vídeo principal.</summary>
+    public int StudioVRecEffort { get; set; } = -1;
+
+    /// <summary>Ao parar, cria um MP4 comum com o índice no começo, pronto para postar.</summary>
+    public bool StudioVRecPostMp4 { get; set; } = true;
+
     // ---- Pix (QR estático "apoie a live")
     public bool StudioPixOn { get; set; }
 

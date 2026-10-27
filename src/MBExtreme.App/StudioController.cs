@@ -42,7 +42,14 @@ internal sealed record StudioConfig(
     SceneTransition Transition = SceneTransition.Cut,
     bool ProgramView = false,
     StreamTarget? VerticalStream = null,
-    VerticalPlatform VerticalPlatform = VerticalPlatform.Instagram)
+    VerticalPlatform VerticalPlatform = VerticalPlatform.Instagram,
+    EncoderOption? VerticalEncoder = null,
+    int VerticalBitrateMbps = 0,
+    int VerticalQualityLevel = 0,
+    EncoderQuality? VerticalEffort = null,
+    int VerticalRecFps = 0,
+    int QualityLevel = 0,
+    bool PostMp4 = false)
 {
     /// <summary>Várias cenas montadas juntas: trocar de cena não reinicia a captura.</summary>
     public bool LiveScenes => Scenes is { Count: > 1 } && Vertical is null && VerticalCopy is null;
@@ -169,7 +176,12 @@ internal sealed class StudioController
                 : null,
             VerticalStream = config.VerticalCopy is null ? null : config.VerticalStream,
             VerticalStreamKbps = VerticalLive.For(config.VerticalPlatform).VideoKbps,
-            VerticalFps = config.VerticalStream is null ? 0 : Math.Min(fps, VerticalLive.For(config.VerticalPlatform).Fps),
+            VerticalFps = config.VerticalStream is null ? config.VerticalRecFps : Math.Min(fps, VerticalLive.For(config.VerticalPlatform).Fps),
+            VerticalEncoder = config.VerticalEncoder,
+            VerticalBitrateMbps = config.VerticalBitrateMbps,
+            VerticalQualityLevel = config.VerticalQualityLevel,
+            VerticalEffort = config.VerticalEffort,
+            QualityLevel = config.Stream is null ? config.QualityLevel : 0,
             VerticalFile = config.Record && config.VerticalCopy is not null ? "gravacao-" + stamp + "-vertical" + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             WorkingDirectory = Folder,
             RecordFile = config.Record ? "gravacao-" + stamp + FfmpegCommand.ExtensionFor(config.Mp4) : null,
@@ -462,9 +474,44 @@ internal sealed class StudioController
     public string? Stop()
     {
         DisposeCaptions();
+        var request = Session.Request;
+        var config = Config;
         string? file = Session.Stop();   // o relógio dos lances se desliga sozinho no próximo tique (este método roda fora da interface)
+        if (config is { PostMp4: true } && request is not null && _ffmpeg is { } ffmpeg)
+        {
+            // vídeos verticais: um MP4 comum com o índice no começo, pronto para postar (cópia sem recodificar)
+            var toPost = new List<string>();
+            if (request.Vertical is not null && file is not null) toPost.Add(file);
+            if (request.VerticalFile is { } copy) toPost.Add(Path.Combine(request.WorkingDirectory, copy));
+            if (toPost.Count > 0) _ = Task.Run(() => PrepareToPost(ffmpeg, toPost));
+        }
         if (Config?.Replay == true) ReplayBuffer.ClearSegments(Path.Combine(Folder, ReplayFolder));
         return file;
+    }
+
+    private void PrepareToPost(string ffmpeg, IReadOnlyList<string> files)
+    {
+        foreach (string input in files)
+        {
+            if (!File.Exists(input)) continue;
+            string output = SocialVideo.PostName(input);
+            try
+            {
+                var info = new ProcessStartInfo(ffmpeg) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+                foreach (string a in SocialVideo.PostArgs(input, output)) info.ArgumentList.Add(a);
+                using var process = Process.Start(info);
+                if (process is null) continue;
+                string error = process.StandardError.ReadToEnd();
+                if (!process.WaitForExit(600_000)) { process.Kill(true); continue; }
+                Raise(process.ExitCode == 0 && File.Exists(output)
+                    ? "Vertical pronto para postar: " + Path.GetFileName(output)
+                    : "Não foi possível preparar o MP4 para postar: " + error.Trim(), process.ExitCode == 0);
+            }
+            catch (Exception ex) when (ex is Win32Exception or IOException or InvalidOperationException)
+            {
+                Raise("Não foi possível preparar o MP4 para postar: " + ex.Message, false);
+            }
+        }
     }
 
     public Task<string?> SaveReplayAsync() => SaveReplayAsync(automatic: false);

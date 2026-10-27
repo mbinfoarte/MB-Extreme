@@ -259,12 +259,12 @@ public static class StudioCommand
 
         args.AddRange(new[] { "-map", videoMap, "-c:v", r.Encoder.FfmpegName });
         args.AddRange(QualityArgs(r.Encoder, r.Quality));
-        args.AddRange(new[]
-        {
-            "-b:v", bitrate, "-maxrate", maxrate, "-bufsize", bufsize,
-            "-g", (fps * 2).ToString(),
-            "-flags", "+global_header",
-        });
+        if (r.QualityLevel > 0 && r.Stream is null)
+            args.AddRange(ConstantQualityArgs(r.Encoder, r.QualityLevel));   // só gravando: a imagem manda, o tamanho do arquivo varia
+        else
+            args.AddRange(new[] { "-b:v", bitrate, "-maxrate", maxrate, "-bufsize", bufsize });
+        if (r.Vertical is not null) args.AddRange(SocialArgs(r.Encoder));
+        args.AddRange(new[] { "-g", (fps * 2).ToString(), "-flags", "+global_header" });
         if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", Math.Clamp(r.AudioKbps, 64, 320) + "k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
 
         // ---- saídas
@@ -286,19 +286,27 @@ public static class StudioCommand
         if (r.VerticalCopy is { } verticalCopy && (r.VerticalFile is not null || r.VerticalStream is not null))
         {
             int copyFps = r.VerticalFps > 0 ? Math.Clamp(r.VerticalFps, 10, 60) : fps;
-            args.AddRange(new[] { "-map", "[vv]", "-c:v", r.Encoder.FfmpegName });
-            args.AddRange(QualityArgs(r.Encoder, r.Quality));
+            // a live vertical exige H.264: com ela ligada, o codificador próprio só vale se for H.264
+            var copyEncoder = r.VerticalEncoder is { } own && (r.VerticalStream is null || own.Codec == VideoCodec.H264) ? own : r.Encoder;
+            args.AddRange(new[] { "-map", "[vv]", "-c:v", copyEncoder.FfmpegName });
+            args.AddRange(QualityArgs(copyEncoder, r.VerticalEffort ?? r.Quality));
             if (r.VerticalStream is not null)
             {
                 // ao vivo: taxa constante e reservatório de 1 s, como a live principal
                 int kbps = Math.Clamp(r.VerticalStreamKbps, 1000, 9000);
                 args.AddRange(new[] { "-b:v", kbps + "k", "-maxrate", kbps + "k", "-bufsize", kbps + "k" });
             }
+            else if (r.VerticalQualityLevel > 0)
+            {
+                args.AddRange(ConstantQualityArgs(copyEncoder, r.VerticalQualityLevel));
+            }
             else
             {
-                int copyMbps = Math.Clamp(FfmpegCommand.DefaultBitrateMbps(verticalCopy.Width, verticalCopy.Height, copyFps), 4, 30);
+                int copyMbps = r.VerticalBitrateMbps > 0 ? Math.Clamp(r.VerticalBitrateMbps, 2, 120)
+                    : Math.Clamp(FfmpegCommand.DefaultBitrateMbps(verticalCopy.Width, verticalCopy.Height, copyFps), 4, 30);
                 args.AddRange(new[] { "-b:v", copyMbps + "M", "-maxrate", (int)Math.Ceiling(copyMbps * 1.5) + "M", "-bufsize", copyMbps * 2 + "M" });
             }
+            args.AddRange(SocialArgs(copyEncoder));
             args.AddRange(new[] { "-g", (copyFps * 2).ToString(), "-flags", "+global_header" });
             if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", Math.Clamp(r.VerticalStream is null ? r.AudioKbps : Math.Min(r.AudioKbps, 128), 64, 320) + "k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
 
@@ -468,6 +476,33 @@ public static class StudioCommand
         }
         parts.Add($"{last}format=nv12[v]");
         return string.Join(";", parts);
+    }
+
+    /// <summary>Valor de qualidade constante: 1 alta, 2 muito alta, 3 máxima (quanto menor o número, melhor a imagem). O AV1 usa uma escala mais alta.</summary>
+    public static int QualityValue(int level, VideoCodec codec) =>
+        Math.Clamp(level, 1, 3) switch { 1 => 23, 2 => 20, _ => 17 } + (codec == VideoCodec.Av1 ? 8 : 0);
+
+    /// <summary>Qualidade constante conforme a marca: NVENC (cq), AMD (cqp), Intel (global_quality) e processador (crf).</summary>
+    public static IReadOnlyList<string> ConstantQualityArgs(EncoderOption encoder, int level)
+    {
+        string q = QualityValue(level, encoder.Codec).ToString();
+        return encoder.Kind switch
+        {
+            EncoderKind.Nvenc => new[] { "-rc", "vbr", "-cq", q, "-b:v", "0" },
+            EncoderKind.Amf => new[] { "-rc", "cqp", "-qp_i", q, "-qp_p", q },
+            EncoderKind.Qsv => new[] { "-global_quality", q },
+            _ => new[] { "-crf", q },
+        };
+    }
+
+    /// <summary>O que as redes sociais esperam: perfil High no H.264 (Main no HEVC) e cores BT.709 marcadas no arquivo.</summary>
+    public static IReadOnlyList<string> SocialArgs(EncoderOption encoder)
+    {
+        var args = new List<string>();
+        if (encoder.Codec == VideoCodec.H264) args.AddRange(new[] { "-profile:v", "high" });
+        else if (encoder.Codec == VideoCodec.Hevc) args.AddRange(new[] { "-profile:v", "main" });
+        args.AddRange(new[] { "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709" });
+        return args;
     }
 
     /// <summary>Esforço do codificador conforme a marca da placa (NVENC p2/p4/p6, AMF speed/balanced/quality, Quick Sync veryfast/medium/slower).</summary>

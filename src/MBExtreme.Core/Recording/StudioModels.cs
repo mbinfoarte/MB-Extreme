@@ -181,6 +181,21 @@ public sealed record StudioRequest
     /// <summary>Quadros por segundo da cópia vertical (0 = os mesmos do vídeo principal).</summary>
     public int VerticalFps { get; init; }
 
+    /// <summary>Codificador próprio da gravação vertical (ex.: HEVC ou AV1 para arquivos menores); null = o do vídeo principal.</summary>
+    public EncoderOption? VerticalEncoder { get; init; }
+
+    /// <summary>Taxa da gravação vertical em Mbps (0 = automática pelo tamanho).</summary>
+    public int VerticalBitrateMbps { get; init; }
+
+    /// <summary>Qualidade constante da gravação vertical (0 = desligada; 1 alta, 2 muito alta, 3 máxima): o arquivo gasta o que precisar para manter a imagem.</summary>
+    public int VerticalQualityLevel { get; init; }
+
+    /// <summary>Esforço do codificador da gravação vertical (null = o do vídeo principal).</summary>
+    public EncoderQuality? VerticalEffort { get; init; }
+
+    /// <summary>Qualidade constante do vídeo principal (0 = taxa normal). Só vale sem transmissão.</summary>
+    public int QualityLevel { get; init; }
+
     /// <summary>Legendas automáticas queimadas no vídeo em tempo real (vertical ou não).</summary>
     public CaptionOverlay? Captions { get; init; }
 

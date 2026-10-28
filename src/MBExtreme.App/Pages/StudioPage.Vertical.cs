@@ -147,7 +147,7 @@ public sealed partial class StudioPage
             var find = SmallButton("Procurar câmeras", async (_, _) => { await FindCamerasAsync(); BuildVertical(); });
             find.Margin = new Thickness(0, 0, 8, 4);
             row.Children.Add(find);
-            row.Children.Add(Muted(pane.Source is { Length: > 0 } ? pane.Source : _ffmpegPath is null ? "Instale o FFmpeg (aba Avançado)." : "Nenhuma câmera listada ainda.", 11));
+            row.Children.Add(Muted(pane.Source is { Length: > 0 } ? pane.Source : _ffmpegPath is null ? "Preparando o motor de vídeo..." : "Nenhuma câmera listada ainda.", 11));
             return row;
         }
 

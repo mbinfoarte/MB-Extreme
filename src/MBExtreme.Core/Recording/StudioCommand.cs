@@ -12,7 +12,12 @@ public static class StudioCommand
     public const int MaxLiveScenes = 6;
 
     /// <summary>Tamanho e ritmo da imagem pequena "No ar" (leve: só para conferir na tela do programa).</summary>
-    private const string ProgramChain = "fps=8,scale=480:-2,format=yuvj420p";
+    private const string ProgramChain = "fps=15,scale=640:-2:flags=bilinear,format=yuvj420p";
+
+    /// <summary>Cópia de cada câmera para o quadro dela na tela do programa (pequena e leve).</summary>
+    private const string CameraPreviewChain = "fps=12,scale=320:-2:flags=bilinear,format=yuvj420p";
+
+    private static string? CameraPipe(StudioRequest r, int index) => index < r.CameraPreviewPipes.Count ? r.CameraPreviewPipes[index] : null;
 
     private static readonly Regex SafeKey = new(@"^[A-Za-z0-9_\-.~%=&?]+$", RegexOptions.Compiled);
 
@@ -85,6 +90,9 @@ public static class StudioCommand
             if (!CaptionOverlay.IsValidPath(c.Line1File) || !CaptionOverlay.IsValidPath(c.Line2File) || !CaptionOverlay.IsValidPath(c.FontFile))
                 return "O caminho da legenda ou da fonte tem caracteres que não são aceitos.";
         }
+        foreach (var camPipe in r.CameraPreviewPipes)
+            if (camPipe is not null && (!camPipe.StartsWith(@"\\.\pipe\", StringComparison.Ordinal) || camPipe.IndexOfAny(new[] { '"', '|', '\'', ';', '[', ']', ' ' }) >= 0))
+                return "O canal da imagem de uma câmera não é válido.";
         if (r.ProgramPipe is { } pipe && (!pipe.StartsWith(@"\\.\pipe\", StringComparison.Ordinal) || pipe.IndexOfAny(new[] { '"', '|', '\'', ';', '[', ']', ' ' }) >= 0))
             return "O canal da imagem \"No ar\" não é válido.";
         if (r.LiveScenes && ValidateScenes(r) is { } sceneProblem) return sceneProblem;
@@ -152,7 +160,7 @@ public static class StudioCommand
         {
             if (complex is not null) complex += $";[v]split=2[vo][pvsrc];[pvsrc]{ProgramChain}[pv]";
             else if (filter is not null) complex = $"[0:v]{filter}[vf];[vf]split=2[vo][pvsrc];[pvsrc]{ProgramChain}[pv]";
-            else complex = $"[0:v]split=2[vo][pvsrc];[pvsrc]fps=8,hwdownload,format=bgra,scale=480:-2,format=yuvj420p[pv]";   // quadros na placa: só a cópia pequena desce
+            else complex = $"[0:v]split=2[vo][pvsrc];[pvsrc]fps=15,hwdownload,format=bgra,scale=640:-2:flags=bilinear,format=yuvj420p[pv]";   // quadros na placa: só a cópia pequena desce
             filter = null;
             videoMap = "[vo]";
         }
@@ -330,6 +338,9 @@ public static class StudioCommand
 
         if (r.ProgramPipe is { } programPipe)
             args.AddRange(new[] { "-map", "[pv]", "-c:v", "mjpeg", "-q:v", "8", "-f", "mjpeg", "-flush_packets", "1", programPipe });
+        for (int i = 0; i < r.Cameras.Count; i++)
+            if (CameraPipe(r, i) is { } cameraPipe)
+                args.AddRange(new[] { "-map", $"[cpv{i}]", "-c:v", "mjpeg", "-q:v", "8", "-f", "mjpeg", "-flush_packets", "1", cameraPipe });
     }
 
     // ---------------------------------------------------------------- cenas ao vivo
@@ -412,11 +423,16 @@ public static class StudioCommand
             int index = i;
             var camera = r.Cameras[i];
             var users = Users(s => s.Cameras.Contains(index), "c" + i);
+            if (CameraPipe(r, i) is not null)
+            {
+                users.Add($"[cpp{i}]");
+                parts.Add($"[cpp{i}]{CameraPreviewChain}[cpv{i}]");
+            }
             if (users.Count == 0) { parts.Add($"[{camBase + i}:v]nullsink"); continue; }
             int width = Math.Max(2, w * camera.ClampedPercent / 100);
             width -= width % 2;
             string camFilter = camera.Filter?.ToChain() is { } camChain ? "," + camChain : "";
-            parts.Add($"[{camBase + i}:v]scale={width}:-2,format=bgra{camFilter}" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "") + Fan(users));
+            parts.Add($"[{camBase + i}:v]scale={width}:-2:flags=bilinear,format=bgra{camFilter}" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "") + Fan(users));
         }
         if (r.Pix is { } pix)
         {
@@ -510,6 +526,7 @@ public static class StudioCommand
     {
         EncoderKind.Nvenc => new[] { "-preset", quality switch { EncoderQuality.Fast => "p2", EncoderQuality.Quality => "p6", _ => "p4" } },
         EncoderKind.Amf => new[] { "-quality", quality switch { EncoderQuality.Fast => "speed", EncoderQuality.Quality => "quality", _ => "balanced" } },
+        EncoderKind.Software => new[] { "-preset", quality switch { EncoderQuality.Fast => "superfast", EncoderQuality.Quality => "faster", _ => "veryfast" } },   // o processador também roda o jogo
         _ => new[] { "-preset", quality switch { EncoderQuality.Fast => "veryfast", EncoderQuality.Quality => "slower", _ => "medium" } },
     };
 
@@ -528,10 +545,17 @@ public static class StudioCommand
     /// </summary>
     private static string OverlayGraph(StudioRequest r, int firstExtra, int verticalFirst, int copyFirst, bool gdi, bool sameSize)
     {
-        int baseWidth = r.Vertical is { } vl ? vl.Width : gdi ? r.OutputWidth : r.Source.Area.Width;
+        // sem vertical, a tela já desce reduzida ao tamanho final: câmeras, Pix, camadas e cores trabalham em menos pixels (bem mais leve em 1440p e 4K)
+        bool scaledFirst = r.Vertical is null && r.VerticalCopy is null;
+        int w = r.OutputWidth, h = r.OutputHeight;
+        int baseWidth = r.Vertical is { } vl ? vl.Width : gdi || scaledFirst ? w : r.Source.Area.Width;
+        int baseHeight = r.Vertical is { } vh ? vh.Height : gdi || scaledFirst ? h : r.Source.Area.Height;
         int margin = Math.Max(8, baseWidth / 80);
         string mainFilter = r.Filter?.ToChain() is { } chain ? "," + chain : "";
-        string screen = (gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra") + mainFilter;
+        string grab = gdi ? "[0:v]format=bgra" : "[0:v]hwdownload,format=bgra";
+        if (scaledFirst && gdi) grab += $",scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1";
+        else if (scaledFirst && !sameSize) grab += $",scale={w}:{h}:flags=bilinear";
+        string screen = grab + mainFilter;
         List<string> parts;
         if (r.Vertical is { } vertical) parts = VerticalGraph.Build(vertical, screen + "[scr]", verticalFirst);
         else if (r.VerticalCopy is { } copy)
@@ -561,8 +585,13 @@ public static class StudioCommand
                 parts.Add($"{camIn}split=2[cm{i}][cv{i}]");   // a mesma câmera alimenta o canto do vídeo normal e a parte do vertical
                 camIn = $"[cm{i}]";
             }
-            string cam = $"{camIn}scale={width}:-2,format=bgra{camFilter}" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
-            parts.Add($"{cam}[c{i}]");
+            string cam = $"{camIn}scale={width}:-2:flags=bilinear,format=bgra{camFilter}" + (camera.Frame ? ",drawbox=x=0:y=0:w=iw:h=ih:color=0xFFC400:t=4" : "");
+            if (CameraPipe(r, i) is not null)
+            {
+                parts.Add($"{cam},split=2[c{i}][cpp{i}]");
+                parts.Add($"[cpp{i}]{CameraPreviewChain}[cpv{i}]");
+            }
+            else parts.Add($"{cam}[c{i}]");
             parts.Add($"[b{layer}][c{i}]overlay={CameraPosition(camera.Corner, margin)}:shortest=0[b{layer + 1}]");
             layer++;
         }
@@ -593,11 +622,11 @@ public static class StudioCommand
         if (r.Captions is { } captions)
         {
             double divider = r.Vertical is { Split: true } split ? split.TopHeight / (double)split.Height : 0.5;
-            parts.Add(CaptionFilter.Build(captions, $"[b{layer}]", $"[b{layer + 1}]", baseWidth, r.Vertical is { } vh ? vh.Height : gdi ? r.OutputHeight : r.Source.Area.Height, divider));
+            parts.Add(CaptionFilter.Build(captions, $"[b{layer}]", $"[b{layer + 1}]", baseWidth, baseHeight, divider));
             layer++;
         }
 
-        string finish = r.Vertical is not null ? "format=nv12" : gdi
+        string finish = r.Vertical is not null || scaledFirst ? "format=nv12" : gdi
             ? $"scale={r.OutputWidth}:{r.OutputHeight}:force_original_aspect_ratio=decrease,pad={r.OutputWidth}:{r.OutputHeight}:(ow-iw)/2:(oh-ih)/2:black,format=nv12"
             : sameSize ? "format=nv12" : $"scale={r.OutputWidth}:{r.OutputHeight}:flags=bilinear,format=nv12";
         parts.Add($"[b{layer}]{finish}[v]");

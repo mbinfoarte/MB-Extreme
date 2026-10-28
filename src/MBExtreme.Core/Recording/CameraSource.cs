@@ -28,15 +28,27 @@ public static class CameraSource
         return $"{uri.Scheme}://{uri.Host}{(uri.IsDefaultPort ? "" : ":" + uri.Port.ToString(CultureInfo.InvariantCulture))}{uri.AbsolutePath}";
     }
 
+    /// <summary>Modo escolhido para cada câmera do Windows (pelo nome). Preenchido pelo programa depois de perguntar os modos à câmera.</summary>
+    public static System.Collections.Concurrent.ConcurrentDictionary<string, CameraMode> Modes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Argumentos que perguntam à câmera quais tamanhos, quadros e formatos ela entrega.</summary>
+    public static string[] ListModesArgs(string device) => new[] { "-hide_banner", "-f", "dshow", "-list_options", "true", "-i", "video=" + device };
+
     /// <summary>Argumentos de entrada do FFmpeg para esta câmera.</summary>
     public static string[] InputArgs(string source)
     {
         if (!IsStream(source))
-            return new[] { "-f", "dshow", "-rtbufsize", "128M", "-use_wallclock_as_timestamps", "1", "-i", "video=" + source };
+        {
+            // modo escolhido (tamanho, quadros e formato): sem ele, o Windows entrega o primeiro da lista, às vezes 1080p cru a 5 quadros por segundo
+            var dshow = new List<string> { "-f", "dshow", "-rtbufsize", "64M", "-thread_queue_size", "512" };
+            if (Modes.TryGetValue(source, out var mode)) dshow.AddRange(mode.InputArgs());
+            dshow.AddRange(new[] { "-use_wallclock_as_timestamps", "1", "-i", "video=" + source });
+            return dshow.ToArray();
+        }
 
         var args = new List<string>();
         if (source.StartsWith("rtsp", StringComparison.OrdinalIgnoreCase)) args.AddRange(new[] { "-rtsp_transport", "tcp" }); // TCP perde menos quadros no Wi-Fi
-        args.AddRange(new[] { "-fflags", "nobuffer", "-use_wallclock_as_timestamps", "1", "-i", source });
+        args.AddRange(new[] { "-fflags", "nobuffer", "-thread_queue_size", "512", "-use_wallclock_as_timestamps", "1", "-i", source });
         return args.ToArray();
     }
 

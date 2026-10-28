@@ -136,11 +136,15 @@ public class EstudioCompletoTests
     }
 
     [Fact]
-    public void Camera_com_tela_reduzida_redimensiona_depois_de_juntar()
+    public void Camera_com_tela_reduzida_reduz_a_tela_antes_de_juntar()
     {
+        // a tela desce já no tamanho final: a câmera e o resto trabalham em menos pixels (bem mais leve)
         var cam = new CameraOverlay("Cam", CameraCorner.TopRight, 20, false);
         string cmd = string.Join(" ", StudioCommand.Build(Request(r => r with { Camera = cam, OutputWidth = 1280, OutputHeight = 720 })));
-        Assert.Contains("scale=1280:720:flags=bilinear,format=nv12[v]", cmd);
+        Assert.Contains("[0:v]hwdownload,format=bgra,scale=1280:720:flags=bilinear[b0]", cmd);
+        Assert.Contains("scale=256:-2:flags=bilinear", cmd);   // 20% da largura final (1280)
+        Assert.Contains("format=nv12[v]", cmd);
+        Assert.DoesNotContain("scale=1280:720:flags=bilinear,format=nv12[v]", cmd);
     }
 
     [Theory]

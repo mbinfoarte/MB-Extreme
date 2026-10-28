@@ -78,6 +78,30 @@ public sealed partial class StudioPage
         }
     }
 
+    private readonly Dictionary<string, long> _camFrameShown = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Com a gravação ou a live no ar, a câmera é do FFmpeg da gravação: ele mesmo manda uma cópia pequena de cada câmera,
+    /// e é ela que aparece nos quadros das câmeras (sem isso a imagem ficaria parada).
+    /// </summary>
+    private void RefreshCameraFramesFromSession()
+    {
+        if (!_studio.IsRunning || _studio.Session.Request is not { } request) return;
+        for (int i = 0; i < request.Cameras.Count; i++)
+        {
+            if (_studio.Session.CameraFrame(i) is not { } frame) continue;
+            string name = request.Cameras[i].DeviceName;
+            if (_camFrameShown.TryGetValue(name, out long shown) && shown == frame.Number) continue;
+            _camFrameShown[name] = frame.Number;
+            if (JpegImage(frame.Jpeg) is not { } image) continue;
+            var cam = _s.StudioCameras.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (cam is null) continue;
+            LiveBrush(cam).ImageSource = image;
+            _camStills[name] = image;
+            if (_camNotes.TryGetValue(cam, out var note)) note.Text = "Câmera ao vivo (na gravação).";
+        }
+    }
+
     /// <summary>Solta as câmeras (para a gravação poder usá-las) e espera o Windows liberar os dispositivos.</summary>
     private async Task ReleaseCameraFeedsAsync()
     {

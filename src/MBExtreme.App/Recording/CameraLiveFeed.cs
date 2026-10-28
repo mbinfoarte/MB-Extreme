@@ -32,6 +32,16 @@ internal sealed class CameraLiveFeed : IDisposable
     {
         Stop();
         int generation = ++_generation;
+        // primeiro descobre o melhor modo da câmera (só na primeira vez), depois abre o vídeo, tudo fora da tela
+        _ = Task.Run(() =>
+        {
+            if (!CameraSource.Modes.ContainsKey(source)) FfmpegRecorder.EnsureCameraMode(ffmpeg, source);
+            if (generation == _generation) _ui.BeginInvoke(new Action(() => { if (generation == _generation) Launch(ffmpeg, source, chain, generation); }));
+        });
+    }
+
+    private void Launch(string ffmpeg, string source, string? chain, int generation)
+    {
         var info = new ProcessStartInfo(ffmpeg)
         {
             UseShellExecute = false,

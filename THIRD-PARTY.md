@@ -37,9 +37,9 @@ Ideias e técnicas de outros projetos usados apenas como referência de estudo e
 ## AnyDesk (não incluído)
 - Uso: suporte remoto. O MB Extreme **não distribui** o AnyDesk: ele é baixado do site oficial (download.anydesk.com) só quando o cliente pede, tem a assinatura digital conferida e é aberto pelo próprio cliente. Programa proprietário, sujeito aos termos do fabricante (uso pessoal gratuito; atendimento comercial exige licença do AnyDesk). https://anydesk.com
 
-## FFmpeg (não incluído)
-- Uso: captura, codificação, transmissão e replay acelerados pela placa de vídeo. O MB Extreme **não distribui** o FFmpeg: ele é instalado pelo usuário (winget, pacote Gyan.FFmpeg) e o aplicativo apenas executa o programa.
-- Licença: LGPL/GPL conforme a compilação instalada. https://ffmpeg.org
+## FFmpeg (motor de vídeo, incluído como programa separado)
+- Uso: captura, codificação, transmissão e replay acelerados pela placa de vídeo. O MB Extreme leva junto, sem modificações, o `ffmpeg.exe` da compilação "release essentials" de https://www.gyan.dev/ffmpeg/builds/ (pasta `ffmpeg` ao lado do programa). Se faltar, o programa baixa o mesmo arquivo do mesmo endereço e confere o SHA-256 publicado. O aplicativo apenas executa o programa (processo separado); nenhum código do FFmpeg é ligado ao MB Extreme.
+- Licença: GPL versão 3 (a compilação inclui componentes GPL). Texto da licença: https://www.gnu.org/licenses/gpl-3.0.html. Código-fonte do FFmpeg: https://ffmpeg.org/download.html; as fontes exatas e a configuração da compilação estão publicadas em https://www.gyan.dev/ffmpeg/builds/ e https://github.com/GyanD/codexffmpeg. https://ffmpeg.org
 
 ## Vosk (reconhecimento de voz das legendas)
 - Uso: legendas automáticas em tempo real, sem internet. O modelo de voz em português (vosk-model-small-pt) é baixado pelo usuário quando ele liga as legendas.

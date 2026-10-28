@@ -157,6 +157,15 @@ public sealed class AppSettings
     /// <summary>Ao parar, cria um MP4 comum com o índice no começo, pronto para postar.</summary>
     public bool StudioVRecPostMp4 { get; set; } = true;
 
+    /// <summary>Codificador escolhido no estúdio (nome do FFmpeg, ex.: h264_nvenc); vazio = o melhor da placa.</summary>
+    public string StudioEncoderName { get; set; } = "";
+
+    /// <summary>Codificadores que funcionaram no último teste (nomes do FFmpeg), para não testar de novo a cada abertura.</summary>
+    public List<string> StudioEncoderCache { get; set; } = new();
+
+    /// <summary>Qual FFmpeg (caminho, tamanho e data) foi testado: se mudar, testa de novo.</summary>
+    public string StudioEncoderStamp { get; set; } = "";
+
     // ---- Pix (QR estático "apoie a live")
     public bool StudioPixOn { get; set; }
 

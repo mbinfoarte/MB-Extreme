@@ -17,9 +17,10 @@ public sealed class FfmpegRecorder
     public bool EndedUnexpectedly => _process is { HasExited: true };
     public string? CurrentFile { get; private set; }
 
+    /// <summary>O que vem com o programa primeiro; depois um FFmpeg que já exista no PC.</summary>
     public static string? Locate()
     {
-        var candidates = new List<string>();
+        var candidates = new List<string>(FfmpegProvision.BundledCandidates());
         string? path = Environment.GetEnvironmentVariable("PATH");
         if (path is not null) candidates.AddRange(path.Split(';', StringSplitOptions.RemoveEmptyEntries).Select(d => Path.Combine(d.Trim('"'), "ffmpeg.exe")));
 
@@ -40,20 +41,66 @@ public sealed class FfmpegRecorder
         return candidates.FirstOrDefault(File.Exists);
     }
 
-    /// <summary>Descobre quais codificadores de GPU realmente funcionam neste PC, codificando alguns quadros de teste de cada um.</summary>
+    /// <summary>
+    /// Descobre quais codificadores da placa de vídeo realmente funcionam neste PC, codificando alguns quadros de teste de cada um (todos ao mesmo tempo).
+    /// O do processador (x264) entra no fim da lista, só como reserva.
+    /// </summary>
     public static IReadOnlyList<EncoderOption> ProbeEncoders(string ffmpeg)
     {
         var listed = Shell.Run(ffmpeg, "-hide_banner", "-encoders");
         var candidates = FfmpegCommand.ParseEncoders(listed.Output);
-        var working = new List<EncoderOption>();
-        foreach (var option in candidates)
-        {
-            var test = Shell.Run(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "nullsrc=s=1280x720:r=30",
-                "-frames:v", "8", "-c:v", option.FfmpegName, "-f", "null", "-");
-            if (test.ExitCode == 0) working.Add(option);
-        }
-
+        var tests = candidates.Select(option => Task.Run(() => TestEncoder(ffmpeg, option.FfmpegName) ? option : null)).ToArray();
+        Task.WaitAll(tests);
+        var working = tests.Select(t => t.Result).OfType<EncoderOption>().ToList();
+        if (FfmpegCommand.HasSoftwareEncoder(listed.Output)) working.Add(FfmpegCommand.Software);
         return working;
+    }
+
+    /// <summary>Codifica 10 quadros em NV12 (o formato que a placa recebe na gravação); desiste em 20 s se o driver travar.</summary>
+    private static bool TestEncoder(string ffmpeg, string name)
+    {
+        var info = new ProcessStartInfo(ffmpeg) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
+        foreach (string a in FfmpegCommand.ProbeArgs(name)) info.ArgumentList.Add(a);
+        try
+        {
+            using var process = Process.Start(info);
+            if (process is null) return false;
+            process.ErrorDataReceived += (_, _) => { };
+            process.OutputDataReceived += (_, _) => { };
+            process.BeginErrorReadLine();
+            process.BeginOutputReadLine();
+            if (!process.WaitForExit(20000))
+            {
+                try { process.Kill(true); } catch (InvalidOperationException) { }
+                return false;
+            }
+            return process.ExitCode == 0;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException) { return false; }
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<CameraMode>> KnownModes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Pergunta à câmera (uma vez por nome) quais modos ela tem e guarda o melhor em <see cref="CameraSource.Modes"/>.
+    /// A câmera precisa estar livre; se não responder, fica no modo padrão do Windows.
+    /// </summary>
+    public static CameraMode? EnsureCameraMode(string ffmpeg, string device, int targetHeight = 720)
+    {
+        if (CameraSource.IsStream(device) || !CameraOverlay.IsValidName(device)) return null;
+        if (!KnownModes.TryGetValue(device, out var modes))
+        {
+            try
+            {
+                var listed = Shell.Run(ffmpeg, CameraSource.ListModesArgs(device));
+                modes = CameraModes.Parse(listed.Error + "\n" + listed.Output);
+            }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException) { modes = Array.Empty<CameraMode>(); }
+            if (modes.Count > 0) KnownModes[device] = modes;
+        }
+        var best = CameraModes.Pick(modes, targetHeight);
+        if (best is not null) CameraSource.Modes[device] = best;
+        return best;
     }
 
     /// <summary>Nomes das câmeras (dispositivos de vídeo do DirectShow) que o FFmpeg enxerga.</summary>

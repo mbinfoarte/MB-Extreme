@@ -324,7 +324,7 @@ public sealed class ShortsPage : ToolPageBase
     private async Task LoadVideoAsync(string file)
     {
         _ffmpeg ??= await Task.Run(FfmpegRecorder.Locate);
-        if (_ffmpeg is null) { SetStatus("Instale o FFmpeg primeiro (página Gravação e transmissão, aba Avançado).", "WarnBrush"); return; }
+        if (_ffmpeg is null) { SetStatus("Abra o Estúdio uma vez para preparar o motor de vídeo (é automático).", "WarnBrush"); return; }
         if (ShortsCommand.Validate(new ShortsRequest(file, new ShortSegment(0, 10, "x"), TestLayout, new EncoderOption(VideoCodec.H264, EncoderKind.Software, "libx264"), "x.mp4", true)) is { } bad && bad.StartsWith("O vídeo escolhido"))
         {
             SetStatus(bad + " Renomeie o arquivo ou copie para outra pasta.", "WarnBrush");

@@ -53,7 +53,7 @@ public sealed partial class StudioPage
         DockPanel.SetDock(_badgeLive, Dock.Left);
         bar.Children.Add(_badgeLive);
 
-        bar.Children.Add(new TextBlock { Text = "Tudo que você muda aqui vale na hora.", FontSize = 13, Foreground = Brush("MutedBrush"), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center });
+        bar.Children.Add(BuildUsageBar());
         return bar;
     }
 

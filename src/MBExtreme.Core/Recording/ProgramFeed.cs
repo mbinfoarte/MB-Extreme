@@ -18,9 +18,9 @@ public sealed class ProgramFeed : IDisposable
     private long _count;
     private Task? _reader;
 
-    public ProgramFeed()
+    public ProgramFeed(string prefix = "mbx-program-")
     {
-        Name = "mbx-program-" + Guid.NewGuid().ToString("N");
+        Name = prefix + Guid.NewGuid().ToString("N");
         _server = new NamedPipeServerStream(Name, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 1 << 20, 0);
     }
 

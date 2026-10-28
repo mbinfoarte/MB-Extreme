@@ -22,6 +22,7 @@ public sealed class StudioSession : IDisposable
     private AudioCapture? _capture;
     private AudioPipe? _pipe;
     private ProgramFeed? _program;
+    private ProgramFeed?[] _cameraFeeds = Array.Empty<ProgramFeed?>();
     private readonly SemaphoreSlim _commandGate = new(1, 1);
     private CancellationTokenSource? _pumpCts;
     private Task? _pump;
@@ -94,6 +95,19 @@ public sealed class StudioSession : IDisposable
     /// <summary>Última imagem do que está no ar (JPEG pequeno) e o número dela; null antes da primeira.</summary>
     public (byte[] Jpeg, long Number)? ProgramFrame => _program?.Latest;
 
+    /// <summary>Última imagem de uma câmera (na ordem das câmeras do pedido), mandada pelo FFmpeg da gravação; null se não houver.</summary>
+    public (byte[] Jpeg, long Number)? CameraFrame(int index) => index >= 0 && index < _cameraFeeds.Length ? _cameraFeeds[index]?.Latest : null;
+
+    /// <summary>Número do processo do FFmpeg (para medir CPU, GPU e memória); null parado.</summary>
+    public int? ProcessId
+    {
+        get
+        {
+            try { return _process is { HasExited: false } p ? p.Id : null; }
+            catch (InvalidOperationException) { return null; }
+        }
+    }
+
     /// <summary>Cena que está no ar agora (troca ao vivo).</summary>
     public int ActiveScene { get; private set; }
 
@@ -161,12 +175,12 @@ public sealed class StudioSession : IDisposable
         {
             try
             {
-                await LaunchWithProgramAsync(request, withAudio ? audio : null).ConfigureAwait(false);
+                await LaunchWithModesAsync(request, withAudio ? audio : null).ConfigureAwait(false);
             }
             catch (AudioUnavailableException ex)
             {
                 AddWarning(ex.Message + " Gravando sem áudio.");
-                await LaunchWithProgramAsync(request, null).ConfigureAwait(false);
+                await LaunchWithModesAsync(request, null).ConfigureAwait(false);
             }
         }
         finally
@@ -177,10 +191,28 @@ public sealed class StudioSession : IDisposable
 
     private sealed class AudioUnavailableException(string message) : Exception(message);
 
-    /// <summary>Com a imagem "No ar", e, se o FFmpeg não aceitar o canal dela, de novo sem (o vídeo é o que importa).</summary>
+    /// <summary>
+    /// Com o modo escolhido de cada câmera (tamanho, quadros e formato) e, se alguma câmera recusar o modo, de novo deixando o Windows escolher.
+    /// </summary>
+    private async Task LaunchWithModesAsync(StudioRequest request, AudioConfig? audio)
+    {
+        var withModes = request.Cameras.Where(c => CameraSource.Modes.ContainsKey(c.DeviceName)).Select(c => c.DeviceName).ToList();
+        try
+        {
+            await LaunchWithProgramAsync(request, audio).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException) when (withModes.Count > 0)
+        {
+            foreach (string name in withModes) CameraSource.Modes.TryRemove(name, out _);
+            AddWarning("Uma câmera não aceitou o modo escolhido; ela ficou no modo padrão do Windows.");
+            await LaunchWithProgramAsync(request, audio).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Com a imagem "No ar" e as das câmeras e, se o FFmpeg não aceitar os canais delas, de novo sem (o vídeo é o que importa).</summary>
     private async Task LaunchWithProgramAsync(StudioRequest request, AudioConfig? audio)
     {
-        if (!request.ProgramView)
+        if (!request.ProgramView && !request.CameraPreviews)
         {
             await LaunchAsync(request, audio).ConfigureAwait(false);
             return;
@@ -190,10 +222,10 @@ public sealed class StudioSession : IDisposable
         {
             await LaunchAsync(request, audio).ConfigureAwait(false);
         }
-        catch (InvalidOperationException) when (_program is not null)
+        catch (InvalidOperationException)   // os canais já foram fechados ao falhar; tenta sem eles
         {
-            AddWarning("A imagem \"No ar\" não pôde ser aberta; o estúdio segue sem ela.");
-            await LaunchAsync(request with { ProgramView = false }, audio).ConfigureAwait(false);
+            AddWarning("As imagens \"No ar\" e das câmeras não puderam ser abertas; o estúdio segue sem elas.");
+            await LaunchAsync(request with { ProgramView = false, CameraPreviews = false }, audio).ConfigureAwait(false);
         }
     }
 
@@ -201,19 +233,29 @@ public sealed class StudioSession : IDisposable
     {
         StopAudio();
         StopProgram();
-        var effective = request with { ProgramPipe = null };
+        var effective = request with { ProgramPipe = null, CameraPreviewPipes = Array.Empty<string?>() };
         ActiveScene = request.ActiveScene;
-        if (request.ProgramView)
+        if (request.ProgramView || request.CameraPreviews)
         {
             try
             {
-                _program = new ProgramFeed();
-                _program.BeginWait();
-                effective = effective with { ProgramPipe = _program.Path };
+                if (request.ProgramView)
+                {
+                    _program = new ProgramFeed();
+                    _program.BeginWait();
+                    effective = effective with { ProgramPipe = _program.Path };
+                }
+                if (request.CameraPreviews && request.Cameras.Count > 0)
+                {
+                    _cameraFeeds = request.Cameras.Select(_ => (ProgramFeed?)new ProgramFeed("mbx-camera-")).ToArray();
+                    foreach (var feed in _cameraFeeds) feed!.BeginWait();
+                    effective = effective with { CameraPreviewPipes = _cameraFeeds.Select(f => (string?)f!.Path).ToList() };
+                }
             }
             catch (IOException)
             {
                 StopProgram();
+                effective = effective with { ProgramPipe = null, CameraPreviewPipes = Array.Empty<string?>() };
             }
         }
         if (audio is not null)
@@ -255,6 +297,9 @@ public sealed class StudioSession : IDisposable
         {
         process = Process.Start(info) ?? throw new InvalidOperationException("Não foi possível iniciar o FFmpeg.");
         _process = process;
+        // acima do normal: com o jogo puxando o processador, a captura não perde quadros (o mesmo que o OBS faz)
+        try { process.PriorityClass = ProcessPriorityClass.AboveNormal; }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception) { }
         process.EnableRaisingEvents = true;
         process.Exited += (_, _) =>
         {
@@ -388,6 +433,8 @@ public sealed class StudioSession : IDisposable
     {
         _program?.Dispose();
         _program = null;
+        foreach (var feed in _cameraFeeds) feed?.Dispose();
+        _cameraFeeds = Array.Empty<ProgramFeed?>();
     }
 
     private void StopAudio()

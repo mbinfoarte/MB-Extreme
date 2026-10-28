@@ -45,6 +45,24 @@ jobs:
           & $signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 out\MBExtreme.exe
           if ($LASTEXITCODE -ne 0) { throw "Falha ao assinar o aplicativo" }
 
+      # o motor de vídeo (FFmpeg) vai junto com o programa: o usuário não instala nada. Se o download falhar, o programa baixa sozinho na primeira vez.
+      - name: Motor de vídeo junto com o programa
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $base = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          Invoke-WebRequest $base -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
+          Invoke-WebRequest "$base.sha256" -OutFile "$env:RUNNER_TEMP\ffmpeg.sha256"
+          $expected = ((Get-Content "$env:RUNNER_TEMP\ffmpeg.sha256" -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash "$env:RUNNER_TEMP\ffmpeg.zip" -Algorithm SHA256).Hash
+          if ($actual -ne $expected) { throw "O FFmpeg baixado nao confere com o SHA-256 publicado" }
+          Expand-Archive "$env:RUNNER_TEMP\ffmpeg.zip" "$env:RUNNER_TEMP\ffmpeg"
+          New-Item -ItemType Directory -Force out\ffmpeg | Out-Null
+          Copy-Item (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName out\ffmpeg\ffmpeg.exe
+          $license = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Recurse -Filter LICENSE* | Select-Object -First 1
+          if ($license) { Copy-Item $license.FullName out\ffmpeg\LICENSE.txt }
+          & out\ffmpeg\ffmpeg.exe -hide_banner -encoders | Select-String "nvenc|amf|qsv"
+
       - name: Compactar o aplicativo
         run: |
           Remove-Item out\*.pdb -ErrorAction SilentlyContinue

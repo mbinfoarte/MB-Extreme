@@ -42,6 +42,28 @@ public static class FfmpegCommand
              .Select(k => new EncoderOption(k.Codec, k.Kind, k.Name))
              .ToList();
 
+    /// <summary>Reserva quando a placa não tem codificador (ou o driver está com problema): pesa no processador.</summary>
+    public static EncoderOption Software { get; } = new(VideoCodec.H264, EncoderKind.Software, "libx264");
+
+    public static bool HasSoftwareEncoder(string ffmpegEncodersOutput) => Regex.IsMatch(ffmpegEncodersOutput, @"\blibx264\b");
+
+    /// <summary>Teste rápido de um codificador: 10 quadros 1280×720 em NV12, sem gravar nada.</summary>
+    public static IReadOnlyList<string> ProbeArgs(string encoderName) => new[]
+    {
+        "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=1280x720:r=30",
+        "-vf", "format=nv12", "-frames:v", "10", "-c:v", encoderName, "-f", "null", "-",
+    };
+
+    /// <summary>Monta a lista guardada nas configurações (nomes do FFmpeg) de volta, na ordem guardada; nomes desconhecidos são ignorados.</summary>
+    public static IReadOnlyList<EncoderOption> FromNames(IEnumerable<string> names)
+    {
+        var all = AllKnown().Append(Software).ToList();
+        return names.Select(n => all.FirstOrDefault(e => e.FfmpegName == n)).OfType<EncoderOption>().Distinct().ToList();
+    }
+
+    /// <summary>Identifica a cópia do FFmpeg testada (se for trocada ou atualizada, os codificadores são testados de novo).</summary>
+    public static string Stamp(string path, long length, DateTime written) => $"{path}|{length}|{written.Ticks}";
+
     public static IReadOnlyList<EncoderOption> AllKnown() => Known.Select(k => new EncoderOption(k.Codec, k.Kind, k.Name)).ToList();
 
     /// <summary>Taxa sugerida (Mbps) para gravação de jogo, conforme resolução e quadros por segundo.</summary>

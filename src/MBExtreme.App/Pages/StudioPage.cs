@@ -200,6 +200,8 @@ public sealed partial class StudioPage : ToolPageBase
         {
             if (++_syncTick % 3 == 0) SyncCameraFeeds();
             RefreshProgramView();
+            RefreshCameraFramesFromSession();
+            if (_syncTick % 20 == 0) _ = SampleUsageAsync();
             await UpdatePreviewAsync();
         };
         Loaded += async (_, _) =>
@@ -217,6 +219,8 @@ public sealed partial class StudioPage : ToolPageBase
             _statsTimer.Stop();
             _previewTimer.Stop();
             StopAllFeeds();
+            _usage?.Dispose();
+            _usage = null;
             _studio.Notice -= OnNotice;
         };
     }
@@ -610,8 +614,9 @@ public sealed partial class StudioPage : ToolPageBase
     private async Task UpdatePreviewAsync()
     {
         if (_previewBusy || AppServices.Recorder.IsRecording) return;
-        // com o estúdio ligado a imagem atualiza só uma vez por segundo, para pesar pouco no jogo
-        if (_studio.IsRunning && ++_previewTick % 10 != 0) return;
+        // no ar, a prévia vem do próprio vídeo (imagem "No ar"); copiar a tela do jogo trava o jogo e a gravação.
+        // Só no modo estúdio (prévia de outra cena) ainda copia, a cada 2 segundos.
+        if (_studio.IsRunning && (!_s.StudioSceneStudioMode && _s.StudioProgramView && _studio.Session.ProgramFrame is not null || ++_previewTick % 20 != 0)) return;
         _previewBusy = true;
         try
         {
@@ -677,11 +682,10 @@ public sealed partial class StudioPage : ToolPageBase
 
     private void BuildEngine()
     {
-        _tabAdvanced.Children.Add(Heading("Programa de gravação"));
+        _tabAdvanced.Children.Add(Heading("Motor de vídeo"));
         _tabAdvanced.Children.Add(CardOf(_engineStatus));
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        buttons.Children.Add(SmallButton("Instalar FFmpeg", async (_, _) => await InstallFfmpegAsync(), true));
-        buttons.Children.Add(SmallButton("Detectar codificadores da minha placa", async (_, _) => await DetectAsync()));
+        buttons.Children.Add(SmallButton("Testar os codificadores da placa de novo", async (_, _) => await DetectAsync()));
         _tabAdvanced.Children.Add(buttons);
     }
 
@@ -816,7 +820,7 @@ public sealed partial class StudioPage : ToolPageBase
             var camNote = Muted("", 10.5);
             camNote.MaxWidth = 150;
             _camNotes[cam] = camNote;
-            camNote.Text = CameraBusyWithRecording ? "Em uso pela gravação agora." : _ffmpegPath is null ? "Instale o FFmpeg (Programa › Avançado)." : "";
+            camNote.Text = CameraBusyWithRecording ? "Em uso pela gravação agora." : _ffmpegPath is null ? "Preparando o motor de vídeo..." : "";
             var camBox = new Border { Width = 150, Height = 84, CornerRadius = new CornerRadius(6), Background = LiveBrush(cam), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1) };
             var left = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
             left.Children.Add(camBox);
@@ -897,7 +901,7 @@ public sealed partial class StudioPage : ToolPageBase
     {
         if (CameraSource.IsStream(cam.Name)) return Muted("Câmera pela rede: " + CameraSource.Display(cam.Name!), 12);
         if (_cameraList.Count == 0)
-            return Muted(_ffmpegPath is null ? "Instale o FFmpeg (aba Avançado) para procurar câmeras." : cam.Name is { Length: > 0 } ? cam.Name + " (clique em Procurar câmeras)" : "Clique em \"Procurar câmeras\".", 12);
+            return Muted(_ffmpegPath is null ? "Preparando o motor de vídeo... (as câmeras aparecem em seguida)" : cam.Name is { Length: > 0 } ? cam.Name + " (clique em Procurar câmeras)" : "Clique em \"Procurar câmeras\".", 12);
         var names = _cameraList.ToList();
         if (cam.Name is { Length: > 0 } saved && !names.Contains(saved)) names.Insert(0, saved + " (não encontrada)");
         int selected = cam.Name is null ? -1 : Math.Max(0, names.FindIndex(n => n == cam.Name || n == cam.Name + " (não encontrada)"));
@@ -921,7 +925,7 @@ public sealed partial class StudioPage : ToolPageBase
         _ffmpegPath ??= await Task.Run(FfmpegRecorder.Locate);
         if (_ffmpegPath is null)
         {
-            SetStatus("Instale o FFmpeg primeiro (aba Avançado).", "WarnBrush");
+            SetStatus("O motor de vídeo ainda está sendo preparado. Aguarde alguns segundos.", "WarnBrush");
             return;
         }
 
@@ -1813,29 +1817,51 @@ public sealed partial class StudioPage : ToolPageBase
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Management.ManagementException or AggregateException) { }
         _ffmpegPath = await Task.Run(FfmpegRecorder.Locate);
-        RebuildCameras();
         if (_ffmpegPath is null)
         {
-            _engineStatus.Text = "FFmpeg não encontrado. Ele é o programa livre que faz a captura e a codificação. Clique em Instalar FFmpeg (instala pelo winget, o instalador oficial da Microsoft).";
-            return;
+            // o motor de vídeo vem com o programa; se sumiu, baixa sozinho (sem instalar nada no Windows)
+            await InstallFfmpegAsync();
         }
+        RebuildCameras();
+        if (_ffmpegPath is null) return;
 
-        _engineStatus.Text = "FFmpeg encontrado. Clique em \"Detectar codificadores da minha placa\" para ver o que ela suporta (leva alguns segundos).";
         if (_encoders.Count == 0 && AppServices.CachedEncoders is { Count: > 0 } cached) _encoders = cached;
+        if (_encoders.Count == 0 && _s.StudioEncoderCache.Count > 0 && _s.StudioEncoderStamp == EngineStamp(_ffmpegPath))
+            _encoders = AppServices.CachedEncoders = FfmpegCommand.FromNames(_s.StudioEncoderCache);
         if (_encoders.Count > 0) BuildEncoderChoice();
+        else await DetectAsync();   // primeira vez (ou motor novo): testa a placa sozinho
     }
 
+    private static string EngineStamp(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return FfmpegCommand.Stamp(path, info.Length, info.LastWriteTimeUtc);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return path; }
+    }
+
+    private static readonly System.Net.Http.HttpClient EngineHttp = new() { Timeout = TimeSpan.FromMinutes(10) };
+
+    /// <summary>Baixa o motor de vídeo oficial (só quando ele não veio junto com o programa), confere e guarda na pasta do MB Extreme.</summary>
     private async Task InstallFfmpegAsync()
     {
-        ShowProgress("Instalando o FFmpeg", "Instalação");
-        IProgress<ProgressEvent> progress = new Progress<ProgressEvent>(Progress.Report);
-        var (ok, message) = await Task.Run(() =>
+        if (_engineDownloading) return;
+        _engineDownloading = true;
+        try
         {
-            progress.Report(new ProgressEvent("Instalação", 20, "Instalando pelo winget (Gyan.FFmpeg)"));
-            return WingetService.Install("Gyan.FFmpeg");
-        });
-        Progress.Finish(ok ? "FFmpeg instalado." : "Não foi possível instalar.", ok, message);
+            _engineStatus.Text = "Preparando o motor de vídeo (só desta vez)...";
+            var progress = new Progress<double>(p => _engineStatus.Text = $"Baixando o motor de vídeo (só desta vez)... {p:0}%");
+            var (path, message) = await FfmpegProvision.DownloadAsync(EngineHttp, progress, CancellationToken.None);
+            _engineStatus.Text = message;
+            if (path is null) { SetStatus(message, "WarnBrush"); return; }
+            _ffmpegPath = path;
+        }
+        finally { _engineDownloading = false; }
     }
+
+    private bool _engineDownloading;
 
     protected override async void OnProgressClosed()
     {
@@ -1848,26 +1874,47 @@ public sealed partial class StudioPage : ToolPageBase
         _ffmpegPath ??= await Task.Run(FfmpegRecorder.Locate);
         if (_ffmpegPath is null)
         {
-            SetStatus("Instale o FFmpeg primeiro.", "WarnBrush");
-            return;
+            await InstallFfmpegAsync();
+            if (_ffmpegPath is null) return;
         }
 
-        SetStatus("Testando os codificadores da placa de vídeo...");
+        SetStatus("Testando os codificadores da sua placa de vídeo (alguns segundos)...");
+        _engineStatus.Text = "Testando os codificadores da sua placa de vídeo...";
         string path = _ffmpegPath;
         _encoders = await Task.Run(() => FfmpegRecorder.ProbeEncoders(path));
         AppServices.CachedEncoders = _encoders;
-        SetStatus(_encoders.Count == 0 ? "Nenhum codificador de GPU funcionou. Atualize o driver da placa de vídeo." : $"{_encoders.Count} codificador(es) disponível(is).",
-            _encoders.Count == 0 ? "WarnBrush" : "OkBrush");
+        _s.StudioEncoderCache = _encoders.Select(e => e.FfmpegName).ToList();
+        _s.StudioEncoderStamp = EngineStamp(path);
+        _s.Save();
+        bool gpu = _encoders.Any(e => e.Kind != EncoderKind.Software);
+        SetStatus(!gpu ? "Nenhum codificador da placa de vídeo funcionou. Atualize o driver da placa (NVIDIA, AMD ou Intel) e clique em \"Testar de novo\"."
+                       : $"{_encoders.Count(e => e.Kind != EncoderKind.Software)} codificador(es) da placa de vídeo prontos.",
+            gpu ? "OkBrush" : "WarnBrush");
         BuildEncoderChoice();
     }
 
     private void BuildEncoderChoice()
     {
         _qualityEncoder.Children.Clear();
-        if (_encoders.Count == 0) return;
-        _engineStatus.Text = "Pronto: FFmpeg e codificadores encontrados.";
-        _encoderIndex = Math.Min(_encoderIndex, _encoders.Count - 1);
-        _qualityEncoder.Children.Add(Chips(_encoders.Select(e => e.Title).ToList(), _encoderIndex, i => _encoderIndex = i));
+        if (_encoders.Count == 0)
+        {
+            _qualityEncoder.Children.Add(Muted("Testando a placa de vídeo...", 11.5));
+            return;
+        }
+        _engineStatus.Text = "Pronto: motor de vídeo e codificadores da placa encontrados.";
+        int saved = _encoders.ToList().FindIndex(e => e.FfmpegName == _s.StudioEncoderName);
+        _encoderIndex = saved >= 0 ? saved : Math.Max(0, LiveLight.BestEncoderIndex(_encoders));
+        _qualityEncoder.Children.Add(Chips(_encoders.Select(e => e.Title).ToList(), _encoderIndex, i =>
+        {
+            _encoderIndex = i;
+            _s.StudioEncoderName = _encoders[i].FfmpegName;
+            _s.Save();
+            RefreshInfoLine();
+        }));
+        if (_encoders[_encoderIndex].Kind == EncoderKind.Software)
+            _qualityEncoder.Children.Add(Muted("Atenção: o processador (x264) pesa muito no jogo. Prefira um codificador da placa de vídeo.", 11));
+        var redo = SmallButton("Testar de novo", async (_, _) => await DetectAsync());
+        redo.HorizontalAlignment = HorizontalAlignment.Left;
 
         // codecs que a placa não tem (AV1 só existe em placas mais novas): avisa em vez de esconder
         var makers = _encoders.Select(e => e.Kind).Distinct().ToList();
@@ -1878,9 +1925,10 @@ public sealed partial class StudioPage : ToolPageBase
                     missing.Add(new EncoderOption(codec, kind, "").Title);
         if (missing.Count > 0)
         {
-            var note = Muted("Sem suporte nesta placa ou neste FFmpeg: " + string.Join(", ", missing) + ".", 11);
+            var note = Muted("Sem suporte nesta placa: " + string.Join(", ", missing) + ".", 11);
             _qualityEncoder.Children.Add(note);
         }
+        _qualityEncoder.Children.Add(redo);
         BuildVertical();   // a gravação vertical lista os mesmos codificadores
     }
 
@@ -1923,7 +1971,7 @@ public sealed partial class StudioPage : ToolPageBase
         if (_studio.IsRunning || AppServices.Recorder.IsRecording) return;
         if (_ffmpegPath is null || _encoders.Count == 0)
         {
-            SetStatus("Instale o FFmpeg e detecte os codificadores antes de começar.", "WarnBrush");
+            SetStatus("O motor de vídeo ainda está sendo preparado ou a placa ainda está sendo testada. Aguarde alguns segundos.", "WarnBrush");
             return;
         }
         if (!_outRecord && !_outStream && !_outReplay)
@@ -2001,7 +2049,7 @@ public sealed partial class StudioPage : ToolPageBase
     /// <summary>Monta a configuração a partir do que está na tela. <paramref name="write"/> grava a imagem do QR do Pix (só ao iniciar ou aplicar, para não escrever em disco a cada segundo).</summary>
     private (StudioConfig? Config, string? Error) BuildConfig(bool write)
     {
-        if (_ffmpegPath is null || _encoders.Count == 0) return (null, "Instale o FFmpeg e detecte os codificadores antes de começar.");
+        if (_ffmpegPath is null || _encoders.Count == 0) return (null, "O motor de vídeo ainda está sendo preparado ou a placa ainda está sendo testada. Aguarde alguns segundos.");
         if (!_outRecord && !_outStream && !_outReplay) return (null, "Marque pelo menos uma opção: gravar, transmitir ou replay.");
 
         // ---- origem

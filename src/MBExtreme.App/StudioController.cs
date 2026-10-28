@@ -194,7 +194,16 @@ internal sealed class StudioController
             ActiveScene = config.ActiveScene,
             Transition = config.Transition,
             ProgramView = config.ProgramView,
+            CameraPreviews = true,
         };
+
+        // o melhor modo de cada câmera (tamanho, quadros e formato): sem isso o Windows pode entregar 1080p cru a 5 quadros e a câmera "trava"
+        var devices = request.Cameras.Select(c => c.DeviceName)
+            .Concat((vertical?.Panes ?? Array.Empty<VerticalPane>()).Concat(request.VerticalCopy?.Panes ?? Array.Empty<VerticalPane>())
+                .Where(p => p.Kind == PaneKind.Camera && p.Source is not null).Select(p => p.Source!))
+            .Where(d => !CameraSource.IsStream(d)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        int cameraHeight = vertical is not null || request.VerticalCopy is not null ? 1080 : 720;
+        await Task.Run(() => { foreach (string device in devices) FfmpegRecorder.EnsureCameraMode(ffmpeg, device, cameraHeight); });
 
         try
         {

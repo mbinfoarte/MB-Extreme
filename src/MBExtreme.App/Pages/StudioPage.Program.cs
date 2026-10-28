@@ -50,17 +50,31 @@ public sealed partial class StudioPage
         _programEmpty.Visibility = Visibility.Collapsed;
         if (frame is not { } f || f.Number == _programShown) return;
         _programShown = f.Number;
+        if (JpegImage(f.Jpeg) is not { } image) return;   // um quadro ruim: espera o próximo
+        _programImage.Source = image;
+        if (!_s.StudioSceneStudioMode)
+        {
+            // sem o modo estúdio, a prévia grande é o próprio vídeo que está saindo: nada de copiar a tela do jogo durante a gravação
+            _preview.Source = image;
+            _lastFrame = image;
+            _previewNote.Text = "Ao vivo: é exatamente o que está sendo gravado e transmitido.";
+            _previewNote.Foreground = Brush("MutedBrush");
+        }
+    }
+
+    private static BitmapSource? JpegImage(byte[] jpeg)
+    {
         try
         {
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
-            image.StreamSource = new MemoryStream(f.Jpeg);
+            image.StreamSource = new MemoryStream(jpeg);
             image.EndInit();
             image.Freeze();
-            _programImage.Source = image;
+            return image;
         }
-        catch (Exception ex) when (ex is NotSupportedException or IOException or InvalidOperationException) { }   // um quadro ruim: espera o próximo
+        catch (Exception ex) when (ex is NotSupportedException or IOException or InvalidOperationException) { return null; }
     }
 
     private void RefreshProgramTitle()

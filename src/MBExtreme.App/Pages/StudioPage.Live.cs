@@ -119,6 +119,7 @@ public sealed partial class StudioPage
         int currentHeight = Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height;
         var plan = LiveLight.Plan(_encoders, _tier, CurrentService(), currentHeight, _s.StudioFps);
         _encoderIndex = plan.EncoderIndex;
+        _s.StudioEncoderName = _encoders[Math.Clamp(plan.EncoderIndex, 0, _encoders.Count - 1)].FfmpegName;
         _s.StudioEncoderQuality = plan.QualityIndex;
         int index = Array.FindIndex(Resolutions, r => r.Height == plan.Height);
         if (index >= 0) _s.StudioResolution = index;

@@ -196,6 +196,15 @@ public sealed record StudioRequest
     /// <summary>Qualidade constante do vídeo principal (0 = taxa normal). Só vale sem transmissão.</summary>
     public int QualityLevel { get; init; }
 
+    /// <summary>
+    /// Cópia pequena de cada câmera (na ordem de <see cref="Cameras"/>), mandada pelo próprio FFmpeg da gravação: com a câmera ocupada pela gravação,
+    /// é assim que os quadros das câmeras na tela continuam se mexendo. Nulo (ou lista menor) = sem cópia daquela câmera.
+    /// </summary>
+    public IReadOnlyList<string?> CameraPreviewPipes { get; init; } = Array.Empty<string?>();
+
+    /// <summary>Pede as cópias pequenas das câmeras (a sessão cria os canais e preenche <see cref="CameraPreviewPipes"/>).</summary>
+    public bool CameraPreviews { get; init; }
+
     /// <summary>Legendas automáticas queimadas no vídeo em tempo real (vertical ou não).</summary>
     public CaptionOverlay? Captions { get; init; }
 

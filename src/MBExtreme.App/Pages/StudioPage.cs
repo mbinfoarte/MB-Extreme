@@ -219,6 +219,7 @@ public sealed partial class StudioPage : ToolPageBase
             _statsTimer.Stop();
             _previewTimer.Stop();
             StopAllFeeds();
+            StopScreenFeed();
             _usage?.Dispose();
             _usage = null;
             _studio.Notice -= OnNotice;
@@ -333,7 +334,8 @@ public sealed partial class StudioPage : ToolPageBase
         var column = new StackPanel();
         column.Children.Add(BuildBigStart());
         column.Children.Add(_timerText);
-        var outputs = new StackPanel();
+        var outputs = _outputsGrid;
+        outputs.Children.Clear();
         outputs.Children.Add(MakeTile(_tileRecord, _tileRecordState, "record", "Gravar", "Salva no computador", () => { _outRecord = !_outRecord; }));
         outputs.Children.Add(MakeTile(_tileStream, _tileStreamState, "stream", "Transmitir", "Envia para YouTube / Twitch", () => { _outStream = !_outStream; }));
         outputs.Children.Add(MakeTile(_tileReplay, _tileReplayState, "replay", "Replay", "Guarda os últimos segundos", () => { _outReplay = !_outReplay; }));
@@ -348,8 +350,9 @@ public sealed partial class StudioPage : ToolPageBase
         column.Children.Add(_saveReplay);
         Detach(_statsCard);
         column.Children.Add(_statsCard);
-        Grid.SetColumn(column, 1);
+        _controlsColumn = column;
         _top.Children.Add(column);
+        ArrangeTop();
         RefreshTiles();
     }
 
@@ -469,11 +472,16 @@ public sealed partial class StudioPage : ToolPageBase
     private void BuildSource()
     {
         // como na maquete: a prévia grande à esquerda e a coluna de controle fixa à direita
+        // monitor em pé (janela estreita): a prévia vai para cima, na largura toda, e os controles descem (StudioPage.Arrange.cs)
         _top = new Grid { Margin = new Thickness(0, 6, 0, 0) };
-        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320) });
+        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 320 });
+        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Clamp(_s.StudioControlsWidth, 240, 560)) });
+        _top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        _preview.MaxHeight = 440;
+        _preview.MaxHeight = Math.Clamp(_s.StudioPreviewHeight, 200, 1400);
         _previewNote.Foreground = Brush("MutedBrush");
         _previewNote.FontSize = 11;
         _previewHost.Children.Add(_preview);
@@ -481,9 +489,10 @@ public sealed partial class StudioPage : ToolPageBase
 
         var previewCard = CardOf(BuildPreviewArea());
         previewCard.Padding = new Thickness(14, 12, 14, 10);
-        previewCard.Margin = new Thickness(0, 0, 16, 0);
         previewCard.CornerRadius = new CornerRadius(12);
+        _previewCard = previewCard;
         _top.Children.Add(previewCard);
+        AddLayoutGrips();
 
         // o que capturar fica numa janela pequena (botão na linha de baixo da prévia)
         var capture = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
@@ -614,6 +623,7 @@ public sealed partial class StudioPage : ToolPageBase
     private async Task UpdatePreviewAsync()
     {
         if (_previewBusy || AppServices.Recorder.IsRecording) return;
+        if (SyncScreenFeed()) return;   // a prévia da tela já vem pela placa de vídeo, ao vivo
         // no ar, a prévia vem do próprio vídeo (imagem "No ar"); copiar a tela do jogo trava o jogo e a gravação.
         // Só no modo estúdio (prévia de outra cena) ainda copia, a cada 2 segundos.
         if (_studio.IsRunning && (!_s.StudioSceneStudioMode && _s.StudioProgramView && _studio.Session.ProgramFrame is not null || ++_previewTick % 20 != 0)) return;

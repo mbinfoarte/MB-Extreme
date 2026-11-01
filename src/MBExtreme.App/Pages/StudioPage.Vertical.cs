@@ -178,7 +178,16 @@ public sealed partial class StudioPage
     private readonly Grid _verticalLive = new() { Visibility = Visibility.Collapsed };
     private System.Windows.Media.Imaging.BitmapSource? _lastFrame;
 
-    /// <summary>Mostra, ao lado da imagem normal, como o vídeo vertical vai sair (aproximação feita com a mesma imagem da pré-visualização).</summary>
+    private string? _verticalShown;
+    private readonly List<Action<System.Windows.Media.Imaging.BitmapSource>> _verticalUpdaters = new();
+
+    /// <summary>Altura do quadro vertical ao lado da prévia (maior com o monitor em pé, onde a prévia ocupa a largura toda).</summary>
+    private double VerticalPreviewHeight => (_s.StudioVerticalOn ? 380 : 250) * (_stacked ? 1.45 : 1);
+
+    /// <summary>
+    /// Mostra, ao lado da imagem normal, como o vídeo vertical vai sair (aproximação feita com a mesma imagem da pré-visualização).
+    /// O desenho é montado uma vez só; a cada quadro novo só as imagens são trocadas (remontar tudo 10 vezes por segundo deixava a tela lenta).
+    /// </summary>
     private void UpdateVerticalLive()
     {
         bool on = _s.StudioVerticalOn || _s.StudioVerticalCopy;
@@ -186,27 +195,38 @@ public sealed partial class StudioPage
         if (!on || _lastFrame is null) return;
 
         var layout = CurrentVerticalLayout();
-        double height = _s.StudioVerticalOn ? 380 : 250;   // "Vertical": o vertical é o vídeo, aparece grande; "Os dois": ao lado da prévia
-        double width = height * layout.Width / layout.Height;
-        var phone = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(2), BorderBrush = Yellow, Background = Brushes.Black, ClipToBounds = true };
-        var stack = new Grid { ClipToBounds = true };
-        double topH = layout.Split ? height * layout.TopHeight / layout.Height : height;
-        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(topH, GridUnitType.Pixel) });
-        if (layout.Split) stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(height - topH, GridUnitType.Star) });
-        AddPane(stack, 0, layout.Top, width, topH);
-        if (layout.Split) AddPane(stack, 1, layout.Bottom, width, height - topH);
-        if (layout.Split && layout.Divider) stack.Children.Add(new Border { Height = 2, Background = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, topH - 1, 0, 0) });
-        phone.Child = stack;
-
-        _verticalLive.Children.Clear();
-        var column = new StackPanel();
+        double height = VerticalPreviewHeight;
         string where = VerticalLiveWanted && !_s.StudioVerticalOn ? " · live no " + VerticalLive.For((VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3)).Name
             : _s.StudioVerticalOn && _s.StudioStreamPreset is 1 or 2 ? " · live no " + (_s.StudioStreamPreset == 1 ? "Instagram" : "TikTok") : "";
-        column.Children.Add(new TextBlock { Text = "Vertical 9:16" + where, FontSize = 12, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 0, 0, 4) });
-        column.Children.Add(phone);
-        _verticalLive.Children.Add(column);
+        string cams = string.Join(",", layout.Panes.Where(p => p.Kind == PaneKind.Camera).Select(p => p.Source is { } c && _camStills.ContainsKey(c) ? "1" : "0"));
+        string signature = $"{layout}|{height}|{where}|{cams}|{_lastFrame.PixelWidth}x{_lastFrame.PixelHeight}";
+
+        if (signature != _verticalShown)
+        {
+            _verticalShown = signature;
+            _verticalUpdaters.Clear();
+            double width = height * layout.Width / layout.Height;
+            var phone = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(2), BorderBrush = Yellow, Background = Brushes.Black, ClipToBounds = true };
+            var stack = new Grid { ClipToBounds = true };
+            double topH = layout.Split ? height * layout.TopHeight / layout.Height : height;
+            stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(topH, GridUnitType.Pixel) });
+            if (layout.Split) stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(height - topH, GridUnitType.Star) });
+            AddPane(stack, 0, layout.Top, width, topH);
+            if (layout.Split) AddPane(stack, 1, layout.Bottom, width, height - topH);
+            if (layout.Split && layout.Divider) stack.Children.Add(new Border { Height = 2, Background = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, topH - 1, 0, 0) });
+            phone.Child = stack;
+
+            _verticalLive.Children.Clear();
+            var column = new StackPanel();
+            column.Children.Add(new TextBlock { Text = "Vertical 9:16" + where, FontSize = 12, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 0, 0, 4) });
+            column.Children.Add(phone);
+            _verticalLive.Children.Add(column);
+        }
+
+        foreach (var update in _verticalUpdaters) update(_lastFrame);
     }
 
+    /// <summary>Monta uma parte do quadro vertical e guarda como trocar a imagem dela a cada quadro.</summary>
     private void AddPane(Grid grid, int row, VerticalPane pane, double w, double h)
     {
         FrameworkElement cell;
@@ -217,8 +237,11 @@ public sealed partial class StudioPage
             if (pane.Fit == PaneFit.Fit)
             {
                 var layers = new Grid { ClipToBounds = true };
-                layers.Children.Add(new System.Windows.Controls.Image { Source = frame, Stretch = Stretch.UniformToFill, Opacity = 0.55, Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 14 } });
-                layers.Children.Add(new System.Windows.Controls.Image { Source = frame, Stretch = Stretch.Uniform });
+                var back = new System.Windows.Controls.Image { Stretch = Stretch.UniformToFill, Opacity = 0.55, Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 14, RenderingBias = System.Windows.Media.Effects.RenderingBias.Performance } };
+                var front = new System.Windows.Controls.Image { Stretch = Stretch.Uniform };
+                layers.Children.Add(back);
+                layers.Children.Add(front);
+                _verticalUpdaters.Add(f => { back.Source = f; front.Source = f; });
                 cell = layers;
             }
             else
@@ -227,12 +250,16 @@ public sealed partial class StudioPage
                 double z = pane.Zoom / 100.0;
                 vw /= z; vh /= z;
                 double x = (1 - vw) * pane.Fx / 100.0, y = (1 - vh) * pane.Fy / 100.0;
-                cell = new Border { Background = new ImageBrush(frame) { Stretch = Stretch.Fill, ViewboxUnits = BrushMappingMode.RelativeToBoundingBox, Viewbox = new Rect(x, y, vw, vh) } };
+                var brush = new ImageBrush { Stretch = Stretch.Fill, ViewboxUnits = BrushMappingMode.RelativeToBoundingBox, Viewbox = new Rect(x, y, vw, vh) };
+                _verticalUpdaters.Add(f => brush.ImageSource = f);
+                cell = new Border { Background = brush };
             }
         }
-        else if (pane.Kind == PaneKind.Camera && pane.Source is { } cam && _camStills.TryGetValue(cam, out var still))
+        else if (pane.Kind == PaneKind.Camera && pane.Source is { } cam && _camStills.ContainsKey(cam))
         {
-            cell = new System.Windows.Controls.Image { Source = still, Stretch = Stretch.UniformToFill };
+            var image = new System.Windows.Controls.Image { Stretch = Stretch.UniformToFill };
+            _verticalUpdaters.Add(_ => { if (_camStills.TryGetValue(cam, out var still) && !ReferenceEquals(image.Source, still)) image.Source = still; });
+            cell = image;
         }
         else
         {

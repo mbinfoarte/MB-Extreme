@@ -3,7 +3,7 @@
 Atualizado em 27/10/2026. Use este arquivo para retomar o trabalho sem depender do histórico da conversa.
 
 ## Frente A: Aplicativo MB Extreme (Windows, .NET 8, WPF)
-**Publicado até o beta-42.** Em commit local, ainda sem subir (vai no beta-43): desempenho do estúdio. Motor de vídeo (FFmpeg) junto com o programa (o CI baixa da gyan.dev e confere o SHA-256; se faltar, o app baixa sozinho, sem winget). Teste automático e salvo dos codificadores da placa (com escolha guardada e x264 só como reserva). Câmera no modo certo (lê os modos da câmera e pede MJPEG/cru 720p30 em vez do padrão do Windows). Câmeras e prévia seguem ao vivo durante a gravação (cópias pequenas pelo próprio FFmpeg, sem copiar a tela do jogo). Tela reduzida antes de juntar câmeras e camadas, FFmpeg com prioridade acima do normal e monitor de CPU, GPU, codificador e RAM no topo do estúdio.
+**Publicado até o beta-43** (desempenho do estúdio, motor de vídeo embutido, monitor de uso). Em commit local, ainda sem subir (vai no beta-44): prévia fluida (tela pela placa de vídeo via ddagrab em vez de GDI; câmera sem fila, 20 fps, prioridade abaixo do normal; quadro vertical montado uma vez só em vez de a cada 0,1 s) e arrumação para monitor em pé (prévia em cima na largura toda com controles embaixo, automática abaixo de 980 px ou escolhida no botão "Arrumação"; alças de arrastar para a largura dos controles e a altura da prévia).
 
 Pendências, em ordem sugerida:
 1. Testar o beta-38 no PC: Modo leve da live, Otimizar a live, vídeo ao vivo das câmeras (inclusive celular por endereço de rede), áudio profissional, bolinha REC, grupo NVIDIA da biblioteca, capas com SteamGridDB.

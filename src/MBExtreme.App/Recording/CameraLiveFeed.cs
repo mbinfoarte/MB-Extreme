@@ -36,11 +36,18 @@ internal sealed class CameraLiveFeed : IDisposable
         _ = Task.Run(() =>
         {
             if (!CameraSource.Modes.ContainsKey(source)) FfmpegRecorder.EnsureCameraMode(ffmpeg, source);
-            if (generation == _generation) _ui.BeginInvoke(new Action(() => { if (generation == _generation) Launch(ffmpeg, source, chain, generation); }));
+            if (generation == _generation) _ui.BeginInvoke(new Action(() => { if (generation == _generation) Launch(ffmpeg, CameraSource.LiveArgs(source, chain), generation); }));
         });
     }
 
-    private void Launch(string ffmpeg, string source, string? chain, int generation)
+    /// <summary>Abre um vídeo qualquer que o FFmpeg entregue em JPEG pela saída (ex.: a prévia da tela pela placa de vídeo).</summary>
+    public void StartArgs(string ffmpeg, IReadOnlyList<string> args)
+    {
+        Stop();
+        Launch(ffmpeg, args, ++_generation);
+    }
+
+    private void Launch(string ffmpeg, IReadOnlyList<string> args, int generation)
     {
         var info = new ProcessStartInfo(ffmpeg)
         {
@@ -49,7 +56,7 @@ internal sealed class CameraLiveFeed : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        foreach (string a in CameraSource.LiveArgs(source, chain)) info.ArgumentList.Add(a);
+        foreach (string a in args) info.ArgumentList.Add(a);
 
         Process process;
         try { process = Process.Start(info) ?? throw new InvalidOperationException("sem processo"); }
@@ -60,6 +67,9 @@ internal sealed class CameraLiveFeed : IDisposable
         }
 
         _process = process;
+        // a prévia nunca disputa o processador com o jogo nem com a gravação
+        try { process.PriorityClass = ProcessPriorityClass.BelowNormal; }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }
         var error = new System.Text.StringBuilder();
         process.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 } && error.Length < 2000) error.AppendLine(e.Data); };
         process.BeginErrorReadLine();

@@ -53,6 +53,8 @@ public sealed partial class StudioPage
         DockPanel.SetDock(_badgeLive, Dock.Left);
         bar.Children.Add(_badgeLive);
 
+        DockPanel.SetDock(_layoutButton, Dock.Left);
+        bar.Children.Add(_layoutButton);
         bar.Children.Add(BuildUsageBar());
         return bar;
     }

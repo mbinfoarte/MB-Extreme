@@ -45,8 +45,10 @@ public class PrevisaoAoVivoTests
         Assert.Equal("pipe:1", args[^1]);
         Assert.Contains("mjpeg", args);
         string vf = args[args.ToList().IndexOf("-vf") + 1];
-        Assert.StartsWith("hflip,", vf);
-        Assert.EndsWith("scale=480:-2,format=yuvj420p", vf);
+        Assert.StartsWith("fps=20,hflip,", vf);   // descarta os quadros a mais antes dos filtros
+        Assert.EndsWith("scale=480:-2:flags=fast_bilinear,format=yuvj420p", vf);
+        Assert.Contains("nobuffer", args);           // sem fila na entrada: menos atraso
+        Assert.Equal("1", args[args.ToList().IndexOf("-flush_packets") + 1]);
         Assert.Contains("dshow", args);
         Assert.DoesNotContain("-rw_timeout", args);
         Assert.Contains("-rw_timeout", CameraSource.LiveArgs("http://10.0.0.2/v", null));

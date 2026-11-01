@@ -121,6 +121,17 @@ public sealed class AppSettings
     /// <summary>Mostra a imagem "No ar" (uma cópia pequena do vídeo final) na tela do estúdio.</summary>
     public bool StudioProgramView { get; set; } = true;
 
+    /// <summary>Arrumação da tela do estúdio: 0 automática (prévia em cima quando a janela é estreita, como num monitor em pé), 1 lado a lado, 2 prévia em cima.</summary>
+    public int StudioLayoutMode { get; set; }
+
+    /// <summary>Largura da coluna de controles (Iniciar, Gravar, Transmitir...) com a prévia ao lado; ajustada arrastando a divisória.</summary>
+    public double StudioControlsWidth { get; set; } = 320;
+
+    /// <summary>Altura máxima da prévia lado a lado e com a prévia em cima; ajustadas arrastando a alça de baixo da prévia.</summary>
+    public double StudioPreviewHeight { get; set; } = 440;
+
+    public double StudioPreviewHeightStacked { get; set; } = 680;
+
     // ---- live vertical ao mesmo tempo (Instagram, TikTok, YouTube...)
     public bool StudioVLiveOn { get; set; }
 

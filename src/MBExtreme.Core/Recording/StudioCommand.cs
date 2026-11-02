@@ -12,7 +12,7 @@ public static class StudioCommand
     public const int MaxLiveScenes = 6;
 
     /// <summary>Tamanho e ritmo da imagem pequena "No ar" (leve: só para conferir na tela do programa).</summary>
-    private const string ProgramChain = "fps=15,scale=640:-2:flags=bilinear,format=yuvj420p";
+    private const string ProgramChain = "fps=24,scale=960:-2:flags=bicubic,format=yuvj420p";
 
     /// <summary>Cópia de cada câmera para o quadro dela na tela do programa (pequena e leve).</summary>
     private const string CameraPreviewChain = "fps=12,scale=320:-2:flags=bilinear,format=yuvj420p";
@@ -90,6 +90,9 @@ public static class StudioCommand
             if (!CaptionOverlay.IsValidPath(c.Line1File) || !CaptionOverlay.IsValidPath(c.Line2File) || !CaptionOverlay.IsValidPath(c.FontFile))
                 return "O caminho da legenda ou da fonte tem caracteres que não são aceitos.";
         }
+        foreach (var relay in r.CameraRelays.Values)
+            if (!relay.PipePath.StartsWith(@"\\.\pipe\", StringComparison.Ordinal) || relay.PipePath.IndexOfAny(new[] { '"', '|', '\'', ';', '[', ']', ' ' }) >= 0 || relay.Width < 2 || relay.Height < 2)
+                return "O canal de uma câmera não é válido.";
         foreach (var camPipe in r.CameraPreviewPipes)
             if (camPipe is not null && (!camPipe.StartsWith(@"\\.\pipe\", StringComparison.Ordinal) || camPipe.IndexOfAny(new[] { '"', '|', '\'', ';', '[', ']', ' ' }) >= 0))
                 return "O canal da imagem de uma câmera não é válido.";
@@ -160,7 +163,7 @@ public static class StudioCommand
         {
             if (complex is not null) complex += $";[v]split=2[vo][pvsrc];[pvsrc]{ProgramChain}[pv]";
             else if (filter is not null) complex = $"[0:v]{filter}[vf];[vf]split=2[vo][pvsrc];[pvsrc]{ProgramChain}[pv]";
-            else complex = $"[0:v]split=2[vo][pvsrc];[pvsrc]fps=15,hwdownload,format=bgra,scale=640:-2:flags=bilinear,format=yuvj420p[pv]";   // quadros na placa: só a cópia pequena desce
+            else complex = $"[0:v]split=2[vo][pvsrc];[pvsrc]fps=24,hwdownload,format=bgra,scale=960:-2:flags=bicubic,format=yuvj420p[pv]";   // quadros na placa: só a cópia pequena desce
             filter = null;
             videoMap = "[vo]";
         }
@@ -201,18 +204,18 @@ public static class StudioCommand
         int copyFirst = 0;
         if (r.Vertical is { } vertical)
         {
-            foreach (var input in VerticalGraph.ExtraInputs(vertical, fps)) args.AddRange(input);
+            foreach (var input in VerticalGraph.ExtraInputs(vertical, fps, relays: r.CameraRelays)) args.AddRange(input);
             firstExtra += vertical.Panes.Count(p => p.Kind != PaneKind.Screen);
         }
         if (r.VerticalCopy is { } copyLayout)
         {
             copyFirst = firstExtra;
             var shared = SharedCameraTest(r);
-            foreach (var input in VerticalGraph.ExtraInputs(copyLayout, fps, shared)) args.AddRange(input);
+            foreach (var input in VerticalGraph.ExtraInputs(copyLayout, fps, shared, relays: r.CameraRelays)) args.AddRange(input);
             firstExtra += copyLayout.Panes.Count(p => p.Kind == PaneKind.File || (p.Kind == PaneKind.Camera && !shared(p)));
         }
         foreach (var camera in r.Cameras)
-            args.AddRange(CameraSource.InputArgs(camera.DeviceName));
+            args.AddRange(CameraSource.InputArgs(camera.DeviceName, r.CameraRelays));
         if (r.Pix is { } pixInput)
             args.AddRange(new[] { "-loop", "1", "-framerate", "5", "-i", pixInput.ImagePath });
         foreach (var layer in r.Layers)
@@ -270,7 +273,10 @@ public static class StudioCommand
         if (r.QualityLevel > 0 && r.Stream is null)
             args.AddRange(ConstantQualityArgs(r.Encoder, r.QualityLevel));   // só gravando: a imagem manda, o tamanho do arquivo varia
         else
+        {
             args.AddRange(new[] { "-b:v", bitrate, "-maxrate", maxrate, "-bufsize", bufsize });
+            if (r.Stream is not null && r.EncoderTuning) args.AddRange(LiveTuning(r.Encoder));
+        }
         if (r.Vertical is not null) args.AddRange(SocialArgs(r.Encoder));
         args.AddRange(new[] { "-g", (fps * 2).ToString(), "-flags", "+global_header" });
         if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", Math.Clamp(r.AudioKbps, 64, 320) + "k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
@@ -303,6 +309,7 @@ public static class StudioCommand
                 // ao vivo: taxa constante e reservatório de 1 s, como a live principal
                 int kbps = Math.Clamp(r.VerticalStreamKbps, 1000, 9000);
                 args.AddRange(new[] { "-b:v", kbps + "k", "-maxrate", kbps + "k", "-bufsize", kbps + "k" });
+                if (r.EncoderTuning) args.AddRange(LiveTuning(copyEncoder));
             }
             else if (r.VerticalQualityLevel > 0)
             {
@@ -337,7 +344,7 @@ public static class StudioCommand
         }
 
         if (r.ProgramPipe is { } programPipe)
-            args.AddRange(new[] { "-map", "[pv]", "-c:v", "mjpeg", "-q:v", "8", "-f", "mjpeg", "-flush_packets", "1", programPipe });
+            args.AddRange(new[] { "-map", "[pv]", "-c:v", "mjpeg", "-q:v", "4", "-f", "mjpeg", "-flush_packets", "1", programPipe });
         for (int i = 0; i < r.Cameras.Count; i++)
             if (CameraPipe(r, i) is { } cameraPipe)
                 args.AddRange(new[] { "-map", $"[cpv{i}]", "-c:v", "mjpeg", "-q:v", "8", "-f", "mjpeg", "-flush_packets", "1", cameraPipe });
@@ -382,7 +389,7 @@ public static class StudioCommand
             if (g == 0 && r.Audio is not null) { AddAudioInput(args, r); next++; }
         }
         int camBase = next;
-        foreach (var camera in r.Cameras) args.AddRange(CameraSource.InputArgs(camera.DeviceName));
+        foreach (var camera in r.Cameras) args.AddRange(CameraSource.InputArgs(camera.DeviceName, r.CameraRelays));
         next += r.Cameras.Count;
         int pixInput = -1;
         if (r.Pix is { } pixImage)
@@ -510,6 +517,20 @@ public static class StudioCommand
             _ => new[] { "-crf", q },
         };
     }
+
+    /// <summary>
+    /// O que o OBS usa na live com o codificador da placa (guia da NVIDIA para OBS): taxa constante (CBR), 2 quadros B no H.264 e quantização adaptativa
+    /// ("psycho visual tuning"), que distribui melhor os bits e deixa a imagem boa com taxa baixa. Sem look-ahead nem várias passadas: pesam e atrasam.
+    /// </summary>
+    public static IReadOnlyList<string> LiveTuning(EncoderOption encoder) => encoder.Kind switch
+    {
+        EncoderKind.Nvenc => encoder.Codec == VideoCodec.H264
+            ? new[] { "-rc", "cbr", "-bf", "2", "-spatial-aq", "1" }
+            : new[] { "-rc", "cbr", "-spatial-aq", "1" },
+        EncoderKind.Amf => new[] { "-rc", "cbr" },
+        EncoderKind.Qsv => new[] { "-look_ahead", "0" },
+        _ => Array.Empty<string>(),
+    };
 
     /// <summary>O que as redes sociais esperam: perfil High no H.264 (Main no HEVC) e cores BT.709 marcadas no arquivo.</summary>
     public static IReadOnlyList<string> SocialArgs(EncoderOption encoder)

@@ -202,6 +202,15 @@ public sealed record StudioRequest
     /// </summary>
     public IReadOnlyList<string?> CameraPreviewPipes { get; init; } = Array.Empty<string?>();
 
+    /// <summary>
+    /// Câmeras que chegam pelo relé (nome da câmera → cano com a imagem crua num ritmo fixo), no lugar de abrir a câmera direto.
+    /// Assim a live não espera a câmera: cada atraso dela não trava mais o vídeo inteiro.
+    /// </summary>
+    public IReadOnlyDictionary<string, RelayInput> CameraRelays { get; init; } = new Dictionary<string, RelayInput>();
+
+    /// <summary>Ajustes de live que o OBS usa no codificador da placa (taxa constante, quadros B, quantização adaptativa). Desligado sozinho se a placa recusar.</summary>
+    public bool EncoderTuning { get; init; } = true;
+
     /// <summary>Pede as cópias pequenas das câmeras (a sessão cria os canais e preenche <see cref="CameraPreviewPipes"/>).</summary>
     public bool CameraPreviews { get; init; }
 

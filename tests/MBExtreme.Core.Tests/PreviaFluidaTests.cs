@@ -10,23 +10,34 @@ public class PreviaFluidaTests
     private static readonly PixelRect Monitor2 = new(1920, 0, 2560, 1440);
 
     [Fact]
-    public void Previa_da_tela_usa_a_placa_e_sai_pequena_em_jpeg()
+    public void Previa_da_tela_usa_a_placa_e_sai_crua_no_tamanho_exato()
     {
-        var args = ScreenPreview.Args(1, null, null);
-        Assert.Contains("ddagrab=output_idx=1:framerate=20:draw_mouse=1", args);
+        var args = ScreenPreview.RawArgs(1, null, null, 1280, 720);
+        Assert.Contains("ddagrab=output_idx=1:framerate=24:draw_mouse=1", args);
         string vf = args[args.ToList().IndexOf("-vf") + 1];
-        Assert.Equal("hwdownload,format=bgra,scale=640:-2:flags=fast_bilinear,format=yuvj420p", vf);
-        Assert.Equal("1", args[args.ToList().IndexOf("-flush_packets") + 1]);
+        Assert.Equal("hwdownload,format=bgra,scale=1280:720:flags=bicubic,format=bgra", vf);
+        Assert.Contains("rawvideo", args);   // sem JPEG: nítida e sem gastar processador comprimindo
         Assert.Equal("pipe:1", args[^1]);
     }
 
     [Fact]
     public void Recorte_da_janela_e_filtro_de_cor_entram_na_previa()
     {
-        var args = ScreenPreview.Args(0, new PixelRect(100, 50, 1280, 720), "eq=brightness=0.1");
+        var args = ScreenPreview.RawArgs(0, new PixelRect(100, 50, 1280, 720), "eq=brightness=0.1", 960, 540);
         string vf = args[args.ToList().IndexOf("-vf") + 1];
-        Assert.Contains("crop=1280:720:100:50,scale=640", vf);
-        Assert.EndsWith("eq=brightness=0.1,format=yuvj420p", vf);
+        Assert.Contains("crop=1280:720:100:50,scale=960:540", vf);
+        Assert.EndsWith("eq=brightness=0.1,format=bgra", vf);
+    }
+
+    [Theory]
+    [InlineData(600, 2560, 1440, 640, 360)]
+    [InlineData(800, 2560, 1440, 960, 540)]
+    [InlineData(1500, 2560, 1440, 1280, 720)]
+    [InlineData(1500, 1080, 1920, 1080, 1920)]   // monitor em pé: não passa do tamanho da tela
+    [InlineData(1500, 1281, 721, 1280, 720)]
+    public void Tamanho_da_previa_acompanha_o_espaco_na_tela(double shown, int w, int h, int ew, int eh)
+    {
+        Assert.Equal((ew, eh), ScreenPreview.Size(shown, w, h));
     }
 
     [Fact]
@@ -59,9 +70,9 @@ public class PreviaFluidaTests
         string? ffmpeg = new[] { "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg" }.FirstOrDefault(File.Exists);
         if (ffmpeg is null || OperatingSystem.IsWindows()) return;
 
-        var screen = ScreenPreview.Args(0, new PixelRect(100, 50, 1280, 720), null).ToList();
+        var screen = ScreenPreview.RawArgs(0, new PixelRect(100, 50, 1280, 720), null, 960, 540).ToList();
         string screenVf = screen[screen.IndexOf("-vf") + 1].Replace("hwdownload,format=bgra,", "format=bgra,");
-        Assert.True(Frames(ffmpeg, "color=c=red:s=2560x1440:r=20:d=1", screenVf) >= 15);
+        Assert.True(Frames(ffmpeg, "color=c=red:s=2560x1440:r=20:d=1", screenVf.Replace(",format=bgra", ",format=yuvj420p").Replace("format=yuvj420p,crop", "format=bgra,crop")) >= 15);
 
         var camera = CameraSource.LiveArgs("Webcam", "hflip").ToList();
         string cameraVf = camera[camera.IndexOf("-vf") + 1];

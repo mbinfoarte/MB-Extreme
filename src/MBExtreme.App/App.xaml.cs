@@ -16,6 +16,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { MBExtreme.UI.AppServices.Cameras.CloseAll(); } catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }   // não deixa câmera presa aberta
         AppServices.Shutdown();
         base.OnExit(e);
     }

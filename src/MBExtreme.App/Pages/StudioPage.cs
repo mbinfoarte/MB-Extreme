@@ -191,6 +191,7 @@ public sealed partial class StudioPage : ToolPageBase
         Body.Children.Add(_files);
 
         _studio.Notice += OnNotice;
+        _camTimer.Tick += (_, _) => DrawCameraFrames();
         _timer.Tick += (_, _) => Tick();
         _statsTimer.Tick += async (_, _) =>
         {
@@ -901,7 +902,7 @@ public sealed partial class StudioPage : ToolPageBase
         var mirror = new CheckBox { Content = "Espelhar (como um espelho)", IsChecked = cam.Mirror, Foreground = Brush("TextBrush") };
         mirror.Click += (_, _) => cam.Mirror = mirror.IsChecked == true;
         panel.Children.Add(Field("Espelho", mirror, 130));
-        var retry = SmallButton("Tentar ligar a imagem de novo", (_, _) => { _failedSignature.Remove(cam); if (_feeds.Remove(cam, out var old)) old.Dispose(); SyncCameraFeeds(); });
+        var retry = SmallButton("Tentar ligar a imagem de novo", (_, _) => RetryCamera(cam));
         retry.HorizontalAlignment = HorizontalAlignment.Left;
         panel.Children.Add(Field("Imagem ao vivo", retry, 130));
         return panel;
@@ -2013,7 +2014,6 @@ public sealed partial class StudioPage : ToolPageBase
 
         _start.IsEnabled = false;
         SetStatus("Iniciando...");
-        await ReleaseCameraFeedsAsync();   // a gravação precisa da câmera livre
         try
         {
             await _studio.StartAsync(_ffmpegPath, config);
@@ -2028,7 +2028,6 @@ public sealed partial class StudioPage : ToolPageBase
             SetStatus("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, target, config.VerticalStream), "BadBrush");
         }
 
-        _feedsSuspended = false;   // se não iniciou, o vídeo ao vivo das câmeras volta
         RefreshState();
     }
 

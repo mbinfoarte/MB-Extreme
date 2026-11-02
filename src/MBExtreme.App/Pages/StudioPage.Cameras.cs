@@ -13,13 +13,15 @@ public sealed partial class StudioPage
     /// <summary>Última imagem recebida de cada câmera, para mostrar nos cartões e nos retângulos da pré-visualização.</summary>
     private readonly Dictionary<string, BitmapSource> _camStills = new();
 
-    private bool CameraBusyWithRecording => _studio.IsRunning || AppServices.Recorder.IsRecording;
+    /// <summary>Só o gravador antigo (modo compatível) prende a câmera; o estúdio usa o relé e a prévia continua durante a live.</summary>
+    private bool CameraBusyWithRecording => AppServices.Recorder.IsRecording;
 
-    private readonly Dictionary<StudioCameraSetting, MBExtreme.UI.Recording.CameraLiveFeed> _feeds = new();
+    private readonly Dictionary<StudioCameraSetting, string> _relaySignatures = new();
+    private readonly Dictionary<StudioCameraSetting, (WriteableBitmap Bitmap, byte[] Pixels, long Shown, CameraRelay Relay)> _camBitmaps = new();
     private readonly Dictionary<StudioCameraSetting, ImageBrush> _liveBrushes = new();
     private readonly Dictionary<StudioCameraSetting, TextBlock> _camNotes = new();
     private readonly Dictionary<StudioCameraSetting, string> _failedSignature = new();
-    private bool _feedsSuspended;
+    private readonly System.Windows.Threading.DispatcherTimer _camTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
 
     private ImageBrush LiveBrush(StudioCameraSetting cam)
     {
@@ -28,54 +30,104 @@ public sealed partial class StudioPage
     }
 
     /// <summary>
-    /// Mantém o vídeo ao vivo de cada câmera ligada (e de todas, na aba Câmeras) enquanto a câmera está livre. Quando algo muda
-    /// (câmera, filtro, espelho), o vídeo é reaberto na hora com o novo ajuste.
+    /// Mantém aberta (pelo relé) cada câmera ligada, e todas na aba Câmeras. A mesma câmera aberta serve a prévia e a gravação/live,
+    /// então ela não fecha nem trava ao começar a live. Quando algo muda (câmera, filtro, espelho), reabre com o novo ajuste.
     /// </summary>
     private void SyncCameraFeeds()
     {
-        bool allowed = IsLoaded && !_feedsSuspended && !CameraBusyWithRecording && _ffmpegPath is not null;
+        bool allowed = IsLoaded && !CameraBusyWithRecording && _ffmpegPath is not null;
         var wanted = new Dictionary<StudioCameraSetting, string>();
         if (allowed)
             foreach (var cam in _s.StudioCameras)
                 if (CameraOverlay.IsValidName(cam.Name) && (cam.On || _settingsTab == 4))
                     wanted[cam] = cam.Name + "|" + (PresetFilter(cam.Preset, cam.Mirror).ToChain() ?? "");
 
-        foreach (var cam in _feeds.Keys.ToList())
+        foreach (var (cam, signature) in _relaySignatures.ToList())
         {
-            if (wanted.ContainsKey(cam)) continue;
-            _feeds[cam].Dispose();
-            _feeds.Remove(cam);
+            if (wanted.TryGetValue(cam, out var want) && want == signature) continue;
+            _relaySignatures.Remove(cam);
+            _camBitmaps.Remove(cam);
+            string name = signature[..signature.IndexOf('|')];
+            if (!wanted.TryGetValue(cam, out var next) || !next.StartsWith(name + "|", StringComparison.Ordinal))
+                AppServices.Cameras.Release(name, this);   // outra câmera ou desligada: solta (fecha se a live não estiver usando)
         }
 
         foreach (var (cam, signature) in wanted)
         {
-            if (_feeds.TryGetValue(cam, out var current))
-            {
-                if (current.Signature == signature) continue;
-                current.Dispose();
-                _feeds.Remove(cam);
-            }
-            if (_failedSignature.TryGetValue(cam, out var failed) && failed == signature) continue; // já falhou assim: espera o usuário mudar algo ou pedir de novo
-
-            var feed = new MBExtreme.UI.Recording.CameraLiveFeed(signature);
-            feed.Frame += image =>
-            {
-                LiveBrush(cam).ImageSource = image;
-                if (cam.Name is not null) _camStills[cam.Name] = image;
-                if (_camNotes.TryGetValue(cam, out var note)) note.Text = "Câmera ao vivo.";
-            };
-            feed.Failed += message =>
-            {
-                _failedSignature[cam] = signature;
-                if (cam.Name is not null) _camStills.Remove(cam.Name);
-                LiveBrush(cam).ImageSource = null;
-                if (_camNotes.TryGetValue(cam, out var note)) note.Text = CameraSource.Explain(cam.Name ?? "", message) + " (clique em \"Tentar de novo\")";
-                UpdateGhosts();
-            };
-            _feeds[cam] = feed;
+            if (_relaySignatures.ContainsKey(cam)) continue;
+            if (_failedSignature.TryGetValue(cam, out var failed) && failed == signature) continue;   // já falhou assim: espera o usuário mudar algo ou pedir de novo
+            _relaySignatures[cam] = signature;
             if (_camNotes.TryGetValue(cam, out var starting)) starting.Text = "Abrindo a câmera...";
-            feed.Start(_ffmpegPath!, cam.Name!, PresetFilter(cam.Preset, cam.Mirror).ToChain());
+            string ffmpeg = _ffmpegPath!, name = cam.Name!;
+            string? chain = PresetFilter(cam.Preset, cam.Mirror).ToChain();
+            _ = Task.Run(() =>
+            {
+                try { AppServices.Cameras.Acquire(ffmpeg, name, chain, this); }   // a primeira vez pergunta os modos da câmera (~1 s)
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    Dispatcher.BeginInvoke(new Action(() => ShowCameraFailure(cam, signature, ex.Message)));
+                }
+            });
         }
+        if (_relaySignatures.Count > 0 && !_camTimer.IsEnabled) _camTimer.Start();
+        if (_relaySignatures.Count == 0) _camTimer.Stop();
+    }
+
+    /// <summary>Desenha a última imagem de cada câmera (até 30 vezes por segundo, só quando chega imagem nova).</summary>
+    private void DrawCameraFrames()
+    {
+        foreach (var (cam, signature) in _relaySignatures)
+        {
+            string name = signature[..signature.IndexOf('|')];
+            var relay = AppServices.Cameras.Find(name);
+            if (relay is null) continue;
+            if (!relay.IsRunning && !relay.HasFrames && relay.LastError is { } error)
+            {
+                ShowCameraFailure(cam, signature, error);
+                continue;
+            }
+            if (relay.LatestFrame is not { } frame) continue;
+            long sequence = relay.Sequence;
+            int step = relay.Width >= 800 ? 2 : 1;
+            var (w, h) = Yuv420Preview.OutputSize(relay.Width, relay.Height, step);
+            if (!_camBitmaps.TryGetValue(cam, out var entry) || !ReferenceEquals(entry.Relay, relay) || entry.Bitmap.PixelWidth != w || entry.Bitmap.PixelHeight != h)
+                entry = (new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null), new byte[w * h * 4], -1, relay);
+            if (entry.Shown == sequence) continue;
+            Yuv420Preview.ToBgra(frame, relay.Width, relay.Height, step, entry.Pixels);
+            entry.Bitmap.WritePixels(new Int32Rect(0, 0, w, h), entry.Pixels, w * 4, 0);
+            bool first = entry.Shown < 0;
+            _camBitmaps[cam] = entry with { Shown = sequence };
+            if (!first) continue;
+            LiveBrush(cam).ImageSource = entry.Bitmap;
+            _camStills[name] = entry.Bitmap;
+            if (_camNotes.TryGetValue(cam, out var note)) note.Text = "Câmera ao vivo.";
+            UpdateGhosts();
+        }
+    }
+
+    private void ShowCameraFailure(StudioCameraSetting cam, string signature, string message)
+    {
+        if (!_relaySignatures.TryGetValue(cam, out var current) || current != signature) return;
+        _failedSignature[cam] = signature;
+        _relaySignatures.Remove(cam);
+        _camBitmaps.Remove(cam);
+        if (cam.Name is not null)
+        {
+            _camStills.Remove(cam.Name);
+            AppServices.Cameras.Release(cam.Name, this);
+        }
+        LiveBrush(cam).ImageSource = null;
+        if (_camNotes.TryGetValue(cam, out var note)) note.Text = CameraSource.Explain(cam.Name ?? "", message) + " (clique em \"Tentar de novo\")";
+        UpdateGhosts();
+    }
+
+    /// <summary>Pede de novo a imagem de uma câmera que falhou.</summary>
+    private void RetryCamera(StudioCameraSetting cam)
+    {
+        _failedSignature.Remove(cam);
+        if (_relaySignatures.Remove(cam) && cam.Name is not null) AppServices.Cameras.Release(cam.Name, this);
+        _camBitmaps.Remove(cam);
+        SyncCameraFeeds();
     }
 
     private readonly Dictionary<string, long> _camFrameShown = new(StringComparer.OrdinalIgnoreCase);
@@ -86,7 +138,7 @@ public sealed partial class StudioPage
     /// </summary>
     private void RefreshCameraFramesFromSession()
     {
-        if (!_studio.IsRunning || _studio.Session.Request is not { } request) return;
+        if (!_studio.IsRunning || _studio.Session.Request is not { } request || request.CameraPreviewPipes.Count == 0) return;   // com o relé, a prévia já vem dele
         for (int i = 0; i < request.Cameras.Count; i++)
         {
             if (_studio.Session.CameraFrame(i) is not { } frame) continue;
@@ -102,21 +154,12 @@ public sealed partial class StudioPage
         }
     }
 
-    /// <summary>Solta as câmeras (para a gravação poder usá-las) e espera o Windows liberar os dispositivos.</summary>
-    private async Task ReleaseCameraFeedsAsync()
-    {
-        _feedsSuspended = true;
-        var running = _feeds.Values.ToList();
-        _feeds.Clear();
-        if (running.Count == 0) return;
-        await Task.Run(() => { foreach (var feed in running) feed.StopAndWait(); });
-        await Task.Delay(300);   // margem para o Windows liberar o dispositivo
-    }
-
     private void StopAllFeeds()
     {
-        foreach (var feed in _feeds.Values) feed.Dispose();
-        _feeds.Clear();
+        _camTimer.Stop();
+        AppServices.Cameras.ReleaseAll(this);   // a câmera continua aberta se a live estiver usando
+        _relaySignatures.Clear();
+        _camBitmaps.Clear();
     }
 
     /// <summary>Retrato (se já existir) para o retângulo da câmera na pré-visualização.</summary>

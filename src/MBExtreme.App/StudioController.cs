@@ -197,13 +197,27 @@ internal sealed class StudioController
             CameraPreviews = true,
         };
 
-        // o melhor modo de cada câmera (tamanho, quadros e formato): sem isso o Windows pode entregar 1080p cru a 5 quadros e a câmera "trava"
+        // câmeras pelo relé (como o OBS): abertas uma vez, com o melhor modo (tamanho, quadros e formato), e a live recebe a última imagem
+        // num ritmo fixo: um atraso da câmera não trava mais o vídeo inteiro. A prévia usa a mesma câmera aberta.
+        var chains = request.Cameras.ToDictionary(c => c.DeviceName, c => c.Filter?.ToChain(), StringComparer.OrdinalIgnoreCase);
         var devices = request.Cameras.Select(c => c.DeviceName)
             .Concat((vertical?.Panes ?? Array.Empty<VerticalPane>()).Concat(request.VerticalCopy?.Panes ?? Array.Empty<VerticalPane>())
                 .Where(p => p.Kind == PaneKind.Camera && p.Source is not null).Select(p => p.Source!))
-            .Where(d => !CameraSource.IsStream(d)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         int cameraHeight = vertical is not null || request.VerticalCopy is not null ? 1080 : 720;
-        await Task.Run(() => { foreach (string device in devices) FfmpegRecorder.EnsureCameraMode(ffmpeg, device, cameraHeight); });
+        AppServices.Cameras.ReleaseAll(this);
+        await Task.Run(async () =>
+        {
+            foreach (string device in devices)
+            {
+                if (!CameraSource.IsStream(device)) FfmpegRecorder.EnsureCameraMode(ffmpeg, device, cameraHeight);
+                try { AppServices.Cameras.Acquire(ffmpeg, device, chains.GetValueOrDefault(device), this); }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }   // abre direto no FFmpeg
+            }
+            // espera a primeira imagem de cada câmera (até 4 s): abrir uma câmera leva um instante
+            for (int i = 0; i < 40 && devices.Any(d => AppServices.Cameras.Find(d) is { IsRunning: true, HasFrames: false }); i++) await Task.Delay(100);
+        });
+        Session.RelayFor = AppServices.Cameras.Find;
 
         try
         {
@@ -212,6 +226,7 @@ internal sealed class StudioController
         catch
         {
             DisposeCaptions();
+            AppServices.Cameras.ReleaseAll(this);
             throw;
         }
 
@@ -486,6 +501,7 @@ internal sealed class StudioController
         var request = Session.Request;
         var config = Config;
         string? file = Session.Stop();   // o relógio dos lances se desliga sozinho no próximo tique (este método roda fora da interface)
+        AppServices.Cameras.ReleaseAll(this);   // a câmera continua aberta se a prévia estiver usando
         if (config is { PostMp4: true } && request is not null && _ffmpeg is { } ffmpeg)
         {
             // vídeos verticais: um MP4 comum com o índice no começo, pronto para postar (cópia sem recodificar)

@@ -1,3 +1,4 @@
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using MBExtreme.Core.Recording;
 
@@ -9,11 +10,10 @@ namespace MBExtreme.UI.Pages;
 /// </summary>
 public sealed partial class StudioPage
 {
-    private MBExtreme.UI.Recording.CameraLiveFeed? _screenFeed;
+    private MBExtreme.UI.Recording.RawFrameFeed? _screenFeed;
     private string? _screenFeedFailed;
     private bool _screenFeedShowing;
     private int _screenFeedTick;
-    private (int W, int H) _screenFeedSize;
 
     /// <summary>True quando a prévia da tela está vindo do FFmpeg (então não precisa copiar a tela).</summary>
     private bool SyncScreenFeed()
@@ -22,10 +22,14 @@ public sealed partial class StudioPage
 
         string? signature = null;
         IReadOnlyList<string>? args = null;
+        (int W, int H) size = default;
         bool allowed = IsLoaded && _ffmpegPath is not null && !_studio.IsRunning && !AppServices.Recorder.IsRecording;
         if (allowed && ScreenFeedTarget() is { } target)
         {
-            args = ScreenPreview.Args(target.Output, target.Crop, CurrentFilter().ToChain());
+            var source = target.Crop ?? _displayList.First(d => d.Index == target.Output).Bounds;
+            double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
+            size = ScreenPreview.Size(shown, source.Width, source.Height);
+            args = ScreenPreview.RawArgs(target.Output, target.Crop, CurrentFilter().ToChain(), size.W, size.H);
             signature = string.Join(" ", args);
         }
 
@@ -37,8 +41,8 @@ public sealed partial class StudioPage
         if (_screenFeed?.Signature == signature) return _screenFeedShowing;
 
         StopScreenFeed();
-        var feed = new MBExtreme.UI.Recording.CameraLiveFeed(signature);
-        feed.Frame += image => ShowScreenFrame(feed, image);
+        var feed = new MBExtreme.UI.Recording.RawFrameFeed(signature, size.W, size.H);
+        feed.Frame += () => ShowScreenFrame(feed);
         feed.Failed += _ =>
         {
             if (!ReferenceEquals(_screenFeed, feed)) return;
@@ -46,25 +50,25 @@ public sealed partial class StudioPage
             StopScreenFeed();
         };
         _screenFeed = feed;
-        feed.StartArgs(_ffmpegPath!, args!);
+        feed.Start(_ffmpegPath!, args!);
         return _screenFeedShowing;
     }
 
-    private void ShowScreenFrame(MBExtreme.UI.Recording.CameraLiveFeed feed, BitmapSource image)
+    private void ShowScreenFrame(MBExtreme.UI.Recording.RawFrameFeed feed)
     {
         if (!ReferenceEquals(_screenFeed, feed) || _studio.IsRunning) return;
+        var image = feed.Bitmap;
+        bool first = !_screenFeedShowing || !ReferenceEquals(_preview.Source, image);
         _screenFeedShowing = true;
-        _preview.Source = image;
-        _lastFrame = image;
-        UpdateVerticalLive();
-        var size = (image.PixelWidth, image.PixelHeight);
-        if (size != _screenFeedSize)
+        if (first)
         {
-            _screenFeedSize = size;
-            _previewNote.Text = "É assim que o vídeo vai sair (imagem reduzida, ao vivo).";
+            _preview.Source = image;
+            _previewNote.Text = "É assim que o vídeo vai sair (ao vivo, pela placa de vídeo).";
             _previewNote.Foreground = Brush("MutedBrush");
             UpdateGhosts();
         }
+        _lastFrame = image;
+        UpdateVerticalLive();
     }
 
     private void StopScreenFeed()
@@ -72,7 +76,6 @@ public sealed partial class StudioPage
         _screenFeed?.Dispose();
         _screenFeed = null;
         _screenFeedShowing = false;
-        _screenFeedSize = default;
     }
 
     /// <summary>A tela (saída da placa) e o recorte que a prévia deve mostrar; null quando a origem é o conteúdo de uma janela (GDI) ou não existe.</summary>

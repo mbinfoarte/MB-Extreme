@@ -23,6 +23,10 @@ public sealed class StudioSession : IDisposable
     private AudioPipe? _pipe;
     private ProgramFeed? _program;
     private ProgramFeed?[] _cameraFeeds = Array.Empty<ProgramFeed?>();
+    private readonly List<IDisposable> _cameraSinks = new();
+
+    /// <summary>Relé já aberto de cada câmera (prévia e gravação usam a mesma câmera aberta); null = abrir a câmera direto no FFmpeg.</summary>
+    public Func<string, CameraRelay?>? RelayFor { get; set; }
     private readonly SemaphoreSlim _commandGate = new(1, 1);
     private CancellationTokenSource? _pumpCts;
     private Task? _pump;
@@ -175,12 +179,12 @@ public sealed class StudioSession : IDisposable
         {
             try
             {
-                await LaunchWithModesAsync(request, withAudio ? audio : null).ConfigureAwait(false);
+                await LaunchWithTuningAsync(request, withAudio ? audio : null).ConfigureAwait(false);
             }
             catch (AudioUnavailableException ex)
             {
                 AddWarning(ex.Message + " Gravando sem áudio.");
-                await LaunchWithModesAsync(request, null).ConfigureAwait(false);
+                await LaunchWithTuningAsync(request, null).ConfigureAwait(false);
             }
         }
         finally
@@ -190,6 +194,20 @@ public sealed class StudioSession : IDisposable
     }
 
     private sealed class AudioUnavailableException(string message) : Exception(message);
+
+    /// <summary>Com os ajustes de live do OBS no codificador e, se a placa recusar algum, de novo sem eles.</summary>
+    private async Task LaunchWithTuningAsync(StudioRequest request, AudioConfig? audio)
+    {
+        try
+        {
+            await LaunchWithModesAsync(request, audio).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException) when (request.EncoderTuning && (request.Stream is not null || request.VerticalStream is not null))
+        {
+            AddWarning("O codificador da placa não aceitou os ajustes extras de live; transmitindo com o ajuste padrão.");
+            await LaunchWithModesAsync(request with { EncoderTuning = false }, audio).ConfigureAwait(false);
+        }
+    }
 
     /// <summary>
     /// Com o modo escolhido de cada câmera (tamanho, quadros e formato) e, se alguma câmera recusar o modo, de novo deixando o Windows escolher.
@@ -235,6 +253,20 @@ public sealed class StudioSession : IDisposable
         StopProgram();
         var effective = request with { ProgramPipe = null, CameraPreviewPipes = Array.Empty<string?>() };
         ActiveScene = request.ActiveScene;
+
+        // câmeras pelo relé: a imagem chega num ritmo fixo e a live nunca espera a câmera (a prévia também vem do relé)
+        var relays = OpenCameraSinks(request);
+        if (relays.Count > 0)
+        {
+            effective = effective with
+            {
+                CameraRelays = relays,
+                CameraPreviews = false,
+                Cameras = request.Cameras.Select(c => relays.ContainsKey(c.DeviceName) ? c with { Filter = null } : c).ToList(),   // o relé já aplica o filtro da câmera
+            };
+            request = request with { CameraPreviews = false };
+        }
+
         if (request.ProgramView || request.CameraPreviews)
         {
             try
@@ -254,7 +286,7 @@ public sealed class StudioSession : IDisposable
             }
             catch (IOException)
             {
-                StopProgram();
+                StopFeeds();
                 effective = effective with { ProgramPipe = null, CameraPreviewPipes = Array.Empty<string?>() };
             }
         }
@@ -429,7 +461,46 @@ public sealed class StudioSession : IDisposable
         process.Dispose();
     }
 
+    /// <summary>Todas as câmeras do Windows usadas (cantos e partes do vertical).</summary>
+    private static IEnumerable<string> CameraDevices(StudioRequest r) =>
+        r.Cameras.Select(c => c.DeviceName)
+            .Concat((r.Vertical?.Panes ?? Array.Empty<VerticalPane>()).Concat(r.VerticalCopy?.Panes ?? Array.Empty<VerticalPane>())
+                .Where(p => p.Kind == PaneKind.Camera && p.Source is not null).Select(p => p.Source!))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+    private Dictionary<string, RelayInput> OpenCameraSinks(StudioRequest r)
+    {
+        StopSinks();
+        var relays = new Dictionary<string, RelayInput>(StringComparer.OrdinalIgnoreCase);
+        if (RelayFor is null) return relays;
+        int fps = Math.Clamp(r.Fps, 10, 60);
+        foreach (string device in CameraDevices(r))
+        {
+            if (RelayFor(device) is not { IsRunning: true, HasFrames: true } relay) continue;
+            try
+            {
+                var (input, sink) = relay.OpenSink(fps);
+                relays[device] = input;
+                _cameraSinks.Add(sink);
+            }
+            catch (IOException) { }   // sem o cano, esta câmera abre direto no FFmpeg
+        }
+        return relays;
+    }
+
+    private void StopSinks()
+    {
+        foreach (var sink in _cameraSinks) sink.Dispose();
+        _cameraSinks.Clear();
+    }
+
     private void StopProgram()
+    {
+        StopSinks();
+        StopFeeds();
+    }
+
+    private void StopFeeds()
     {
         _program?.Dispose();
         _program = null;

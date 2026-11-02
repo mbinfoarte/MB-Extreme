@@ -31,16 +31,26 @@ public static class ScreenPreview
         return -1;
     }
 
-    public static IReadOnlyList<string> Args(int output, PixelRect? crop, string? chain, int fps = 20, int width = 640)
+    /// <summary>Largura da prévia conforme o espaço na tela (640, 960 ou 1280) e a altura na proporção da imagem (medidas pares).</summary>
+    public static (int Width, int Height) Size(double shownWidth, int sourceWidth, int sourceHeight)
+    {
+        int width = shownWidth > 1000 ? 1280 : shownWidth > 680 ? 960 : 640;
+        width = Math.Min(width, Math.Max(160, sourceWidth - sourceWidth % 2));
+        int height = (int)Math.Round(width * Math.Max(2, sourceHeight) / (double)Math.Max(2, sourceWidth));
+        return (width, Math.Max(2, height - height % 2));
+    }
+
+    /// <summary>Versão nítida: imagem crua BGRA do tamanho exato (sem JPEG), desenhada direto na tela.</summary>
+    public static IReadOnlyList<string> RawArgs(int output, PixelRect? crop, string? chain, int width, int height, int fps = 24)
     {
         string rate = Math.Clamp(fps, 5, 30).ToString(CultureInfo.InvariantCulture);
         string cut = crop is { } c ? $"crop={c.Width}:{c.Height}:{c.X}:{c.Y}," : "";
-        string filters = $"hwdownload,format=bgra,{cut}scale={Math.Clamp(width, 160, 1280)}:-2:flags=fast_bilinear," + (string.IsNullOrEmpty(chain) ? "" : chain + ",") + "format=yuvj420p";
+        string filters = $"hwdownload,format=bgra,{cut}scale={width}:{height}:flags=bicubic," + (string.IsNullOrEmpty(chain) ? "" : chain + ",") + "format=bgra";
         return new[]
         {
             "-hide_banner", "-loglevel", "error", "-nostats",
             "-f", "lavfi", "-i", $"ddagrab=output_idx={Math.Max(0, output)}:framerate={rate}:draw_mouse=1",
-            "-an", "-vf", filters, "-f", "image2pipe", "-c:v", "mjpeg", "-q:v", "6", "-flush_packets", "1", "pipe:1",
+            "-an", "-vf", filters, "-f", "rawvideo", "-pix_fmt", "bgra", "pipe:1",
         };
     }
 }

@@ -50,6 +50,9 @@ internal static class AppServices
 
     public static ScreenRecorder Recorder { get; } = new();
 
+    /// <summary>Câmeras abertas uma vez só e compartilhadas entre a prévia e a gravação/live (relé, como no OBS).</summary>
+    public static CameraHub Cameras { get; } = new();
+
     /// <summary>Codificadores de GPU já testados nesta sessão (o teste leva alguns segundos).</summary>
     public static IReadOnlyList<EncoderOption>? CachedEncoders { get; set; }
 

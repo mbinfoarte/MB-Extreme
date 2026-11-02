@@ -92,14 +92,14 @@ public sealed record VerticalLayout(int Width, int Height, bool Split, int TopPe
 public static class VerticalGraph
 {
     /// <summary>Entradas extras do FFmpeg (câmera ou arquivo de cada parte), na ordem em que as partes aparecem.</summary>
-    public static IReadOnlyList<string[]> ExtraInputs(VerticalLayout layout, int fps, Func<VerticalPane, bool>? shared = null, bool realtime = true)
+    public static IReadOnlyList<string[]> ExtraInputs(VerticalLayout layout, int fps, Func<VerticalPane, bool>? shared = null, bool realtime = true, IReadOnlyDictionary<string, RelayInput>? relays = null)
     {
         var list = new List<string[]>();
         foreach (var pane in layout.Panes)
         {
             if (pane.Kind == PaneKind.Camera && shared?.Invoke(pane) == true) continue;   // a câmera já está aberta por outra parte do vídeo
             if (pane.Kind == PaneKind.Camera)
-                list.Add(CameraSource.InputArgs(pane.Source!));
+                list.Add(CameraSource.InputArgs(pane.Source!, relays));
             else if (pane.Kind == PaneKind.File)
                 list.Add(VerticalPane.IsImage(pane.Source!)
                     ? new[] { "-loop", "1", "-framerate", Math.Clamp(fps, 5, 30).ToString(CultureInfo.InvariantCulture), "-i", pane.Source! }

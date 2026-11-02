@@ -35,6 +35,12 @@ public static class CameraSource
     public static string[] ListModesArgs(string device) => new[] { "-hide_banner", "-f", "dshow", "-list_options", "true", "-i", "video=" + device };
 
     /// <summary>Argumentos de entrada do FFmpeg para esta câmera.</summary>
+    public static string[] InputArgs(string source, IReadOnlyDictionary<string, RelayInput>? relays)
+    {
+        if (relays is not null && relays.TryGetValue(source, out var relay)) return relay.InputArgs();
+        return InputArgs(source);
+    }
+
     public static string[] InputArgs(string source)
     {
         if (!IsStream(source))

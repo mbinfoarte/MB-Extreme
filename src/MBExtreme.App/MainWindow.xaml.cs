@@ -37,10 +37,11 @@ public partial class MainWindow : Window
         // Voltar como no navegador: Alt + seta para a esquerda e o botão lateral do mouse
         PreviewKeyDown += (_, e) =>
         {
+            if (Pages.PeripheralTestPage.Active) return;   // no teste de periféricos essas teclas estão sendo testadas
             if (e.SystemKey == System.Windows.Input.Key.Left && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Alt) { GoBack(); e.Handled = true; }
             else if (e.Key == System.Windows.Input.Key.BrowserBack) { GoBack(); e.Handled = true; }
         };
-        PreviewMouseDown += (_, e) => { if (e.ChangedButton == System.Windows.Input.MouseButton.XButton1) { GoBack(); e.Handled = true; } };
+        PreviewMouseDown += (_, e) => { if (!Pages.PeripheralTestPage.Active && e.ChangedButton == System.Windows.Input.MouseButton.XButton1) { GoBack(); e.Handled = true; } };
         _ = Task.Run(() => MBExtreme.Core.Operations.OperationJournal.Shared.Prune(DateTimeOffset.Now));
         AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(() => { UpdateFooter(); _ = AppServices.ProLock.CheckAsync(); }));
         AppServices.License.Start();
@@ -305,6 +306,8 @@ public partial class MainWindow : Window
         "undo" => new UndoCenterPage(),
         "diagnose" => new DiagnosticPage(),
         "postinstall" => new PostInstallPage(),
+        "speedtest" => new InternetTestPage(),
+        "periphtest" => new PeripheralTestPage(),
         "recommended" => new RecommendedPage(),
         "cpu-detail" => new ComponentMonitorPage(gpu: false),
         "gpu-detail" => new ComponentMonitorPage(gpu: true),

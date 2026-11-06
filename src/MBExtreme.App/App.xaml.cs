@@ -51,8 +51,14 @@ public partial class App : Application
         if (!first)
         {
             SingleInstance.SignalFirst();
-            Shutdown(0);
-            return;
+            // a outra cópia pode estar fechando (atualização, reinício): espera um pouco antes de desistir
+            try { first = _instance.WaitOne(TimeSpan.FromSeconds(3)); }
+            catch (System.Threading.AbandonedMutexException) { first = true; }   // a outra fechou sem soltar: agora é esta
+            if (!first)
+            {
+                Shutdown(0);
+                return;
+            }
         }
         SingleInstance.ListenForOthers(() => Dispatcher.BeginInvoke(new Action(() => (MainWindow as MainWindow)?.ActivateFromOther())));
 

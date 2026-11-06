@@ -147,3 +147,26 @@ Objetivo: criar o núcleo comum **sem mudar o comportamento** de nada que já ex
 7. **Testes:** estados e transições da fila, cancelamento, falha no meio, retomada após interrupção, restauração e diário corrompido.
 
 Critério de pronto da Fase 1: todos os testes atuais e os novos passando no CI, as páginas atuais funcionando igual, e a Central Desfazer listando e restaurando os ajustes aplicados.
+
+
+## 10. Fases 3 a 9 (06/11/2026)
+
+| Fase | O que entrou | Testes |
+|---|---|---|
+| 3. Reparação | Relógio (w32tm, em qualquer idioma) e ano impossível; Windows Update (serviços desativados e dias sem atualização); tempo limite configurável dos comandos comuns — DISM, SFC e CHKDSK nunca são cortados, só avisados; aviso de reinício pendente | `ReparacaoFase3Tests` (com processo real) |
+| 4. Limpeza e discos | "Ver arquivos" antes de limpar; pastas que nunca são limpas (inclusive na semanal); Prefetch fora do padrão; Windows.old só medido (apagar pela Limpeza de Disco do Windows); TRIM, otimização agendada, Proteção do Sistema por unidade e histórico SMART | `LimpezaDiscosFase4Tests` (com arquivos reais) |
+| 5. Otimizações e pós-formatação | Recall, Widgets, Notícias e interesses, tela de bloqueio, Iniciar, Explorador, barra menor — com fonte em `CATALOGO-AJUSTES.md`; versão mínima/máxima do Windows por ajuste; grupos Recomendados/Seguros/Moderados/Avançados/Todos; assistente de pós-formatação | `OtimizacoesFase5Tests` |
+| 6. Programas | Inventário (registro + Loja, com ícone e busca); desinstalação acompanhada; atualizações e instalações uma de cada vez pela fila; aviso de programa aberto; erros do winget em português (conferidos na documentação oficial) | `ProgramasFase6Tests` |
+| 7. Periféricos e internet | Teclado, mouse (taxa pela entrada bruta, clique duplicado) e controle XInput (deriva, zona morta, circularidade, vibração); teste de internet com várias conexões, aquecimento, servidor e cidade, histórico | `PerifericosInternetFase7Tests` (servidor de mentira) |
+| 8. Interface | Nome acessível automático em todos os controles; foco visível; escala 90–150% (Ctrl +/−/0) | `InterfaceFase8Tests` |
+| 9. Revisão | Uma janela só espera 3 s a outra fechar (atualização/reinício); roteiro de testes no Windows (`ROTEIRO-TESTES-MB-OPTIMIZER.md`) | 1196 testes no total |
+
+### O que NÃO foi possível verificar daqui
+Tudo foi compilado e as regras foram testadas automaticamente, mas o ambiente de desenvolvimento não é Windows. Precisam de teste num Windows real ou numa máquina virtual com snapshot: as chamadas ao registro, serviços, DISM/SFC/CHKDSK, winget, contadores, XInput, entrada bruta do mouse, Narrador e a escala. O roteiro está em `docs/ROTEIRO-TESTES-MB-OPTIMIZER.md`.
+
+### Limitações conhecidas
+- Controles de PlayStation/Switch só aparecem no teste com um tradutor (Steam, DS4Windows): o teste usa XInput.
+- O teste de internet usa a Cloudflare, não a Ookla: os números podem diferir do Speedtest.
+- Desinstaladores que abrem outro processo e saem na hora podem ser dados como "desinstalado" antes de terminar.
+- A "última vez que o programa foi aberto" não é mostrada (o Windows não guarda isso de forma confiável).
+- A lista dos 24 ajustes do fórum não foi recebida: os ajustes citados por nome foram feitos; os demais dependem da lista.

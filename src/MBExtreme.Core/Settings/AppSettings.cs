@@ -127,6 +127,9 @@ public sealed class AppSettings
     /// <summary>Pastas que a limpeza nunca toca (escolhidas pelo usuário).</summary>
     public List<string> CleanupExcluded { get; set; } = new();
 
+    /// <summary>Escala da interface (0,9 a 1,5); 1 = tamanho normal.</summary>
+    public double UiScale { get; set; } = 1.0;
+
     /// <summary>Arrumação da tela do estúdio: 0 automática (prévia em cima quando a janela é estreita, como num monitor em pé), 1 lado a lado, 2 prévia em cima.</summary>
     public int StudioLayoutMode { get; set; }
 

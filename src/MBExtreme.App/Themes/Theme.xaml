@@ -300,4 +300,15 @@
         </Setter>
     </Style>
 
+
+    <!-- Foco do teclado visível em todos os controles (Tab): contorno amarelo tracejado -->
+    <Style x:Key="{x:Static SystemParameters.FocusVisualStyleKey}">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Rectangle Margin="-3" RadiusX="6" RadiusY="6" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" StrokeDashArray="2 1" SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>

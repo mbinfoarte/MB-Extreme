@@ -34,9 +34,22 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => await _updates.CheckAsync();
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
+        Accessibility.ApplyScale(RootGrid, AppServices.Settings.UiScale);
         // Voltar como no navegador: Alt + seta para a esquerda e o botão lateral do mouse
         PreviewKeyDown += (_, e) =>
         {
+            // Ctrl + e Ctrl − aumentam e diminuem a interface; Ctrl 0 volta ao normal
+            if (System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control && !Pages.PeripheralTestPage.Active)
+            {
+                double? scale = e.Key switch
+                {
+                    System.Windows.Input.Key.OemPlus or System.Windows.Input.Key.Add => Accessibility.Step(AppServices.Settings.UiScale, +1),
+                    System.Windows.Input.Key.OemMinus or System.Windows.Input.Key.Subtract => Accessibility.Step(AppServices.Settings.UiScale, -1),
+                    System.Windows.Input.Key.D0 or System.Windows.Input.Key.NumPad0 => 1.0,
+                    _ => null,
+                };
+                if (scale is double s) { SetScale(s); e.Handled = true; return; }
+            }
             if (Pages.PeripheralTestPage.Active) return;   // no teste de periféricos essas teclas estão sendo testadas
             if (e.SystemKey == System.Windows.Input.Key.Left && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Alt) { GoBack(); e.Handled = true; }
             else if (e.Key == System.Windows.Input.Key.BrowserBack) { GoBack(); e.Handled = true; }
@@ -52,6 +65,14 @@ public partial class MainWindow : Window
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    /// <summary>Muda a escala da interface e guarda.</summary>
+    internal void SetScale(double scale)
+    {
+        AppServices.Settings.UiScale = scale;
+        AppServices.Settings.Save();
+        Accessibility.ApplyScale(RootGrid, scale);
+    }
 
     /// <summary>Alguém abriu o programa de novo: traz esta janela para frente em vez de abrir outra.</summary>
     internal void ActivateFromOther()
@@ -308,6 +329,7 @@ public partial class MainWindow : Window
         "postinstall" => new PostInstallPage(),
         "speedtest" => new InternetTestPage(),
         "periphtest" => new PeripheralTestPage(),
+        "a11y" => new AccessibilityPage(),
         "recommended" => new RecommendedPage(),
         "cpu-detail" => new ComponentMonitorPage(gpu: false),
         "gpu-detail" => new ComponentMonitorPage(gpu: true),

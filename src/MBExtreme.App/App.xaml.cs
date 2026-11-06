@@ -56,6 +56,7 @@ public partial class App : Application
         }
         SingleInstance.ListenForOthers(() => Dispatcher.BeginInvoke(new Action(() => (MainWindow as MainWindow)?.ActivateFromOther())));
 
+        Accessibility.Install();
         base.OnStartup(e);
     }
 

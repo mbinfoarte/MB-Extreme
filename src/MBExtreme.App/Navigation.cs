@@ -90,6 +90,7 @@ internal static class NavigationMap
         new("sup", "Suporte", "Ajuda do suporte da MB InfoArt por acesso remoto.", "\uE8F2", new Tile[]
         {
             new("remote", "Acesso remoto", "Seu ID, conexão com outro PC (tela, mouse, teclado e som).", "\uE8AF", ""),
+            new("a11y", "Acessibilidade e tamanho", "Interface maior ou menor, teclado e Narrador.", "\uE776", ""),
             new("support", "Pedir suporte", "Descreva o problema e envie o relatório do PC; AnyDesk como alternativa.", "\uE8F2", ""),
         }),
         new("lic", "Licença", "Plano, ativação e conta.", "\uE8D7", new Tile[]

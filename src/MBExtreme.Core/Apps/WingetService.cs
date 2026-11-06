@@ -108,6 +108,23 @@ public static class WingetService
         return (result.ExitCode == 0, tail);
     }
 
+    /// <summary>Resultado do winget com a mensagem em português (pelo código de saída) e se pede reinício.</summary>
+    public sealed record WingetResult(bool Ok, int ExitCode, string Message, bool RebootRequired);
+
+    private static WingetResult RunDetailed(string verb, string id)
+    {
+        if (!IsValidId(id)) throw new ArgumentException("Identificador de programa inválido.", nameof(id));
+        var result = Shell.RunUtf8("winget.exe", verb, "--id", id, "-e", "--silent",
+            "--accept-package-agreements", "--accept-source-agreements", "--disable-interactivity");
+        var (ok, message, reboot) = WingetErrors.Explain(result.ExitCode, verb == "upgrade");
+        string tail = string.Join(" ", result.Output.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).TakeLast(1));
+        return new WingetResult(ok, result.ExitCode, ok || tail.Length == 0 ? message : $"{message} ({tail})", reboot);
+    }
+
+    public static WingetResult UpgradeDetailed(string id) => RunDetailed("upgrade", id);
+
+    public static WingetResult InstallDetailed(string id) => RunDetailed("install", id);
+
     public static (bool Ok, string Message) Upgrade(string id) => Run("upgrade", id);
 
     public static (bool Ok, string Message) Install(string id) => Run("install", id);

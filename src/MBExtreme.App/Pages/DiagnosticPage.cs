@@ -46,13 +46,6 @@ public sealed class DiagnosticPage : ToolPageBase
     /// <summary>Começa a análise rápida sozinho (botão "Analisar o PC" do Início).</summary>
     public async Task StartAsync() { if (!_busy) await AnalyzeAsync(deep: false, fresh: true); }
 
-    private IReadOnlyList<MBExtreme.Core.Tweaks.Tweak> AllowedTweaks()
-    {
-        var license = AppServices.License;
-        bool pro = !license.Config.Enforce || LicenseExpiry.IsPro(license.Status);
-        return pro ? AppServices.Tweaks : AppServices.Tweaks.Where(t => !LicenseExpiry.ProTweakCategories.Contains(t.Category)).ToList();
-    }
-
     private void RefreshButtons()
     {
         _quick.IsEnabled = _deep.IsEnabled = !_busy;
@@ -75,7 +68,7 @@ public sealed class DiagnosticPage : ToolPageBase
         SetStatus(deep ? "Análise profunda: pode levar de 10 a 30 minutos. Nada é alterado no Windows." : "Análise rápida: só leitura, nada é alterado.");
         var progress = new Progress<DiagnosticProgress>(p =>
             _progress.Text = $"Etapa {p.Step} de {p.Total}: {p.Title}  ·  {DiagnosticText.Duration(p.Elapsed)}");
-        var checks = WindowsChecks.All(AllowedTweaks());
+        var checks = WindowsChecks.All(AppServices.AllowedTweaks());
         var token = _cts.Token;
         try
         {

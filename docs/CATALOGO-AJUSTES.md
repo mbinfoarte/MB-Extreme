@@ -137,3 +137,17 @@ Planejado: agendar `chkdsk`, `DISM /RestoreHealth`, `sfc /scannow`, atualizar dr
 > Atualização: o pacote foi lido por inteiro. Veja `ANALISE-LOBO-ALPHA.md` (decisão por item) e a Etapa 8 do `PLANO-ETAPAS.md`. O texto abaixo é histórico.
 
 Os nomes e tamanhos de todas as pastas foram mapeados, mas o conteúdo de vários arquivos ainda não foi lido: scripts por jogo, navegadores, periféricos (`.reg`), RAM por quantidade, `Aumentar Prioridade de jogos` (51 KB), drivers de vídeo e as páginas seguintes de algumas pastas. A tabela acima será completada à medida que forem lidos.
+
+## Ajustes do plano MB Optimizer (Fase 5, 06/11/2026)
+
+| Id | O que faz | Valor | Fonte | Versões |
+|---|---|---|---|---|
+| priv-recall | Desativa o Recall (salvamento de instantâneos) | `HKLM`/`HKCU\Software\Policies\Microsoft\Windows\WindowsAI` `DisableAIDataAnalysis=1` | Microsoft Learn, Policy CSP – WindowsAI › DisableAIDataAnalysis | Windows 11 24H2+ (build 26100) |
+| priv-widgets | Desativa os Widgets | `HKLM\SOFTWARE\Policies\Microsoft\Dsh` `AllowNewsAndInterests=0` | Microsoft Learn, Policy CSP – NewsAndInterests › AllowNewsAndInterests | Windows 11 (22000+) |
+| priv-news-interests | Desativa Notícias e interesses | `HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds` `EnableFeeds=0` | Política "Habilitar notícias e interesses na barra de tarefas" (Modelos Administrativos) | Windows 10 |
+| priv-lockscreen-tips | Sem dicas na tela de bloqueio | `HKCU\...\ContentDeliveryManager` `RotatingLockScreenOverlayEnabled=0`, `SubscribedContent-338387Enabled=0` | Valores gravados pela opção de Configurações › Personalização › Tela de bloqueio | Windows 10 e 11 |
+| priv-start-promos | Sem recomendações e avisos de conta no Iniciar | `HKCU\...\Explorer\Advanced` `Start_IrisRecommendations=0`, `Start_AccountNotifications=0` | Valores gravados pelas opções de Configurações › Personalização › Iniciar | Windows 11 22H2+ |
+| priv-explorer-ads | Sem notificações do provedor de sincronização | `HKCU\...\Explorer\Advanced` `ShowSyncProviderNotifications=0` | Opção de Opções de Pasta › Modo de exibição | Windows 10 e 11 |
+| visual-taskbar-small | Barra de tarefas menor | `HKCU\...\Explorer\Advanced` `TaskbarSmallIcons=1` | Opção "Usar botões pequenos da barra de tarefas" das Configurações | Só Windows 10 (o 11 não tem a opção nativa) |
+
+O programa confere a build do Windows (`Tweak.MinBuild`/`MaxBuild`) e esconde o ajuste onde ele não existe.

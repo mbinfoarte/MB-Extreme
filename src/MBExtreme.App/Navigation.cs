@@ -15,6 +15,7 @@ internal static class NavigationMap
         new("opt", "Otimização", "Deixe o computador mais rápido e leve: limpeza, desempenho, jogos e rede.", "\uE945", new Tile[]
         {
             new("diagnose", "Painel inteligente", "Analisa o PC sem mudar nada e corrige só o que você escolher.", "\uE9D9", "Diagnóstico"),
+            new("postinstall", "Pós-formatação", "Prepara um Windows recém-instalado: perfis Leve, Equilibrado e Extremo.", "\uE7E8", "Diagnóstico"),
             new("cleanup", "Limpeza", "Procura lixo, temporários, cache e libera memória.", "\uE74D", "Limpeza e espaço"),
             new("weekly", "Limpeza semanal", "Limpeza automática todo domingo, sem abrir janela.", "\uE74D", "Limpeza e espaço"),
             new("memory", "Memória", "Limpe a RAM e proteja aplicativos.", "\uE950", "Limpeza e espaço"),

@@ -12,7 +12,15 @@
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Aplicar alterações" Style="{StaticResource PrimaryButton}" Click="ApplyButton_Click" />
                     <Button Content="Marcar recomendados" Style="{StaticResource GhostButton}" Margin="12,0,0,0"
-                            Click="RecommendedButton_Click" />
+                            Click="RecommendedButton_Click" Tag="Recommended" />
+                    <Button Content="Seguros" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Safe"
+                            ToolTip="Marca os ajustes de risco baixo" />
+                    <Button Content="Moderados" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Moderate"
+                            ToolTip="Marca os ajustes de risco médio (leia os avisos)" />
+                    <Button Content="Avançados" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Advanced"
+                            ToolTip="Marca os ajustes de risco alto (só se souber o que está fazendo)" />
+                    <Button Content="Todos" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="All" />
+                    <Button Content="Nenhum" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="None" />
                     <Button Content="Restaurar originais" Style="{StaticResource GhostButton}" Margin="12,0,0,0"
                             Click="RestoreButton_Click" />
                 </StackPanel>

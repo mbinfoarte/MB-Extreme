@@ -128,11 +128,22 @@ public partial class TweaksPage : UserControl
         _ => "BadBrush",
     };
 
+    /// <summary>Recomendados, Seguros (risco baixo), Moderados (médio), Avançados (alto), Todos ou Nenhum.</summary>
     private void RecommendedButton_Click(object sender, RoutedEventArgs e)
     {
+        string tag = (sender as FrameworkElement)?.Tag as string ?? "Recommended";
+        if (tag == "None")
+        {
+            foreach (var (_, box) in _boxes) box.IsChecked = false;
+            StatusText.Text = "Nada marcado.";
+            StatusText.Foreground = (Brush)FindResource("MutedBrush");
+            return;
+        }
+        var group = Enum.Parse<TweakGroup>(tag);
+        int marked = 0;
         foreach (var (tweak, box) in _boxes)
-            if (tweak.Recommended) box.IsChecked = true;
-        StatusText.Text = "Recomendados marcados. Clique em Aplicar alterações para confirmar.";
+            if (TweakSelection.InGroup(tweak, group) && box.IsEnabled) { box.IsChecked = true; marked++; }
+        StatusText.Text = $"{TweakSelection.Title(group)}: {marked} marcado(s). Clique em Aplicar alterações para confirmar.";
         StatusText.Foreground = (Brush)FindResource("MutedBrush");
     }
 

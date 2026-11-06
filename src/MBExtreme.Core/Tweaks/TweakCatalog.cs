@@ -224,6 +224,82 @@ public static class TweakCatalog
                 Effect = "Menos processos e menos envio de dados.",
             },
 
+            // Recall: política oficial "Desativar o salvamento de instantâneos" (Policy CSP WindowsAI/DisableAIDataAnalysis)
+            new RegistryTweak(store, "priv-recall", TweakCategory.Privacy, TweakRisk.Low,
+                "Desativar o Recall",
+                "Impede o Windows de tirar e guardar capturas da tela para a busca do Recall (política oficial da Microsoft).",
+                new[]
+                {
+                    new RegistryValueSpec(Hklm, @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis", 1),
+                    new RegistryValueSpec(Hkcu, @"Software\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis", 1),
+                })
+            {
+                Effect = "Nenhuma captura da tela é guardada; mais privacidade e menos disco usado.",
+                Recommended = true,
+                MinBuild = 26100,
+            },
+
+            // Widgets do Windows 11: política oficial "Permitir widgets" (Policy CSP NewsAndInterests/AllowNewsAndInterests)
+            new RegistryTweak(store, "priv-widgets", TweakCategory.Privacy, TweakRisk.Low,
+                "Desativar os Widgets",
+                "Desliga o painel de Widgets (notícias, clima e anúncios) da barra de tarefas pela política oficial.",
+                new[] { new RegistryValueSpec(Hklm, @"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", 0) })
+            {
+                Effect = "Menos processos em segundo plano e nada de notícias na barra.",
+                Recommended = true,
+                MinBuild = 22000,
+            },
+
+            // Windows 10: "Notícias e interesses" (política oficial "Habilitar notícias e interesses na barra de tarefas")
+            new RegistryTweak(store, "priv-news-interests", TweakCategory.Privacy, TweakRisk.Low,
+                "Desativar Notícias e interesses",
+                "Tira o painel de notícias e clima da barra de tarefas do Windows 10 pela política oficial.",
+                new[] { new RegistryValueSpec(Hklm, @"SOFTWARE\Policies\Microsoft\Windows\Windows Feeds", "EnableFeeds", 0) })
+            {
+                Effect = "Menos processos em segundo plano e nada de notícias na barra.",
+                Recommended = true,
+                MaxBuild = 21999,
+            },
+
+            // as mesmas opções de Configurações > Personalização > Tela de bloqueio
+            new RegistryTweak(store, "priv-lockscreen-tips", TweakCategory.Privacy, TweakRisk.Low,
+                "Sem dicas e curiosidades na tela de bloqueio",
+                "Desliga \"Obter fatos divertidos, dicas, truques e muito mais na tela de bloqueio\" (a mesma opção das Configurações).",
+                new[]
+                {
+                    new RegistryValueSpec(Hkcu, contentDelivery, "RotatingLockScreenOverlayEnabled", 0),
+                    new RegistryValueSpec(Hkcu, contentDelivery, "SubscribedContent-338387Enabled", 0),
+                })
+            {
+                Effect = "Tela de bloqueio limpa, sem propaganda.",
+                Recommended = true,
+            },
+
+            // Configurações > Personalização > Iniciar (Windows 11 22H2 em diante)
+            new RegistryTweak(store, "priv-start-promos", TweakCategory.Privacy, TweakRisk.Low,
+                "Sem recomendações e avisos de conta no Iniciar",
+                "Desliga \"Mostrar recomendações de dicas, atalhos, novos aplicativos e muito mais\" e as notificações da conta Microsoft no Iniciar (as mesmas opções das Configurações).",
+                new[]
+                {
+                    new RegistryValueSpec(Hkcu, explorerAdvanced, "Start_IrisRecommendations", 0),
+                    new RegistryValueSpec(Hkcu, explorerAdvanced, "Start_AccountNotifications", 0),
+                })
+            {
+                Effect = "Iniciar sem propaganda.",
+                Recommended = true,
+                MinBuild = 22621,
+            },
+
+            // Opções de Pasta > Modo de exibição > "Mostrar notificações do provedor de sincronização"
+            new RegistryTweak(store, "priv-explorer-ads", TweakCategory.Privacy, TweakRisk.Low,
+                "Sem propaganda no Explorador de Arquivos",
+                "Desliga \"Mostrar notificações do provedor de sincronização\" (os avisos de OneDrive e Microsoft 365 no Explorador), a mesma opção das Opções de Pasta.",
+                new[] { new RegistryValueSpec(Hkcu, explorerAdvanced, "ShowSyncProviderNotifications", 0) })
+            {
+                Effect = "Explorador sem banners de propaganda.",
+                Recommended = true,
+            },
+
             new RegistryTweak(store, "priv-cortana", TweakCategory.Privacy, TweakRisk.Low,
                 "Desativar a Cortana",
                 "Desliga a Cortana por política.",
@@ -335,6 +411,16 @@ public static class TweakCatalog
             },
 
             // ---------------------------------------------------------------- Efeitos visuais
+            // Windows 10: "Usar botões pequenos da barra de tarefas" (o Windows 11 não tem mais essa opção)
+            new RegistryTweak(store, "visual-taskbar-small", TweakCategory.Visual, TweakRisk.Low,
+                "Barra de tarefas menor",
+                "Liga \"Usar botões pequenos da barra de tarefas\" (a mesma opção das Configurações do Windows 10).",
+                new[] { new RegistryValueSpec(Hkcu, explorerAdvanced, "TaskbarSmallIcons", 1) })
+            {
+                Effect = "Mais espaço na tela.",
+                MaxBuild = 21999,
+            },
+
             new RegistryTweak(store, "visual-transparency", TweakCategory.Visual, TweakRisk.Low,
                 "Desligar a transparência do Windows",
                 "Remove o efeito de vidro na barra de tarefas, no Iniciar e nas janelas.",

@@ -304,6 +304,7 @@ public partial class MainWindow : Window
         "security" => new SecurityPage(),
         "undo" => new UndoCenterPage(),
         "diagnose" => new DiagnosticPage(),
+        "postinstall" => new PostInstallPage(),
         "recommended" => new RecommendedPage(),
         "cpu-detail" => new ComponentMonitorPage(gpu: false),
         "gpu-detail" => new ComponentMonitorPage(gpu: true),

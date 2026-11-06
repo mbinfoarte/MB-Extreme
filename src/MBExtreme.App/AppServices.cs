@@ -17,6 +17,13 @@ internal static class AppServices
 
     public static IReadOnlyList<Tweak> Tweaks { get; } = TweakCatalog.Create(TweakStore);
 
+    /// <summary>Ajustes que a pessoa pode aplicar no plano dela (os das páginas Pro ficam de fora no plano grátis).</summary>
+    public static IReadOnlyList<Tweak> AllowedTweaks()
+    {
+        bool pro = !License.Config.Enforce || MBExtreme.Core.Licensing.LicenseExpiry.IsPro(License.Status);
+        return pro ? Tweaks : Tweaks.Where(t => !MBExtreme.Core.Licensing.LicenseExpiry.ProTweakCategories.Contains(t.Category)).ToList();
+    }
+
     /// <summary>Configurações do usuário: uma única cópia, para um salvamento não apagar o do outro.</summary>
     public static MBExtreme.Core.Settings.AppSettings Settings { get; } = LoadSettings();
 

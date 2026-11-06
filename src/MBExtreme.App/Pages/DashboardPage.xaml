@@ -3,23 +3,73 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ctl="clr-namespace:MBExtreme.UI.Controls">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="36,32,36,32">
+        <StackPanel Margin="28,18,28,28">
 
-            <!-- Cabeçalho -->
-            <Grid>
-                <StackPanel>
-                    <TextBlock Text="Início" FontSize="30" FontWeight="SemiBold" />
-                    <TextBlock x:Name="HealthText" Margin="0,2,0,0" Foreground="{StaticResource MutedBrush}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Button Content="Escanear e limpar" Style="{StaticResource GhostButton}" Margin="0,0,10,0" Click="ScanButton_Click" />
-                    <Button Content="Analisar o PC" Style="{StaticResource PrimaryButton}" Click="AnalyzeButton_Click"
-                            AutomationProperties.Name="Analisar o PC no Painel inteligente" />
-                </StackPanel>
-            </Grid>
+            <!-- Topo: análise com nota de saúde -->
+            <ContentControl x:Name="HeroHost" />
 
-            <!-- Itens que precisam de atenção -->
-            <StackPanel x:Name="AttentionPanel" Margin="0,14,0,0" />
+            <!-- Itens urgentes do momento (segurança, temperatura, memória) -->
+            <TextBlock x:Name="HealthText" Margin="2,10,0,0" FontSize="12" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+            <StackPanel x:Name="AttentionPanel" Margin="0,4,0,0" />
+
+            <!-- Resumo: memória, disco do Windows e o computador -->
+            <UniformGrid Columns="3" Margin="0,12,0,0">
+                <Border Style="{StaticResource Card}" Padding="14,12" Margin="0,0,6,0" Cursor="Hand" x:Name="RamSummary">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="44" Height="44">
+                            <ContentControl x:Name="RamRingHost" />
+                            <TextBlock x:Name="RamRingText" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Memória RAM" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock x:Name="RamSummaryText" FontSize="13" FontWeight="SemiBold" Text="—" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}" Padding="14,12" Margin="6,0,6,0" Cursor="Hand" x:Name="DiskSummary">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="44" Height="44">
+                            <ContentControl x:Name="DiskRingHost" />
+                            <TextBlock x:Name="DiskRingText" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Disco do Windows" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock x:Name="DiskSummaryText" FontSize="13" FontWeight="SemiBold" Text="—" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}" Padding="14,12" Margin="6,0,0,0" Cursor="Hand" x:Name="PcSummary">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource ToolIconBox}" Width="44" Height="44" CornerRadius="12">
+                            <TextBlock Text="&#xE7F8;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="#0B0B0B" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="PcWindowsText" FontSize="11" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="PcCpuText" FontSize="13" FontWeight="SemiBold" Text="—" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="PcUptimeText" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </UniformGrid>
+
+            <!-- Ferramentas -->
+            <TextBlock Text="Ferramentas" FontSize="15" FontWeight="SemiBold" Margin="2,20,0,10" />
+            <UniformGrid x:Name="ToolsGrid" Columns="3" />
+
+            <!-- Ao vivo -->
+            <TextBlock Text="Ao vivo" FontSize="15" FontWeight="SemiBold" Margin="2,16,0,0" />
 
             <!-- Aviso: sensores da CPU -->
             <Border x:Name="SensorHint" Style="{StaticResource Card}" Margin="0,18,0,0" Padding="18,14" Visibility="Collapsed">

@@ -4,7 +4,8 @@ using System.Text.Json;
 namespace MBExtreme.Core.Network;
 
 /// <summary>Resultado de um teste de internet.</summary>
-public sealed record SpeedResult(DateTimeOffset At, double? DownloadMbps, double? UploadMbps, double? PingMs, double? JitterMs, string? ServerCode, string? City, int Connections);
+public sealed record SpeedResult(DateTimeOffset At, double? DownloadMbps, double? UploadMbps, double? PingMs, double? JitterMs, string? ServerCode, string? City, int Connections,
+    double? LoadedPingMs = null, double? RouterMs = null, double? DnsMs = null, string? Name = null);
 
 /// <summary>Contas do teste de internet (separadas para testar sem rede).</summary>
 public static class SpeedMath
@@ -22,6 +23,24 @@ public static class SpeedMath
     /// <summary>Variação (jitter): média da diferença entre medições seguidas, como nos testes de internet comuns.</summary>
     public static double Jitter(IReadOnlyList<double> values) =>
         values.Count < 2 ? 0 : values.Zip(values.Skip(1), (a, b) => Math.Abs(b - a)).Average();
+
+    /// <summary>
+    /// Ping sob carga (bufferbloat): quanto a latência sobe enquanto a internet está cheia (download rodando). É o que faz o jogo
+    /// travar quando alguém da casa está baixando ou vendo vídeo. Faixas parecidas com as dos testes de bufferbloat conhecidos.
+    /// </summary>
+    public static (string Grade, string Text) Bufferbloat(double? idleMs, double? loadedMs)
+    {
+        if (idleMs is not double idle || loadedMs is not double loaded) return ("?", "Não deu para medir o ping sob carga.");
+        double rise = Math.Max(0, loaded - idle);
+        return rise switch
+        {
+            < 5 => ("A+", $"Excelente: o ping quase não sobe com a internet cheia (+{rise:0} ms)."),
+            < 30 => ("A", $"Muito bom: +{rise:0} ms com a internet cheia."),
+            < 60 => ("B", $"Bom: +{rise:0} ms com a internet cheia; jogo e chamada seguem bem."),
+            < 200 => ("C", $"Atenção: +{rise:0} ms com a internet cheia. Jogos e chamadas podem travar quando alguém baixa algo. O QoS/SQM do roteador ajuda."),
+            _ => ("F", $"Ruim: +{rise:0} ms com a internet cheia. O roteador enche a fila: ligue o QoS/SQM ou troque o roteador."),
+        };
+    }
 
     /// <summary>Lê a resposta "chave=valor" do /cdn-cgi/trace da Cloudflare.</summary>
     public static IReadOnlyDictionary<string, string> ParseTrace(string text) =>
@@ -127,6 +146,44 @@ public sealed class SpeedTest(HttpClient http, string baseUrl = "https://speed.c
         try { await Task.WhenAll(workers); } catch (OperationCanceledException) { }
         ct.ThrowIfCancellationRequested();
         return bytes <= 0 ? null : SpeedMath.Mbps(bytes, seconds);
+    }
+
+    /// <summary>Ping medido enquanto o download roda (a fila do roteador cheia).</summary>
+    public async Task<(double? Down, double? LoadedPing)> DownloadWithLoadedPingAsync(int connections, TimeSpan warmup, TimeSpan measure, IProgress<double>? live, CancellationToken ct)
+    {
+        var download = DownloadAsync(connections, warmup, measure, live, ct);
+        await Task.Delay(warmup + TimeSpan.FromSeconds(1), ct);
+        var times = new List<double>();
+        var end = DateTime.UtcNow + measure - TimeSpan.FromSeconds(2);
+        while (DateTime.UtcNow < end && !download.IsCompleted)
+        {
+            ct.ThrowIfCancellationRequested();
+            var clock = Stopwatch.StartNew();
+            try
+            {
+                using var response = await http.GetAsync($"{baseUrl}/__down?bytes=0", HttpCompletionOption.ResponseHeadersRead, ct);
+                if (response.IsSuccessStatusCode) times.Add(clock.Elapsed.TotalMilliseconds);
+            }
+            catch (HttpRequestException) { }
+            await Task.Delay(300, ct);
+        }
+        double? down = await download;
+        return (down, times.Count == 0 ? null : SpeedMath.Median(times));
+    }
+
+    /// <summary>Tempo para o DNS responder um nome que não está no cache (nome aleatório).</summary>
+    public static async Task<double?> DnsTimeAsync(CancellationToken ct)
+    {
+        var times = new List<double>();
+        for (int i = 0; i < 3; i++)
+        {
+            string name = $"mbx{Guid.NewGuid():N}".Substring(0, 14) + ".cloudflare.com";
+            var clock = Stopwatch.StartNew();
+            try { await System.Net.Dns.GetHostAddressesAsync(name, ct); }
+            catch (System.Net.Sockets.SocketException) { }   // "não existe" também é resposta do DNS
+            times.Add(clock.Elapsed.TotalMilliseconds);
+        }
+        return times.Count == 0 ? null : SpeedMath.Median(times);
     }
 
     /// <summary>Qual servidor respondeu (código do aeroporto, ex.: GRU) e a cidade, quando conhecida.</summary>

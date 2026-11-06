@@ -75,7 +75,7 @@ public class NucleoOperacoesTests
         using var inside = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
         var slow = new FakeOperation("lenta", _ => { inside.Set(); release.Wait(5000); return OperationResult.Ok(); });
-        var running = Task.Run(() => queue.Run(new IOperation[] { slow }));
+        var running = Task.Factory.StartNew(() => queue.Run(new IOperation[] { slow }), TaskCreationOptions.LongRunning);   // thread própria: não depende da fila de threads ocupada por outros testes
         Assert.True(inside.Wait(5000));
         Assert.True(queue.IsBusy);
         Assert.Throws<InvalidOperationException>(() => queue.Run(new IOperation[] { new FakeOperation("outra", _ => OperationResult.Ok()) }));

@@ -375,4 +375,23 @@ public partial class CleanupPage : UserControl
             ProgressView.Finish("Não foi possível concluir a limpeza.", false, ex.Message);
         }
     }
+
+    private async void FreeRam_Click(object sender, RoutedEventArgs e)
+    {
+        FreeRamButton.IsEnabled = false;
+        try
+        {
+            var allowlist = AppServices.Settings.MemoryAllowlist.ToList();
+            var result = await Task.Run(() => MBExtreme.Core.Memory.MemoryService.Clean(allowlist));
+            FreeRamButton.Content = $"Memória: {result.FreedBytes / (1024.0 * 1024):0} MB liberados";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
+        {
+            FreeRamButton.Content = "Não foi possível liberar";
+        }
+        finally
+        {
+            FreeRamButton.IsEnabled = true;
+        }
+    }
 }

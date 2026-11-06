@@ -45,6 +45,109 @@ public sealed class DriversPage : ToolPageBase
         foreach (var gpu in gpus) Body.Children.Add(GpuCard(gpu));
 
         Body.Children.Add(Muted("A NVIDIA é atualizada direto do servidor oficial dela, com conferência da assinatura digital. AMD e Intel usam o Windows Update; se ele não tiver a versão mais nova, abra a página oficial do fabricante."));
+        _ = ShowMoreAsync();
+    }
+
+    private readonly StackPanel _more = new();
+    private readonly TextBox _driverSearch = new() { Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 4, 0, 6) };
+    private readonly CheckBox _showGeneric = new() { Content = "Mostrar os genéricos do Windows", Margin = new Thickness(0, 0, 0, 6) };
+    private readonly StackPanel _driverList = new();
+    private IReadOnlyList<MBExtreme.Core.Drivers.InstalledDriver> _drivers = Array.Empty<MBExtreme.Core.Drivers.InstalledDriver>();
+
+    /// <summary>Aparelhos com problema (no alto), placa-mãe, backup e a lista de todos os drivers.</summary>
+    private async Task ShowMoreAsync()
+    {
+        if (!Body.Children.Contains(_more)) Body.Children.Add(_more);
+        _more.Children.Clear();
+        _more.Children.Add(Muted("Lendo os aparelhos e os drivers..."));
+        IReadOnlyList<MBExtreme.Core.Drivers.ProblemDevice> problems;
+        MBExtreme.Core.Drivers.Motherboard? board;
+        try
+        {
+            (problems, board, _drivers) = await Task.Run(() => (MBExtreme.Core.Drivers.DeviceDrivers.Problems(), MBExtreme.Core.Drivers.DeviceDrivers.Board(), MBExtreme.Core.Drivers.DeviceDrivers.All()));
+        }
+        catch (Exception ex) when (ex is System.Management.ManagementException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+        {
+            _more.Children.Clear();
+            _more.Children.Add(Muted("Não foi possível ler os drivers: " + ex.Message));
+            return;
+        }
+        _more.Children.Clear();
+
+        // aparelhos com problema vão para o topo da página
+        foreach (var old in Body.Children.OfType<FrameworkElement>().Where(e => e.Tag as string == "problem").ToList()) Body.Children.Remove(old);
+        int at = 0;
+        if (problems.Count > 0)
+        {
+            var title = Heading($"Aparelhos com problema ({problems.Count})");
+            title.Tag = "problem";
+            title.Foreground = Brush("BadBrush");
+            Body.Children.Insert(at++, title);
+            foreach (var p in problems)
+            {
+                var device = p;
+                var right = new StackPanel { Orientation = Orientation.Horizontal };
+                right.Children.Add(SmallButton("Copiar ID", (_, _) => { if (TryCopy(device.DeviceId)) SetStatus("ID copiado: cole no Google para achar o driver.", "OkBrush"); }));
+                right.Children.Add(SmallButton("Gerenciador de Dispositivos", (_, _) => StartTool("devmgmt.msc")));
+                var row = Row($"⚠  {p.Name}" + (p.Class.Length > 0 ? $"  ·  {p.Class}" : ""), $"{p.Explanation}  (código {p.Code})", right, "WarnBrush");
+                row.Tag = "problem";
+                Body.Children.Insert(at++, row);
+            }
+        }
+
+        if (board is not null)
+        {
+            _more.Children.Add(Heading("Placa-mãe"));
+            var info = new StackPanel();
+            info.Children.Add(new TextBlock { Text = $"{board.Brand} {board.Model}", FontSize = 14, FontWeight = FontWeights.SemiBold });
+            info.Children.Add(Muted($"Fabricante: {board.Manufacturer} · BIOS {board.Bios}" + (board.BiosDate is { } d ? $" ({d:dd/MM/yyyy})" : "")));
+            info.Children.Add(Muted("Na página do fabricante ficam os drivers de chipset, som, rede e a BIOS do seu modelo. Se ela não abrir direto no modelo, copie o modelo acima e cole na busca do site.", 11.5));
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            if (board.SupportUrl is { } url) buttons.Children.Add(SmallButton($"Abrir suporte da {board.Brand}", (_, _) => Open(url), true));
+            buttons.Children.Add(SmallButton("Copiar modelo", (_, _) => TryCopy(board.Model)));
+            info.Children.Add(buttons);
+            _more.Children.Add(CardOf(info));
+        }
+
+        _more.Children.Add(Heading("Backup dos drivers"));
+        var backup = new StackPanel();
+        backup.Children.Add(Muted("Salva uma cópia dos drivers instalados (menos os que já vêm com o Windows) e das redes Wi-Fi num pendrive, para devolver tudo depois de formatar."));
+        backup.Children.Add(SmallButton("Abrir Backup para formatar", (_, _) => MainWindow.Current?.Go("formatbackup"), true));
+        _more.Children.Add(CardOf(backup));
+
+        _more.Children.Add(Heading("Todos os drivers instalados"));
+        System.Windows.Automation.AutomationProperties.SetName(_driverSearch, "Procurar driver por aparelho, fabricante ou versão");
+        _driverSearch.TextChanged -= FilterChanged;
+        _driverSearch.TextChanged += FilterChanged;
+        _showGeneric.Foreground = Brush("TextBrush");
+        _showGeneric.Click -= GenericChanged;
+        _showGeneric.Click += GenericChanged;
+        _more.Children.Add(_driverSearch);
+        _more.Children.Add(_showGeneric);
+        _more.Children.Add(_driverList);
+        FillDrivers();
+    }
+
+    private void FilterChanged(object sender, TextChangedEventArgs e) => FillDrivers();
+    private void GenericChanged(object sender, RoutedEventArgs e) => FillDrivers();
+
+    private void FillDrivers()
+    {
+        _driverList.Children.Clear();
+        string q = _driverSearch.Text.Trim();
+        var list = _drivers.Where(d => _showGeneric.IsChecked == true || !d.IsWindowsGeneric)
+            .Where(d => q.Length == 0 || d.Device.Contains(q, StringComparison.CurrentCultureIgnoreCase) || d.Manufacturer.Contains(q, StringComparison.CurrentCultureIgnoreCase) || d.Version.Contains(q, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        _driverList.Children.Add(Muted($"{list.Count} de {_drivers.Count} drivers" + (_showGeneric.IsChecked == true ? "" : $" ({_drivers.Count(d => d.IsWindowsGeneric)} genéricos do Windows escondidos)"), 11.5));
+        foreach (var d in list.Take(300))
+            _driverList.Children.Add(Row(d.Device, $"{d.Manufacturer} · versão {d.Version}" + (d.Date is { } date ? $" · {date:dd/MM/yyyy}" : "") + (d.Signed ? " · assinado" : " · SEM assinatura")
+                , null, d.Signed ? "MutedBrush" : "WarnBrush"));
+    }
+
+    private static void StartTool(string tool)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(tool) { UseShellExecute = true }); }
+        catch (System.ComponentModel.Win32Exception) { }
     }
 
     private Border GpuCard(GpuDriverInfo gpu)

@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         Go("home");
         _updates = new UpdateController(RootGrid, ContentHost);
         Loaded += async (_, _) => await _updates.CheckAsync();
+        ContentRendered += (_, _) => Pages.WhatsNew.ShowOnceAfterUpdate(this);
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
         Accessibility.ApplyScale(RootGrid, AppServices.Settings.UiScale);
@@ -62,6 +63,7 @@ public partial class MainWindow : Window
         if (AppServices.Settings.RemoteAutoListen && AppServices.License.Config.ServerUrl.Length > 0) _ = AppServices.RemoteSupport.StartAsync();
         _ = AppServices.Fans.StartIfConfiguredAsync();
         UpdateFooter();
+        VersionText.Text = VersionLabel;
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -104,13 +106,13 @@ public partial class MainWindow : Window
     internal static MainWindow? Current { get; private set; }
 
     /// <summary>Abre uma página pelo nome e destaca o módulo dela no menu lateral.</summary>
-    internal void Go(string key, bool autoStart = false)
+    internal void Go(string key, bool autoStart = false, bool deep = false)
     {
-        string moduleKey = key == "home" ? "home" : NavigationMap.ModuleOf(key)?.Key ?? "home";
+        string? sideKey = key == "home" ? "home" : NavigationMap.SideKeyOf(key);
 
         _suppressNav = true;
         foreach (var radio in NavRadios())
-            radio.IsChecked = (string?)radio.Tag == moduleKey;
+            radio.IsChecked = (string?)radio.Tag == sideKey;
         _suppressNav = false;
 
         ShowPage(key);
@@ -118,53 +120,85 @@ public partial class MainWindow : Window
         if (autoStart && _inner.TryGetValue(key, out var inner))
         {
             if (inner is CleanupPage cleanup) cleanup.StartScan();
-            else if (inner is DiagnosticPage diagnose) _ = diagnose.StartAsync();
+            else if (inner is DiagnosticPage diagnose) _ = deep ? diagnose.StartDeepAsync() : diagnose.StartAsync();
         }
     }
 
     private void BuildMenu()
     {
-        // Início no topo, o resto em ordem alfabética e o Suporte por último.
-        AddNavItem("home", "Início", "\uE80F", true);
-        var pt = new System.Globalization.CultureInfo("pt-BR");
-        var ordered = NavigationMap.Modules
-            .Where(m => m.Key != "lic") // a licença fica no cartão do cliente
-            .OrderBy(m => m.Key == "sup" ? 1 : 0)
-            .ThenBy(m => m.Title, StringComparer.Create(pt, ignoreCase: true));
-        foreach (var module in ordered)
-            AddNavItem(module.Key, module.Title, module.Icon, false);
+        // Menu em seções, como um painel de controle: cada item abre a tela direto.
+        bool first = true;
+        foreach (var section in NavigationMap.Sidebar)
+        {
+            if (section.Header.Length > 0)
+                NavPanel.Children.Add(new TextBlock
+                {
+                    Text = section.Header,
+                    FontSize = 9.5,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("MutedBrush"),
+                    Margin = new Thickness(10, first ? 4 : 12, 0, 3),
+                });
+            foreach (var item in section.Items)
+                AddNavItem(item.Key, item.Title, item.Icon, item.Key == "home");
+            first = false;
+        }
     }
+
+    private static readonly Brush IconIdle = new SolidColorBrush(Color.FromRgb(0x8E, 0x8E, 0x96));
+    private static readonly Brush IconActive = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
 
     private void AddNavItem(string key, string title, string glyph, bool selected)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
-        content.Children.Add(new TextBlock
+        var icon = new TextBlock
         {
             FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-            FontSize = 15,
+            FontSize = 13,
             Text = glyph,
-            Width = 22,
+            Width = 20,
             VerticalAlignment = VerticalAlignment.Center,
-        });
+            Foreground = selected ? IconActive : IconIdle,
+        };
+        content.Children.Add(icon);
         content.Children.Add(new TextBlock
         {
             Text = title,
-            FontWeight = FontWeights.SemiBold,
-            FontSize = 13,
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
         });
         var radio = new RadioButton
         {
             Tag = key,
             GroupName = "nav",
             IsChecked = selected,
-            Style = (Style)FindResource("NavItem"),
+            Style = (Style)FindResource("SideItem"),
             Content = content,
         };
+        System.Windows.Automation.AutomationProperties.SetName(radio, title);
+        radio.Checked += (_, _) => icon.Foreground = IconActive;
+        radio.Unchecked += (_, _) => icon.Foreground = IconIdle;
         radio.Checked += Nav_Checked;
         NavPanel.Children.Add(radio);
     }
+
+    private void FontSize_Click(object sender, RoutedEventArgs e) => Go("a11y");
+
+    private void CheckUpdate_Click(object sender, RoutedEventArgs e) => CheckForUpdates();
+
+    /// <summary>Procura atualização e sempre responde (rodapé do menu e tela Sobre).</summary>
+    internal async void CheckForUpdates()
+    {
+        if (_updates is null) return;
+        VersionText.Text = "Procurando atualização...";
+        string answer = await _updates.CheckNowAsync();
+        VersionText.Text = VersionLabel;
+        MessageBox.Show(answer, MBExtreme.Core.AppInfo.ShortName, MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private static string VersionLabel =>
+        $"v{MBExtreme.Core.AppInfo.Version} · compilação {MBExtreme.Core.Update.AppUpdates.CurrentBuild()} · Verificar atualização";
 
     private IEnumerable<RadioButton> NavRadios() => NavPanel.Children.OfType<RadioButton>();
 
@@ -181,7 +215,7 @@ public partial class MainWindow : Window
 
     /// <summary>Nome de uma tela para o botão Voltar.</summary>
     internal static string LabelOf(string key) =>
-        key == "home" ? "Início" : NavigationMap.Modules.FirstOrDefault(m => m.Key == key)?.Title ?? NavigationMap.TileOf(key)?.Title ?? "Voltar";
+        key == "home" ? "Painel" : key == "alltools" ? "Todas as ferramentas" : NavigationMap.Modules.FirstOrDefault(m => m.Key == key)?.Title ?? NavigationMap.TileOf(key)?.Title ?? "Voltar";
 
     /// <summary>Volta para a tela de onde o usuário veio (o Início, se ele chegou por lá; senão, o módulo da página).</summary>
     internal void GoBack()
@@ -265,6 +299,7 @@ public partial class MainWindow : Window
     private UserControl Create(string key)
     {
         if (key == "home") return new DashboardPage();
+        if (key == "alltools") return new AllToolsPage(k => Go(k));
 
         var module = NavigationMap.Modules.FirstOrDefault(m => m.Key == key);
         if (module is not null && module.Tiles.Count == 1)
@@ -304,7 +339,20 @@ public partial class MainWindow : Window
         "gamesettings" => new GameSettingsPage(),
         "software" => new SoftwareHubPage(),
         "drivers" => new DriversPage(),
-        "programs" => new ProgramsPage(),
+        "programs" => new TabsPage(("Instalar programas", "programs", () => new InstallAppsPage()),
+                                   ("Atualizar e instalados", "programs-installed", () => new ProgramsPage())),
+        "uninstaller" => new TabsPage(("Programas instalados", "programs-installed", () => new ProgramsPage(startWithInventory: true)),
+                                      ("Aplicativos do Windows (bloatware)", "debloat", () => new DebloatPage())),
+        "win11" => new Win11Page(),
+        "diskmap" => new DiskMapPage(),
+        "restorepoints" => new RestorePointsPage(),
+        "formatbackup" => new FormatBackupPage(),
+        "fakecheck" => new FakeCapacityPage(),
+        "about" => new AboutPage(),
+        "tweaks-all" => new TweaksPage("Otimizações",
+            "Todos os ajustes do Windows num lugar só, separados por assunto. Nada muda até você clicar em Aplicar, e cada ajuste tem volta pela Central Desfazer.",
+            TweakCategory.Performance, TweakCategory.Gaming, TweakCategory.Visual, TweakCategory.Privacy, TweakCategory.Network,
+            TweakCategory.Storage, TweakCategory.Boot, TweakCategory.Peripherals),
         "hardware" => new HardwarePage(),
         "bios" => new BiosPage(),
         "recipe" => new RecipePage(),

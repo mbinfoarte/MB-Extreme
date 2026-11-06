@@ -57,6 +57,20 @@ public static class WingetService
         }
     }
 
+    /// <summary>Dos ids informados, quais já estão instalados (uma chamada só ao winget).</summary>
+    public static ISet<string> InstalledOf(IEnumerable<string> ids)
+    {
+        try
+        {
+            var result = Shell.RunUtf8("winget.exe", "list", "--accept-source-agreements", "--disable-interactivity");
+            return AppCatalog.IdsIn(result.Output, ids);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return new HashSet<string>();
+        }
+    }
+
     public static IReadOnlyList<WingetApp> Upgradable()
     {
         var result = Shell.RunUtf8("winget.exe", "upgrade", "--accept-source-agreements", "--disable-interactivity");

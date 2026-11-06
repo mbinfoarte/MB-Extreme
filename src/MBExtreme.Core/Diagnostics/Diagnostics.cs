@@ -73,14 +73,15 @@ public sealed class DiagnosticRunner
     /// <summary>A última análise (para reaproveitar e para o "antes e depois").</summary>
     public DiagnosticReport? Last { get; private set; }
 
-    public DiagnosticReport Run(IReadOnlyList<IDiagnosticCheck> checks, bool deep, IProgress<DiagnosticProgress>? progress = null, CancellationToken ct = default, bool forceFresh = false)
+    public DiagnosticReport Run(IReadOnlyList<IDiagnosticCheck> checks, bool deep, IProgress<DiagnosticProgress>? progress = null, CancellationToken ct = default, bool forceFresh = false,
+        Action<CheckRun>? onCheck = null)
     {
         var started = _clock();
         var wanted = checks.Where(c => deep || c.Depth == CheckDepth.Quick).ToList();
         var reusable = !forceFresh && deep && Last is { } last && started - last.Finished <= ReuseFor
             ? last.Checks.Where(c => c.Depth == CheckDepth.Quick && c.Status == CheckStatus.Done).ToDictionary(c => c.CheckId)
             : new Dictionary<string, CheckRun>();
-        var runs = new List<CheckRun>();
+        var runs = new ReportingList(onCheck);
         bool cancelled = false;
         for (int i = 0; i < wanted.Count; i++)
         {
@@ -122,6 +123,46 @@ public sealed class DiagnosticRunner
         if (!cancelled) Last = report;
         return report;
     }
+}
+
+/// <summary>Lista que avisa cada verificação concluída (o Painel mostra os itens aparecendo um a um).</summary>
+internal sealed class ReportingList(Action<CheckRun>? onAdd) : List<CheckRun>
+{
+    public new void Add(CheckRun run)
+    {
+        base.Add(run);
+        onAdd?.Invoke(run);
+    }
+}
+
+/// <summary>
+/// Nota de saúde do PC, de 0 a 100, a partir do que a análise achou (itens ignorados não contam):
+/// crítico tira 25, problema tira 12, atenção tira 5 e informação não tira nada. Verificações que não rodaram não mudam a nota.
+/// </summary>
+public static class HealthScore
+{
+    public static int Of(IEnumerable<Finding> findings, ISet<string>? ignored = null)
+    {
+        int score = 100;
+        foreach (var f in findings)
+        {
+            if (ignored is not null && ignored.Contains(f.Id)) continue;
+            score -= f.Severity switch { Severity.Critical => 25, Severity.Problem => 12, Severity.Warning => 5, _ => 0 };
+        }
+        return Math.Clamp(score, 0, 100);
+    }
+
+    /// <summary>Frase do título do Painel para a nota.</summary>
+    public static string Headline(int score) => score switch
+    {
+        >= 90 => "Seu PC está em dia",
+        >= 70 => "Seu PC está bem, com alguns pontos de atenção",
+        >= 40 => "Seu PC precisa de atenção",
+        _ => "Seu PC precisa de cuidados",
+    };
+
+    /// <summary>Faixa de cor: 2 = boa, 1 = atenção, 0 = ruim.</summary>
+    public static int Level(int score) => score >= 80 ? 2 : score >= 50 ? 1 : 0;
 }
 
 /// <summary>Resumo de uma análise guardado no histórico (sem as correções, que dependem do momento).</summary>

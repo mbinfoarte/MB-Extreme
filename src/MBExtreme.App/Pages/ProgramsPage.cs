@@ -22,7 +22,10 @@ public sealed class ProgramsPage : ToolPageBase
     private IReadOnlyList<WingetApp> _lastUpgrades = Array.Empty<WingetApp>();
     private CancellationTokenSource? _cts;
 
-    public ProgramsPage() : base("Programas",
+    public ProgramsPage() : this(false) { }
+
+    /// <summary>startWithInventory: abre já na lista do que está instalado (tela Desinstalador).</summary>
+    public ProgramsPage(bool startWithInventory) : base(startWithInventory ? "Desinstalador" : "Programas",
         "Atualize seus programas e instale ferramentas úteis pelo winget, o gerenciador de pacotes da Microsoft. Tudo roda um de cada vez, e o programa avisa se o que vai ser atualizado está aberto.")
     {
         AddButton("Procurar atualizações", async (_, _) => await SearchAsync());
@@ -33,7 +36,12 @@ public sealed class ProgramsPage : ToolPageBase
         AddSelectionButtons(() => _upgrades.Values.Concat(_installs.Values));
         _search.TextChanged += (_, _) => FillInventory();
         System.Windows.Automation.AutomationProperties.SetName(_search, "Procurar programa instalado");
-        Loaded += (_, _) => { if (Body.Children.Count == 0) Render(Array.Empty<WingetApp>()); };
+        Loaded += async (_, _) =>
+        {
+            if (Body.Children.Count > 0) return;
+            if (startWithInventory) await ShowInventoryAsync();
+            else Render(Array.Empty<WingetApp>());
+        };
     }
 
     private async Task SearchAsync()

@@ -49,16 +49,35 @@ public partial class TweaksPage : UserControl
     {
         // Ler o estado de cada ajuste pode chamar o powercfg; isso roda fora da thread da interface.
         int version = ++_buildVersion;
-        var candidates = AppServices.Tweaks.Where(t => _categories.Contains(t.Category)).ToList();
+        // na tela com todas as categorias, os ajustes Pro (desempenho, jogos e rede) só aparecem para quem tem o plano Pro
+        var source = _categories.Length > 1 ? AppServices.AllowedTweaks() : AppServices.Tweaks;
+        var candidates = source.Where(t => _categories.Contains(t.Category)).ToList();
         // ajustes de uma marca de placa de vídeo só aparecem em PCs com essa marca
         var states = await Task.Run(() => candidates.Where(t => t.IsAvailable).Select(t => (Tweak: t, Applied: SafeIsApplied(t))).ToList());
         if (version != _buildVersion) return;
 
         RowsHost.Children.Clear();
         _boxes.Clear();
+        if (_categories.Length > 1 && source.Count < AppServices.Tweaks.Count)
+            RowsHost.Children.Add(new TextBlock
+            {
+                Text = "Os ajustes de desempenho, jogos e rede fazem parte do plano Pro e aparecem aqui quando você assina.",
+                FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 8), Foreground = (Brush)FindResource("WarnBrush"),
+            });
 
-        foreach (var (tweak, applied) in states)
+        TweakCategory? lastCategory = null;
+        foreach (var (tweak, applied) in states.OrderBy(x => Array.IndexOf(_categories, x.Tweak.Category)))
         {
+            // tela "Otimizações" (todas as categorias): um título por assunto
+            if (_categories.Length > 1 && tweak.Category != lastCategory)
+            {
+                lastCategory = tweak.Category;
+                RowsHost.Children.Add(new TextBlock
+                {
+                    Text = CategoryTitle(tweak.Category), FontSize = 15, FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)), Margin = new Thickness(2, 14, 0, 8),
+                });
+            }
             var content = BuildContent(tweak);
             content.Margin = new Thickness(8, 0, 0, 0);
 
@@ -79,6 +98,19 @@ public partial class TweaksPage : UserControl
             _boxes[tweak] = box;
         }
     }
+
+    private static string CategoryTitle(TweakCategory category) => category switch
+    {
+        TweakCategory.Performance => "Desempenho",
+        TweakCategory.Gaming => "Jogos e placa de vídeo",
+        TweakCategory.Visual => "Efeitos visuais",
+        TweakCategory.Privacy => "Privacidade, Iniciar e barra de tarefas",
+        TweakCategory.Network => "Rede",
+        TweakCategory.Storage => "Armazenamento",
+        TweakCategory.Boot => "Inicialização e desligamento",
+        TweakCategory.Peripherals => "Mouse e teclado",
+        _ => category.ToString(),
+    };
 
     private StackPanel BuildContent(Tweak tweak)
     {

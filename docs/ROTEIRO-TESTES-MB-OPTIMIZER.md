@@ -69,3 +69,24 @@ Marque cada item e anote o que der diferente.
 - [ ] Narrador (Ctrl + Win + Enter) lê os botões, inclusive os só com ícone.
 - [ ] Tab mostra o contorno amarelo.
 - [ ] Escala 90% a 150% e Ctrl +/−/0; nada cortado em 1366×768.
+
+## Visual novo (beta-47): menu em seções, Painel com nota e telas novas
+
+| Tela | O que testar | Esperado |
+|---|---|---|
+| Menu lateral | Clicar em cada item de cada seção; Ctrl + / Ctrl −; "Tamanho da letra"; versão no rodapé | Abre a tela certa, item destacado em amarelo; a versão responde mesmo sem atualização |
+| Painel | ANALISAR; Parar no meio; Corrigir tudo; Resolver; Ignorar; Mostrar ignorados | Itens aparecem um a um; nota 0–100 com cor; ignorado não tira nota; correção pede confirmação e cria ponto de restauração |
+| Painel (cards) | Clicar em Memória, Disco do Windows e no card do PC | Abrem Memória, Mapa do disco e Meu PC |
+| Programas | Kit Gamer; filtrar categoria; buscar; Instalar (2 programas pequenos) | "Já instalado" aparece; instala um de cada vez; erro em português se falhar |
+| Desinstalador | Abas Programas instalados e Aplicativos do Windows | Lista abre direto; desinstalar abre o desinstalador do programa |
+| Windows 11 | Abrir no Windows 10 e no 11 | 10 requisitos com ✔/✖/?; dica no TPM/UEFI quando faltam |
+| Drivers | Desativar um aparelho no Gerenciador e abrir Drivers | Aparece em "Aparelhos com problema" (código 22); placa-mãe com link do fabricante; lista de drivers com busca |
+| Rede | Testar com nome; repetir | Roteador, ping, DNS, download, upload e sob carga; nota do ping sob carga; histórico com o nome |
+| Periféricos | Tela, Alto-falantes (esquerdo/direito), Microfone (barra e gravar 5 s), Webcam (foto) | Cores em tela cheia com Esc; som no lado certo; barra mexe; foto aparece |
+| Mapa do disco | Clicar no C:, entrar em pastas, Voltar, Abrir no Explorador | Blocos proporcionais; nada é apagado |
+| Pontos de restauração | Criar com nome (2 vezes seguidas); Apagar; Voltar (só em máquina virtual) | Cria mesmo com outro ponto nas últimas 24 h; apagar pede confirmação |
+| Backup para formatar | Backup num pendrive; Restaurar na mesma máquina; abrir Pós-formatação com o pendrive | Pasta MBExtreme-Backup com backup.json; Pós-formatação avisa que achou o backup |
+| Pendrive original? | Pendrive pequeno (8–16 GB) | Escreve, confere e apaga os arquivos de teste; resultado "Capacidade verdadeira" |
+| Inicialização | Abrir | Tempo para ligar (ou "Ainda sem medição"); "O que é" e selo em cada programa |
+| Otimizações | Abrir no plano grátis com a licença ligada | Desempenho, jogos e rede não aparecem (aviso do Pro); os demais sim |
+| Sobre | O que há de novo; Verificar atualização; Abrir pasta | Janela de novidades; também abre sozinha 1 vez depois de atualizar |

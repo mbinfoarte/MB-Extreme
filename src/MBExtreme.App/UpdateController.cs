@@ -110,6 +110,20 @@ internal sealed class UpdateController
         }
     }
 
+    /// <summary>Verificação pedida pelo usuário (rodapé do menu): sempre responde, mesmo quando não há nada novo.</summary>
+    public async Task<string> CheckNowAsync()
+    {
+        string current = $"Você está na versão {AppInfo.Version} ({AppInfo.DisplayVersion}), compilação {AppUpdates.CurrentBuild()}.";
+        string url = AppServices.License.Config.ServerUrl;
+        if (url.Length == 0) return current + "\n\nEsta cópia não tem servidor configurado para procurar atualizações. As novas compilações saem na página de downloads.";
+        var manifest = await AppUpdates.CheckAsync(Http, url);
+        if (manifest is null) return current + "\n\nNão foi possível falar com o servidor agora. Confira a internet e tente de novo.";
+        var state = AppUpdates.Evaluate(AppUpdates.CurrentBuild(), manifest);
+        if (state == UpdateState.UpToDate) return current + "\n\nVocê já está com a versão mais nova.";
+        await CheckAsync();   // mostra o aviso (ou a tela obrigatória) com o botão de instalar
+        return current + $"\n\nHá uma compilação nova ({manifest.Build}). O aviso para instalar apareceu no alto da tela.";
+    }
+
     private async Task InstallAsync(ProgressBar progress)
     {
         if (_busy || _manifest is null) return;

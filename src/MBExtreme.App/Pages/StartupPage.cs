@@ -15,9 +15,16 @@ public sealed class StartupPage : ToolPageBase
         Loaded += (_, _) => Reload();
     }
 
-    private void Reload()
+    private async void Reload()
     {
         Body.Children.Clear();
+        var bootCard = new StackPanel();
+        bootCard.Children.Add(new TextBlock { Text = "TEMPO PARA LIGAR", FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush") });
+        var bootText = new TextBlock { Text = "Lendo...", FontSize = 20, FontWeight = FontWeights.SemiBold };
+        var bootDetail = Muted("");
+        bootCard.Children.Add(bootText);
+        bootCard.Children.Add(bootDetail);
+        Body.Children.Add(CardOf(bootCard));
         IReadOnlyList<StartupEntry> entries;
         try
         {
@@ -29,8 +36,10 @@ public sealed class StartupPage : ToolPageBase
             return;
         }
 
-        SetStatus(entries.Count == 0 ? "Nenhum programa na inicialização." : $"{entries.Count(e => e.Enabled)} de {entries.Count} abrem junto com o Windows.");
-        foreach (var entry in entries)
+        var described = entries.Select(e => (Entry: e, Info: StartupAdvisor.Describe(e.Name, e.Command))).ToList();
+        int safe = described.Count(d => d.Entry.Enabled && d.Info.Advice is StartupAdvice.CanDisable or StartupAdvice.DisableIfUnused);
+        SetStatus(entries.Count == 0 ? "Nenhum programa na inicialização." : $"{entries.Count(e => e.Enabled)} de {entries.Count} abrem junto com o Windows · {safe} ligado(s) costuma(m) ser seguro(s) de desligar.");
+        foreach (var (entry, info) in described)
         {
             var e = entry;
             var box = new CheckBox { IsChecked = e.Enabled, Content = "Abre na inicialização", Foreground = Brush("TextBrush"), VerticalAlignment = VerticalAlignment.Center };
@@ -49,7 +58,38 @@ public sealed class StartupPage : ToolPageBase
                     SetStatus("Não foi possível alterar: " + ex.Message, "BadBrush");
                 }
             };
-            Body.Children.Add(Row(e.Name, $"{e.SourceText}\n{e.Command}", box));
+            string brush = info.Advice switch { StartupAdvice.CanDisable => "OkBrush", StartupAdvice.DisableIfUnused => "WarnBrush", StartupAdvice.KeepOn => "BadBrush", _ => "MutedBrush" };
+            var row = Row($"{e.Name}   ·   {StartupAdvisor.AdviceText(info.Advice)}", $"O que é: {info.WhatIs}\n{e.SourceText} · {e.Command}", box);
+            if (row.Child is Grid g && g.Children.OfType<StackPanel>().FirstOrDefault()?.Children.OfType<TextBlock>().FirstOrDefault() is { } title)
+            {
+                title.Inlines.Clear();
+                title.Inlines.Add(new System.Windows.Documents.Run(e.Name));
+                title.Inlines.Add(new System.Windows.Documents.Run("   " + StartupAdvisor.AdviceText(info.Advice)) { Foreground = Brush(brush), FontSize = 11.5 });
+            }
+            Body.Children.Add(row);
+        }
+
+        try
+        {
+            var boots = await Task.Run(StartupAdvisor.ReadBootTimes);
+            if (boots.Count == 0)
+            {
+                bootText.Text = "Ainda sem medição";
+                bootDetail.Text = "O Windows ainda não registrou quanto tempo leva para ligar. Reinicie o PC (Iniciar → Energia → Reiniciar), espere alguns minutos e clique em Atualizar.";
+            }
+            else
+            {
+                var last = boots[0];
+                bootText.Text = $"{last.Boot.TotalSeconds:0.0} s";
+                bootDetail.Text = $"Última inicialização: {last.At:dd/MM HH:mm}" + (last.MainPath is { } m ? $" · até a área de trabalho: {m.TotalSeconds:0.0} s" : "")
+                    + (boots.Count > 1 ? " · antes: " + string.Join(", ", boots.Skip(1).Select(b => $"{b.Boot.TotalSeconds:0} s")) : "")
+                    + ". Desligue o que não usa e compare depois de reiniciar.";
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            bootText.Text = "Não deu para ler";
+            bootDetail.Text = ex.Message;
         }
     }
 }

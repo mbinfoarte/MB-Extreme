@@ -15,7 +15,7 @@ namespace MBExtreme.UI.Pages;
 /// Testes de periféricos: teclado (cada tecla acende ao apertar), mouse (botões, roda, clique duplo "fantasma" e taxa de atualização
 /// pela entrada bruta do Windows) e controle XInput (botões, gatilhos, analógicos com deriva, circularidade, zona morta e vibração).
 /// </summary>
-public sealed class PeripheralTestPage : ToolPageBase
+public sealed partial class PeripheralTestPage : ToolPageBase
 {
     /// <summary>Enquanto esta página está aberta, Alt+← e o botão lateral do mouse não voltam de página (eles estão sendo testados).</summary>
     public static bool Active { get; private set; }
@@ -24,10 +24,10 @@ public sealed class PeripheralTestPage : ToolPageBase
     private readonly StackPanel _host = new();
 
     public PeripheralTestPage() : base("Teste de periféricos",
-        "Teste o teclado, o mouse e o controle sem instalar nada. Clique na área do teste antes de começar, para o programa receber as teclas e os cliques.")
+        "Teste o teclado, o mouse, o controle, a tela, o som, o microfone e a webcam sem instalar nada. Clique na área do teste antes de começar, para o programa receber as teclas e os cliques.")
     {
         Focusable = true;
-        Body.Children.Add(Choice(new[] { "Teclado", "Mouse", "Controle" }, 0, i => { _tab = i; Show(); }));
+        Body.Children.Add(Choice(new[] { "Teclado", "Mouse", "Controle", "Tela", "Alto-falantes", "Microfone", "Webcam" }, 0, i => { _tab = i; Show(); }));
         Body.Children.Add(_host);
         Loaded += (_, _) => { Active = true; Show(); };
         Unloaded += (_, _) => { Active = false; StopAll(); };
@@ -38,6 +38,7 @@ public sealed class PeripheralTestPage : ToolPageBase
         _padTimer.Stop();
         Vibrate(0, 0);
         UnregisterRaw();
+        StopMedia();
     }
 
     private void Show()
@@ -48,7 +49,11 @@ public sealed class PeripheralTestPage : ToolPageBase
         {
             case 0: BuildKeyboard(); break;
             case 1: BuildMouse(); break;
-            default: BuildPad(); break;
+            case 2: BuildPad(); break;
+            case 3: BuildScreen(); break;
+            case 4: BuildSpeakers(); break;
+            case 5: BuildMic(); break;
+            default: BuildWebcam(); break;
         }
     }
 

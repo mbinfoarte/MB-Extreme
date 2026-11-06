@@ -48,6 +48,15 @@ public partial class DashboardPage : UserControl
     public DashboardPage()
     {
         InitializeComponent();
+        HeroHost.Content = new AnalyzerHero();
+        RamRingHost.Content = _ramRing;
+        DiskRingHost.Content = _diskRing;
+        RamSummary.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("memory");
+        DiskSummary.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("diskmap");
+        PcSummary.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("sysinfo");
+        foreach (var (key, title, description, icon) in Tools)
+            ToolsGrid.Children.Add(ToolCard.Build(title, description, icon, () => MainWindow.Current?.Go(key)));
+        _ = LoadPcSummaryAsync();
         CpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("cpu-detail");
         GpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("gpu-detail");
         RamCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("ram-detail");
@@ -66,6 +75,57 @@ public partial class DashboardPage : UserControl
             await UpdateAsync();
         };
         Unloaded += (_, _) => _timer.Stop();
+    }
+
+    private readonly RingGauge _ramRing = new() { Width = 44, Height = 44, Thickness = 5 };
+    private readonly RingGauge _diskRing = new() { Width = 44, Height = 44, Thickness = 5 };
+
+    /// <summary>Atalhos do Painel (os mais usados).</summary>
+    private static readonly (string Key, string Title, string Description, string Icon)[] Tools =
+    {
+        ("postinstall", "Pós-formatação", "Programas e Windows prontos depois de formatar", "\uE896"),
+        ("bench", "Benchmark", "Teste e compare o desempenho", "\uE9D9"),
+        ("sysinfo", "Meu PC", "Tudo sobre o seu computador", "\uE7F8"),
+        ("cleanup", "Limpeza", "Libere espaço no disco", "\uE74D"),
+        ("uninstaller", "Desinstalador", "Remova vários programas de uma vez", "\uE8BB"),
+        ("drivers", "Drivers", "Aparelhos sem driver e placa de vídeo", "\uE964"),
+        ("storage", "Saúde dos discos", "Saúde, TRIM e otimização", "\uEDA2"),
+        ("speedtest", "Rede", "Teste de velocidade, ping e variação", "\uE774"),
+        ("tweaks-all", "Otimizações", "Windows mais rápido e com menos propaganda", "\uE945"),
+        ("win11", "Windows 11", "Requisitos e o que falta para atualizar", "\uE770"),
+        ("diskmap", "Mapa do disco", "O que está enchendo o disco", "\uE8B7"),
+        ("support", "Suporte MB InfoArt", "Ajuda por acesso remoto", "\uE8F2"),
+    };
+
+    /// <summary>Cartões de resumo: disco do Windows (espaço) e o computador (Windows, processador, tempo ligado).</summary>
+    private async Task LoadPcSummaryAsync()
+    {
+        try
+        {
+            var (windows, cpu) = await Task.Run(() => (SystemSummary.WindowsName(), SystemSummary.ProcessorName()));
+            PcWindowsText.Text = windows;
+            PcCpuText.Text = cpu;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            PcCpuText.Text = Environment.MachineName;
+        }
+        UpdateDiskSummary();
+    }
+
+    private void UpdateDiskSummary()
+    {
+        try
+        {
+            var drive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\");
+            if (!drive.IsReady || drive.TotalSize <= 0) return;
+            double usedPercent = 100.0 * (drive.TotalSize - drive.AvailableFreeSpace) / drive.TotalSize;
+            _diskRing.Percent = usedPercent;
+            _diskRing.Fill = (Brush)FindResource(usedPercent >= 90 ? "BadBrush" : usedPercent >= 80 ? "WarnBrush" : "OkBrush");
+            DiskRingText.Text = $"{usedPercent:0}%";
+            DiskSummaryText.Text = $"{drive.AvailableFreeSpace / BytesPerGb:0.0} GB livres de {drive.TotalSize / BytesPerGb:0.0} GB";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
     }
 
     private static string Rate(double bytesPerSecond)
@@ -117,6 +177,16 @@ public partial class DashboardPage : UserControl
         double used = 100 - memory.FreePercent;
         RamGauge.Value = memory.TotalBytes > 0 ? used : null;
         RamDetail.Text = $"{memory.UsedBytes / BytesPerGb:0.0} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";
+        if (memory.TotalBytes > 0)
+        {
+            _ramRing.Percent = used;
+            _ramRing.Fill = (Brush)FindResource(used >= 85 ? "BadBrush" : used >= 70 ? "WarnBrush" : "OkBrush");
+            RamRingText.Text = $"{used:0}%";
+            RamSummaryText.Text = $"{memory.UsedBytes / BytesPerGb:0.#} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";
+        }
+        var up = TimeSpan.FromMilliseconds(Environment.TickCount64);
+        PcUptimeText.Text = $"Ligado há {(int)up.TotalHours} h {up.Minutes} min";
+        if (_tick % 30 == 0) UpdateDiskSummary();
         _memoryUsed = used;
         if (memory.TotalBytes > 0)
         {

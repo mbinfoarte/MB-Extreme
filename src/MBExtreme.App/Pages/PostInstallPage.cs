@@ -31,6 +31,14 @@ public sealed class PostInstallPage : ToolPageBase
         AddButton("Preparar o computador", async (_, _) => await RunAsync());
         AddButton("Parar", (_, _) => _cts?.Cancel(), false);
         AddButton("Abrir o Windows Update", (_, _) => Open("ms-settings:windowsupdate-action"), false);
+        AddButton("Restaurar drivers e Wi-Fi de um backup", (_, _) => MainWindow.Current?.Go("formatbackup"), false);
+        Loaded += async (_, _) =>
+        {
+            // backup feito antes de formatar num pendrive conectado: avisa no topo
+            var found = await Task.Run(() => MBExtreme.Core.Windows.FormatBackup.Find(MBExtreme.Core.Windows.FormatBackup.ReadyRoots()));
+            if (found.Count > 0)
+                SetStatus($"Achamos um backup de drivers e Wi-Fi de {found[0].Computer} ({found[0].Created:dd/MM/yyyy}). Clique em \"Restaurar drivers e Wi-Fi de um backup\" para devolver tudo.", "OkBrush");
+        };
         Loaded += async (_, _) => { if (_items.Count == 0) await LoadAsync(); };
     }
 

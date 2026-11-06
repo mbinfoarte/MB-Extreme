@@ -16,8 +16,8 @@ namespace MBExtreme.UI.Pages;
 /// </summary>
 public sealed class DiagnosticPage : ToolPageBase
 {
-    private static readonly DiagnosticRunner Runner = new();
-    private static readonly DiagnosticHistory History = new();
+    internal static readonly DiagnosticRunner Runner = new();
+    internal static readonly DiagnosticHistory History = new();
     private readonly Button _quick, _deep, _stop, _export, _fixSelected, _fixAll;
     private readonly TextBlock _progress = new() { FontSize = 13, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
     private readonly List<(CheckBox Box, Finding Finding)> _boxes = new();
@@ -45,6 +45,9 @@ public sealed class DiagnosticPage : ToolPageBase
 
     /// <summary>Começa a análise rápida sozinho (botão "Analisar o PC" do Início).</summary>
     public async Task StartAsync() { if (!_busy) await AnalyzeAsync(deep: false, fresh: true); }
+
+    /// <summary>Começa a análise profunda sozinho (botão "Análise profunda" do Painel).</summary>
+    public async Task StartDeepAsync() { if (!_busy) await AnalyzeAsync(deep: true, fresh: false); }
 
     private void RefreshButtons()
     {

@@ -26,7 +26,8 @@ public static class CleanupCatalog
             new CleanupCategory("prefetch", "Prefetch",
                 "Lista de programas abertos recentemente que o Windows usa para abrir mais rápido.",
                 new[] { Path.Combine(windows, "Prefetch") },
-                Note: "O Windows recria sozinho. Os primeiros programas abertos depois da limpeza podem demorar um pouco mais."),
+                DefaultSelected: false,
+                Note: "Não recomendado no dia a dia: o Windows usa estes arquivos para abrir os programas mais rápido e recria sozinho. Limpe só se um programa estiver abrindo com erro."),
 
             new CleanupCategory("crash-dumps", "Relatórios de erro e despejos de memória",
                 "Arquivos de diagnóstico de travamentos.",

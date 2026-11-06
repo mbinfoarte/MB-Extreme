@@ -108,7 +108,7 @@ public partial class CleanupPage : UserControl
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 Content = RowContent(item.Category.Title, item.Category.Description,
                     item.Files > 0 ? $"{Format(item.Bytes)} · {item.Files} arquivos" : "nada encontrado",
-                    item.Category.Note),
+                    item.Category.Note, item.Files > 0 ? () => ShowPreview(item.Category) : null),
             };
             box.Checked += (_, _) => UpdateSummary();
             box.Unchecked += (_, _) => UpdateSummary();
@@ -116,10 +116,134 @@ public partial class CleanupPage : UserControl
             RowsHost.Children.Add(Card(box));
         }
 
+        RowsHost.Children.Add(_previousHost);
+        _ = ShowPreviousWindowsAsync();
+        RowsHost.Children.Add(BuildExclusions());
+
         CleanButton.Visibility = Visibility.Visible;
         SelectAllButton.Visibility = Visibility.Visible;
         SelectNoneButton.Visibility = Visibility.Visible;
         UpdateSummary();
+    }
+
+    private readonly StackPanel _previousHost = new();
+
+    private Brush Muted => (Brush)FindResource("MutedBrush");
+
+    /// <summary>Instalação anterior do Windows: só mede. Apagar é com a Limpeza de Disco do próprio Windows (o jeito oficial e seguro).</summary>
+    private async Task ShowPreviousWindowsAsync()
+    {
+        _previousHost.Children.Clear();
+        string drive = (Environment.GetEnvironmentVariable("SystemDrive") ?? "C:").TrimEnd('\\');
+        var found = await Task.Run(() => MBExtreme.Core.Storage.DiskMaintenance.FindPrevious(drive));
+        if (found.Count == 0) return;
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = $"Instalações anteriores do Windows: {Format(found.Sum(f => f.Bytes))}", FontSize = 14, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(new TextBlock
+        {
+            Text = string.Join(", ", found.Select(f => f.Path)) + ". Servem para voltar à versão anterior do Windows nos primeiros dias depois de uma atualização grande. " +
+                   "Para apagar com segurança, use a Limpeza de Disco do Windows > \"Limpar arquivos do sistema\" > \"Instalações anteriores do Windows\".",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = Muted,
+        });
+        var row = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var open = new Button { Content = "Abrir a Limpeza de Disco do Windows", Style = (Style)FindResource("GhostButton"), Margin = new Thickness(0, 0, 10, 0) };
+        open.Click += (_, _) =>
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cleanmgr.exe", "/d " + drive) { UseShellExecute = true }); }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { SummaryText.Text = "Não foi possível abrir a Limpeza de Disco: " + ex.Message; }
+        };
+        var components = new Button { Content = "Limpar componentes antigos das atualizações", Style = (Style)FindResource("GhostButton") };
+        components.Click += (_, _) => MainWindow.Current?.Go("repair");
+        components.ToolTip = "Abre o Reparo do Windows: use \"Limpar componentes antigos do Windows\" (DISM).";
+        row.Children.Add(open);
+        row.Children.Add(components);
+        panel.Children.Add(row);
+        _previousHost.Children.Add(Card(panel));
+    }
+
+    /// <summary>Pastas que a limpeza nunca toca, escolhidas por você (valem também para a limpeza semanal).</summary>
+    private UIElement BuildExclusions()
+    {
+        var settings = AppServices.Settings;
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = "Pastas que nunca são limpas", FontSize = 14, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Arquivos dentro destas pastas ficam de fora em todas as categorias, inclusive na limpeza semanal.",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = Muted,
+        });
+        if (settings.CleanupExcluded.Count == 0)
+            panel.Children.Add(new TextBlock { Text = "Nenhuma.", FontSize = 12, Foreground = Muted, Margin = new Thickness(0, 4, 0, 0) });
+        foreach (string folder in settings.CleanupExcluded.ToList())
+        {
+            var line = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var remove = new Button { Content = "Remover", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(10, 2, 10, 2) };
+            System.Windows.Automation.AutomationProperties.SetName(remove, "Remover " + folder + " das pastas protegidas");
+            remove.Click += (_, _) => { settings.CleanupExcluded.Remove(folder); SaveExclusions(); };
+            DockPanel.SetDock(remove, Dock.Right);
+            line.Children.Add(remove);
+            line.Children.Add(new TextBlock { Text = folder, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            panel.Children.Add(line);
+        }
+        var add = new Button { Content = "Adicionar pasta...", Style = (Style)FindResource("GhostButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) };
+        add.Click += (_, _) =>
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Pasta que a limpeza nunca deve tocar" };
+            if (dialog.ShowDialog() == true) AddExclusion(dialog.FolderName);
+        };
+        panel.Children.Add(add);
+        return Card(panel);
+    }
+
+    private void AddExclusion(string folder)
+    {
+        var settings = AppServices.Settings;
+        if (!settings.CleanupExcluded.Contains(folder, StringComparer.OrdinalIgnoreCase)) settings.CleanupExcluded.Add(folder);
+        SaveExclusions();
+    }
+
+    private void SaveExclusions()
+    {
+        AppServices.Settings.Save();
+        CleanupService.Excluded = AppServices.Settings.CleanupExcluded.ToList();
+        _ = ScanAsync();   // os tamanhos mudam: procura de novo
+    }
+
+    /// <summary>Mostra os maiores arquivos que a categoria apagaria (até 300), antes de limpar.</summary>
+    private async void ShowPreview(CleanupCategory category)
+    {
+        var files = await Task.Run(() => CleanupService.Preview(category, DateTime.UtcNow));
+        var list = new StackPanel();
+        foreach (var (path, bytes, modified) in files)
+        {
+            var line = new DockPanel { Margin = new Thickness(0, 1, 0, 1) };
+            var info = new TextBlock { Text = $"{Format(bytes)} · {modified:dd/MM/yyyy}", Foreground = Muted, FontSize = 11.5, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            DockPanel.SetDock(info, Dock.Right);
+            var keep = new Button { Content = "Nunca limpar esta pasta", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(8, 1, 8, 1), FontSize = 11, Margin = new Thickness(12, 0, 0, 0) };
+            string folder = Path.GetDirectoryName(path) ?? path;
+            keep.Click += (s, _) => { AddExclusion(folder); ((Button)s).Content = "Protegida"; ((Button)s).IsEnabled = false; };
+            DockPanel.SetDock(keep, Dock.Right);
+            line.Children.Add(keep);
+            line.Children.Add(info);
+            line.Children.Add(new TextBlock { Text = path, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = path, VerticalAlignment = VerticalAlignment.Center });
+            list.Children.Add(line);
+        }
+        if (files.Count == 0) list.Children.Add(new TextBlock { Text = "Nada para limpar nesta categoria agora.", Foreground = Muted });
+        var root = new DockPanel { Margin = new Thickness(18) };
+        var head = new TextBlock
+        {
+            Text = $"{category.Title}: {(files.Count >= 300 ? "os 300 maiores" : files.Count + "")} arquivo(s) que seriam apagados. Arquivos em uso ficam onde estão.",
+            TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10),
+        };
+        DockPanel.SetDock(head, Dock.Top);
+        root.Children.Add(head);
+        root.Children.Add(new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        new Window
+        {
+            Title = "Arquivos que seriam limpos", Width = 980, Height = 600, Owner = Window.GetWindow(this),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = root,
+            Background = (Brush)FindResource("BgBrush"), Foreground = (Brush)FindResource("TextBrush"),
+        }.ShowDialog();
     }
 
     private Border Card(UIElement child) => new()
@@ -130,7 +254,7 @@ public partial class CleanupPage : UserControl
         Child = child,
     };
 
-    private Grid RowContent(string title, string description, string size, string note)
+    private Grid RowContent(string title, string description, string size, string note, Action? preview = null)
     {
         var grid = new Grid { Margin = new Thickness(8, 0, 0, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -151,11 +275,15 @@ public partial class CleanupPage : UserControl
             });
         grid.Children.Add(left);
 
-        var right = new TextBlock
+        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
+        right.Children.Add(new TextBlock { Text = size, FontSize = 13, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right });
+        if (preview is not null)
         {
-            Text = size, FontSize = 13, FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0),
-        };
+            var see = new Button { Content = "Ver arquivos", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(8, 1, 8, 1), FontSize = 11.5, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
+            System.Windows.Automation.AutomationProperties.SetName(see, "Ver os arquivos de " + title);
+            see.Click += (_, e) => { e.Handled = true; preview(); };
+            right.Children.Add(see);
+        }
         Grid.SetColumn(right, 1);
         grid.Children.Add(right);
         return grid;

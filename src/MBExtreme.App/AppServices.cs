@@ -18,7 +18,14 @@ internal static class AppServices
     public static IReadOnlyList<Tweak> Tweaks { get; } = TweakCatalog.Create(TweakStore);
 
     /// <summary>Configurações do usuário: uma única cópia, para um salvamento não apagar o do outro.</summary>
-    public static MBExtreme.Core.Settings.AppSettings Settings { get; } = MBExtreme.Core.Settings.AppSettings.Load();
+    public static MBExtreme.Core.Settings.AppSettings Settings { get; } = LoadSettings();
+
+    private static MBExtreme.Core.Settings.AppSettings LoadSettings()
+    {
+        var settings = MBExtreme.Core.Settings.AppSettings.Load();
+        MBExtreme.Core.Cleanup.CleanupService.Excluded = settings.CleanupExcluded;   // pastas que a limpeza nunca toca
+        return settings;
+    }
 
     public static NetworkMonitor Network { get; } = new();
 

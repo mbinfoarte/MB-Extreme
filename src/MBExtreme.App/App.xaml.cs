@@ -36,6 +36,7 @@ public partial class App : Application
         {
             try
             {
+                MBExtreme.Core.Cleanup.CleanupService.Excluded = MBExtreme.Core.Settings.AppSettings.Load().CleanupExcluded;
                 string text = MBExtreme.Core.Cleanup.WeeklyRoutine.RunClean(DateTime.UtcNow);
                 Directory.CreateDirectory(Path.GetDirectoryName(MBExtreme.Core.Cleanup.WeeklyRoutine.LogPath)!);
                 File.AppendAllText(MBExtreme.Core.Cleanup.WeeklyRoutine.LogPath, text + Environment.NewLine);

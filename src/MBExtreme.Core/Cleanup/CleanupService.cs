@@ -28,8 +28,37 @@ public static class CleanupService
         ReturnSpecialDirectories = false,
     };
 
+    /// <summary>Pastas que o usuário pediu para nunca limpar (valem para todas as categorias).</summary>
+    public static IReadOnlyList<string> Excluded { get; set; } = Array.Empty<string>();
+
+    /// <summary>O arquivo está dentro de uma pasta excluída?</summary>
+    public static bool IsExcluded(string path, IReadOnlyList<string> excluded)
+    {
+        string file = path.Replace('/', '\\');
+        foreach (string folder in excluded)
+        {
+            if (string.IsNullOrWhiteSpace(folder)) continue;
+            string root = folder.Replace('/', '\\').TrimEnd('\\');
+            if (file.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase) || string.Equals(file, root, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Os maiores arquivos que a limpeza apagaria nesta categoria (para ver antes de limpar).</summary>
+    public static IReadOnlyList<(string Path, long Bytes, DateTime Modified)> Preview(CleanupCategory category, DateTime nowUtc, int max = 300)
+    {
+        var list = new List<(string, long, DateTime)>();
+        foreach (var file in Targets(category, nowUtc))
+        {
+            try { list.Add((file.FullName, file.Length, file.LastWriteTime)); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        return list.OrderByDescending(f => f.Item2).Take(max).ToList();
+    }
+
     private static IEnumerable<FileInfo> Targets(CleanupCategory category, DateTime nowUtc)
     {
+        var excluded = Excluded;
         foreach (var root in category.Roots)
         {
             if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) continue;
@@ -47,6 +76,7 @@ public static class CleanupService
             foreach (var file in files)
             {
                 if (category.MinAge is TimeSpan age && nowUtc - file.LastWriteTimeUtc < age) continue;
+                if (excluded.Count > 0 && IsExcluded(file.FullName, excluded)) continue;
                 yield return file;
             }
         }

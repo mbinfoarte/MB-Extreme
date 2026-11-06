@@ -16,6 +16,11 @@ public sealed class StoragePage : ToolPageBase
         Loaded += async (_, _) => await RunOnce(LoadAsync);
     }
 
+    private IReadOnlySet<char> _protected = new HashSet<char>();
+    private OptimizeTask? _optimize;
+    private bool? _trim;
+    private static string SystemDrive => (Environment.GetEnvironmentVariable("SystemDrive") ?? "C:").TrimEnd('\\');
+
     private async Task LoadAsync()
     {
         SetStatus("Lendo os discos...");
@@ -26,6 +31,11 @@ public sealed class StoragePage : ToolPageBase
         try
         {
             volumes = await Task.Run(StorageService.Volumes);
+            var maintenance = await Task.Run(() => (Protected: DiskMaintenance.ProtectedDrives(), Optimize: DiskMaintenance.ScheduledOptimize(),
+                Trim: DiskMaintenance.TrimEnabled()));
+            _protected = maintenance.Protected;
+            _optimize = maintenance.Optimize;
+            _trim = maintenance.Trim;
             try { disks = await Task.Run(StorageService.PhysicalDisks); }
             catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException)
             {
@@ -39,6 +49,17 @@ public sealed class StoragePage : ToolPageBase
         }
 
         SetStatus("");
+        var history = disks.Count > 0 ? await Task.Run(() => new DiskHistory().Record(disks, DateTimeOffset.Now)) : Array.Empty<DiskSnapshot>();
+
+        // manutenção feita pelo próprio Windows: TRIM e otimização agendada
+        Body.Children.Add(Heading("Manutenção automática"));
+        Body.Children.Add(Row("TRIM dos SSDs: " + (_trim switch { true => "ligado", false => "DESLIGADO", null => "não informado" }),
+            _trim == false ? "Ligue em Ajustes de armazenamento ou pelo Painel inteligente: sem ele o SSD fica mais lento com o tempo." : "O Windows avisa o SSD sobre o que foi apagado, mantendo a velocidade.",
+            null, _trim == false ? "BadBrush" : "MutedBrush"));
+        Body.Children.Add(Row("Otimização automática das unidades: " + (_optimize is null ? "não informada" : _optimize.Enabled ? "ligada" : "DESLIGADA"),
+            (_optimize?.LastRun is { } last ? $"Última vez: {last.ToLocalTime():dd/MM/yyyy HH:mm}. " : _optimize is null ? "" : "Ainda não rodou. ") +
+            "O Windows faz o TRIM nos SSDs e desfragmenta só os HDs (nunca desfragmenta SSD).", null, _optimize?.Enabled == false ? "WarnBrush" : "MutedBrush"));
+
         Body.Children.Add(Heading("Unidades"));
         foreach (var v in volumes)
         {
@@ -57,6 +78,12 @@ public sealed class StoragePage : ToolPageBase
                 BorderThickness = new Thickness(0),
             });
             content.Children.Add(Muted($"{(v.TotalBytes - v.FreeBytes) / 1e9:0.0} GB usados de {v.TotalBytes / 1e9:0.0} GB · livre {v.FreeBytes / 1e9:0.0} GB · {v.Format}"));
+            bool protectedDrive = v.Name.Length > 0 && _protected.Contains(char.ToUpperInvariant(v.Name[0]));
+            content.Children.Add(new TextBlock
+            {
+                Text = protectedDrive ? "Proteção do Sistema: ligada (tem pontos de restauração)" : "Proteção do Sistema: desligada",
+                FontSize = 11.5, Foreground = Brush(protectedDrive || !v.Name.StartsWith(SystemDrive, StringComparison.OrdinalIgnoreCase) ? "MutedBrush" : "WarnBrush"),
+            });
             string name = v.Name;
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -79,6 +106,7 @@ public sealed class StoragePage : ToolPageBase
             if (d.PowerOnHours is { } h) parts.Add($"{h:N0} h ligado");
             if (d.ReadErrors is > 0 || d.WriteErrors is > 0) parts.Add($"erros: leitura {d.ReadErrors ?? 0}, gravação {d.WriteErrors ?? 0}");
             bool healthy = d.Health.Equals("Healthy", StringComparison.OrdinalIgnoreCase);
+            if (DiskHistory.Trend(history, d.Name) is { } trend) parts.Add("evolução: " + trend);
             Body.Children.Add(Row($"{d.Name} — {(healthy ? "Saudável" : d.Health)}", string.Join(" · ", parts), null,
                 healthy ? "MutedBrush" : "BadBrush"));
         }

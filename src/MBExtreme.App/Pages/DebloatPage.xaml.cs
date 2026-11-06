@@ -190,6 +190,9 @@ public partial class DebloatPage : UserControl
             {
                 AppRemovalService.Remove(app);
                 removed++;
+                MBExtreme.Core.Operations.OperationJournal.Shared.Record(
+                    new MBExtreme.Core.Operations.OperationInfo("app.remove." + app.Title, MBExtreme.Core.Operations.OperationKind.AppRemoval, "Remover aplicativo: " + app.Title),
+                    MBExtreme.Core.Operations.OperationResult.Ok("Removido para este usuário."), DateTimeOffset.Now);
             }
             catch (InvalidOperationException ex)
             {

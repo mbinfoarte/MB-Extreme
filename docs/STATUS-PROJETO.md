@@ -3,7 +3,7 @@
 Atualizado em 27/10/2026. Use este arquivo para retomar o trabalho sem depender do histórico da conversa.
 
 ## Frente A: Aplicativo MB Extreme (Windows, .NET 8, WPF)
-**Publicado até o beta-44** (prévia fluida, arrumação para monitor em pé). Em commit local, ainda sem subir (vai no beta-45): câmera pelo relé, como o OBS (a câmera abre uma vez, um FFmpeg leve entrega imagem crua YUV e a live recebe a última imagem num ritmo fixo por cano nomeado; antes o filtro overlay segurava o vídeo inteiro a cada atraso da câmera, o que travava a live). A prévia usa a mesma câmera aberta (não fecha ao iniciar a live). Ajustes de live do OBS no codificador (CBR, 2 quadros B no H.264, quantização adaptativa; volta ao padrão se a placa recusar). Prévia da tela crua (sem JPEG) em até 1280 px e imagem "No ar" em 960 px a 24 fps.
+**Publicado até o beta-45** (câmera pelo relé, como o OBS). Em commit local, ainda sem subir: plano do MB Optimizer dentro do MB Extreme — auditoria (`docs/AUDITORIA-MB-OPTIMIZER.md`) e Fase 1: núcleo de operações (fila, estados, diário), Central Desfazer, uma janela só, Voltar com Alt+← e botão do mouse, selo "Licença: Grátis".
 
 Pendências, em ordem sugerida:
 1. Testar o beta-38 no PC: Modo leve da live, Otimizar a live, vídeo ao vivo das câmeras (inclusive celular por endereço de rede), áudio profissional, bolinha REC, grupo NVIDIA da biblioteca, capas com SteamGridDB.

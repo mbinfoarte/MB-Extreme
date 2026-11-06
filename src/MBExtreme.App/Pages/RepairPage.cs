@@ -251,6 +251,10 @@ public sealed class RepairPage : ToolPageBase
             });
 
             var result = await Task.Run(() => new RepairRunner().RunAsync(task, progress, token));
+            MBExtreme.Core.Operations.OperationJournal.Shared.Record(
+                new MBExtreme.Core.Operations.OperationInfo("repair." + task.Id, MBExtreme.Core.Operations.OperationKind.Repair, "Reparo: " + task.Title, NeedsAdmin: true),
+                new MBExtreme.Core.Operations.OperationResult(result.Cancelled ? MBExtreme.Core.Operations.OperationState.Cancelled
+                    : result.Success ? MBExtreme.Core.Operations.OperationState.Succeeded : MBExtreme.Core.Operations.OperationState.Failed, result.Summary), DateTimeOffset.Now);
             _bar.Value = result.Cancelled ? _bar.Value : 100;
             _current.Text = result.Summary;
             SetStatus(result.Summary, result.Cancelled ? "WarnBrush" : result.Success ? "OkBrush" : "BadBrush");

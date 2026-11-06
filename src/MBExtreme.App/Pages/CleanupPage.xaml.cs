@@ -209,6 +209,9 @@ public partial class CleanupPage : UserControl
                     progress.Report(new ProgressEvent("Arquivos", 85.0 * i / Math.Max(1, selected.Count),
                         "Limpando " + selected[i].Category.Title));
                     var r = CleanupService.Clean(selected[i].Category, DateTime.UtcNow, token);
+                    MBExtreme.Core.Operations.OperationJournal.Shared.Record(
+                        new MBExtreme.Core.Operations.OperationInfo("cleanup." + selected[i].Category.Title, MBExtreme.Core.Operations.OperationKind.Cleanup, "Limpeza: " + selected[i].Category.Title),
+                        MBExtreme.Core.Operations.OperationResult.Ok($"{r.FilesDeleted} arquivo(s), {r.FreedBytes / (1024 * 1024)} MB liberados; {r.FilesSkipped} em uso ficaram."), DateTimeOffset.Now);
                     freed += r.FreedBytes;
                     deleted += r.FilesDeleted;
                     skipped += r.FilesSkipped;

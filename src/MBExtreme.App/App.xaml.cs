@@ -45,8 +45,20 @@ public partial class App : Application
             return;
         }
 
+        // uma janela só: duas cópias abertas poderiam rodar dois reparos ou duas atualizações ao mesmo tempo
+        _instance = new System.Threading.Mutex(true, @"Local\MBExtreme-Instancia", out bool first);
+        if (!first)
+        {
+            SingleInstance.SignalFirst();
+            Shutdown(0);
+            return;
+        }
+        SingleInstance.ListenForOthers(() => Dispatcher.BeginInvoke(new Action(() => (MainWindow as MainWindow)?.ActivateFromOther())));
+
         base.OnStartup(e);
     }
+
+    private System.Threading.Mutex? _instance;
 
     private static void RunUninstall()
     {

@@ -97,7 +97,26 @@ Legenda: **Feito** = existe e funciona (dentro do testado); **Parcial** = existe
 2. **Selo "Licença: Grátis":** vale só para o MB Optimizer (opção a) ou o MB Extreme também passa a ter um modo grátis?
 3. **Os 24 ajustes do fórum:** preciso da lista com nomes. Hoje existem 49 ajustes no catálogo, e alguns dos citados (Recall, Widgets, propaganda do Iniciar e da tela de bloqueio) ainda faltam.
 
-## 8. Proposta da Fase 1 (aguarda sua validação)
+## 7.1 Decisões tomadas (06/11/2026)
+
+- O MB Optimizer é o **próprio MB Extreme** (opção b): nada de produto separado.
+- Selo **"Licença: Grátis"** no cartão do cliente enquanto não houver assinatura Pro; os recursos Pro continuam liberando só com a assinatura.
+- Fase 1 aprovada.
+
+## 8. Fase 1 — feita (06/11/2026)
+
+- `src/MBExtreme.Core/Operations/`: `Operation.cs` (contrato, estados, risco), `OperationQueue.cs` (fila única), `OperationJournal.cs` (diário em `%AppData%\MBExtreme\diario`, um arquivo por dia, 90 dias), `TweakOperation.cs` (ajuste como operação reversível com verificação), `UndoCenter.cs` (o que dá e o que não dá para desfazer).
+- `TweakRunner` passou a registrar cada ajuste no diário (as páginas atuais não mudaram); restaurar pela página conta como desfeito.
+- Limpeza, remoção de aplicativos e reparos ficam registrados como "sem volta", com o motivo.
+- Nova página **Central Desfazer** (Windows › Sistema e segurança).
+- Uma janela só: abrir de novo traz a janela aberta para frente.
+- Voltar com Alt+← e com o botão lateral do mouse.
+- Selo "Licença: Grátis".
+- Testes: `NucleoOperacoesTests` (9 testes) — fila em ordem e seguindo após falha, cancelamento, duas filas ao mesmo tempo, diário com linha cortada e operação interrompida, limpeza dos dias antigos, desfazer com verificação, desfazer que falha, regras da Central e o registro pelo `TweakRunner`.
+
+Limitações: os ajustes de outras páginas que não usam o `TweakRunner` (Jogos e energia, Diagnóstico de latência, Inicialização) ainda não entram no diário; ficam para a próxima fase. Nada foi testado num Windows real ainda.
+
+## 8.1 Proposta original da Fase 1
 
 Objetivo: criar o núcleo comum **sem mudar o comportamento** de nada que já existe.
 

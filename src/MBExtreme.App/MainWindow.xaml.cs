@@ -34,6 +34,14 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => await _updates.CheckAsync();
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
+        // Voltar como no navegador: Alt + seta para a esquerda e o botão lateral do mouse
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.SystemKey == System.Windows.Input.Key.Left && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Alt) { GoBack(); e.Handled = true; }
+            else if (e.Key == System.Windows.Input.Key.BrowserBack) { GoBack(); e.Handled = true; }
+        };
+        PreviewMouseDown += (_, e) => { if (e.ChangedButton == System.Windows.Input.MouseButton.XButton1) { GoBack(); e.Handled = true; } };
+        _ = Task.Run(() => MBExtreme.Core.Operations.OperationJournal.Shared.Prune(DateTimeOffset.Now));
         AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(() => { UpdateFooter(); _ = AppServices.ProLock.CheckAsync(); }));
         AppServices.License.Start();
         // disponível para suporte enquanto o programa estiver aberto (cada acesso exige o aceite do usuário)
@@ -43,6 +51,17 @@ public partial class MainWindow : Window
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    /// <summary>Alguém abriu o programa de novo: traz esta janela para frente em vez de abrir outra.</summary>
+    internal void ActivateFromOther()
+    {
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Show();
+        Activate();
+        Topmost = true;   // truque comum do WPF para vencer a regra do Windows de não roubar o foco
+        Topmost = false;
+        Focus();
+    }
 
     private void Maximize_Click(object sender, RoutedEventArgs e) =>
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
@@ -165,6 +184,8 @@ public partial class MainWindow : Window
             ProfileLevel.Ok => "OkBrush", ProfileLevel.Warn => "WarnBrush", ProfileLevel.Bad => "BadBrush", _ => "MutedBrush",
         });
         ActivateButton.Content = info.ActionText;
+        // selo "Licença: Grátis" enquanto não houver assinatura Pro ativa
+        FreeBadge.Visibility = MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status) ? Visibility.Collapsed : Visibility.Visible;
         ActivateButton.Visibility = info.ShowAction ? Visibility.Visible : Visibility.Collapsed;
 
         var photo = ProfileStore.Load();
@@ -278,6 +299,7 @@ public partial class MainWindow : Window
         "shredder" => new ShredderPage(),
         "autoshutdown" => new AutoShutdownPage(),
         "security" => new SecurityPage(),
+        "undo" => new UndoCenterPage(),
         "recommended" => new RecommendedPage(),
         "cpu-detail" => new ComponentMonitorPage(gpu: false),
         "gpu-detail" => new ComponentMonitorPage(gpu: true),

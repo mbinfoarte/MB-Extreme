@@ -70,6 +70,7 @@ internal static class NavigationMap
             new("boot", "Inicialização e boot", "Como o Windows liga e desliga.", "\uE7E8", "Sistema e segurança"),
             new("periph", "Periféricos", "Mouse e teclado.", "\uE765", "Sistema e segurança"),
             new("security", "Segurança", "Antivírus, firewall e controle de contas.", "\uE72E", "Sistema e segurança"),
+            new("undo", "Central Desfazer", "Histórico de tudo que o programa mudou, com volta ao valor original.", "\uE7A7", "Sistema e segurança"),
             new("diskmgr", "Gerenciador de discos", "Crie, formate, divida e organize partições; troque letras e prepare discos novos.", "\uEDA2", "Discos e dispositivos"),
             new("repair", "Reparo do Windows", "SFC, DISM, CHKDSK e correções de Windows Update, loja e rede.", "\uE90F", "Discos e dispositivos"),
             new("devices", "Dispositivos conectados", "Lista de USB e de todo o hardware.", "\uE88E", "Discos e dispositivos"),

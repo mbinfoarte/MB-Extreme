@@ -80,6 +80,11 @@
                             <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
                                 <TextBlock x:Name="CustomerName" Text="Visitante" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
                                 <TextBlock x:Name="CustomerPlan" Text="Plano gratuito" FontSize="11" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" />
+                                <Border x:Name="FreeBadge" HorizontalAlignment="Left" Margin="0,4,0,0" Padding="7,1,7,2" CornerRadius="8"
+                                        BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" ToolTip="Você está no plano grátis. Os recursos Pro liberam quando você assina."
+                                        AutomationProperties.Name="Licença: Grátis">
+                                    <TextBlock Text="Licença: Grátis" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+                                </Border>
                             </StackPanel>
                         </Grid>
                         <Button x:Name="ActivateButton" Content="Ativar o Pro" Style="{StaticResource PrimaryButton}" Margin="0,10,0,0"

@@ -93,8 +93,11 @@ public partial class MainWindow : Window
 
         ShowPage(key);
 
-        if (autoStart && _inner.TryGetValue(key, out var inner) && inner is CleanupPage cleanup)
-            cleanup.StartScan();
+        if (autoStart && _inner.TryGetValue(key, out var inner))
+        {
+            if (inner is CleanupPage cleanup) cleanup.StartScan();
+            else if (inner is DiagnosticPage diagnose) _ = diagnose.StartAsync();
+        }
     }
 
     private void BuildMenu()
@@ -300,6 +303,7 @@ public partial class MainWindow : Window
         "autoshutdown" => new AutoShutdownPage(),
         "security" => new SecurityPage(),
         "undo" => new UndoCenterPage(),
+        "diagnose" => new DiagnosticPage(),
         "recommended" => new RecommendedPage(),
         "cpu-detail" => new ComponentMonitorPage(gpu: false),
         "gpu-detail" => new ComponentMonitorPage(gpu: true),

@@ -114,7 +114,18 @@ Legenda: **Feito** = existe e funciona (dentro do testado); **Parcial** = existe
 - Selo "Licença: Grátis".
 - Testes: `NucleoOperacoesTests` (9 testes) — fila em ordem e seguindo após falha, cancelamento, duas filas ao mesmo tempo, diário com linha cortada e operação interrompida, limpeza dos dias antigos, desfazer com verificação, desfazer que falha, regras da Central e o registro pelo `TweakRunner`.
 
-Limitações: os ajustes de outras páginas que não usam o `TweakRunner` (Jogos e energia, Diagnóstico de latência, Inicialização) ainda não entram no diário; ficam para a próxima fase. Nada foi testado num Windows real ainda.
+Concluída depois: Jogos e energia, Diagnóstico de latência e Inicialização também entram no diário (como configuração, com a dica de como desfazer). Nada foi testado num Windows real ainda.
+
+## 9. Fase 2 — Painel inteligente (06/11/2026)
+
+- `src/MBExtreme.Core/Diagnostics/`: contrato de verificação (só leitura), `DiagnosticRunner` (etapa X de Y e tempo decorrido, sem porcentagem inventada; parar; "não verificável" separado de erro; a profunda reaproveita a rápida de até 10 minutos), histórico das 30 últimas análises, relatório técnico em texto, regras testáveis (`DiagnosticRules`).
+- Verificações rápidas: espaço livre, temporários e cache, proteção do Windows, programas na inicialização, ajustes recomendados (só os do plano do usuário), TRIM, otimização automática dos discos, Proteção do Sistema, saúde SMART e reinício pendente.
+- Verificações profundas, todas em modo "só verificar": DISM CheckHealth/ScanHealth, SFC /verifyonly e CHKDSK /scan do disco do Windows.
+- Correções pela fila: limpeza, ajustes recomendados (com volta), ligar o TRIM, ligar a otimização agendada, ligar a Proteção do Sistema, reparos DISM RestoreHealth e SFC (sem volta, avisado antes). Ponto de restauração antes; acompanhamento item a item; no fim, nova análise rápida com "antes → depois".
+- Página Painel inteligente (Otimização › Diagnóstico) e botão "Analisar o PC" no Início.
+- Testes: `PainelInteligenteTests` (17).
+
+Limitações: o resultado do DISM/SFC em modo verificação depende do `RepairInterpreter` atual; não foi conferido num Windows com a imagem realmente corrompida.
 
 ## 8.1 Proposta original da Fase 1
 

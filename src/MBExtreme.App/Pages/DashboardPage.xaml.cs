@@ -458,6 +458,8 @@ public partial class DashboardPage : UserControl
 
     private void ScanButton_Click(object sender, RoutedEventArgs e) => MainWindow.Current?.Go("cleanup", autoStart: true);
 
+    private void AnalyzeButton_Click(object sender, RoutedEventArgs e) => MainWindow.Current?.Go("diagnose", autoStart: true);
+
     private void InstallSensorDriver_Click(object sender, RoutedEventArgs e)
     {
         var answer = MessageBox.Show(

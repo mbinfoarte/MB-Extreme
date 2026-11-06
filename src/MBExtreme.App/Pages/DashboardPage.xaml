@@ -11,8 +11,11 @@
                     <TextBlock Text="Início" FontSize="30" FontWeight="SemiBold" />
                     <TextBlock x:Name="HealthText" Margin="0,2,0,0" Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
-                <Button Content="Escanear e limpar" Style="{StaticResource PrimaryButton}"
-                        HorizontalAlignment="Right" VerticalAlignment="Center" Click="ScanButton_Click" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Content="Escanear e limpar" Style="{StaticResource GhostButton}" Margin="0,0,10,0" Click="ScanButton_Click" />
+                    <Button Content="Analisar o PC" Style="{StaticResource PrimaryButton}" Click="AnalyzeButton_Click"
+                            AutomationProperties.Name="Analisar o PC no Painel inteligente" />
+                </StackPanel>
             </Grid>
 
             <!-- Itens que precisam de atenção -->

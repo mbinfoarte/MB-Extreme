@@ -3,7 +3,7 @@
 Atualizado em 27/10/2026. Use este arquivo para retomar o trabalho sem depender do histórico da conversa.
 
 ## Frente A: Aplicativo MB Extreme (Windows, .NET 8, WPF)
-**Publicado até o beta-45** (câmera pelo relé, como o OBS). Em commit local, ainda sem subir: plano do MB Optimizer dentro do MB Extreme — auditoria (`docs/AUDITORIA-MB-OPTIMIZER.md`) e Fase 1: núcleo de operações (fila, estados, diário), Central Desfazer, uma janela só, Voltar com Alt+← e botão do mouse, selo "Licença: Grátis".
+**Publicado até o beta-45** (câmera pelo relé, como o OBS). Em commit local, ainda sem subir: plano do MB Optimizer dentro do MB Extreme — auditoria (`docs/AUDITORIA-MB-OPTIMIZER.md`) e Fase 1: núcleo de operações (fila, estados, diário), Central Desfazer, uma janela só, Voltar com Alt+← e botão do mouse, selo "Licença: Grátis". Fase 2: Painel inteligente (análise rápida e profunda só leitura, correção seletiva pela fila, antes e depois, histórico e relatório).
 
 Pendências, em ordem sugerida:
 1. Testar o beta-38 no PC: Modo leve da live, Otimizar a live, vídeo ao vivo das câmeras (inclusive celular por endereço de rede), áudio profissional, bolinha REC, grupo NVIDIA da biblioteca, capas com SteamGridDB.

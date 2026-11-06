@@ -30,7 +30,8 @@ public static class UndoCenter
                     : new UndoItem(entry, tweak, false, "O valor original já foi restaurado (sem nada guardado para voltar)."));
                 continue;
             }
-            items.Add(new UndoItem(entry, null, false, IrreversibleNote(entry.Kind)));
+            if (entry.RolledBack) { items.Add(new UndoItem(entry, null, false, "Já desfeito.")); continue; }
+            items.Add(new UndoItem(entry, null, false, entry.Kind == OperationKind.Setting && entry.Message.Length > 0 ? entry.Message : IrreversibleNote(entry.Kind)));
         }
         return items;
     }
@@ -41,6 +42,7 @@ public static class UndoCenter
         OperationKind.AppRemoval => "Sem volta pelo programa: reinstale o aplicativo pela Microsoft Store.",
         OperationKind.Repair => "Sem volta: os reparos do Windows (DISM, SFC, CHKDSK) não têm como ser desfeitos; use um ponto de restauração se precisar.",
         OperationKind.Program => "Sem volta pelo programa: desinstale ou reinstale pelo winget ou pelo Windows.",
+        OperationKind.Setting => "Desfaça pela página onde foi feito.",
         _ => "Sem volta pelo programa.",
     };
 }

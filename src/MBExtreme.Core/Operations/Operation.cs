@@ -21,6 +21,8 @@ public enum OperationKind
     Cleanup,
     AppRemoval,
     Program,
+    /// <summary>Configuração que se desfaz na própria página de origem (Modo de Jogo, plano de energia, inicialização...).</summary>
+    Setting,
     Other,
 }
 

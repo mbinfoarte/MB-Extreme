@@ -18,6 +18,7 @@ public sealed class GameSettingsPage : ToolPageBase
             try
             {
                 _service.RestoreAll();
+                MBExtreme.Core.Operations.OperationJournal.Shared.MarkRolledBackWhere(e => e.OperationId.StartsWith("gamesettings.", StringComparison.Ordinal), DateTimeOffset.Now);
                 SetStatus("Valores originais restaurados.", "OkBrush");
             }
             catch (Exception ex)
@@ -38,13 +39,13 @@ public sealed class GameSettingsPage : ToolPageBase
         bool gameMode = _service.GameModeEnabled();
         Body.Children.Add(Row("Modo de Jogo",
             "Faz o Windows priorizar o jogo e evitar interrupções (como atualizações) durante a partida. Recomendado: ligado.",
-            SmallButton(gameMode ? "Desligar" : "Ligar", (_, _) => Apply(() => _service.SetGameMode(!gameMode)))));
+            SmallButton(gameMode ? "Desligar" : "Ligar", (_, _) => Apply("gamesettings.gamemode", gameMode ? "Desligar o Modo de Jogo" : "Ligar o Modo de Jogo", () => _service.SetGameMode(!gameMode)))));
 
         bool? hags = _service.HagsEnabled();
         string hagsText = hags switch { true => "Ligado", false => "Desligado", null => "Padrão do Windows" };
         Body.Children.Add(Row($"Agendamento de GPU acelerado por hardware: {hagsText}",
             "A placa de vídeo gerencia a própria memória. Pode ajudar ou piorar conforme a placa e o driver (precisa de GPU recente e driver atual). Exige reiniciar o PC. Risco: médio.",
-            SmallButton(hags == true ? "Desligar" : "Ligar", (_, _) => Apply(() => _service.SetHags(hags != true))), "WarnBrush"));
+            SmallButton(hags == true ? "Desligar" : "Ligar", (_, _) => Apply("gamesettings.hags", hags == true ? "Desligar o agendamento de GPU (HAGS)" : "Ligar o agendamento de GPU (HAGS)", () => _service.SetHags(hags != true))), "WarnBrush"));
 
         Body.Children.Add(Heading("Plano de energia"));
         try
@@ -53,7 +54,7 @@ public sealed class GameSettingsPage : ToolPageBase
             {
                 var button = plan.Active
                     ? new TextBlock { Text = "Ativo", Foreground = Brush("OkBrush"), FontWeight = FontWeights.SemiBold }
-                    : (UIElement)SmallButton("Ativar", (_, _) => Apply(() => _service.ActivatePlan(plan.Guid)));
+                    : (UIElement)SmallButton("Ativar", (_, _) => Apply("gamesettings.plan", "Ativar o plano de energia " + plan.Name, () => _service.ActivatePlan(plan.Guid)));
                 Body.Children.Add(Row(plan.Name, plan.Guid, button));
             }
         }
@@ -65,15 +66,19 @@ public sealed class GameSettingsPage : ToolPageBase
         Body.Children.Add(Muted("Notebook: o plano de alto desempenho gasta mais bateria e esquenta mais."));
     }
 
-    private void Apply(Action change)
+    private const string UndoHint = "Para desfazer: \"Restaurar originais\" em Jogos e energia.";
+
+    private void Apply(string id, string title, Action change)
     {
         try
         {
             change();
+            MBExtreme.Core.Operations.OperationJournal.Shared.RecordSetting(id, title, true, UndoHint);
             SetStatus("Aplicado. Alguns ajustes só valem depois de reiniciar.", "OkBrush");
         }
         catch (Exception ex)
         {
+            MBExtreme.Core.Operations.OperationJournal.Shared.RecordSetting(id, title, false, UndoHint, ex.Message);
             SetStatus("Não foi possível aplicar: " + ex.Message, "BadBrush");
         }
         Reload(keepStatus: true);

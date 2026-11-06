@@ -39,6 +39,8 @@ public sealed class StartupPage : ToolPageBase
                 try
                 {
                     StartupService.SetEnabled(e, box.IsChecked == true);
+                    MBExtreme.Core.Operations.OperationJournal.Shared.RecordSetting("startup." + e.Name, (box.IsChecked == true ? "Abrir na inicialização: " : "Tirar da inicialização: ") + e.Name, true,
+                        "Para desfazer: marque ou desmarque de novo em Inicialização.");
                     SetStatus(box.IsChecked == true ? $"{e.Name}: vai abrir na inicialização." : $"{e.Name}: não abre mais na inicialização.", "OkBrush");
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or System.Security.SecurityException)

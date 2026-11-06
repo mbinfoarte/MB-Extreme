@@ -74,6 +74,16 @@ public sealed class OperationJournal
     /// <summary>Marca que uma alteração foi desfeita.</summary>
     public void MarkRolledBack(JournalEntry entry, DateTimeOffset now) => Append(entry with { RolledBack = true }, now);
 
+    /// <summary>Marca como desfeitas todas as alterações ainda valendo que combinam (ex.: "Restaurar originais" de uma página).</summary>
+    public void MarkRolledBackWhere(Func<JournalEntry, bool> match, DateTimeOffset now)
+    {
+        foreach (var entry in Load().Where(e => e.Changed && !e.RolledBack && match(e))) MarkRolledBack(entry, now);
+    }
+
+    /// <summary>Registra uma configuração feita fora da fila, com a dica de como desfazer.</summary>
+    public void RecordSetting(string id, string title, bool ok, string undoHint, string? error = null) =>
+        Record(new OperationInfo(id, OperationKind.Setting, title), ok ? new OperationResult(OperationState.Succeeded, undoHint) : OperationResult.Fail(error ?? "Não foi possível."), DateTimeOffset.Now);
+
     private void Append(JournalEntry entry, DateTimeOffset now)
     {
         string line = JsonSerializer.Serialize(entry, Json);

@@ -99,13 +99,13 @@ public sealed class LatencyPage : ToolPageBase
 
         _settings.Children.Add(Row($"Modo de Jogo: {(s.GameMode ? "ligado" : "desligado")}",
             "Faz o Windows priorizar o jogo e adiar tarefas em segundo plano. Recomendado: ligado.",
-            SmallButton(s.GameMode ? "Desligar" : "Ligar", (_, _) => ApplySetting(() => _gameSettings.SetGameMode(!s.GameMode))),
+            SmallButton(s.GameMode ? "Desligar" : "Ligar", (_, _) => ApplySetting(() => _gameSettings.SetGameMode(!s.GameMode), "gamesettings.gamemode", s.GameMode ? "Desligar o Modo de Jogo" : "Ligar o Modo de Jogo")),
             s.GameMode ? "OkBrush" : "WarnBrush"));
 
         string hags = s.Hags switch { true => "ligado", false => "desligado", null => "padrão do Windows" };
         _settings.Children.Add(Row($"Agendamento de GPU acelerado (HAGS): {hags}",
             "Pode reduzir a latência de quadro em GPUs recentes (com Frame Generation exige ligado) e piorar em outras. Exige reiniciar o PC. Teste e compare com o Antes e depois.",
-            SmallButton(s.Hags == true ? "Desligar" : "Ligar", (_, _) => ApplySetting(() => _gameSettings.SetHags(s.Hags != true)))));
+            SmallButton(s.Hags == true ? "Desligar" : "Ligar", (_, _) => ApplySetting(() => _gameSettings.SetHags(s.Hags != true), "gamesettings.hags", s.Hags == true ? "Desligar o agendamento de GPU (HAGS)" : "Ligar o agendamento de GPU (HAGS)"))));
 
         foreach (var state in s.Tweaks)
         {
@@ -114,7 +114,7 @@ public sealed class LatencyPage : ToolPageBase
             string label = state.Applied switch { true => "aplicado", false => "não aplicado", null => "indisponível" };
             string detail = tweak.Description + (string.IsNullOrWhiteSpace(tweak.Effect) ? "" : "\n" + tweak.Effect);
             UIElement? button = state.Applied is null ? null
-                : SmallButton(on ? "Desfazer" : "Aplicar", (_, _) => ApplySetting(() => { if (on) tweak.Revert(); else tweak.Apply(); }));
+                : SmallButton(on ? "Desfazer" : "Aplicar", (_, _) => ApplyTweak(tweak, apply: !on));
             _settings.Children.Add(Row($"{tweak.Title}: {label}", detail, button, on ? "OkBrush" : "MutedBrush"));
         }
 
@@ -124,17 +124,29 @@ public sealed class LatencyPage : ToolPageBase
                 SmallButton("Ver ajuste", (_, _) => MainWindow.Current?.Go("tweaks-perf")), "WarnBrush"));
     }
 
-    private void ApplySetting(Action change)
+    private void ApplySetting(Action change, string id, string title)
     {
+        const string hint = "Para desfazer: \"Restaurar originais\" em Jogos e energia.";
         try
         {
             change();
+            MBExtreme.Core.Operations.OperationJournal.Shared.RecordSetting(id, title, true, hint);
             SetStatus("Configuração alterada. Alguns ajustes só valem depois de reiniciar.", "OkBrush");
         }
         catch (Exception ex)
         {
+            MBExtreme.Core.Operations.OperationJournal.Shared.RecordSetting(id, title, false, hint, ex.Message);
             SetStatus("Não foi possível alterar: " + ex.Message, "BadBrush");
         }
+        _ = LoadSettingsAsync();
+    }
+
+    /// <summary>Pelo mesmo caminho das páginas de ajustes: entra no diário e na Central Desfazer.</summary>
+    private void ApplyTweak(MBExtreme.Core.Tweaks.Tweak tweak, bool apply)
+    {
+        var outcome = MBExtreme.Core.Tweaks.TweakRunner.Run(new[] { new MBExtreme.Core.Tweaks.TweakWork(tweak, apply) }).Single();
+        SetStatus(outcome.Success ? "Configuração alterada. Alguns ajustes só valem depois de reiniciar." : "Não foi possível alterar: " + outcome.Error,
+            outcome.Success ? "OkBrush" : "BadBrush");
         _ = LoadSettingsAsync();
     }
 

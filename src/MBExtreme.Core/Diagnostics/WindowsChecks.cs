@@ -125,13 +125,58 @@ public static class WindowsChecks
 
         new DelegateCheck("reboot", "Reinício pendente", CheckDepth.Quick, _ =>
         {
-            using var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-            bool pending = DiagnosticRules.RebootKeys.Any(k => { using var key = hklm.OpenSubKey(k); return key is not null; });
-            return !pending ? Array.Empty<Finding>() : new[]
+            return !RebootState.IsPending() ? Array.Empty<Finding>() : new[]
             {
                 new Finding("reboot", "O Windows está esperando reiniciar", "Uma atualização ou instalação só termina depois de reiniciar. Reinicie quando puder, antes de reparar o Windows.",
                     Severity.Info),
             };
+        }),
+
+        new DelegateCheck("clock", "Data e hora do Windows", CheckDepth.Quick, _ =>
+        {
+            var findings = new List<Finding>();
+            if (ClockCheck.YearLooksWrong(DateTime.Now))
+                findings.Add(new Finding("clock-year", "O relógio do PC está num ano errado",
+                    $"O Windows acha que é {DateTime.Now:dd/MM/yyyy}. Costuma ser a bateria da placa-mãe fraca. Sites seguros e atualizações falham assim.",
+                    Severity.Critical, SyncFix()));
+            var r = Shell.Run("w32tm.exe", "/stripchart", "/computer:time.windows.com", "/samples:1", "/dataonly");
+            double? offset = ClockCheck.ParseOffset(r.Output);
+            if (offset is null)
+            {
+                if (findings.Count == 0) throw new CheckUnavailableException("Não deu para comparar com o servidor de hora (sem internet ou serviço de hora parado).");
+                return findings;
+            }
+            var severity = ClockCheck.Severity(offset.Value);
+            if (severity != Severity.Ok)
+                findings.Add(new Finding("clock-offset", "Relógio do Windows fora da hora certa", $"Está {ClockCheck.Describe(offset.Value)} em relação ao servidor de hora da Microsoft.",
+                    severity, SyncFix()));
+            return findings;
+        }),
+
+        new DelegateCheck("windows-update", "Windows Update", CheckDepth.Quick, _ =>
+        {
+            var findings = new List<Finding>();
+            foreach (var (name, title) in UpdateCheck.Services)
+            {
+                var start = Shell.PowerShellUtf8($"(Get-Service -Name '{name}' -ErrorAction Stop).StartType");
+                if (start.ExitCode == 0 && start.Output.Trim().Equals("Disabled", StringComparison.OrdinalIgnoreCase))
+                    findings.Add(new Finding("wu-service-" + name, $"Serviço \"{title}\" desativado",
+                        "Com ele desativado o Windows não baixa nem instala atualizações (às vezes é coisa de \"otimizador\" antigo).", Severity.Problem,
+                        RepairFix("wu-reset", "Reiniciar o Windows Update (religa os serviços)")));
+            }
+            var last = Shell.PowerShellUtf8(
+                "$s = New-Object -ComObject Microsoft.Update.Session; $h = $s.CreateUpdateSearcher(); $n = $h.GetTotalHistoryCount(); " +
+                "if ($n -gt 0) { $h.QueryHistory(0, [Math]::Min($n, 100)) | Where-Object { $_.ResultCode -eq 2 } | Sort-Object Date -Descending | Select-Object -First 1 | ForEach-Object { $_.Date.ToUniversalTime().ToString('o') } }");
+            if (last.ExitCode == 0 && UpdateCheck.ParseDate(last.Output) is { } date)
+            {
+                int days = (int)(DateTimeOffset.UtcNow - date).TotalDays;
+                var severity = UpdateCheck.Age(days);
+                if (severity != Severity.Ok)
+                    findings.Add(new Finding("wu-age", $"Nenhuma atualização instalada há {days} dias",
+                        $"A última foi em {date.ToLocalTime():dd/MM/yyyy}. Atualizações trazem correções de segurança. Veja em Configurações > Windows Update se há erro.",
+                        severity, RepairFix("wu-reset", "Reiniciar o Windows Update")));
+            }
+            return findings;
         }),
 
         DeepRepairCheck("deep-dism", "Imagem do Windows (DISM, só verificar)", "dism-scan",
@@ -141,6 +186,17 @@ public static class WindowsChecks
         DeepRepairCheck("deep-disk", $"Disco do Windows ({SystemDrive}, só verificar)", "chkdsk-scan",
             $"O sistema de arquivos de {SystemDrive} tem erros", null, null),
     };
+
+    private static FixPlan SyncFix() => new("Acertar o relógio agora", () => new IOperation[]
+    {
+        new CommandOperation("diag.clock", "Acertar o relógio pelo servidor de hora",
+            "Set-Service -Name W32Time -StartupType Manual -ErrorAction SilentlyContinue; Start-Service W32Time -ErrorAction SilentlyContinue; " +
+            "w32tm /config /update | Out-Null; w32tm /resync /force | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'O servidor de hora não respondeu.' }",
+            "Para desfazer: Configurações > Hora e idioma."),
+    });
+
+    private static FixPlan RepairFix(string taskId, string text) => new(text, () =>
+        RepairCatalog.All().Where(t => t.Id == taskId).Select(t => (IOperation)new RepairOperation(t)).ToList());
 
     /// <summary>Verificação profunda pelos utilitários do Windows em modo "só verificar"; a correção (que altera) é oferecida à parte.</summary>
     private static IDiagnosticCheck DeepRepairCheck(string id, string title, string verifyTask, string problem, string? fixTask, string? fixText, string? thenTask = null) =>

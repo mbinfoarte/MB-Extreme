@@ -8,6 +8,12 @@ public sealed class RepairRunner
 {
     private const int MaxCaptured = 200_000;
 
+    /// <summary>Limite (minutos) dos comandos comuns; DISM, SFC e CHKDSK nunca são cortados (ver <see cref="RepairTimeouts"/>).</summary>
+    public int GenericTimeoutMinutes { get; init; } = 15;
+
+    /// <summary>Troca a regra de tempo limite (os testes usam segundos em vez de minutos).</summary>
+    public Func<StepKind, StepTimeout>? TimeoutPolicy { get; init; }
+
     public static string LogDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "logs");
 
@@ -41,7 +47,7 @@ public sealed class RepairRunner
             StepResult result;
             try
             {
-                result = await RunStepAsync(step, Overall, Write, stepToken).ConfigureAwait(false);
+                result = await RunStepAsync(step, Overall, Write, stepToken, TimeoutPolicy?.Invoke(step.Kind) ?? RepairTimeouts.For(step.Kind, GenericTimeoutMinutes)).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -73,7 +79,7 @@ public sealed class RepairRunner
     }
 
     private static async Task<StepResult> RunStepAsync(RepairStep step, Func<double, double> overall,
-        Action<string, double, bool> write, CancellationToken token)
+        Action<string, double, bool> write, CancellationToken token, StepTimeout limit)
     {
         var info = new ProcessStartInfo(step.File, step.Arguments)
         {
@@ -105,6 +111,20 @@ public sealed class RepairRunner
         var gate = new object();
         double lastPercent = 0;
 
+        // vigia do tempo: comando comum que trava é encerrado; DISM/SFC/CHKDSK só recebem um aviso
+        bool timedOut = false;
+        using var watchdog = new CancellationTokenSource();
+        _ = Task.Delay(limit.Limit, watchdog.Token).ContinueWith(t =>
+        {
+            if (t.IsCanceled) return;
+            if (limit.Stop)
+            {
+                timedOut = true;
+                try { process.Kill(entireProcessTree: true); } catch { }
+            }
+            else lock (gate) write(RepairTimeouts.SlowWarning(limit), overall(lastPercent), true);
+        }, TaskScheduler.Default);
+
         void OnLine(string raw)
         {
             string line = RepairOutput.Clean(raw);
@@ -124,7 +144,9 @@ public sealed class RepairRunner
         await Task.WhenAll(Pump(process.StandardOutput.BaseStream, OnLine), Pump(process.StandardError.BaseStream, OnLine))
             .ConfigureAwait(false);
         await process.WaitForExitAsync().ConfigureAwait(false);
+        watchdog.Cancel();
         token.ThrowIfCancellationRequested();
+        if (timedOut) return new StepResult(step.Title, -1, false, RepairTimeouts.StoppedVerdict(limit));
 
         var (ok, verdict) = RepairInterpreter.Interpret(step.Kind, process.ExitCode, captured.ToString());
         return new StepResult(step.Title, process.ExitCode, ok, verdict);

@@ -121,6 +121,9 @@ public sealed class AppSettings
     /// <summary>Mostra a imagem "No ar" (uma cópia pequena do vídeo final) na tela do estúdio.</summary>
     public bool StudioProgramView { get; set; } = true;
 
+    /// <summary>Limite (minutos) dos comandos comuns do Reparo do Windows; DISM, SFC e CHKDSK nunca são cortados.</summary>
+    public int RepairTimeoutMinutes { get; set; } = 15;
+
     /// <summary>Arrumação da tela do estúdio: 0 automática (prévia em cima quando a janela é estreita, como num monitor em pé), 1 lado a lado, 2 prévia em cima.</summary>
     public int StudioLayoutMode { get; set; }
 

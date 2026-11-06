@@ -55,10 +55,4 @@ public static class DiagnosticRules
         return value switch { "0" => true, "1" => false, _ => null };
     }
 
-    /// <summary>Chaves que o Windows cria quando falta reiniciar para terminar uma atualização ou instalação.</summary>
-    public static readonly string[] RebootKeys =
-    {
-        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending",
-        @"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired",
-    };
 }

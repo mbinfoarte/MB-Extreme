@@ -42,6 +42,11 @@ public sealed class RepairPage : ToolPageBase
 
     // o estado vale para o app todo: voltar à página durante um reparo não libera um segundo
     private static bool s_running;
+    private readonly TextBlock _rebootNote = new()
+    {
+        Text = "O Windows está esperando reiniciar para terminar uma atualização. Reinicie antes de reparar: o DISM e o SFC podem falhar ou repetir o trabalho.",
+        TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 4),
+    };
     private static CancellationTokenSource? s_cts;
 
     public RepairPage() : base("Reparo do Windows",
@@ -63,8 +68,27 @@ public sealed class RepairPage : ToolPageBase
             Margin = new Thickness(0, 4, 0, 0),
         };
         Body.Children.Add(_restorePoint);
+
+        // reinício pendente: reparar antes de reiniciar costuma falhar ou repetir o trabalho
+        Body.Children.Add(_rebootNote);
+        _rebootNote.Foreground = Brush("WarnBrush");
+        _rebootNote.Visibility = Visibility.Collapsed;
+
+        var timeouts = new[] { 5, 15, 30, 60 };
+        var s = AppServices.Settings;
+        var limits = Choice(timeouts.Select(m => m + " min").ToList(), Math.Max(0, Array.IndexOf(timeouts, s.RepairTimeoutMinutes)), i =>
+        {
+            s.RepairTimeoutMinutes = timeouts[i];
+            s.Save();
+        });
+        Body.Children.Add(Muted("Tempo limite dos comandos comuns (se travarem, param sozinhos). O DISM, o SFC e o CHKDSK nunca são cortados no meio: se demorarem, o programa só avisa.", 11.5));
+        Body.Children.Add(limits);
+        Body.Children.Add(Muted("Quer só verificar sem mudar nada? Use a análise profunda do Painel inteligente.", 11.5));
+
         Loaded += async (_, _) =>
         {
+            bool pending = await Task.Run(MBExtreme.Core.Windows.RebootState.IsPending);
+            _rebootNote.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
             SetRunning(s_running);
             await LoadDrivesAsync();
         };
@@ -250,7 +274,7 @@ public sealed class RepairPage : ToolPageBase
                 if (update.IsLog) Append(update.Message);
             });
 
-            var result = await Task.Run(() => new RepairRunner().RunAsync(task, progress, token));
+            var result = await Task.Run(() => new RepairRunner { GenericTimeoutMinutes = AppServices.Settings.RepairTimeoutMinutes }.RunAsync(task, progress, token));
             MBExtreme.Core.Operations.OperationJournal.Shared.Record(
                 new MBExtreme.Core.Operations.OperationInfo("repair." + task.Id, MBExtreme.Core.Operations.OperationKind.Repair, "Reparo: " + task.Title, NeedsAdmin: true),
                 new MBExtreme.Core.Operations.OperationResult(result.Cancelled ? MBExtreme.Core.Operations.OperationState.Cancelled

@@ -84,6 +84,29 @@
         <GradientStop Color="#00FFFFFF" Offset="0.5" />
     </LinearGradientBrush>
 
+    <!-- Degradê da marca: amarelo para laranja (barra do menu, abas e cartões escolhidos) -->
+    <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#FFD84D" Offset="0" />
+        <GradientStop Color="#FFC400" Offset="0.45" />
+        <GradientStop Color="#FF8A00" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="AccentGradientVertical" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FFE066" Offset="0" />
+        <GradientStop Color="#FFC400" Offset="0.5" />
+        <GradientStop Color="#FF7A00" Offset="1" />
+    </LinearGradientBrush>
+    <!-- Vidro: branco quase transparente em cima, sumindo para baixo, com um toque amarelo -->
+    <LinearGradientBrush x:Key="GlassSelectedBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#2EFFE27A" Offset="0" />
+        <GradientStop Color="#14FFC400" Offset="0.5" />
+        <GradientStop Color="#0AFFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#55FFFFFF" Offset="0" />
+        <GradientStop Color="#18FFFFFF" Offset="0.5" />
+        <GradientStop Color="#40FFC400" Offset="1" />
+    </LinearGradientBrush>
+
     <!-- Botões: amarelo da marca com leve degradê -->
     <LinearGradientBrush x:Key="ButtonBrush" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="#FFDD33" Offset="0" />
@@ -408,29 +431,6 @@
             </Setter.Value>
         </Setter>
     </Style>
-
-    <!-- Degradê da marca: amarelo para laranja (barra do menu, abas e cartões escolhidos) -->
-    <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#FFD84D" Offset="0" />
-        <GradientStop Color="#FFC400" Offset="0.45" />
-        <GradientStop Color="#FF8A00" Offset="1" />
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="AccentGradientVertical" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#FFE066" Offset="0" />
-        <GradientStop Color="#FFC400" Offset="0.5" />
-        <GradientStop Color="#FF7A00" Offset="1" />
-    </LinearGradientBrush>
-    <!-- Vidro: branco quase transparente em cima, sumindo para baixo, com um toque amarelo -->
-    <LinearGradientBrush x:Key="GlassSelectedBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#2EFFE27A" Offset="0" />
-        <GradientStop Color="#14FFC400" Offset="0.5" />
-        <GradientStop Color="#0AFFFFFF" Offset="1" />
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#55FFFFFF" Offset="0" />
-        <GradientStop Color="#18FFFFFF" Offset="0.5" />
-        <GradientStop Color="#40FFC400" Offset="1" />
-    </LinearGradientBrush>
 
     <!-- Cartão que se escolhe (modo do benchmark, disco): fica de vidro com borda amarela quando marcado -->
     <Style x:Key="SelectCard" TargetType="ToggleButton">

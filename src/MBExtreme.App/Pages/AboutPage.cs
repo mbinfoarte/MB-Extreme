@@ -21,6 +21,20 @@ public sealed class AboutPage : ToolPageBase
         license.Children.Add(Muted("No plano grátis o selo \"Licença: Grátis\" fica no alto do menu. Os recursos Pro liberam quando você assina, em Licença e conta."));
         Body.Children.Add(CardOf(license));
 
+        Body.Children.Add(Heading("Atualizações"));
+        var updates = new StackPanel();
+        updates.Children.Add(Choice(new[] { "Atualizar sozinho", "Só avisar" }, AppServices.Settings.AutoUpdate ? 0 : 1, i =>
+        {
+            AppServices.Settings.AutoUpdate = i == 0;
+            AppServices.Settings.Save();
+            SetStatus(i == 0 ? "Versões novas serão baixadas sozinhas; você escolhe reiniciar agora ou instalar ao fechar." : "O programa só avisa quando sair versão nova.", "OkBrush");
+        }));
+        var beta = new CheckBox { Content = "Receber também as versões de teste (beta)", IsChecked = AppServices.Settings.BetaUpdates, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 8, 0, 0) };
+        beta.Click += (_, _) => { AppServices.Settings.BetaUpdates = beta.IsChecked == true; AppServices.Settings.Save(); };
+        updates.Children.Add(beta);
+        updates.Children.Add(Muted("O MB Extreme procura versão nova ao abrir e a cada 6 horas. Antes de instalar, ele confere a impressão digital (SHA-256) do instalador; se não bater, o arquivo é apagado. Versões marcadas como obrigatórias precisam ser instaladas para continuar usando.", 11.5));
+        Body.Children.Add(CardOf(updates));
+
         Body.Children.Add(Heading("Como o MB Extreme protege você"));
         foreach (var line in new[]
         {
@@ -70,7 +84,12 @@ internal static class WhatsNew
     public static void Show(Window? owner)
     {
         var list = new StackPanel { Margin = new Thickness(22, 16, 22, 10) };
-        foreach (var item in Items)
+        // depois de uma atualização, o texto da Release (o que escrevemos no GitHub) vem primeiro
+        string notes = AppServices.Settings.LastUpdateNotes.Trim();
+        var items = notes.Length > 0
+            ? notes.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(l => !l.TrimStart().StartsWith('#')).Select(l => l.TrimStart('-', '*', '•', ' ')).Where(l => l.Length > 0).ToArray()
+            : Items;
+        foreach (var item in items)
             list.Children.Add(new TextBlock { Text = "•  " + item, TextWrapping = TextWrapping.Wrap, FontSize = 13, Margin = new Thickness(0, 0, 0, 8), Foreground = (System.Windows.Media.Brush)Application.Current.FindResource("TextBrush") });
         var head = new Border
         {

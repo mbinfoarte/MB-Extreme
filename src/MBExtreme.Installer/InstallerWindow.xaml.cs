@@ -41,6 +41,41 @@ public partial class InstallerWindow : Window
         }
         _timer.Tick += (_, _) => ShowSlide((_slide + 1) % SlideInfo.Length);
         ShowSlide(0);
+
+        // atualização pedida pelo próprio programa: instala por cima na mesma pasta, sem perguntar nada
+        _update = UpdateArgs.Parse(Environment.GetCommandLineArgs().Skip(1));
+        if (_update.Update)
+        {
+            if (_update.Folder is { } folder) { _directory = folder; DirectoryBox.Text = folder; }
+            Title = InstallInfo.AppName + " — atualizando";
+            Loaded += async (_, _) =>
+            {
+                await WaitForOldVersionAsync();
+                await InstallAsync();
+                if (_state == State.Done)
+                {
+                    Launch();
+                    await Task.Delay(1200);
+                    Close();
+                }
+            };
+        }
+    }
+
+    private UpdateArgs _update = new(false, null);
+
+    /// <summary>Espera a versão antiga fechar (até 20 segundos), senão os arquivos estariam em uso.</summary>
+    private static async Task WaitForOldVersionAsync()
+    {
+        string name = Path.GetFileNameWithoutExtension(InstallInfo.ExecutableName);
+        for (int i = 0; i < 40; i++)
+        {
+            var running = Process.GetProcessesByName(name);
+            bool any = running.Length > 0;
+            foreach (var p in running) p.Dispose();
+            if (!any) return;
+            await Task.Delay(500);
+        }
     }
 
     private void ShowSlide(int index)

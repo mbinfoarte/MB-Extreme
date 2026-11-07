@@ -94,12 +94,20 @@ jobs:
       - name: Publicar o MB Extreme (Beta 01)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >
-          gh release create "beta-${{ github.run_number }}" setup/MBExtreme-Beta-Setup.exe MBExtreme-Beta-portatil-win-x64.zip
-          --prerelease
-          --target "${{ github.sha }}"
-          --title "MB Extreme (Beta 01) - compilação ${{ github.run_number }}"
-          --notes "MB Extreme (Beta 01), compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador). MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes."
+        shell: pwsh
+        run: |
+          # impressão digital do instalador: o programa confere antes de instalar uma atualização
+          $sha = (Get-FileHash setup\MBExtreme-Beta-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$sha  MBExtreme-Beta-Setup.exe" | Out-File -Encoding ascii setup\MBExtreme-Beta-Setup.exe.sha256
+          # texto da Release = descrição do commit (vira o "O que há de novo" dentro do programa)
+          $lines = (git log -1 --pretty=%B) | Where-Object { $_ -notmatch '^(Co-Authored-By|Claude-Session):' }
+          $notes = @("## Novidades", "") + $lines + @("", "---", "Compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador). MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes.")
+          Set-Content -Path notes.md -Value $notes -Encoding utf8
+          gh release create "beta-${{ github.run_number }}" setup/MBExtreme-Beta-Setup.exe setup/MBExtreme-Beta-Setup.exe.sha256 MBExtreme-Beta-portatil-win-x64.zip `
+            --prerelease `
+            --target "${{ github.sha }}" `
+            --title "MB Extreme (Beta 01) - compilação ${{ github.run_number }}" `
+            --notes-file notes.md
 
       - name: Avisar o servidor da nova versão (atualização dentro do programa)
         continue-on-error: true

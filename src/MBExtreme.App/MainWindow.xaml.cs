@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         };
         Go("home");
         _updates = new UpdateController(RootGrid, ContentHost);
+        Closed += (_, _) => _updates?.InstallPendingOnExit();   // atualização baixada: instala ao fechar
         Loaded += async (_, _) => await _updates.CheckAsync();
         ContentRendered += (_, _) => Pages.WhatsNew.ShowOnceAfterUpdate(this);
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);

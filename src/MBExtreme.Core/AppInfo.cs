@@ -15,5 +15,8 @@ public static class AppInfo
     /// A chave pública sai de https://SEU-DOMINIO/v1/public-key (não é segredo).
     /// </summary>
     public const string DefaultServerUrl = "";
+
+    /// <summary>Repositório do GitHub com as Releases (atualização sem servidor; só funciona com o repositório público).</summary>
+    public const string UpdateRepository = "mbinfoarte/MB-Extreme";
     public const string DefaultPublicKey = "";
 }

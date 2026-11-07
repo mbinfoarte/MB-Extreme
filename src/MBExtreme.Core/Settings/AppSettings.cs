@@ -139,6 +139,15 @@ public sealed class AppSettings
     /// <summary>Animações da interface (desligar deixa tudo instantâneo, para PCs fracos ou quem prefere).</summary>
     public bool Animations { get; set; } = true;
 
+    /// <summary>Atualizar sozinho (baixa em segundo plano e instala quando você mandar ou ao fechar) ou só avisar.</summary>
+    public bool AutoUpdate { get; set; } = true;
+
+    /// <summary>Texto da Release instalada por último (aparece no "O que há de novo").</summary>
+    public string LastUpdateNotes { get; set; } = "";
+
+    /// <summary>Receber também as compilações de teste (beta). Fora do beta, só as versões estáveis.</summary>
+    public bool BetaUpdates { get; set; } = true;
+
     /// <summary>Seções do menu lateral que o usuário recolheu.</summary>
     public List<string> CollapsedSections { get; set; } = new();
 

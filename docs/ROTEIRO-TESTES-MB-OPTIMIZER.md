@@ -109,3 +109,18 @@ Marque cada item e anote o que der diferente.
 | Menu lateral | Passar o mouse devagar sobre os itens | Brilho amarelado acompanha o mouse; item escolhido com barra em degradê amarelo→laranja e fundo de vidro |
 | Efeito cristal | Janela restaurada sobre um papel de parede colorido | Fundo cinza-escuro → preto com o que está atrás desfocado; cantos arredondados sem quadrado em volta; maximizada fica sem cantos |
 | Efeito cristal | Acessibilidade → desmarcar "Fundo de vidro"; Windows com Efeitos de transparência desligado | Fundo fica sólido na hora; com o Windows desligado, fica sólido mesmo marcado |
+
+## Benchmark v3: IA, dia a dia, janela 3D separada e etapas de 0 a 100
+
+| Onde | O que fazer | O que deve acontecer |
+|---|---|---|
+| Novo teste | Ver "O que testar" | Chips novos: Inteligência artificial, Uso do dia a dia (pesado) e Placa de vídeo 3D (janela separada) |
+| Em andamento | Iniciar o Padrão completo | Núcleo central girando com o ícone da etapa e "ETAPA X DE 11", barrinhas mexendo; % grande, barra, "Decorrido" e "Restante"; lista de etapas com anel enchendo de 0 a 100 e tempo de cada uma |
+| Em andamento | Processador e dia a dia | Chips das partes acendem uma a uma (Cálculo, Ray tracing, Física...; Documentos, Navegação, Vídeo H.264, Planilhas, Fotos, Compactar, Tudo ao mesmo tempo) e ganham ✓ |
+| Em andamento | Modo Preciso | Selo "Passada 2 de 3" aparece; o resultado é a mediana |
+| Janela 3D | Etapas da placa de vídeo | Abre a janela "MB Bench · Cena 1 · Reflexos (não feche esta janela)" com o FPS no canto e a barra amarela embaixo; troca para Geometria, Estúdio, Simulação de jogo e as resoluções do limite |
+| Janela 3D | Fechar a janela no meio | Teste interrompido ("Interrompido. Nada foi salvo.") sem travar o programa |
+| Resultados | Depois do teste completo | Cartões: processador 1 núcleo e todos (pts), IA, dia a dia, cada cena em FPS; "Limite por resolução" com as barras e até onde passa de 60 FPS; tempos do dia a dia |
+| Dia a dia sem FFmpeg | PC sem o FFmpeg do programa | "Vídeo H.264" aparece como não medido; o resto vale |
+| Comparar | Duas medições completas | Linhas novas: Processador 1 núcleo/todos, IA, Dia a dia, Reflexos, Geometria, Estúdio, Simulação de jogo |
+| Só a placa de vídeo | Testes avulsos | Roda só as 5 etapas da janela 3D |

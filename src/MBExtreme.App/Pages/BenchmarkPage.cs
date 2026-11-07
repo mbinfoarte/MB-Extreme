@@ -21,7 +21,7 @@ public sealed partial class BenchmarkPage : ToolPageBase
 {
     private const string IconFont = "Segoe MDL2 Assets";
     private static BenchmarkMode _mode = BenchmarkMode.Padrao;
-    private static bool _testCpu = true, _testMemory = true, _testDisk = true, _testGpu = true;
+    private static bool _testCpu = true, _testMemory = true, _testDisk = true, _testGpu = true, _testAi = true, _testDaily = true;
     private static string? _diskRoot;
     private static BenchmarkResolution? _resolution;
 
@@ -46,23 +46,9 @@ public sealed partial class BenchmarkPage : ToolPageBase
     private bool _running;
     private BenchmarkResult? _viewing;
 
-    // ---- em andamento
-    private readonly Image _preview = new() { Stretch = Stretch.Uniform, MaxHeight = 400 };
-    private readonly Border _previewCard = new() { CornerRadius = new CornerRadius(14), ClipToBounds = true, Background = Brushes.Black, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
-    private readonly TextBlock _previewCaption = new() { FontSize = 12, Margin = new Thickness(12, 0, 0, 10), VerticalAlignment = VerticalAlignment.Bottom, Foreground = Brushes.White };
-    private readonly ProgressBar _overall = new() { Height = 8, Maximum = 100, Margin = new Thickness(0, 10, 0, 4) };
-    private readonly TextBlock _runTitle = new() { FontSize = 18, FontWeight = FontWeights.SemiBold };
-    private readonly TextBlock _runDetail = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
-    private readonly TextBlock _runClock = new() { FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right };
-    private readonly StackPanel _stepList = new() { Margin = new Thickness(0, 8, 0, 0) };
-    private readonly TextBlock _live = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
-    private readonly Dictionary<string, (TextBlock Icon, TextBlock Name, TextBlock Detail)> _stepRows = new();
-    private WriteableBitmap? _bitmap;
-    private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
-    private Stopwatch _runWatch = new();
 
     public BenchmarkPage() : base("Benchmark",
-        "Mede o processador, a memória, o disco e a placa de vídeo, com um render 3D de estúdio feito pela placa. A nota é para comparar este PC com ele mesmo: antes e depois de uma mudança.")
+        "Mede a velocidade real do PC: processador, memória, disco, inteligência artificial, uso do dia a dia e a placa de vídeo em 3D numa janela separada. A nota é para comparar este PC com ele mesmo: meça, faça a mudança e meça de novo no mesmo modo.")
     {
         _layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         _layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
@@ -86,7 +72,7 @@ public sealed partial class BenchmarkPage : ToolPageBase
 
         BuildNewTest();
         BuildRunPanel();
-        _clockTimer.Tick += (_, _) => _runClock.Text = $"{_runWatch.Elapsed:m\\:ss}";
+        _clockTimer.Tick += (_, _) => UpdateClock();
         Loaded += (_, _) =>
         {
             SelectTab(_tab);
@@ -179,7 +165,9 @@ public sealed partial class BenchmarkPage : ToolPageBase
         parts.Children.Add(PartChip("", "Processador", () => _testCpu, v => _testCpu = v));
         parts.Children.Add(PartChip("", "Memória", () => _testMemory, v => _testMemory = v));
         parts.Children.Add(PartChip("", "Disco", () => _testDisk, v => { _testDisk = v; _diskSection.Visibility = v ? Visibility.Visible : Visibility.Collapsed; }));
-        parts.Children.Add(PartChip("", "Placa de vídeo 3D", () => _testGpu, v => { _testGpu = v; _resolutionSection.Visibility = v ? Visibility.Visible : Visibility.Collapsed; }));
+        parts.Children.Add(PartChip("\uE99A", "Inteligência artificial", () => _testAi, v => _testAi = v));
+        parts.Children.Add(PartChip("\uE8A5", "Uso do dia a dia (pesado)", () => _testDaily, v => _testDaily = v));
+        parts.Children.Add(PartChip("", "Placa de vídeo 3D (janela separada)", () => _testGpu, v => { _testGpu = v; _resolutionSection.Visibility = v ? Visibility.Visible : Visibility.Collapsed; }));
         _newPanel.Children.Add(parts);
 
         BuildDiskSection();
@@ -217,7 +205,7 @@ public sealed partial class BenchmarkPage : ToolPageBase
             _extraButtons.Add(b);
             extras.Children.Add(b);
         }
-        Extra("", "Só a placa de vídeo (3D ao vivo)", RunGpuLiveAsync);
+        Extra("", "Só a placa de vídeo (janela 3D)", RunGpuLiveAsync);
         Extra("", "Render da CPU", RunRenderAsync);
         Extra("", "CPU por núcleo", PerCoreAsync);
         var compare = ExtraButton("", "Antes e depois de um ajuste");
@@ -379,7 +367,8 @@ public sealed partial class BenchmarkPage : ToolPageBase
         var res = _resolution ?? BenchmarkResolutions.FullHd;
         var disk = SelectedDisk;
         return new BenchmarkOptions(_testDisk, _testGpu, false, string.IsNullOrWhiteSpace(_label.Text) ? null : _label.Text.Trim(), mode,
-            disk is null ? null : BenchmarkDisks.DirectoryFor(disk, Path.GetTempPath()), disk?.Title, res.Width, res.Height, _testCpu, _testMemory);
+            disk is null ? null : BenchmarkDisks.DirectoryFor(disk, Path.GetTempPath()), disk?.Title, res.Width, res.Height, _testCpu, _testMemory,
+            _testAi, _testDaily, _resolutions.Count > 0 ? _resolutions : null);
     }
 
     private void UpdateSummary()
@@ -389,6 +378,8 @@ public sealed partial class BenchmarkPage : ToolPageBase
         if (o.Cpu) parts.Add("processador");
         if (o.Memory) parts.Add("memória");
         if (o.Disk) parts.Add("disco " + (SelectedDisk?.Letter ?? ""));
+        if (o.Cpu && o.Ai) parts.Add("IA");
+        if (o.Cpu && o.Daily) parts.Add("dia a dia");
         if (o.Gpu3D) parts.Add($"placa de vídeo em {(_resolution ?? BenchmarkResolutions.FullHd).Name}");
         bool any = parts.Count > 0;
         _start.IsEnabled = any && !_running;
@@ -402,310 +393,6 @@ public sealed partial class BenchmarkPage : ToolPageBase
         _summary.Inlines.Add(new System.Windows.Documents.Run($" · {string.Join(", ", parts)}") { Foreground = Brush("TextBrush") });
         _summary.Inlines.Add(new System.Windows.Documents.LineBreak());
         _summary.Inlines.Add(new System.Windows.Documents.Run($"Duração estimada {BenchmarkModes.Duration(BenchmarkModes.EstimatedSeconds(o))}" + (o.Cpu && o.Memory ? "" : " · sem a nota geral")) { Foreground = Brush("MutedBrush"), FontSize = 12 });
-    }
-
-    // ================================================================== Em andamento
-
-    private void BuildRunPanel()
-    {
-        _previewCard.Child = new Grid { Children = { _preview, _previewCaption } };
-        RenderIdleRun();
-    }
-
-    private void RenderIdleRun()
-    {
-        if (_running) return;
-        _runPanel.Children.Clear();
-        var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 30, 0, 30) };
-        stack.Children.Add(new TextBlock { Text = "", FontFamily = new FontFamily(IconFont), FontSize = 40, HorizontalAlignment = HorizontalAlignment.Center, Foreground = (Brush)FindResource("AccentGradientBrush") });
-        stack.Children.Add(new TextBlock { Text = "Nenhum teste rodando", FontSize = 17, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 4) });
-        stack.Children.Add(Muted("Escolha o modo e o que testar em Novo teste. Durante o teste, aqui aparecem as etapas, a imagem 3D sendo renderizada e os sensores.", 12));
-        var go = new Button { Content = "Ir para Novo teste", Style = (Style)FindResource("PrimaryButton"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 14, 0, 0) };
-        go.Click += (_, _) => SelectTab(0);
-        stack.Children.Add(go);
-        _runPanel.Children.Add(CardOf(stack));
-        if (_bitmap is not null)
-        {
-            _previewCaption.Text = "Última imagem renderizada";
-            _previewCard.Visibility = Visibility.Visible;
-            _runPanel.Children.Add(Free(_previewCard));
-        }
-    }
-
-    private void BeginRun(string title, IReadOnlyList<string> steps)
-    {
-        _running = true;
-        Cts = new CancellationTokenSource();
-        foreach (var b in _extraButtons) b.IsEnabled = false;
-        UpdateSummary();
-        _runPanel.Children.Clear();
-        _stepRows.Clear();
-        _stepList.Children.Clear();
-        _overall.Value = 0;
-        _runTitle.Text = title;
-        _runDetail.Text = "Preparando...";
-        _runDetail.Foreground = Brush("MutedBrush");
-        _runClock.Foreground = Brush("MutedBrush");
-        _live.Foreground = Brush("MutedBrush");
-        _live.Text = "";
-
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition());
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var titles = new StackPanel();
-        titles.Children.Add(Free(_runTitle));
-        titles.Children.Add(Free(_runDetail));
-        head.Children.Add(titles);
-        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
-        right.Children.Add(Free(_runClock));
-        var stop = new Button { Content = "Parar", Style = (Style)FindResource("GhostButton"), Margin = new Thickness(12, 0, 0, 0) };
-        stop.Click += (_, _) => Cts?.Cancel();
-        right.Children.Add(stop);
-        Grid.SetColumn(right, 1);
-        head.Children.Add(right);
-
-        var card = new StackPanel();
-        card.Children.Add(head);
-        card.Children.Add(Free(_overall));
-        foreach (var step in steps)
-        {
-            var row = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) });
-            var icon = new TextBlock { Text = "", FontFamily = new FontFamily(IconFont), FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, RenderTransformOrigin = new Point(0.5, 0.5) };
-            var name = new TextBlock { Text = step, FontSize = 13, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center };
-            var detail = new TextBlock { FontSize = 11.5, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            row.Children.Add(icon);
-            Grid.SetColumn(name, 1);
-            row.Children.Add(name);
-            Grid.SetColumn(detail, 2);
-            row.Children.Add(detail);
-            _stepList.Children.Add(row);
-            _stepRows[step] = (icon, name, detail);
-        }
-        card.Children.Add(Free(_stepList));
-        card.Children.Add(Free(_live));
-        _runPanel.Children.Add(CardOf(card));
-        _previewCard.Visibility = Visibility.Collapsed;
-        _runPanel.Children.Add(Free(_previewCard));
-        _runWatch = Stopwatch.StartNew();
-        _runClock.Text = "0:00";
-        _clockTimer.Start();
-        SelectTab(1);
-    }
-
-    private string? _currentStep;
-
-    private void ReportRun(ProgressEvent e)
-    {
-        _overall.Value = Math.Clamp(e.Percent, 0, 100);
-        _runDetail.Text = e.Message;
-        if (!_stepRows.TryGetValue(e.Step, out var row)) return;
-        if (e.Step == _currentStep) { row.Detail.Text = e.Message; return; }
-        if (_currentStep is { } previous && _stepRows.TryGetValue(previous, out var done)) MarkDone(done);
-        _currentStep = e.Step;
-        row.Icon.Text = "";
-        row.Icon.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
-        Motion.Spin(row.Icon);
-        row.Name.Foreground = Brush("TextBrush");
-        row.Name.FontWeight = FontWeights.SemiBold;
-        row.Detail.Text = e.Message;
-    }
-
-    private void MarkDone((TextBlock Icon, TextBlock Name, TextBlock Detail) row)
-    {
-        Motion.Stop(row.Icon);
-        row.Icon.Text = "";
-        row.Icon.Foreground = Brush("OkBrush");
-        row.Name.FontWeight = FontWeights.Normal;
-        row.Detail.Text = "Concluído";
-    }
-
-    private void EndRun(string text, string brush)
-    {
-        foreach (var row in _stepRows.Values)
-            if (row.Icon.Text == "") { if (brush == "OkBrush") MarkDone(row); else { Motion.Stop(row.Icon); row.Icon.Text = ""; row.Icon.Foreground = Brush(brush); } }
-        _currentStep = null;
-        _clockTimer.Stop();
-        _runDetail.Text = text;
-        _runDetail.Foreground = Brush(brush);
-        if (brush == "OkBrush") _overall.Value = 100;
-        _running = false;
-        foreach (var b in _extraButtons) b.IsEnabled = true;
-        UpdateSummary();
-    }
-
-
-    private async Task RunAsync()
-    {
-        if (_running) return;
-        var options = OptionsFor(_mode);
-        if (!options.Cpu && !options.Memory && !options.Disk && !options.Gpu3D) return;
-        if (options.Disk && SelectedDisk is { } disk && !BenchmarkDisks.HasRoom(disk, BenchmarkModes.For(options).DiskMegabytes))
-        {
-            SetStatus($"O disco {disk.Letter} está com pouco espaço para o arquivo de teste. Escolha outro disco ou um modo mais leve.", "WarnBrush");
-            return;
-        }
-        string? recording = BeginRecordingIfChecked("benchmark");
-        var steps = BenchmarkService.StepsFor(options);
-        BeginRun($"Testando · modo {BenchmarkModes.For(options).Name}", steps);
-        var token = Cts!.Token;
-        if (options.Gpu3D) NewBitmap(options.GpuWidth, options.GpuHeight);
-
-        var clock = Stopwatch.StartNew();
-        var phases = new List<PhaseMark>();
-        string? lastStep = null;
-        var recorder = new SensorRecorder();
-        using var stopSampling = new CancellationTokenSource();
-        IProgress<ProgressEvent> progress = new Progress<ProgressEvent>(e =>
-        {
-            ReportRun(e);
-            if (e.Step == BenchmarkService.StepGpu) { _previewCard.Visibility = Visibility.Visible; _previewCaption.Text = e.Message; }
-            if (e.Step != lastStep) { lastStep = e.Step; phases.Add(new PhaseMark(e.Step, clock.Elapsed.TotalSeconds)); }
-        });
-        var sampler = SampleSensorsAsync(recorder, stopSampling.Token);
-        try
-        {
-            var result = await Task.Run(() => BenchmarkService.Run(progress, token, options, null, options.Gpu3D ? ShowFrame : null));
-            stopSampling.Cancel();
-            await sampler;
-            result = result with { Monitoring = recorder.Tracks(), Phases = phases };
-            BenchmarkHistory.Add(result);
-            _viewing = result;
-            _ = SubmitAndShowAsync(result);
-            EndRun(result.Score > 0 ? $"Pronto! Pontuação {result.Score:N0}." : "Pronto! (sem a nota geral: processador ou memória ficou de fora)", "OkBrush");
-            _ = FillSideAsync();
-            SelectTab(2);
-        }
-        catch (OperationCanceledException)
-        {
-            EndRun("Interrompido. Nada foi salvo.", "WarnBrush");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            EndRun("Não foi possível usar o disco escolhido: " + ex.Message, "BadBrush");
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            EndRun("Não foi possível concluir: " + ex.Message, "BadBrush");
-        }
-        finally
-        {
-            stopSampling.Cancel();
-            try { await sampler; } catch (OperationCanceledException) { }
-            EndRecording(recording);
-        }
-    }
-
-    /// <summary>Lê os sensores a cada segundo enquanto o teste roda (gráfico do resultado e a linha "ao vivo").</summary>
-    private Task SampleSensorsAsync(SensorRecorder recorder, CancellationToken stop) => Task.Run(async () =>
-    {
-        try
-        {
-            var sensors = await AppServices.Sensors;
-            while (!stop.IsCancellationRequested)
-            {
-                var s = sensors.Read();
-                recorder.Add(s);
-                if (s.Available)
-                {
-                    var parts = new List<string>();
-                    if (s.CpuLoad is { } cl) parts.Add($"CPU {cl:0}%" + (s.CpuTemperature is { } ct ? $" · {ct:0} °C" : ""));
-                    if (s.GpuLoad is { } gl) parts.Add($"GPU {gl:0}%" + (s.GpuTemperature is { } gt ? $" · {gt:0} °C" : ""));
-                    if (parts.Count > 0)
-                    {
-                        string text = "Ao vivo: " + string.Join("   |   ", parts);
-                        _ = Dispatcher.BeginInvoke(new Action(() => _live.Text = text));
-                    }
-                }
-                await Task.Delay(1000, stop);
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is InvalidOperationException or AggregateException) { }
-    });
-
-    /// <summary>Roda só o benchmark 3D da GPU mostrando a imagem sendo renderizada.</summary>
-    private async Task RunGpuLiveAsync()
-    {
-        if (_running) return;
-        var profile = BenchmarkModes.Get(_mode);
-        var res = _resolution ?? BenchmarkResolutions.FullHd;
-        BeginRun($"Placa de vídeo 3D · {res.Name}", new[] { "GPU" });
-        var token = Cts!.Token;
-        NewBitmap(res.Width, res.Height);
-        _previewCard.Visibility = Visibility.Visible;
-        string? recording = BeginRecordingIfChecked("benchmark-gpu");
-        IProgress<ProgressEvent> progress = new Progress<ProgressEvent>(e => { ReportRun(e); _previewCaption.Text = e.Message; });
-        var recorder = new SensorRecorder();
-        using var stopSampling = new CancellationTokenSource();
-        var sampler = SampleSensorsAsync(recorder, stopSampling.Token);
-        try
-        {
-            var gpu = await Task.Run(() => Gpu3DBenchmark.Run(progress, "GPU", 0, 100, ShowFrame, token, profile.GpuSecondsPerScene, res.Width, res.Height, profile.StudioSamples));
-            stopSampling.Cancel();
-            await sampler;
-            var result = new BenchmarkResult(DateTime.Now, Environment.ProcessorCount, 0, 0, 0, 0, 0, 0,
-                Label: string.IsNullOrWhiteSpace(_label.Text) ? null : _label.Text.Trim(),
-                GpuName: gpu.GpuName, Gpu3DScore: gpu.Score, GpuScenes: gpu.Scenes, Monitoring: recorder.Tracks(),
-                Mode: profile.Name, Resolution: $"{res.Width}×{res.Height}");
-            BenchmarkHistory.Add(result);
-            _viewing = result;
-            _ = SubmitAndShowAsync(result);
-            EndRun($"{gpu.GpuName}: {gpu.Score:N0} pontos na GPU.", "OkBrush");
-            _ = FillSideAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            EndRun("Interrompido.", "WarnBrush");
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            EndRun("Não foi possível rodar o 3D: " + ex.Message + " (atualize o driver da placa de vídeo)", "BadBrush");
-        }
-        finally
-        {
-            stopSampling.Cancel();
-            try { await sampler; } catch (OperationCanceledException) { }
-            EndRecording(recording);
-        }
-    }
-
-    /// <summary>Teste de renderização da CPU: desenha uma cena por blocos (1 núcleo e depois todos) e mostra a imagem aparecendo.</summary>
-    private async Task RunRenderAsync()
-    {
-        if (_running) return;
-        BeginRun("Render da CPU", new[] { "1 núcleo", "Todos os núcleos" });
-        var token = Cts!.Token;
-        _previewCard.Visibility = Visibility.Visible;
-        string? recording = BeginRecordingIfChecked("benchmark-render");
-        var progress = new Progress<ProgressEvent>(ReportRun);
-        IProgress<ProgressEvent> report = progress;
-        try
-        {
-            NewBitmap(CpuRenderBenchmark.DefaultWidth, CpuRenderBenchmark.DefaultHeight);
-            _previewCaption.Text = "Render da CPU: 1 núcleo";
-            Action<double> single = p => report.Report(new ProgressEvent("1 núcleo", p / 2, $"{p:0}% da imagem"));
-            Action<double> multi = p => report.Report(new ProgressEvent("Todos os núcleos", 50 + p / 2, $"{p:0}% da imagem"));
-            var one = await Task.Run(() => CpuRenderBenchmark.Run(1, 6, token, ShowTile, single));
-            NewBitmap(CpuRenderBenchmark.DefaultWidth, CpuRenderBenchmark.DefaultHeight);
-            _previewCaption.Text = $"Render da CPU: {Environment.ProcessorCount} linhas de execução";
-            var all = await Task.Run(() => CpuRenderBenchmark.Run(Environment.ProcessorCount, 8, token, ShowTile, multi));
-            var result = new BenchmarkResult(DateTime.Now, Environment.ProcessorCount, 0, 0, 0, 0, 0, 0,
-                Label: string.IsNullOrWhiteSpace(_label.Text) ? null : _label.Text.Trim(), RenderSingleScore: one.Score, RenderMultiScore: all.Score);
-            BenchmarkHistory.Add(result);
-            _viewing = result;
-            EndRun($"1 núcleo {one.Score:N0} pts · todos os núcleos {all.Score:N0} pts ({all.MegaRaysPerSecond:0.0} milhões de raios por segundo).", "OkBrush");
-        }
-        catch (OperationCanceledException)
-        {
-            EndRun("Interrompido.", "WarnBrush");
-        }
-        finally
-        {
-            EndRecording(recording);
-        }
     }
 
     private void NewBitmap(int width, int height) => Dispatcher.Invoke(() =>

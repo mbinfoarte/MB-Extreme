@@ -286,7 +286,7 @@ void CS(uint3 id : SV_DispatchThreadID)
         }
     }
 
-    private static byte[] CompileShader(string source, string entry, string profile)
+    internal static byte[] CompileShader(string source, string entry, string profile)
     {
         var result = Compiler.Compile(source, entry, "mbx", profile, out Blob? blob, out Blob? error);
         if (result.Failure || blob is null)
@@ -297,7 +297,7 @@ void CS(uint3 id : SV_DispatchThreadID)
     private static Gpu3DResult RunScenes(ID3D11Device device, ID3D11DeviceContext ctx, string gpuName, IProgress<ProgressEvent> progress,
         string step, double from, double span, Action<byte[], int, int>? preview, CancellationToken token, int seconds, int Width, int Height, int studioSamples)
     {
-        const int SceneCount = BenchmarkModes.GpuScenes;
+        const int SceneCount = 5;
         using var target = device.CreateTexture2D(new Texture2DDescription
         {
             Width = (uint)Width, Height = (uint)Height, MipLevels = 1, ArraySize = 1, Format = Format.B8G8R8A8_UNorm,

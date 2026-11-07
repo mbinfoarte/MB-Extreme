@@ -23,8 +23,9 @@ public class BenchmarkNovoTests
         int normal = BenchmarkModes.EstimatedSeconds(full with { Mode = BenchmarkMode.Padrao });
         int precise = BenchmarkModes.EstimatedSeconds(full with { Mode = BenchmarkMode.Preciso });
         Assert.True(quick < normal && normal < precise);
-        Assert.InRange(quick, 15, 45);
-        Assert.InRange(precise, 90, 240);
+        Assert.InRange(quick, 35, 100);
+        Assert.InRange(precise, 200, 450);
+        Assert.Equal(new[] { 1, 1, 3 }, all.Select(m => m.Passes));
     }
 
     [Fact]
@@ -169,6 +170,90 @@ public class BenchmarkNovoTests
         var quick = R(5000, 4, "Rápido");
         Assert.Contains("abaixo da sua média no modo Padrão", BenchmarkAdvice.Compare(low, history.Append(quick).Append(low).ToList()));
         Assert.StartsWith("Medição parcial", BenchmarkAdvice.Compare(R(0, 5), history));
+    }
+
+    [Fact]
+    public void Etapas_NaOrdemDoTesteCompleto()
+    {
+        var steps = BenchmarkService.StepsFor(new BenchmarkOptions(Disk: true, Gpu3D: true));
+        Assert.Equal(new[]
+        {
+            "Processador · 1 núcleo", "Processador · todos os núcleos", "Memória RAM", "Armazenamento", "Inteligência artificial",
+            "Uso do dia a dia (pesado)", "Cena 1 · Reflexos", "Cena 2 · Geometria", "Cena 3 · Estúdio (path tracing)", "Simulação de jogo", "Limite por resolução",
+        }, steps);
+        Assert.DoesNotContain(BenchmarkService.StepAi, BenchmarkService.StepsFor(new BenchmarkOptions(Cpu: false)));
+        Assert.DoesNotContain(BenchmarkService.StepDaily, BenchmarkService.StepsFor(new BenchmarkOptions(Daily: false)));
+        var options = new BenchmarkOptions(Gpu3D: true, Mode: BenchmarkMode.Padrao);
+        Assert.All(steps, s => Assert.True(BenchmarkModes.StepSeconds(options, s) > 0));
+    }
+
+    [Fact]
+    public void LimitePorResolucao_AteAEscolhida()
+    {
+        var monitor = BenchmarkResolutions.For(3840, 2160);
+        var upTo1440 = BenchmarkService.LimitResolutions(new BenchmarkOptions(GpuWidth: 2560, GpuHeight: 1440, Resolutions: monitor));
+        Assert.Equal(new[] { 720, 1080, 1440 }, upTo1440.Select(r => r.Height));
+        var at720 = BenchmarkService.LimitResolutions(new BenchmarkOptions(GpuWidth: 1280, GpuHeight: 720, Resolutions: monitor));
+        Assert.Equal(new[] { 720, 1080 }, at720.Select(r => r.Height)); // 1080p sempre entra como referência
+        Assert.Equal(2, BenchmarkService.LimitResolutions(new BenchmarkOptions()).Count);
+
+        var result = new GpuWindowResult("GPU", 100, 300, 500, 90, new[] { new ResolutionFps(1280, 720, 140), new ResolutionFps(1920, 1080, 75), new ResolutionFps(2560, 1440, 48) }, 0);
+        Assert.Equal("1920×1080", result.Max60!.Label);
+        Assert.Equal(GpuWindowBench.Score(100, 300, 500, 90, 1920L * 1080), GpuWindowBench.Score(25, 300, 500, 22.5, 3840L * 2160));
+    }
+
+    [Fact]
+    public void Mediana_DasPassadas()
+    {
+        Assert.Equal(5, BenchmarkService.Median(new double[] { 9, 1, 5 }));
+        Assert.Equal(4, BenchmarkService.Median(new double[] { 3, 5 }));
+        Assert.Equal(0, BenchmarkService.Median(Array.Empty<double>()));
+    }
+
+    [Fact]
+    public void Processador_TarefasReais()
+    {
+        var results = CpuTasks.Run(2, 60, CancellationToken.None);
+        Assert.Equal(CpuTasks.Tasks.Select(t => t.Name), results.Select(r => r.Name));
+        Assert.All(results, r => Assert.True(r.Rate > 0, r.Name));
+        Assert.True(CpuTasks.Score(results) > 0);
+        // exatamente na referência dá 1000
+        Assert.Equal(1000, CpuTasks.Score(CpuTasks.Tasks.Select(t => new CpuTaskResult(t.Name, t.Reference, t.Unit)).ToList()));
+    }
+
+    [Fact]
+    public void InteligenciaArtificial_FP32eINT8()
+    {
+        var parts = new List<string>();
+        var ai = AiBenchmark.Run(80, CancellationToken.None, (p, _) => { if (!parts.Contains(p)) parts.Add(p); }, _ => 1234);
+        Assert.True(ai.CpuFp32Gflops > 0 && ai.CpuInt8Gops > 0);
+        Assert.Equal(1234, ai.GpuFp32Gflops);
+        Assert.Equal(new[] { AiBenchmark.PartFp32, AiBenchmark.PartInt8, AiBenchmark.PartGpu }, parts);
+        var failed = AiBenchmark.Run(30, CancellationToken.None, null, _ => throw new InvalidOperationException("sem placa"));
+        Assert.Equal(0, failed.GpuFp32Gflops);
+    }
+
+    [Fact]
+    public void DiaADia_TarefasComTempo()
+    {
+        var seen = new List<string>();
+        var daily = DailyBenchmark.Run(CancellationToken.None, (t, _) => { if (!seen.Contains(t)) seen.Add(t); }, ffmpeg: null);
+        Assert.Equal(DailyBenchmark.Tasks.Select(t => t.Name), daily.Tasks.Select(t => t.Name));
+        Assert.Equal(DailyBenchmark.Tasks.Select(t => t.Name), seen);
+        var video = daily.Tasks.Single(t => t.Name == DailyBenchmark.Video);
+        Assert.Equal(0, video.Seconds);
+        Assert.Contains("FFmpeg", video.Note);
+        Assert.All(daily.Tasks.Where(t => t.Name != DailyBenchmark.Video), t => Assert.True(t.Seconds > 0, t.Name));
+        Assert.True(daily.Score > 0);
+        Assert.Equal(1000, DailyBenchmark.Score(DailyBenchmark.Tasks.Select(t => new DailyTask(t.Name, t.Reference)).ToList()));
+    }
+
+    [Fact]
+    public void Sombreadores_VemDentroDoPrograma()
+    {
+        var names = typeof(GpuWindowBench).Assembly.GetManifestResourceNames();
+        foreach (string shader in new[] { "Common", "Reflections", "Geometry", "Studio", "Game", "AiGemm" })
+            Assert.Contains("MBExtreme.Bench." + shader + ".hlsl", names);
     }
 
     private sealed class SyncProgress(List<ProgressEvent> events) : IProgress<ProgressEvent>

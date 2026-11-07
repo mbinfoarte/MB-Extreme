@@ -245,21 +245,38 @@ public sealed partial class BenchmarkPage
             card.Padding = new Thickness(12, 9, 12, 9);
             parts.Children.Add(card);
         }
-        if (last.CpuSingleMops > 0) Part("", "CPU, 1 núcleo", $"{last.CpuSingleMops:0.#}", "milhões de operações por segundo", last.CpuSingleMops, h => h.CpuSingleMops);
-        if (last.CpuMultiMops > 0) Part("", "CPU, todos os núcleos", $"{last.CpuMultiMops:0.#}", $"{last.Threads} linhas de execução", last.CpuMultiMops, h => h.CpuMultiMops);
-        if (last.RenderMultiScore > 0) Part("", "Render da CPU", $"{last.RenderMultiScore:N0} pts", $"1 núcleo: {last.RenderSingleScore:N0} pts", last.RenderMultiScore, h => h.RenderMultiScore);
-        if (last.MemoryGBps > 0) Part("", "Memória", $"{last.MemoryGBps:0.#} GB/s", last.MemoryLatencyNs > 0 ? $"latência {last.MemoryLatencyNs:0} ns" : "", last.MemoryGBps, h => h.MemoryGBps);
-        if (last.DiskWriteMBps > 0) Part("", "Disco" + (last.DiskName is { Length: > 0 } dn ? $" {dn}" : ""), $"{last.DiskWriteMBps:0} MB/s", $"gravação · leitura {last.DiskReadMBps:0} MB/s", last.DiskWriteMBps, h => h.DiskWriteMBps);
-        if (last.Gpu3DScore > 0) Part("", "GPU 3D", last.Gpu3DScore.ToString("N0"), last.GpuName ?? "", last.Gpu3DScore, h => h.Gpu3DScore);
-        var studio = last.GpuScenes?.FirstOrDefault(s => s.Unit == "M amostras/s");
-        if (studio is not null) Part("", "Render 3D do estúdio", $"{studio.Fps:N0}", "milhões de amostras por segundo (path tracing)", studio.Fps,
-            h => h.GpuScenes?.FirstOrDefault(s => s.Unit == "M amostras/s")?.Fps ?? 0);
+        if (last.CpuSingleScore > 0) Part("\uE950", "Processador · 1 núcleo", $"{last.CpuSingleScore:N0} pts", $"{last.CpuSingleMops:0.#} Mop/s no cálculo", last.CpuSingleScore, h => h.CpuSingleScore);
+        else if (last.CpuSingleMops > 0) Part("\uE950", "CPU, 1 núcleo", $"{last.CpuSingleMops:0.#}", "milhões de operações por segundo", last.CpuSingleMops, h => h.CpuSingleMops);
+        if (last.CpuMultiScore > 0) Part("\uE950", "Processador · todos os núcleos", $"{last.CpuMultiScore:N0} pts", $"{last.Threads} linhas de execução", last.CpuMultiScore, h => h.CpuMultiScore);
+        else if (last.CpuMultiMops > 0) Part("\uE950", "CPU, todos os núcleos", $"{last.CpuMultiMops:0.#}", $"{last.Threads} linhas de execução", last.CpuMultiMops, h => h.CpuMultiMops);
+        if (last.RenderMultiScore > 0) Part("\uE950", "Render da CPU", $"{last.RenderMultiScore:N0} pts", $"1 núcleo: {last.RenderSingleScore:N0} pts", last.RenderMultiScore, h => h.RenderMultiScore);
+        if (last.MemoryGBps > 0) Part("\uE964", "Memória RAM", $"{last.MemoryGBps:0.#} GB/s", last.MemoryLatencyNs > 0 ? $"latência {last.MemoryLatencyNs:0} ns" : "", last.MemoryGBps, h => h.MemoryGBps);
+        if (last.DiskWriteMBps > 0) Part("\uEDA2", "Armazenamento" + (last.DiskName is { Length: > 0 } dn ? $" {dn}" : ""), $"{last.DiskWriteMBps:0} MB/s", $"gravação · leitura {last.DiskReadMBps:0} MB/s", last.DiskWriteMBps, h => h.DiskWriteMBps);
+        if (last.AiScore > 0) Part("\uE99A", "Inteligência artificial", $"{last.AiScore:N0} pts", $"FP32 {last.AiCpuGflops:0} GFLOPS · INT8 {last.AiInt8Gops:0} GOPS" + (last.AiGpuGflops > 0 ? $" · placa {last.AiGpuGflops:N0} GFLOPS" : ""), last.AiScore, h => h.AiScore);
+        if (last.DailyScore > 0) Part("\uE8A5", "Uso do dia a dia", $"{last.DailyScore:N0} pts", $"{last.DailyTasks?.Count(t => t.Seconds > 0) ?? 0} tarefas em {last.DailyTasks?.Sum(t => t.Seconds) ?? 0:0.0} s", last.DailyScore, h => h.DailyScore);
+        if (last.Gpu3DScore > 0) Part("\uE7F8", "Placa de vídeo 3D", last.Gpu3DScore.ToString("N0") + " pts", last.GpuName ?? "", last.Gpu3DScore, h => h.Gpu3DScore);
+        if (last.ReflectionsFps > 0) Part("\uE7F8", "Cena 1 · Reflexos", $"{last.ReflectionsFps:0} FPS", "raymarching com reflexos e sombras", last.ReflectionsFps, h => h.ReflectionsFps);
+        if (last.GeometryFps > 0) Part("\uE7F8", "Cena 2 · Geometria", $"{last.GeometryFps:0} FPS", "5,8 milhões de triângulos por quadro", last.GeometryFps, h => h.GeometryFps);
+        if (last.StudioMsps > 0) Part("\uE7F4", "Cena 3 · Estúdio", $"{last.StudioMsps:N0}", "milhões de amostras por segundo (path tracing)", last.StudioMsps, h => h.StudioMsps);
+        else
+        {
+            var studio = last.GpuScenes?.FirstOrDefault(s => s.Unit == "M amostras/s");
+            if (studio is not null) Part("\uE7F4", "Render 3D do estúdio", $"{studio.Fps:N0}", "milhões de amostras por segundo (path tracing)", studio.Fps,
+                h => h.GpuScenes?.FirstOrDefault(s => s.Unit == "M amostras/s")?.Fps ?? 0);
+        }
+        if (last.GameFps > 0) Part("\uE7FC", "Simulação de jogo", $"{last.GameFps:0} FPS", "terreno e 10 mil unidades", last.GameFps, h => h.GameFps);
         if (parts.Children.Count > 0) _resultsPanel.Children.Add(parts);
 
+        if (last.ResolutionLimit is { Count: > 0 } limit) _resultsPanel.Children.Add(ResolutionCard(limit));
+        if (last.DailyTasks is { Count: > 0 } daily) _resultsPanel.Children.Add(DailyCard(daily));
         if (last.Monitoring is { Count: > 0 } tracks) _resultsPanel.Children.Add(MonitoringCard(tracks, last.Phases));
         if (scored.Count > 1) _resultsPanel.Children.Add(RankingCard(scored, last));
 
         _resultsPanel.Children.Add(Heading("Detalhes"));
+        if (last.CpuTasksSingle is { Count: > 0 } ts && last.CpuTasksMulti is { Count: > 0 } tm)
+            _resultsPanel.Children.Add(Row("Tarefas do processador (1 núcleo → todos)",
+                string.Join("\n", ts.Select((t, i) => $"{t.Name}: {t.Rate:0.#} → {(i < tm.Count ? tm[i].Rate : 0):0.#} {t.Unit} ({(t.Rate > 0 && i < tm.Count ? tm[i].Rate / t.Rate : 0):0.0}x)"))));
+        if (last.Passes > 1) _resultsPanel.Children.Add(Muted($"Processador, memória, IA e dia a dia rodaram {last.Passes} vezes; o resultado é a mediana.", 11.5));
         if (last.CpuSimdGflops > 0)
             _resultsPanel.Children.Add(Row("CPU vetorial, criptografia e compressão",
                 $"{last.CpuSimdGflops:0.0} GFLOPS · AES {last.CryptoMBps:0} MB/s · compressão {last.CompressMBps:0} MB/s"));
@@ -280,6 +297,47 @@ public sealed partial class BenchmarkPage
         BuildRanking();
         _resultsPanel.Children.Add(CardOf(Free(_rankingPanel)));
         Motion.Cascade(_resultsPanel, 30);
+    }
+
+    private Border ResolutionCard(IReadOnlyList<ResolutionFps> list)
+    {
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock { Text = "Limite por resolução (simulação de jogo)", FontSize = 14, FontWeight = FontWeights.SemiBold });
+        var best = list.Where(r => r.Fps >= 60).OrderByDescending(r => (long)r.Width * r.Height).FirstOrDefault();
+        stack.Children.Add(Muted(best is null ? "Nenhuma resolução passou de 60 FPS nesta cena pesada: em jogos, use 720p ou reduza a qualidade." :
+            $"Passa de 60 FPS até {best.Label}. Acima disso a placa de vídeo vira o limite.", 11.5));
+        double max = Math.Max(1, list.Max(r => r.Fps));
+        foreach (var r in list)
+        {
+            var row = new Grid { Margin = new Thickness(0, 5, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.Children.Add(new TextBlock { Text = r.Label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+            var bar = Bar(r.Fps / max, r.Fps >= 60 ? (Brush)FindResource("AccentGradientBrush") : new SolidColorBrush(Color.FromRgb(0x6A, 0x4A, 0x2A)), $"{r.Fps:0} FPS");
+            Grid.SetColumn(bar, 1);
+            row.Children.Add(bar);
+            stack.Children.Add(row);
+        }
+        return CardOf(stack);
+    }
+
+    private Border DailyCard(IReadOnlyList<DailyTask> tasks)
+    {
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock { Text = "Uso do dia a dia (pesado)", FontSize = 14, FontWeight = FontWeights.SemiBold });
+        stack.Children.Add(Muted("Tempo de cada tarefa (menor é melhor). Tudo offline, sem abrir programas.", 11.5));
+        var grid = new UniformGrid { Columns = 2, Margin = new Thickness(0, 6, 0, 0) };
+        foreach (var t in tasks)
+        {
+            var reference = DailyBenchmark.Tasks.FirstOrDefault(x => x.Name == t.Name);
+            var cell = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
+            cell.Children.Add(new TextBlock { Text = t.Name, FontSize = 12, FontWeight = FontWeights.SemiBold });
+            cell.Children.Add(new TextBlock { Text = t.Seconds > 0 ? $"{t.Seconds:0.00} s" : t.Note ?? "não medido", FontSize = t.Seconds > 0 ? 16 : 11, Foreground = t.Seconds > 0 ? new SolidColorBrush(Yellow) : Brush("WarnBrush"), TextWrapping = TextWrapping.Wrap });
+            if (reference.Description is { Length: > 0 } d) cell.Children.Add(new TextBlock { Text = d, FontSize = 10.5, Foreground = Brush("MutedBrush"), TextWrapping = TextWrapping.Wrap });
+            grid.Children.Add(cell);
+        }
+        stack.Children.Add(grid);
+        return CardOf(stack);
     }
 
     private Border MonitoringCard(IReadOnlyList<SensorTrack> tracks, IReadOnlyList<PhaseMark>? phases)

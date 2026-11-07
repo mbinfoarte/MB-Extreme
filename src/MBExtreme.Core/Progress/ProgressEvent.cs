@@ -21,4 +21,14 @@ public sealed class ProgressEvent
 
     /// <summary>Texto curto do que está sendo feito agora.</summary>
     public string Message { get; }
+
+    /// <summary>Progresso só da etapa atual, de 0 a 100 (negativo quando a tarefa não informa).</summary>
+    public double StepPercent { get; init; } = -1;
+
+    /// <summary>Parte da etapa que está rodando agora (ex.: "Vídeo H.264" dentro do uso do dia a dia).</summary>
+    public string? Detail { get; init; }
+
+    /// <summary>Passada atual e total de passadas (modo Preciso repete as medições e usa a mediana).</summary>
+    public int Pass { get; init; }
+    public int Passes { get; init; }
 }

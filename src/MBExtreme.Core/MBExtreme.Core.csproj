@@ -28,4 +28,8 @@
     <InternalsVisibleTo Include="MBExtreme.Core.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- sombreadores das cenas 3D do benchmark (janela separada) -->
+    <EmbeddedResource Include="Benchmark\Shaders\*.hlsl" LogicalName="MBExtreme.Bench.%(Filename).hlsl" />
+  </ItemGroup>
 </Project>

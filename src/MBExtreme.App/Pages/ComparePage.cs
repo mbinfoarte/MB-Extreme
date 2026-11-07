@@ -74,7 +74,7 @@ public sealed class ComparePage : ToolPageBase
 
     private async Task MeasureAsync()
     {
-        var options = new BenchmarkOptions(Disk: false, Gpu3D: false, Quick: true,
+        var options = new BenchmarkOptions(Disk: false, Gpu3D: false, Quick: true, Ai: false, Daily: false,
             Label: string.IsNullOrWhiteSpace(_label.Text) ? null : _label.Text.Trim());
         ShowProgress("Medição rápida", BenchmarkService.StepsFor(options));
         var token = Cts!.Token;

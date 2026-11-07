@@ -32,7 +32,15 @@ public static class BenchmarkComparison
         Add("Memória: latência", "ns", before.MemoryLatencyNs, after.MemoryLatencyNs, higherBetter: false);
         Add("Disco: gravação", "MB/s", before.DiskWriteMBps, after.DiskWriteMBps);
         Add("Disco: leitura", "MB/s", before.DiskReadMBps, after.DiskReadMBps);
+        Add("Processador, 1 núcleo", "pts", before.CpuSingleScore, after.CpuSingleScore);
+        Add("Processador, todos os núcleos", "pts", before.CpuMultiScore, after.CpuMultiScore);
+        Add("Inteligência artificial", "pts", before.AiScore, after.AiScore);
+        Add("Uso do dia a dia", "pts", before.DailyScore, after.DailyScore);
         Add("GPU 3D", "pontos", before.Gpu3DScore, after.Gpu3DScore);
+        Add("Cena 1 · Reflexos", "FPS", before.ReflectionsFps, after.ReflectionsFps);
+        Add("Cena 2 · Geometria", "FPS", before.GeometryFps, after.GeometryFps);
+        Add("Cena 3 · Estúdio", "M amostras/s", before.StudioMsps, after.StudioMsps);
+        Add("Simulação de jogo", "FPS", before.GameFps, after.GameFps);
         return list;
     }
 

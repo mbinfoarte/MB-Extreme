@@ -12,15 +12,16 @@ public sealed record BenchmarkProfile(
     int DiskMegabytes,
     int GpuSecondsPerScene,
     int StudioSamples,
-    bool QuickLatency);
+    bool QuickLatency,
+    int Passes = 1);
 
 public static class BenchmarkModes
 {
     public static readonly IReadOnlyList<BenchmarkProfile> All = new[]
     {
-        new BenchmarkProfile(BenchmarkMode.Rapido, "Rápido", "Uma conferida rápida. Carga leve e curta: bom para ver se algo mudou.", 1200, 128, 3, 2, true),
-        new BenchmarkProfile(BenchmarkMode.Padrao, "Padrão", "O equilíbrio entre tempo e precisão. Recomendado para comparar antes e depois.", 2500, 512, 6, 4, false),
-        new BenchmarkProfile(BenchmarkMode.Preciso, "Preciso", "Carga longa e pesada em tudo: o resultado varia menos, mas o PC esquenta mais.", 5000, 2048, 12, 8, false),
+        new BenchmarkProfile(BenchmarkMode.Rapido, "Rápido", "Uma conferida rápida. Carga leve e curta: bom para ver se algo mudou.", 1200, 128, 4, 2, true, 1),
+        new BenchmarkProfile(BenchmarkMode.Padrao, "Padrão", "O equilíbrio entre tempo e precisão. Recomendado para comparar antes e depois.", 2500, 512, 8, 4, false, 1),
+        new BenchmarkProfile(BenchmarkMode.Preciso, "Preciso", "Carga longa e pesada em tudo: 3 passadas e vale a mediana. Varia menos, mas o PC esquenta mais.", 5000, 2048, 15, 8, false, 3),
     };
 
     public static BenchmarkProfile Get(BenchmarkMode mode) => All.First(p => p.Mode == mode);
@@ -29,20 +30,29 @@ public static class BenchmarkModes
     public static BenchmarkProfile For(BenchmarkOptions options) =>
         Get(options.Mode ?? (options.Quick ? BenchmarkMode.Rapido : BenchmarkMode.Padrao));
 
-    /// <summary>Quantas cenas 3D a GPU roda (fractal, geometria, preenchimento, cálculo e o render do estúdio).</summary>
-    public const int GpuScenes = 5;
-
-    /// <summary>Estimativa da duração em segundos (o disco conta 400 MB/s, um SSD comum; um HD demora mais).</summary>
-    public static int EstimatedSeconds(BenchmarkOptions options)
+    /// <summary>Tempo estimado de uma etapa em segundos (o disco conta 400 MB/s, um SSD comum; um HD demora mais).</summary>
+    public static double StepSeconds(BenchmarkOptions options, string step)
     {
         var p = For(options);
-        double seconds = 1;
-        if (options.Cpu) seconds += 5 * p.PhaseMs / 1000.0;
-        if (options.Memory) seconds += 1.5 * p.PhaseMs / 1000.0 + (p.QuickLatency ? 1 : 3);
-        if (options.Disk) seconds += p.DiskMegabytes * 2 / 400.0 + 1;
-        if (options.Gpu3D) seconds += GpuScenes * p.GpuSecondsPerScene + 2;
-        return (int)Math.Ceiling(seconds);
+        double task = Math.Max(150, p.PhaseMs / 2) / 1000.0;
+        int resolutions = BenchmarkService.LimitResolutions(options).Count;
+        return step switch
+        {
+            BenchmarkService.StepSingle => CpuTasks.Tasks.Count * task * p.Passes + 0.3,
+            BenchmarkService.StepMulti => (CpuTasks.Tasks.Count + 1) * task * p.Passes + 0.3,
+            BenchmarkService.StepMemory => (1.5 * p.PhaseMs / 1000.0 + (p.QuickLatency ? 1 : 3)) * p.Passes,
+            BenchmarkService.StepDisk => p.DiskMegabytes * 2 / 400.0 + 1,
+            BenchmarkService.StepAi => 2 * task * p.Passes + (options.Gpu3D ? Math.Max(1.0, p.PhaseMs / 1000.0) + 1 : 0),
+            BenchmarkService.StepDaily => 14.0 * p.Passes,
+            GpuWindowBench.ResolutionLimit => resolutions * (Math.Max(2, p.GpuSecondsPerScene / 2) + 0.5),
+            _ when BenchmarkService.GpuSteps.Contains(step) => p.GpuSecondsPerScene + 1.5,
+            _ => 1,
+        };
     }
+
+    /// <summary>Estimativa da duração total em segundos.</summary>
+    public static int EstimatedSeconds(BenchmarkOptions options) =>
+        (int)Math.Ceiling(1 + BenchmarkService.StepsFor(options).Sum(s => StepSeconds(options, s)));
 
     public static string Duration(int seconds) =>
         seconds < 60 ? $"~{seconds} s" : seconds % 60 < 10 ? $"~{seconds / 60} min" : $"~{seconds / 60} min {seconds % 60} s";

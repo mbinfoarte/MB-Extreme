@@ -54,15 +54,18 @@
         </Style>
     </Window.Resources>
     <Border x:Name="WindowFrame" CornerRadius="22" Background="{StaticResource WindowBackdropBrush}"
-            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+            BorderBrush="{StaticResource SidebarEdgeBrush}" BorderThickness="1">
     <Grid x:Name="RootGrid">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="214" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
+        <!-- Reflexo do vidro por cima do fundo (efeito cristal) -->
+        <Border x:Name="GlassSheen" Grid.ColumnSpan="2" CornerRadius="21" Background="{StaticResource GlassSheenBrush}" IsHitTestVisible="False" />
+
         <!-- Menu lateral: marca no alto, itens em seções e, embaixo, conta, tamanho da letra e versão -->
-        <Border Margin="8,8,4,8" CornerRadius="18" Background="#0E0E10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+        <Border Margin="8,8,4,8" CornerRadius="18" Background="{StaticResource SidebarGlassBrush}" BorderBrush="{StaticResource SidebarEdgeBrush}" BorderThickness="1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="14,14,12,8">
                     <Grid>

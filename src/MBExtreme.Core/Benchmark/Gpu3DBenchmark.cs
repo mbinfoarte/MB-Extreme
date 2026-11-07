@@ -12,18 +12,23 @@ namespace MBExtreme.Core.Benchmark;
 public sealed record Gpu3DResult(string GpuName, int Score, IReadOnlyList<GpuSceneResult> Scenes);
 
 /// <summary>
-/// Benchmark 3D próprio em Direct3D 11, sem janela: renderiza cenas fora da tela em 1920x1080 e mede os quadros por segundo.
-/// Cenas: fractal por raymarching (cálculo), centenas de milhares de cubos (geometria), camadas de preenchimento (pixels) e um teste de
-/// cálculo puro (GFLOPS). Escolhe a placa de vídeo com mais memória dedicada. Não usa marcas ou cenas de terceiros.
+/// Benchmark 3D próprio em Direct3D 11, sem janela: renderiza cenas fora da tela na resolução escolhida e mede os quadros por segundo.
+/// Cenas: fractal por raymarching (cálculo), centenas de milhares de cubos (geometria), camadas de preenchimento (pixels), um teste de
+/// cálculo puro (GFLOPS) e um render de estúdio por path tracing (luz que rebate, como nos programas de modelagem 3D), que vai limpando
+/// o ruído quadro a quadro. Escolhe a placa de vídeo com mais memória dedicada. Não usa marcas ou cenas de terceiros.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public static partial class Gpu3DBenchmark
 {
+    /// <summary>Resolução de referência das notas: as cenas presas aos pixels são convertidas para ela, então 720p e 4K dão notas parecidas.</summary>
+    public const double ReferencePixels = 1920.0 * 1080.0;
+
+    // Tamanho fixo do queimador do Teste de estresse; o benchmark usa a resolução escolhida.
     private const int Width = 1920;
     private const int Height = 1080;
 
     private const string Common = @"
-cbuffer Frame : register(b0) { float time; float layers; float2 res; };
+cbuffer Frame : register(b0) { float time; float layers; float2 res; float sampleIndex; float spp; float2 pad; };
 struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; float3 col : COLOR0; };
 VSOut VSFull(uint id : SV_VertexID, uint inst : SV_InstanceID)
 {
@@ -87,6 +92,114 @@ float4 PSFill(VSOut i) : SV_Target
     return float4(v * 0.04, v * 0.03, v * 0.05, 1);
 }";
 
+    /// <summary>
+    /// Estúdio: chão e parede de fundo, uma luz de área no teto, uma esfera amarela laqueada, uma cromada, um cubo branco fosco
+    /// e uma pequena esfera que brilha. Cada pixel lança raios que rebatem até 5 vezes (difuso e reflexo com aspereza) e a soma
+    /// vai para uma textura de ponto flutuante; a resolução divide pelo número de amostras, então o ruído some com o tempo.
+    /// </summary>
+    private const string Studio = Common + @"
+Texture2D<float4> Accum : register(t0);
+uint Hash(uint s) { s = (s ^ 61u) ^ (s >> 16); s *= 9u; s = s ^ (s >> 4); s *= 0x27d4eb2du; s = s ^ (s >> 15); return s; }
+float Rnd(inout uint s) { s = s * 747796405u + 2891336453u; uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u; w = (w >> 22u) ^ w; return w / 4294967296.0; }
+float3 RndSphere(inout uint s) { float z = Rnd(s) * 2.0 - 1.0; float a = Rnd(s) * 6.2831853; float r = sqrt(max(0.0, 1.0 - z * z)); return float3(r * cos(a), r * sin(a), z); }
+struct Hit { float t; float3 n; int m; };
+void Sphere(float3 ro, float3 rd, float3 c, float r, int m, inout Hit h)
+{
+    float3 oc = ro - c; float b = dot(oc, rd); float k = dot(oc, oc) - r * r; float d = b * b - k;
+    if (d < 0.0) return;
+    float q = sqrt(d); float t = -b - q; if (t < 0.001) t = -b + q;
+    if (t > 0.001 && t < h.t) { h.t = t; h.n = normalize(ro + rd * t - c); h.m = m; }
+}
+void Box(float3 ro, float3 rd, float3 c, float3 e, float ang, int m, inout Hit h)
+{
+    float ca = cos(ang), sa = sin(ang);
+    float3 o = ro - c; o = float3(ca * o.x + sa * o.z, o.y, -sa * o.x + ca * o.z);
+    float3 d = float3(ca * rd.x + sa * rd.z, rd.y, -sa * rd.x + ca * rd.z);
+    float3 inv = 1.0 / d; float3 t0 = (-e - o) * inv; float3 t1 = (e - o) * inv;
+    float3 mn = min(t0, t1); float3 mx = max(t0, t1);
+    float tn = max(max(mn.x, mn.y), mn.z); float tf = min(min(mx.x, mx.y), mx.z);
+    if (tn > tf || tf < 0.001) return;
+    float t = tn > 0.001 ? tn : tf;
+    if (t >= h.t) return;
+    float3 p = (o + d * t) / e; float3 a = abs(p); float3 n;
+    if (a.x > a.y && a.x > a.z) n = float3(sign(p.x), 0, 0); else if (a.y > a.z) n = float3(0, sign(p.y), 0); else n = float3(0, 0, sign(p.z));
+    h.t = t; h.n = float3(ca * n.x - sa * n.z, n.y, sa * n.x + ca * n.z); h.m = m;
+}
+void Scene(float3 ro, float3 rd, inout Hit h)
+{
+    if (rd.y < 0.0) { float t = -ro.y / rd.y; if (t > 0.001 && t < h.t) { h.t = t; h.n = float3(0, 1, 0); h.m = 0; } }
+    if (rd.z < 0.0) { float t = (-2.6 - ro.z) / rd.z; if (t > 0.001 && t < h.t) { h.t = t; h.n = float3(0, 0, 1); h.m = 1; } }
+    if (rd.y > 0.0)
+    {
+        float t = (3.6 - ro.y) / rd.y; float3 p = ro + rd * t;
+        if (t > 0.001 && t < h.t && abs(p.x) < 2.2 && abs(p.z + 0.2) < 1.4) { h.t = t; h.n = float3(0, -1, 0); h.m = 6; }
+    }
+    Sphere(ro, rd, float3(-0.95, 0.7, -0.1), 0.7, 2, h);
+    Sphere(ro, rd, float3(0.95, 0.5, 0.35), 0.5, 3, h);
+    Box(ro, rd, float3(0.35, 0.38, -1.1), float3(0.38, 0.38, 0.38), 0.65, 4, h);
+    Sphere(ro, rd, float3(0.05, 0.16, 0.95), 0.16, 5, h);
+}
+void Material(int m, float3 p, out float3 albedo, out float rough, out float metal, out float3 emit)
+{
+    emit = 0; metal = 0; rough = 1; albedo = 0.6;
+    if (m == 0) { float c = fmod(floor(p.x * 2.0) + floor(p.z * 2.0), 2.0); albedo = lerp(0.16, 0.22, abs(c)); rough = 0.6; }
+    else if (m == 1) { albedo = 0.18; rough = 0.9; }
+    else if (m == 2) { albedo = float3(1.0, 0.72, 0.02); rough = 0.12; }
+    else if (m == 3) { albedo = float3(0.92, 0.93, 0.95); rough = 0.05; metal = 1; }
+    else if (m == 4) { albedo = 0.85; rough = 1; }
+    else if (m == 5) { emit = float3(6.0, 4.2, 0.6); }
+    else { emit = 5.0; }
+}
+float3 Sky(float3 rd) { return lerp(float3(0.04, 0.04, 0.05), float3(0.32, 0.33, 0.38), saturate(rd.y * 0.5 + 0.5)); }
+float3 Trace(float3 ro, float3 rd, inout uint seed)
+{
+    float3 acc = 0; float3 thr = 1;
+    [loop] for (int b = 0; b < 5; b++)
+    {
+        Hit h; h.t = 1e9; h.n = 0; h.m = -1;
+        Scene(ro, rd, h);
+        if (h.m < 0) { acc += thr * Sky(rd); break; }
+        float3 p = ro + rd * h.t; float3 n = h.n;
+        float3 albedo; float rough; float metal; float3 emit;
+        Material(h.m, p, albedo, rough, metal, emit);
+        if (emit.x + emit.y + emit.z > 0.0) { acc += thr * emit; break; }
+        float fres = metal > 0.5 ? 1.0 : 0.04 + 0.96 * pow(1.0 - saturate(dot(-rd, n)), 5.0);
+        float3 dir;
+        if (Rnd(seed) < fres)
+        {
+            dir = normalize(reflect(rd, n) + rough * RndSphere(seed));
+            if (dot(dir, n) < 0.0) dir = reflect(dir, n);
+            if (metal > 0.5) thr *= albedo;
+        }
+        else
+        {
+            dir = normalize(n + RndSphere(seed) * 0.999);
+            thr *= albedo;
+        }
+        ro = p + n * 0.001; rd = dir;
+        if (b > 1) { float pr = max(max(thr.x, max(thr.y, thr.z)), 0.001); if (Rnd(seed) > pr) break; thr /= pr; }
+    }
+    return acc;
+}
+float4 PSStudio(VSOut i) : SV_Target
+{
+    uint2 px = uint2(i.pos.xy);
+    uint seed = Hash(px.x * 1973u + px.y * 9277u + uint(sampleIndex) * 26699u) | 1u;
+    float2 j = float2(Rnd(seed), Rnd(seed));
+    float2 uv = ((floor(i.pos.xy) + j) / res * 2.0 - 1.0) * float2(res.x / res.y, -1.0);
+    float3 ro = float3(0.0, 1.25, 4.4); float3 at = float3(0.0, 0.55, 0.0);
+    float3 fw = normalize(at - ro); float3 rt = normalize(cross(fw, float3(0, 1, 0))); float3 up = cross(rt, fw);
+    float3 rd = normalize(fw * 2.1 + rt * uv.x + up * uv.y);
+    return float4(Trace(ro, rd, seed), 1.0);
+}
+float4 PSResolve(VSOut i) : SV_Target
+{
+    float4 a = Accum.Load(int3(i.pos.xy, 0));
+    float3 c = a.rgb / max(a.a, 1.0);
+    c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+    return float4(pow(saturate(c), 1.0 / 2.2), 1);
+}";
+
     private const string Compute = @"
 RWBuffer<float> Out : register(u0);
 [numthreads(256, 1, 1)]
@@ -105,11 +218,21 @@ void CS(uint3 id : SV_DispatchThreadID)
     private struct FrameConstants
     {
         public float Time, Layers, ResX, ResY;
+        public float SampleIndex, Spp, Pad0, Pad1;
+    }
+
+    /// <summary>Nota de uma rodada: as cenas presas aos pixels são convertidas para 1080p; a geometria não depende da resolução.</summary>
+    public static int Score(double fractalFps, double cubesFps, double fillFps, double gflops, double studioMsps, long pixels)
+    {
+        double scale = pixels / ReferencePixels;
+        return (int)Math.Round(fractalFps * scale * 25 + cubesFps * 8 + fillFps * scale * 15 + gflops * 0.5 + studioMsps * 4);
     }
 
     public static Gpu3DResult Run(IProgress<ProgressEvent> progress, string step, double from, double span,
-        Action<byte[], int, int>? preview, CancellationToken token, int secondsPerScene = 5)
+        Action<byte[], int, int>? preview, CancellationToken token, int secondsPerScene = 5, int width = 1920, int height = 1080, int studioSamples = 4)
     {
+        int Width = Math.Clamp(width, 320, 7680);
+        int Height = Math.Clamp(height, 240, 4320);
         var adapter = PickAdapter(out string gpuName);
         try
         {
@@ -118,7 +241,7 @@ void CS(uint3 id : SV_DispatchThreadID)
             using (device!)
             using (context!)
             {
-                return RunScenes(device!, context!, gpuName, progress, step, from, span, preview, token, secondsPerScene);
+                return RunScenes(device!, context!, gpuName, progress, step, from, span, preview, token, secondsPerScene, Width, Height, Math.Clamp(studioSamples, 1, 64));
             }
         }
         finally
@@ -172,21 +295,22 @@ void CS(uint3 id : SV_DispatchThreadID)
     }
 
     private static Gpu3DResult RunScenes(ID3D11Device device, ID3D11DeviceContext ctx, string gpuName, IProgress<ProgressEvent> progress,
-        string step, double from, double span, Action<byte[], int, int>? preview, CancellationToken token, int seconds)
+        string step, double from, double span, Action<byte[], int, int>? preview, CancellationToken token, int seconds, int Width, int Height, int studioSamples)
     {
+        const int SceneCount = BenchmarkModes.GpuScenes;
         using var target = device.CreateTexture2D(new Texture2DDescription
         {
-            Width = Width, Height = Height, MipLevels = 1, ArraySize = 1, Format = Format.B8G8R8A8_UNorm,
+            Width = (uint)Width, Height = (uint)Height, MipLevels = 1, ArraySize = 1, Format = Format.B8G8R8A8_UNorm,
             SampleDescription = new SampleDescription(1, 0), Usage = ResourceUsage.Default, BindFlags = BindFlags.RenderTarget,
         });
         using var depth = device.CreateTexture2D(new Texture2DDescription
         {
-            Width = Width, Height = Height, MipLevels = 1, ArraySize = 1, Format = Format.D32_Float,
+            Width = (uint)Width, Height = (uint)Height, MipLevels = 1, ArraySize = 1, Format = Format.D32_Float,
             SampleDescription = new SampleDescription(1, 0), Usage = ResourceUsage.Default, BindFlags = BindFlags.DepthStencil,
         });
         using var staging = device.CreateTexture2D(new Texture2DDescription
         {
-            Width = Width, Height = Height, MipLevels = 1, ArraySize = 1, Format = Format.B8G8R8A8_UNorm,
+            Width = (uint)Width, Height = (uint)Height, MipLevels = 1, ArraySize = 1, Format = Format.B8G8R8A8_UNorm,
             SampleDescription = new SampleDescription(1, 0), Usage = ResourceUsage.Staging, CPUAccessFlags = CpuAccessFlags.Read,
         });
         using var rtv = device.CreateRenderTargetView(target);
@@ -222,10 +346,11 @@ void CS(uint3 id : SV_DispatchThreadID)
             }
         }
 
-        void Present(double elapsed, ref double lastPreview)
+        void Present(double elapsed, ref double lastPreview, Action? resolve = null)
         {
             if (preview is null || elapsed - lastPreview < 0.35) return;
             lastPreview = elapsed;
+            resolve?.Invoke();
             ctx.CopyResource(staging, target);
             ctx.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None, out MappedSubresource mapped);
             try
@@ -255,7 +380,7 @@ void CS(uint3 id : SV_DispatchThreadID)
         // Cena 1: fractal
         double Frames(string label, Action<float> drawFrame, int index, Action? beforeEach = null)
         {
-            progress.Report(new ProgressEvent(step, from + span * index / 4, label));
+            progress.Report(new ProgressEvent(step, from + span * index / SceneCount, label));
             beforeEach?.Invoke();
             var watch = System.Diagnostics.Stopwatch.StartNew();
             long frames = 0;
@@ -327,7 +452,7 @@ void CS(uint3 id : SV_DispatchThreadID)
             Buffer = new BufferUnorderedAccessView { FirstElement = 0, NumElements = threads },
         });
         using var cs = device.CreateComputeShader(CompileShader(Compute, "CS", "cs_5_0"));
-        progress.Report(new ProgressEvent(step, from + span * 3 / 4, "Cálculo puro (compute)"));
+        progress.Report(new ProgressEvent(step, from + span * 3 / SceneCount, "Cálculo puro (compute)"));
         ctx.CSSetShader(cs);
         ctx.CSSetUnorderedAccessView(0, uav);
         var cWatch = System.Diagnostics.Stopwatch.StartNew();
@@ -342,12 +467,77 @@ void CS(uint3 id : SV_DispatchThreadID)
 
         // 2048 iterações x 8 mad x 2 operações por thread
         double gflops = dispatches * (double)threads * 2048 * 8 * 2 / cWatch.Elapsed.TotalSeconds / 1e9;
-        scenes.Add(new GpuSceneResult("Compute (GFLOPS)", gflops));
+        scenes.Add(new GpuSceneResult("Compute (GFLOPS)", gflops, "GFLOPS"));
+        ctx.CSSetUnorderedAccessView(0, null);
+        ctx.CSSetShader(null);
+
+        // Cena 5: render do estúdio (path tracing progressivo)
+        double studioMsps = RunStudio();
+        scenes.Add(new GpuSceneResult("Estúdio 3D (path tracing)", studioMsps, "M amostras/s"));
         done = 1;
         progress.Report(new ProgressEvent(step, from + span * done, "Concluído"));
 
-        int score = (int)Math.Round(fractalFps * 25 + cubesFps * 8 + fillFps * 15 + gflops * 0.5);
+        int score = Score(fractalFps, cubesFps, fillFps, gflops, studioMsps, (long)Width * Height);
         return new Gpu3DResult(gpuName, score, scenes);
+
+        double RunStudio()
+        {
+            progress.Report(new ProgressEvent(step, from + span * 4 / SceneCount, "Estúdio 3D: luz que rebate (path tracing)"));
+            using var accum = device.CreateTexture2D(new Texture2DDescription
+            {
+                Width = (uint)Width, Height = (uint)Height, MipLevels = 1, ArraySize = 1, Format = Format.R32G32B32A32_Float,
+                SampleDescription = new SampleDescription(1, 0), Usage = ResourceUsage.Default, BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
+            });
+            using var accumRtv = device.CreateRenderTargetView(accum);
+            using var accumSrv = device.CreateShaderResourceView(accum);
+            using var sum = device.CreateBlendState(new BlendDescription(Blend.One, Blend.One, Blend.One, Blend.One));
+            using var vsStudio = device.CreateVertexShader(CompileShader(Studio, "VSFull", "vs_5_0"));
+            using var psStudio = device.CreatePixelShader(CompileShader(Studio, "PSStudio", "ps_5_0"));
+            using var psResolve = device.CreatePixelShader(CompileShader(Studio, "PSResolve", "ps_5_0"));
+            ctx.ClearRenderTargetView(accumRtv, new Color4(0, 0, 0, 0));
+            ctx.VSSetShader(vsStudio);
+
+            void Resolve()
+            {
+                ctx.OMSetRenderTargets(rtv, null);
+                ctx.OMSetBlendState(opaque);
+                ctx.PSSetShader(psResolve);
+                ctx.PSSetShaderResource(0, accumSrv);
+                ctx.Draw(3, 0);
+                // Ao voltar a usar a textura como alvo, o Direct3D 11 desliga sozinho esta leitura (não há conflito).
+            }
+
+            // Uma amostra por desenho (com Flush entre eles) para nenhum desenho durar o bastante para o Windows reiniciar a placa;
+            // se um quadro passar de 0,8 s, o próximo leva menos amostras.
+            int spp = studioSamples;
+            long samples = 0;
+            double lastPreview = -1;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            while (watch.Elapsed.TotalSeconds < seconds)
+            {
+                token.ThrowIfCancellationRequested();
+                double frameStart = watch.Elapsed.TotalSeconds;
+                ctx.OMSetRenderTargets(accumRtv, null);
+                ctx.OMSetBlendState(sum);
+                ctx.PSSetShader(psStudio);
+                for (int s = 0; s < spp; s++)
+                {
+                    var fc = new FrameConstants { Time = (float)frameStart, ResX = Width, ResY = Height, SampleIndex = samples + s, Spp = spp };
+                    ctx.UpdateSubresource(in fc, constants);
+                    ctx.Draw(3, 0);
+                    ctx.Flush();
+                }
+
+                Wait();
+                samples += spp;
+                if (watch.Elapsed.TotalSeconds - frameStart > 0.8 && spp > 1) spp = Math.Max(1, spp / 2);
+                Present(watch.Elapsed.TotalSeconds, ref lastPreview, Resolve);
+            }
+
+            double elapsed = watch.Elapsed.TotalSeconds;
+            if (preview is not null) { lastPreview = -1; Present(1e9, ref lastPreview, Resolve); }
+            return samples * (double)Width * Height / Math.Max(elapsed, 0.001) / 1e6;
+        }
         }
     }
 }

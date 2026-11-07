@@ -34,6 +34,23 @@ public sealed class AccessibilityPage : ToolPageBase
         Body.Children.Add(animations);
         Body.Children.Add(Muted("Se o Windows estiver com \"Efeitos de animação\" desligado (Configurações → Acessibilidade → Efeitos visuais), o MB Extreme também não anima.", 12));
 
+        Body.Children.Add(Heading("Efeito cristal"));
+        var glass = new System.Windows.Controls.CheckBox
+        {
+            Content = "Fundo de vidro (o que está atrás da janela aparece desfocado, como no Aero do Windows Vista)",
+            IsChecked = AppServices.Settings.GlassEffect, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 4),
+        };
+        glass.Click += (_, _) =>
+        {
+            AppServices.Settings.GlassEffect = glass.IsChecked == true;
+            AppServices.Settings.Save();
+            MainWindow.Current?.SetGlass(glass.IsChecked == true);
+            SetStatus(glass.IsChecked != true ? "Efeito cristal desligado: fundo sólido." :
+                GlassEffect.SystemAllows() ? "Efeito cristal ligado." : "Ligado aqui, mas o Windows está com \"Efeitos de transparência\" desligado (Configurações → Personalização → Cores).", "OkBrush");
+        };
+        Body.Children.Add(glass);
+        Body.Children.Add(Muted("Se o PC for mais fraco ou a janela ficar lenta ao arrastar, desligue. Com \"Efeitos de transparência\" desligado no Windows, o fundo fica sólido.", 12));
+
         Body.Children.Add(Heading("Pelo teclado"));
         Body.Children.Add(Row("Tab e Shift+Tab", "Andam entre os botões e caixas. O item com o foco ganha um contorno amarelo."));
         Body.Children.Add(Row("Espaço ou Enter", "Apertam o botão ou marcam a caixa com o foco."));

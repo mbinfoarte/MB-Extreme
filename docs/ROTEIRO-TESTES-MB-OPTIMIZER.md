@@ -90,3 +90,22 @@ Marque cada item e anote o que der diferente.
 | Inicialização | Abrir | Tempo para ligar (ou "Ainda sem medição"); "O que é" e selo em cada programa |
 | Otimizações | Abrir no plano grátis com a licença ligada | Desempenho, jogos e rede não aparecem (aviso do Pro); os demais sim |
 | Sobre | O que há de novo; Verificar atualização; Abrir pasta | Janela de novidades; também abre sozinha 1 vez depois de atualizar |
+
+## Benchmark novo, menu de vidro e efeito cristal
+
+| Onde | O que fazer | O que deve acontecer |
+|---|---|---|
+| Benchmark → Novo teste | Escolher Rápido, Padrão e Preciso | Cartão escolhido fica de vidro com borda amarela; duração estimada muda no rodapé (~30 s, ~1 min, ~2 min) |
+| Benchmark → O que testar | Desmarcar Disco e depois Placa de vídeo | Somem as seções de disco e de resolução; sem processador ou memória avisa "sem a nota geral" |
+| Benchmark → Disco | PC com 2 discos: escolher o D: e rodar o Rápido | Grava e lê em D:\MBExtreme-teste-de-disco e apaga a pasta no fim; disco sem espaço aparece apagado |
+| Benchmark → Resolução | Monitor 1080p, depois um Quad HD/4K | 1080p mostra só 720p e 1080p; Quad HD/4K aparecem quando o monitor aguenta; ultrawide mostra "Nativa do monitor" |
+| Benchmark → Em andamento | Iniciar o Padrão completo | Abre a aba sozinho; etapas giram e ficam com ✔; linha "Ao vivo" com CPU/GPU; na GPU aparece a imagem 3D e, no fim, o estúdio (esferas amarela e cromada, cubo branco) limpando o ruído |
+| Benchmark → Parar | Parar no meio | "Interrompido. Nada foi salvo."; botão Iniciar volta |
+| Benchmark → Resultados | Depois do teste | Nota, frase de comparação automática, cartões por parte com barra em relação ao seu melhor, "Render 3D do estúdio" em M amostras/s, monitoramento |
+| Benchmark → Histórico | Ver e Comparar numa medição antiga | Ver abre em Resultados e muda a nota do painel lateral; Comparar abre a aba Comparar com antes/depois |
+| Benchmark → Comparar | Trocar Antes e Depois nas caixas | Barras cinza x amarela, % verde/vermelho; aviso quando modos ou resoluções são diferentes |
+| Benchmark → painel lateral | Notebook na bateria; plano Equilibrado | Dicas em laranja: "Ligue o carregador" e o plano de energia; Seu sistema com CPU, GPU, memória, discos, Windows e energia |
+| Benchmark (janela estreita) | Diminuir a janela | Painel lateral vai para baixo das abas |
+| Menu lateral | Passar o mouse devagar sobre os itens | Brilho amarelado acompanha o mouse; item escolhido com barra em degradê amarelo→laranja e fundo de vidro |
+| Efeito cristal | Janela restaurada sobre um papel de parede colorido | Fundo cinza-escuro → preto com o que está atrás desfocado; cantos arredondados sem quadrado em volta; maximizada fica sem cantos |
+| Efeito cristal | Acessibilidade → desmarcar "Fundo de vidro"; Windows com Efeitos de transparência desligado | Fundo fica sólido na hora; com o Windows desligado, fica sólido mesmo marcado |

@@ -10,7 +10,11 @@ namespace MBExtreme.Core.Benchmark;
 
 public sealed record LatencyPoint(int SizeKb, double Nanoseconds);
 
-public sealed record GpuSceneResult(string Scene, double Fps);
+/// <summary>Uma cena 3D. <see cref="Unit"/> vazio quer dizer quadros por segundo; o cálculo usa GFLOPS e o render do estúdio, milhões de amostras por segundo.</summary>
+public sealed record GpuSceneResult(string Scene, double Fps, string? Unit = null)
+{
+    public string Display => $"{Fps:0.#} {Unit ?? (Scene.Contains("GFLOPS") ? "GFLOPS" : "FPS")}";
+}
 
 /// <summary>Resultado de uma rodada. A pontuação é relativa: serve para comparar este mesmo PC antes e depois de uma mudança.</summary>
 public sealed record BenchmarkResult(
@@ -36,12 +40,21 @@ public sealed record BenchmarkResult(
     int RenderSingleScore = 0,
     int RenderMultiScore = 0,
     IReadOnlyList<MBExtreme.Core.Fps.SensorTrack>? Monitoring = null,
-    IReadOnlyList<PhaseMark>? Phases = null);
+    IReadOnlyList<PhaseMark>? Phases = null,
+    string? Mode = null,
+    string? Resolution = null,
+    string? DiskName = null);
 
 /// <summary>Em que segundo do teste começou cada etapa (para marcar no gráfico de monitoramento).</summary>
 public sealed record PhaseMark(string Name, double StartSeconds);
 
-public sealed record BenchmarkOptions(bool Disk = true, bool Gpu3D = false, bool Quick = false, string? Label = null);
+/// <summary>
+/// O que medir e como. <paramref name="Mode"/> manda na duração (Quick continua valendo para quem chama sem modo);
+/// <paramref name="DiskDirectory"/> escolhe o disco; a resolução vale para as cenas 3D.
+/// </summary>
+public sealed record BenchmarkOptions(bool Disk = true, bool Gpu3D = false, bool Quick = false, string? Label = null,
+    BenchmarkMode? Mode = null, string? DiskDirectory = null, string? DiskName = null, int GpuWidth = 1920, int GpuHeight = 1080,
+    bool Cpu = true, bool Memory = true);
 
 public sealed record CoreScore(int Core, double Mops);
 
@@ -57,55 +70,64 @@ public static class BenchmarkService
 
     public static string[] StepsFor(BenchmarkOptions options)
     {
-        var steps = new List<string> { StepSingle, StepMulti, StepExtra, StepMemory };
+        var steps = new List<string>();
+        if (options.Cpu) steps.AddRange(new[] { StepSingle, StepMulti, StepExtra });
+        if (options.Memory) steps.Add(StepMemory);
         if (options.Disk) steps.Add(StepDisk);
         if (options.Gpu3D) steps.Add(StepGpu);
         return steps.ToArray();
     }
 
-    private const int DiskMegabytes = 256;
-
     private static double _sink;
 
-    private static int PhaseMs(BenchmarkOptions o) => o.Quick ? 1200 : 2500;
-
-    public static BenchmarkResult Run(IProgress<ProgressEvent> progress, CancellationToken token, BenchmarkOptions? options = null, string? diskDirectory = null)
+    public static BenchmarkResult Run(IProgress<ProgressEvent> progress, CancellationToken token, BenchmarkOptions? options = null, string? diskDirectory = null,
+        Action<byte[], int, int>? gpuPreview = null)
     {
         options ??= new BenchmarkOptions();
-        int total = StepsFor(options).Length;
+        var profile = BenchmarkModes.For(options);
+        int total = Math.Max(1, StepsFor(options).Length);
         int done = 0;
         double Pct() => 100.0 * done / total;
-        int ms = PhaseMs(options);
-
-        progress.Report(new ProgressEvent(StepSingle, Pct(), "Medindo um núcleo"));
-        double single = CpuPhase(1, ms, token);
-        done++;
-
-        progress.Report(new ProgressEvent(StepMulti, Pct(), "Medindo todos os núcleos"));
+        int ms = profile.PhaseMs;
         int threads = Environment.ProcessorCount;
-        double multi = CpuPhase(threads, ms, token);
-        done++;
 
-        progress.Report(new ProgressEvent(StepExtra, Pct(), "Instruções vetoriais"));
-        double simd = SimdPhase(ms, token);
-        progress.Report(new ProgressEvent(StepExtra, Pct() + 4, "Criptografia (AES)"));
-        double crypto = CryptoPhase(ms, token);
-        progress.Report(new ProgressEvent(StepExtra, Pct() + 8, "Compressão"));
-        double compress = CompressPhase(ms, token);
-        done++;
+        double single = 0, multi = 0, simd = 0, crypto = 0, compress = 0;
+        if (options.Cpu)
+        {
+            progress.Report(new ProgressEvent(StepSingle, Pct(), "Medindo um núcleo"));
+            single = CpuPhase(1, ms, token);
+            done++;
 
-        progress.Report(new ProgressEvent(StepMemory, Pct(), "Banda da memória"));
-        var (read, write, copy) = MemoryBandwidthPhase(ms, token);
-        progress.Report(new ProgressEvent(StepMemory, Pct() + 6, "Latência da memória"));
-        var curve = MemoryLatencyCurve(options.Quick, token);
-        double latency = curve.Count > 0 ? curve[^1].Nanoseconds : 0;
-        done++;
+            progress.Report(new ProgressEvent(StepMulti, Pct(), "Medindo todos os núcleos"));
+            multi = CpuPhase(threads, ms, token);
+            done++;
+
+            progress.Report(new ProgressEvent(StepExtra, Pct(), "Instruções vetoriais"));
+            simd = SimdPhase(ms, token);
+            progress.Report(new ProgressEvent(StepExtra, Pct() + 4, "Criptografia (AES)"));
+            crypto = CryptoPhase(ms, token);
+            progress.Report(new ProgressEvent(StepExtra, Pct() + 8, "Compressão"));
+            compress = CompressPhase(ms, token);
+            done++;
+        }
+
+        double read = 0, write = 0, copy = 0, latency = 0;
+        IReadOnlyList<LatencyPoint> curve = Array.Empty<LatencyPoint>();
+        if (options.Memory)
+        {
+            progress.Report(new ProgressEvent(StepMemory, Pct(), "Banda da memória"));
+            (read, write, copy) = MemoryBandwidthPhase(ms, token);
+            progress.Report(new ProgressEvent(StepMemory, Pct() + 6, "Latência da memória"));
+            curve = MemoryLatencyCurve(profile.QuickLatency, token);
+            latency = curve.Count > 0 ? curve[^1].Nanoseconds : 0;
+            done++;
+        }
 
         double diskWrite = 0, diskRead = 0;
         if (options.Disk)
         {
-            progress.Report(new ProgressEvent(StepDisk, Pct(), "Gravando e lendo um arquivo temporário"));
-            (diskWrite, diskRead) = DiskPhase(diskDirectory ?? Path.GetTempPath(), progress, Pct(), 100.0 / total, token);
+            progress.Report(new ProgressEvent(StepDisk, Pct(), $"Gravando e lendo um arquivo temporário de {profile.DiskMegabytes} MB"));
+            (diskWrite, diskRead) = DiskPhase(options.DiskDirectory ?? diskDirectory ?? Path.GetTempPath(), profile.DiskMegabytes, progress, Pct(), 100.0 / total, token);
             done++;
         }
 
@@ -117,7 +139,8 @@ public static class BenchmarkService
             progress.Report(new ProgressEvent(StepGpu, Pct(), "Preparando a placa de vídeo"));
             try
             {
-                var gpu = Gpu3DBenchmark.Run(progress, StepGpu, Pct(), 100.0 / total, null, token);
+                var gpu = Gpu3DBenchmark.Run(progress, StepGpu, Pct(), 100.0 / total, gpuPreview, token, profile.GpuSecondsPerScene,
+                    options.GpuWidth, options.GpuHeight, profile.StudioSamples);
                 gpuName = gpu.GpuName;
                 gpuScore = gpu.Score;
                 scenes = gpu.Scenes;
@@ -134,7 +157,9 @@ public static class BenchmarkService
         progress.Report(new ProgressEvent(StepDisk, 100, "Concluído"));
         int score = ComputeScore(single, multi, copy, diskWrite, diskRead) + ExtraScore(simd, crypto, compress, latency);
         return new BenchmarkResult(DateTime.Now, threads, single, multi, copy, diskWrite, diskRead, score,
-            simd, crypto, compress, read, write, latency, curve, options.Label, gpuName, gpuScore, scenes);
+            simd, crypto, compress, read, write, latency, curve, options.Label, gpuName, gpuScore, scenes,
+            Mode: profile.Name, Resolution: options.Gpu3D ? $"{options.GpuWidth}×{options.GpuHeight}" : null,
+            DiskName: options.Disk ? options.DiskName : null);
     }
 
     public static int ComputeScore(double single, double multi, double memoryGBps, double writeMBps, double readMBps) =>
@@ -373,10 +398,13 @@ public static class BenchmarkService
         return watch.Elapsed.TotalMilliseconds * 1_000_000 / steps;
     }
 
-    private static (double WriteMBps, double ReadMBps) DiskPhase(string directory, IProgress<ProgressEvent> progress, double from, double span, CancellationToken token)
+    private static (double WriteMBps, double ReadMBps) DiskPhase(string directory, int megabytes, IProgress<ProgressEvent> progress, double from, double span, CancellationToken token)
     {
         const int chunk = 4 * 1024 * 1024;
-        const int chunks = DiskMegabytes / 4;
+        int chunks = Math.Max(1, megabytes / 4);
+        int diskMegabytes = chunks * 4;
+        bool ownFolder = !Directory.Exists(directory);
+        if (ownFolder) Directory.CreateDirectory(directory);
         string path = Path.Combine(directory, "mbextreme-bench-" + Guid.NewGuid().ToString("N") + ".tmp");
         var buffer = new byte[chunk];
         new Random(7).NextBytes(buffer);
@@ -396,7 +424,7 @@ public static class BenchmarkService
                 file.Flush(true);
             }
 
-            double write = DiskMegabytes / Math.Max(watch.Elapsed.TotalSeconds, 0.001);
+            double write = diskMegabytes / Math.Max(watch.Elapsed.TotalSeconds, 0.001);
 
             watch.Restart();
             using (var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None, 1 << 16, FileOptions.SequentialScan))
@@ -409,13 +437,17 @@ public static class BenchmarkService
                 }
             }
 
-            double read = DiskMegabytes / Math.Max(watch.Elapsed.TotalSeconds, 0.001);
+            double read = diskMegabytes / Math.Max(watch.Elapsed.TotalSeconds, 0.001);
             return (write, read);
         }
         finally
         {
-            try { File.Delete(path); }
-            catch (IOException) { /* arquivo temporário; o Windows limpa depois */ }
+            try
+            {
+                File.Delete(path);
+                if (ownFolder && !Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* arquivo temporário; o Windows limpa depois */ }
         }
     }
 }

@@ -21,6 +21,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         WorkArea.Attach(this);   // maximizada, respeita a barra de tarefas
+        SourceInitialized += (_, _) => GlassEffect.Apply(this, WindowFrame, AppServices.Settings.GlassEffect);   // efeito cristal
+        SizeChanged += (_, _) => GlassEffect.UpdateRegion(this, WindowFrame);
         BuildMenu();
         Current = this;
         StateChanged += (_, _) => UpdateMaximizeState();
@@ -102,9 +104,14 @@ public partial class MainWindow : Window
         // o tamanho maximizado já vem certo do Windows (WorkArea): sem margem extra, senão sobra uma faixa
         WindowFrame.Margin = new Thickness(0);
         WindowFrame.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(22);
+        GlassSheen.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(21);
+        GlassEffect.UpdateRegion(this, WindowFrame);
         MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
         MaximizeButton.ToolTip = maximized ? "Restaurar" : "Maximizar";
     }
+
+    /// <summary>Liga ou desliga o efeito cristal (tela Acessibilidade).</summary>
+    internal void SetGlass(bool on) => GlassEffect.Apply(this, WindowFrame, on);
 
     /// <summary>Janela principal, para as páginas pedirem navegação (ex.: o painel abre a limpeza).</summary>
     internal static MainWindow? Current { get; private set; }
@@ -223,6 +230,7 @@ public partial class MainWindow : Window
         };
         System.Windows.Automation.AutomationProperties.SetName(radio, title);
         radio.MouseEnter += (_, _) => Motion.Pop(icon);
+        Controls.MouseGlow.Attach(radio);   // brilho que acompanha o mouse
         radio.Checked += (_, _) => { icon.Foreground = IconActive; Motion.Pop(icon); };
         radio.Unchecked += (_, _) => icon.Foreground = IconIdle;
         radio.Checked += Nav_Checked;

@@ -139,6 +139,9 @@ public sealed class AppSettings
     /// <summary>Animações da interface (desligar deixa tudo instantâneo, para PCs fracos ou quem prefere).</summary>
     public bool Animations { get; set; } = true;
 
+    /// <summary>Efeito cristal: fundo levemente transparente com o desfoque do Windows atrás da janela.</summary>
+    public bool GlassEffect { get; set; } = true;
+
     /// <summary>Atualizar sozinho (baixa em segundo plano e instala quando você mandar ou ao fechar) ou só avisar.</summary>
     public bool AutoUpdate { get; set; } = true;
 

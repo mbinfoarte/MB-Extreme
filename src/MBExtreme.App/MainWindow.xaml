@@ -85,7 +85,7 @@
                     <Border x:Name="FreeBadge" HorizontalAlignment="Left" Margin="0,8,0,0" Padding="7,1,8,2" CornerRadius="8"
                             Background="#1FFFC400" ToolTip="Você está no plano grátis. Os recursos Pro liberam quando você assina."
                             AutomationProperties.Name="Licença: Grátis">
-                        <TextBlock FontSize="10" FontWeight="SemiBold" Foreground="#FFC400"><Run FontFamily="Segoe MDL2 Assets" Text="&#xE73E;" /><Run Text=" Licença: Grátis" /></TextBlock>
+                        <TextBlock FontSize="10" FontWeight="SemiBold" Foreground="#FFC400"><Run FontFamily="Segoe MDL2 Assets" Text="&#xE73E;" /><Run x:Name="BadgeText" Text=" Licença: Grátis" /></TextBlock>
                     </Border>
                 </StackPanel>
 

@@ -15,9 +15,9 @@ public static class FeaturePolicy
     public static bool RequiresPro(string pageKey) => ProPages.Contains(pageKey);
 
     /// <summary>A página pode abrir? Sem aplicação de licença ou com licença válida de plano pago, sim.</summary>
-    public static bool IsAllowed(string pageKey, LicenseStatus status, bool enforce)
+    public static bool IsAllowed(string pageKey, LicenseStatus status, bool enforce, bool trialActive = false)
     {
-        if (!enforce || !RequiresPro(pageKey)) return true;
+        if (!enforce || !RequiresPro(pageKey) || trialActive) return true;   // no teste grátis, tudo do Pro fica liberado
         if (!status.IsValid || status.Payload is null) return false;
         return status.Plan is "pro" || status.Payload.Features.Contains(pageKey);
     }
@@ -37,7 +37,8 @@ public static class LicenseExpiry
 
     public static bool IsPro(LicenseStatus status) => status.IsValid && status.Plan == "pro";
 
-    public static bool ShouldRevert(bool enforce, bool configured, LicenseStatus status) => enforce && configured && !IsPro(status);
+    public static bool ShouldRevert(bool enforce, bool configured, LicenseStatus status, bool trialActive = false) =>
+        enforce && !trialActive && !IsPro(status) && (configured || AppInfo.EnforceLicense);
 }
 
 /// <summary>Configuração do licenciamento. O endereço do servidor e a chave pública vêm das configurações do usuário (ou de variáveis de ambiente, para testes) até serem fixados na versão de venda.</summary>
@@ -49,6 +50,6 @@ public sealed record LicenseConfig(bool Enforce, string ServerUrl, string Public
     {
         string url = Environment.GetEnvironmentVariable("MBX_LICENSE_URL") ?? (settings.LicenseServerUrl.Length > 0 ? settings.LicenseServerUrl : AppInfo.DefaultServerUrl);
         string key = Environment.GetEnvironmentVariable("MBX_LICENSE_PUBLIC_KEY") ?? (settings.LicensePublicKey.Length > 0 ? settings.LicensePublicKey : AppInfo.DefaultPublicKey);
-        return new LicenseConfig(settings.LicenseEnforce, url.Trim().TrimEnd('/'), key.Trim());
+        return new LicenseConfig(settings.LicenseEnforce || AppInfo.EnforceLicense, url.Trim().TrimEnd('/'), key.Trim());
     }
 }

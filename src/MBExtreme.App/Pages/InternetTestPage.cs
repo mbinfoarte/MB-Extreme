@@ -391,14 +391,24 @@ public sealed class InternetTestPage : ToolPageBase
         Body.Children.Add(_name);
         _steps.Children.Clear();
         _stepValues.Clear();
-        foreach (var (key, label) in new[] { ("router", "Roteador"), ("ping", "Ping"), ("dns", "DNS"), ("down", "Download"), ("up", "Upload"), ("load", "Sob carga") })
+        _stepIcons.Clear();
+        _stepCards.Clear();
+        foreach (var (key, label, glyph) in new[] { ("router", "Roteador", "\uE839"), ("ping", "Ping", "\uE774"), ("dns", "DNS", "\uE71B"), ("down", "Download", "\uE896"), ("up", "Upload", "\uE898"), ("load", "Sob carga", "\uE916") })
         {
             var value = new TextBlock { Text = "—", FontSize = 18, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
             _stepValues[key] = value;
+            var icon = new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 16, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Brush("MutedBrush") };
+            var iconBox = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(17), Background = Brush("Surface2Brush"), HorizontalAlignment = HorizontalAlignment.Center, Child = icon, Margin = new Thickness(0, 0, 0, 4) };
+            iconBox.Child = icon;
+            icon.VerticalAlignment = VerticalAlignment.Center;
+            _stepIcons[key] = iconBox;
             var cell = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+            cell.Children.Add(iconBox);
             cell.Children.Add(new TextBlock { Text = label, FontSize = 11.5, Foreground = Brush("MutedBrush"), HorizontalAlignment = HorizontalAlignment.Center });
             cell.Children.Add(value);
-            _steps.Children.Add(new Border { Child = cell, Background = Brush("SurfaceBrush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(8), Margin = new Thickness(0, 0, 6, 0) });
+            var card = new Border { Child = cell, Background = Brush("SurfaceBrush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(8), Margin = new Thickness(0, 0, 6, 0), BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent };
+            _stepCards[key] = card;
+            _steps.Children.Add(card);
         }
         Body.Children.Add(_steps);
         if (result is not null)
@@ -432,7 +442,33 @@ public sealed class InternetTestPage : ToolPageBase
 
     private ActiveAdapter? _adapter;
 
-    private void Set(string key, string text) { if (_stepValues.TryGetValue(key, out var t)) t.Text = text; }
+    private readonly Dictionary<string, Border> _stepIcons = new();
+    private readonly Dictionary<string, Border> _stepCards = new();
+
+    /// <summary>Mostra o valor da etapa e marca como feita (ícone verde).</summary>
+    private void Set(string key, string text)
+    {
+        if (_stepValues.TryGetValue(key, out var t)) { t.Text = text; Motion.Flash(t); }
+        if (_stepIcons.TryGetValue(key, out var icon))
+        {
+            Motion.Stop(icon);
+            icon.Background = new SolidColorBrush(Color.FromArgb(0x30, 0x3D, 0xDC, 0x97));
+            if (icon.Child is TextBlock g) g.Foreground = Brush("OkBrush");
+        }
+        if (_stepCards.TryGetValue(key, out var card)) card.BorderBrush = Brushes.Transparent;
+    }
+
+    /// <summary>Etapa em andamento: ícone amarelo pulsando e borda amarela.</summary>
+    private void Working(string key)
+    {
+        if (_stepIcons.TryGetValue(key, out var icon))
+        {
+            icon.Background = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xC4, 0x00));
+            if (icon.Child is TextBlock g) g.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
+            Motion.Breathe(icon, 1.15, 0.6);
+        }
+        if (_stepCards.TryGetValue(key, out var card)) card.BorderBrush = new SolidColorBrush(Color.FromArgb(0x90, 0xFF, 0xC4, 0x00));
+    }
 
     private static string Fmt(double? mbps) => mbps is double v ? $"{v:0.0} Mbps" : "—";
 
@@ -454,15 +490,16 @@ public sealed class InternetTestPage : ToolPageBase
         var live = new Progress<double>(v => _gauge.Show(v));
         try
         {
-            _stage.Text = "Ping até o roteador...";
+            _stage.Text = "Ping até o roteador..."; Working("router");
             double? router = _adapter?.Gateway is { } gw ? await NetAnalyzer.PingAsync(gw, 1000) : null;
             Set("router", Ms(router));
-            _stage.Text = "Tempo de resposta do DNS...";
+            _stage.Text = "Tempo de resposta do DNS..."; Working("dns");
             double? dns = await SpeedTest.DnsTimeAsync(token);
             Set("dns", Ms(dns));
             _stage.Text = "Achando o servidor...";
             var (code, city) = _libre is not null ? ((string?)"LibreSpeed", (string?)_libre.Name) : await test.ServerAsync(token);
             _stage.Text = $"Latência ({code ?? "servidor"}{(city is null ? "" : ", " + city)})...";
+            Working("ping");
             var (ping, jitter) = await test.LatencyAsync(12, token);
             if (ping is null) { SetStatus("Sem resposta do servidor de teste. Confira a internet.", "BadBrush"); return; }
             _gauge.CenterText = $"{ping:0}";
@@ -475,6 +512,8 @@ public sealed class InternetTestPage : ToolPageBase
             _gauge.Caption = "Mbps";
             _gauge.Upload = false;
             if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Download; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Download; _map.InvalidateVisual(); }
+            Working("down");
+            Working("load");
             var (down, loaded) = await test.DownloadWithLoadedPingAsync(connections, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8), live, token);
             Set("down", Fmt(down));
             Set("load", Ms(loaded));
@@ -483,6 +522,7 @@ public sealed class InternetTestPage : ToolPageBase
             _stage.Text = $"Upload com {connections} conexões (2 s de aquecimento + 8 s de medição)...";
             _gauge.Reset();
             _gauge.Upload = true;
+            Working("up");
             if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Upload; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Upload; _map.InvalidateVisual(); }
             var up = await test.UploadAsync(connections, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8), live, token);
             var result = new SpeedResult(DateTimeOffset.Now, down, up, ping, jitter, code, city, connections, loaded, router, dns, _name.Text.Trim());

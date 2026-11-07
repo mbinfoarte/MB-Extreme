@@ -37,7 +37,17 @@ internal sealed class LicenseManager
 
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "license.dat");
 
-    public bool IsAllowed(string pageKey) => FeaturePolicy.IsAllowed(pageKey, Status, Config.Enforce);
+    public bool IsAllowed(string pageKey) => FeaturePolicy.IsAllowed(pageKey, Status, Config.Enforce, Trial.Active);
+
+    /// <summary>Teste grátis do Pro deste PC (7 dias desde o primeiro uso).</summary>
+    public TrialState Trial => _trial ??= TrialClock.Current(AppServices.Settings, MBExtreme.Core.AppInfo.TrialDays);
+    private TrialState? _trial;
+
+    /// <summary>Recalcula os dias do teste (o relógio anda).</summary>
+    public void RefreshTrial() => _trial = TrialClock.Current(AppServices.Settings, MBExtreme.Core.AppInfo.TrialDays);
+
+    /// <summary>Pro de verdade (assinatura) ou durante o teste grátis.</summary>
+    public bool HasProFeatures => !Config.Enforce || LicenseExpiry.IsPro(Status) || Trial.Active;
 
     /// <summary>Texto curto para o menu lateral.</summary>
     public string Summary => Status.IsValid ? (Status.Plan == "pro" ? "Plano Pro" : "Plano gratuito") : Config.Enforce ? "Sem licença" : "Beta aberto";

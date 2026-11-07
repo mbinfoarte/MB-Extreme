@@ -370,10 +370,10 @@ public class SiteAfiliadosTests : IClassFixture<SiteFixture>
     // ------------------------------------------------------------ páginas públicas
 
     [Fact]
-    public async Task PaginaInicialMostraTesteDeTresDiasPrecosENiveis()
+    public async Task PaginaInicialMostraTesteDeSeteDiasPrecosENiveis()
     {
         string html = await Client().GetStringAsync("/");
-        Assert.Contains("3 dias", html);
+        Assert.Contains("7 dias", html);
         Assert.Contains("R$ 19,90", html);
         Assert.Contains("R$ 149,90", html);
         Assert.Contains("Baixar grátis", html);

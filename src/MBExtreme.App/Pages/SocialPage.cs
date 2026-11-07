@@ -44,6 +44,29 @@ public sealed class SocialPage : UserControl
         _ => ("🌐", Color.FromRgb(0xFF, 0xC4, 0x00)),
     };
 
+    /// <summary>Ícone da rede: o desenho da marca (Simple Icons) na cor dela, num quadrado com a cor clarinha; sem desenho, o símbolo.</summary>
+    private static FrameworkElement BrandTile(string icon, double size)
+    {
+        var (glyph, color) = IconOf(icon);
+        FrameworkElement inner = new TextBlock { Text = glyph, FontSize = size * 0.42, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(color), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        if (SocialIcons.Known.TryGetValue(icon, out var brand))
+        {
+            color = (Color)ColorConverter.ConvertFromString(brand.Color);
+            if (0.299 * color.R + 0.587 * color.G + 0.114 * color.B < 60) color = Colors.White;   // marcas pretas (TikTok, Threads) em branco
+            try
+            {
+                var shape = Geometry.Parse("F1 " + brand.Path);
+                inner = new System.Windows.Shapes.Path { Data = shape, Fill = new SolidColorBrush(color), Stretch = Stretch.Uniform, Width = size * 0.5, Height = size * 0.5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            }
+            catch (FormatException) { }
+        }
+        return new Border
+        {
+            Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.26), Background = new SolidColorBrush(Color.FromArgb(0x26, color.R, color.G, color.B)),
+            HorizontalAlignment = HorizontalAlignment.Center, Child = inner,
+        };
+    }
+
     private void Build(ChannelConfig c)
     {
         _root.Children.Clear();
@@ -80,13 +103,8 @@ public sealed class SocialPage : UserControl
         var grid = new UniformGrid { Columns = Math.Max(1, Math.Min(5, c.Links.Count)) };
         foreach (var link in c.Links)
         {
-            var (glyph, color) = IconOf(link.Icon);
             var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            content.Children.Add(new Border
-            {
-                Width = 46, Height = 46, CornerRadius = new CornerRadius(12), Background = new SolidColorBrush(Color.FromArgb(0x28, color.R, color.G, color.B)), HorizontalAlignment = HorizontalAlignment.Center,
-                Child = new TextBlock { Text = glyph, FontSize = 20, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(color), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-            });
+            content.Children.Add(BrandTile(link.Icon, 46));
             content.Children.Add(new TextBlock { Text = link.Name, FontSize = 13.5, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 0) });
             content.Children.Add(new TextBlock { Text = link.Description, FontSize = 11, Foreground = Res("MutedBrush"), HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap });
             var url = link.Url;
@@ -107,12 +125,13 @@ public sealed class SocialPage : UserControl
             var row = new UniformGrid { Columns = Math.Min(2, c.Offers.Count) };
             foreach (var offer in c.Offers)
             {
-                var (glyph, color) = IconOf(offer.Icon);
                 var g = new Grid { Margin = new Thickness(0, 0, 10, 10) };
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 g.ColumnDefinitions.Add(new ColumnDefinition());
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                g.Children.Add(new TextBlock { Text = glyph, FontSize = 22, Foreground = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+                var tile = BrandTile(offer.Icon, 40);
+                tile.Margin = new Thickness(0, 0, 12, 0);
+                g.Children.Add(tile);
                 var t = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
                 t.Children.Add(new TextBlock { Text = offer.Name, FontWeight = FontWeights.SemiBold });
                 t.Children.Add(new TextBlock { Text = offer.Description, FontSize = 11.5, Foreground = Res("MutedBrush"), TextWrapping = TextWrapping.Wrap });

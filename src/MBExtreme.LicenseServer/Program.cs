@@ -33,7 +33,7 @@ builder.Services.AddSingleton(signing);
 builder.Services.AddSingleton(issuer);
 
 long monthlyCents = config.GetValue("Billing:MonthlyCents", 1990L);
-int trialDays = Math.Clamp(config.GetValue("Billing:TrialDays", 3), 0, 60);
+int trialDays = Math.Clamp(config.GetValue("Billing:TrialDays", 7), 0, 60);
 var fixedPrices = new Dictionary<string, long>();
 foreach (var (key, cents) in PlanCatalog.DefaultPrices) fixedPrices[key] = config.GetValue($"Billing:Prices:{key}", cents);
 monthlyCents = fixedPrices["monthly"];
@@ -597,9 +597,10 @@ app.MapPost("/v1/suggestions", async (HttpContext c) =>
     catch (JsonException) { return Results.BadRequest(); }
     string S(string name) => body.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
     string text = S("text").Trim();
-    if (text.Length < 10) return Results.BadRequest(new { message = "Texto curto demais." });
-    string kind = S("kind") is "Ideia" or "Problema" or "Elogio" ? S("kind") : "Ideia";
-    db.AddSuggestion(kind, text, S("contact"), S("appVersion"), S("windows"), S("report"), RemoteRelay.Hash(Ip(c)));
+    if (text.Length < 15) return Results.BadRequest(new { message = "Texto curto demais." });
+    string kind = S("kind") is "Sugestão de função" or "Encontrei um problema" or "Elogio" or "Outro" ? S("kind") : "Outro";
+    string contact = (S("name") + " " + S("contact")).Trim();
+    db.AddSuggestion(kind, text, contact, S("appVersion"), S("windows"), S("report"), RemoteRelay.Hash(Ip(c)));
     return Results.Json(new { ok = true });
 });
 

@@ -158,6 +158,13 @@ public sealed class AppSettings
     /// <summary>Código do canal (UC...) descoberto pelo @ (guardado para não buscar toda vez).</summary>
     public string YouTubeChannelId { get; set; } = "";
 
+    /// <summary>Teste grátis do Pro: quando começou e a data mais adiantada já vista (contra relógio atrasado).</summary>
+    public string TrialStartedUtc { get; set; } = "";
+    public string TrialLastSeenUtc { get; set; } = "";
+
+    /// <summary>Já mostrou a tela "Seu teste acabou" (uma vez).</summary>
+    public bool TrialEndShown { get; set; }
+
     /// <summary>Seções do menu lateral que o usuário recolheu.</summary>
     public List<string> CollapsedSections { get; set; } = new();
 

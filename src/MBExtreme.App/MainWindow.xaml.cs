@@ -35,7 +35,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => _updates?.InstallPendingOnExit();   // atualização baixada: instala ao fechar
         AppServices.Videos.Start();   // vídeo novo do canal: aviso no canto e faixa no Painel
         Loaded += async (_, _) => await _updates.CheckAsync();
-        ContentRendered += (_, _) => Pages.WhatsNew.ShowOnceAfterUpdate(this);
+        ContentRendered += (_, _) => { Pages.WhatsNew.ShowOnceAfterUpdate(this); TrialEnd.ShowIfNeeded(this); };
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
         Accessibility.ApplyScale(RootGrid, AppServices.Settings.UiScale);
@@ -291,6 +291,12 @@ public partial class MainWindow : Window
         ActivateButton.Content = info.ActionText;
         // selo "Licença: Grátis" enquanto não houver assinatura Pro ativa
         FreeBadge.Visibility = MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status) ? Visibility.Collapsed : Visibility.Visible;
+        // com a licença aplicada: durante o teste, a contagem; depois, "Grátis"
+        license.RefreshTrial();
+        BadgeText.Text = license.Config.Enforce && !MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status) && license.Trial.Active
+            ? $" Teste Pro: {license.Trial.LeftText}"
+            : " Licença: Grátis";
+        System.Windows.Automation.AutomationProperties.SetName(FreeBadge, BadgeText.Text.Trim());
         ActivateButton.Visibility = info.ShowAction ? Visibility.Visible : Visibility.Collapsed;
 
         var photo = ProfileStore.Load();

@@ -17,7 +17,8 @@ internal sealed class ProLock
     public async Task CheckAsync()
     {
         var license = AppServices.License;
-        if (_running || !LicenseExpiry.ShouldRevert(license.Config.Enforce, license.Config.Configured, license.Status)) return;
+        license.RefreshTrial();
+        if (_running || !LicenseExpiry.ShouldRevert(license.Config.Enforce, license.Config.Configured, license.Status, license.Trial.Active)) return;
 
         var tweaks = AppServices.Tweaks.Where(t => t.HasBackup && LicenseExpiry.ProTweakCategories.Contains(t.Category)).ToList();
         var games = AppServices.GameLibrary.Optimized();

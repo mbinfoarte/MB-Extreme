@@ -28,7 +28,14 @@ Como usar:
 - "O que há de novo" passa a vir das notas da Release (o texto que escrevermos no GitHub aparece no app).
 - O CI já gera `beta-N`; para o público usamos tags `v1.0.0`, `v1.0.1`… (pré-lançamentos ficam de fora para o cliente).
 
-### Etapa 2 — Grátis por 7 dias, depois Pro ou Grátis com limites
+### Etapa 2 — Grátis por 7 dias, depois Pro ou Grátis com limites — FEITA NO PROGRAMA
+
+Como ligar para o público: em `src/MBExtreme.Core/AppInfo.cs`, `EnforceLicense = true` (e o endereço do servidor em `DefaultServerUrl`).
+Enquanto estiver `false`, o beta continua aberto e nada muda para quem testa.
+- O teste começa no primeiro uso, sem conta; a data fica nas configurações e no registro (apagar uma não reinicia); atrasar o relógio não devolve dias.
+- Selo do menu: "Teste Pro: faltam N dias" → "Licença: Grátis".
+- No fim: tela "Seu teste do Pro acabou" com Assinar o Pro (abre os planos) ou Continuar no Grátis (os ajustes Pro voltam ao original).
+- Servidor: teste padrão passou de 3 para 7 dias.
 - **Teste de 7 dias do Pro começa sozinho na instalação**, sem pedir conta. O servidor guarda só um código do PC (hash), para reinstalar não renovar o teste. Sem internet, o app conta os 7 dias localmente.
 - No fim dos 7 dias: tela "Seu teste acabou" com duas opções — **Assinar o Pro** (abre o checkout) ou **Continuar no Grátis** (os ajustes Pro são desfeitos pela Central Desfazer, como já funciona).
 - Contagem regressiva no selo do menu ("Pro: faltam 3 dias").

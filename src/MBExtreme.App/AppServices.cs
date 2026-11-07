@@ -20,7 +20,7 @@ internal static class AppServices
     /// <summary>Ajustes que a pessoa pode aplicar no plano dela (os das páginas Pro ficam de fora no plano grátis).</summary>
     public static IReadOnlyList<Tweak> AllowedTweaks()
     {
-        bool pro = !License.Config.Enforce || MBExtreme.Core.Licensing.LicenseExpiry.IsPro(License.Status);
+        bool pro = License.HasProFeatures;   // assinatura Pro, teste grátis ativo ou licença não aplicada
         return pro ? Tweaks : Tweaks.Where(t => !MBExtreme.Core.Licensing.LicenseExpiry.ProTweakCategories.Contains(t.Category)).ToList();
     }
 

@@ -86,10 +86,10 @@ public class CanalSuporteTests
     [Fact]
     public void Sugestao_curta_demais_nao_vai_e_mensagem_leva_versao()
     {
-        Assert.NotNull(new Suggestion("Ideia", "oi", "", "0.9.0", "Windows 11").Problem);
-        var s = new Suggestion("Problema", "O teste de internet travou no upload.", "74999998888", "0.9.0", "Windows 11 Pro");
+        Assert.NotNull(new Suggestion("Sugestão de função", "oi", "", "0.9.0", "Windows 11").Problem);
+        var s = new Suggestion("Encontrei um problema", "O teste de internet travou no upload.", "74999998888", "0.9.0", "Windows 11 Pro");
         Assert.Null(s.Problem);
-        Assert.Contains("[Problema] MB Extreme 0.9.0 · Windows 11 Pro", s.AsMessage());
+        Assert.Contains("[Encontrei um problema] MB Extreme 0.9.0 · Windows 11 Pro", s.AsMessage());
         Assert.Contains("Contato: 74999998888", s.AsMessage());
     }
 

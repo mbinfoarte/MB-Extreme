@@ -35,3 +35,34 @@ public class InterfaceFase8Tests
         Assert.Equal(1.1, AccessibleText.Step(1.37, +1));  // valor estranho: parte do 100%
     }
 }
+
+/// <summary>Contas das animações: suavização, contagem da nota e cascata.</summary>
+public class AnimacoesTests
+{
+    [Fact]
+    public void Suavizacao_comeca_em_0_termina_em_1_e_nunca_passa()
+    {
+        Assert.Equal(0, MBExtreme.Core.Ui.Easing.OutCubic(0));
+        Assert.Equal(1, MBExtreme.Core.Ui.Easing.OutCubic(1));
+        Assert.Equal(1, MBExtreme.Core.Ui.Easing.OutCubic(5));
+        Assert.True(MBExtreme.Core.Ui.Easing.OutCubic(0.5) > 0.5);   // rápida no começo
+    }
+
+    [Fact]
+    public void Contagem_da_nota_chega_no_valor_certo()
+    {
+        var d = TimeSpan.FromMilliseconds(900);
+        Assert.Equal(0, MBExtreme.Core.Ui.Easing.Count(0, 87, TimeSpan.Zero, d));
+        Assert.Equal(87, MBExtreme.Core.Ui.Easing.Count(0, 87, d, d));
+        Assert.Equal(87, MBExtreme.Core.Ui.Easing.Count(0, 87, TimeSpan.FromSeconds(5), d));
+        Assert.Equal(87, MBExtreme.Core.Ui.Easing.Count(0, 87, TimeSpan.Zero, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void Cascada_tem_limite_para_listas_grandes()
+    {
+        Assert.Equal(TimeSpan.Zero, MBExtreme.Core.Ui.Easing.Stagger(0));
+        Assert.Equal(TimeSpan.FromMilliseconds(70), MBExtreme.Core.Ui.Easing.Stagger(2));
+        Assert.Equal(TimeSpan.FromMilliseconds(420), MBExtreme.Core.Ui.Easing.Stagger(500));
+    }
+}

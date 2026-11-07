@@ -27,6 +27,9 @@
     <SolidColorBrush x:Key="WarnBrush" Color="{StaticResource WarnColor}" />
     <SolidColorBrush x:Key="BadBrush" Color="{StaticResource BadColor}" />
 
+    <!-- Tempo dos efeitos de passar o mouse e clicar (o programa zera quando as animações estão desligadas) -->
+    <Duration x:Key="MotionHover">0:0:0.14</Duration>
+
     <!-- Fundo da janela: preto com um degradê quase imperceptível -->
     <LinearGradientBrush x:Key="WindowBackdropBrush" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Color="#0C0C0F" Offset="0" />
@@ -70,10 +73,19 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="14"
-                            Padding="{TemplateBinding Padding}">
+                            Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform><ScaleTransform x:Name="Motion" /></Border.RenderTransform>
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1.03" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1.03" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="0.96" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="0.96" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1.03" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1.03" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource ButtonHoverBrush}" />
                         </Trigger>
@@ -98,10 +110,19 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="14"
                             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                            Padding="{TemplateBinding Padding}">
+                            Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform><ScaleTransform x:Name="Motion" /></Border.RenderTransform>
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1.03" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1.03" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="0.96" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="0.96" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1.03" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1.03" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource MutedBrush}" />
                         </Trigger>
@@ -209,6 +230,30 @@
         </Setter>
     </Style>
 
+    <!-- Título de seção do menu lateral (clicável: recolhe e abre a seção) -->
+    <Style x:Key="SideHeaderButton" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="10,4,10,4">
+                        <ContentPresenter HorizontalAlignment="Stretch" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#0FFFFFFF" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#FFC400" />
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="1" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Botões discretos do rodapé do menu lateral -->
     <Style x:Key="SideFooterButton" TargetType="Button">
         <Setter Property="Foreground" Value="#B4B4BC" />
@@ -241,10 +286,19 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bd" Background="{StaticResource SurfaceBrush}" CornerRadius="12"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="14,12">
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="14,12" RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform><ScaleTransform x:Name="Motion" /></Border.RenderTransform>
                         <ContentPresenter />
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1.025" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1.025" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="0.97" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="0.97" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1.025" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1.025" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2Brush}" />
                             <Setter TargetName="Bd" Property="BorderBrush" Value="#66FFC400" />
@@ -274,10 +328,19 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="Bd" Background="{StaticResource SurfaceBrush}" CornerRadius="18"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="20">
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="20" RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform><ScaleTransform x:Name="Motion" /></Border.RenderTransform>
                         <ContentPresenter />
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1.02" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1.02" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="0.98" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="0.98" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleX" To="1.02" Duration="{StaticResource MotionHover}" /><DoubleAnimation Storyboard.TargetName="Motion" Storyboard.TargetProperty="ScaleY" To="1.02" Duration="{StaticResource MotionHover}" /></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2Brush}" />
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource MutedBrush}" />

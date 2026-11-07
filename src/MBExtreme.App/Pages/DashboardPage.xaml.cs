@@ -57,6 +57,17 @@ public partial class DashboardPage : UserControl
         foreach (var (key, title, description, icon) in Tools)
             ToolsGrid.Children.Add(ToolCard.Build(title, description, icon, () => MainWindow.Current?.Go(key)));
         _ = LoadPcSummaryAsync();
+        // entrada: ferramentas em cascata na primeira vez que o Painel aparece
+        bool entered = false;
+        Loaded += (_, _) =>
+        {
+            if (entered) return;
+            entered = true;
+            Motion.Cascade(ToolsGrid, 25);
+            Motion.Enter(RamSummary, TimeSpan.FromMilliseconds(60));
+            Motion.Enter(DiskSummary, TimeSpan.FromMilliseconds(110));
+            Motion.Enter(PcSummary, TimeSpan.FromMilliseconds(160));
+        };
         CpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("cpu-detail");
         GpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("gpu-detail");
         RamCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("ram-detail");
@@ -120,7 +131,7 @@ public partial class DashboardPage : UserControl
             var drive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\");
             if (!drive.IsReady || drive.TotalSize <= 0) return;
             double usedPercent = 100.0 * (drive.TotalSize - drive.AvailableFreeSpace) / drive.TotalSize;
-            _diskRing.Percent = usedPercent;
+            _diskRing.AnimateTo(usedPercent);
             _diskRing.Fill = (Brush)FindResource(usedPercent >= 90 ? "BadBrush" : usedPercent >= 80 ? "WarnBrush" : "OkBrush");
             DiskRingText.Text = $"{usedPercent:0}%";
             DiskSummaryText.Text = $"{drive.AvailableFreeSpace / BytesPerGb:0.0} GB livres de {drive.TotalSize / BytesPerGb:0.0} GB";
@@ -179,7 +190,7 @@ public partial class DashboardPage : UserControl
         RamDetail.Text = $"{memory.UsedBytes / BytesPerGb:0.0} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";
         if (memory.TotalBytes > 0)
         {
-            _ramRing.Percent = used;
+            _ramRing.AnimateTo(used);
             _ramRing.Fill = (Brush)FindResource(used >= 85 ? "BadBrush" : used >= 70 ? "WarnBrush" : "OkBrush");
             RamRingText.Text = $"{used:0}%";
             RamSummaryText.Text = $"{memory.UsedBytes / BytesPerGb:0.#} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";

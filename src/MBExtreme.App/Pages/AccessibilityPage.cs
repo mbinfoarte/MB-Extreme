@@ -17,6 +17,23 @@ public sealed class AccessibilityPage : ToolPageBase
         }));
         Body.Children.Add(Muted("Atalhos: Ctrl + aumenta, Ctrl − diminui e Ctrl 0 volta ao normal. Em telas pequenas, 90% mostra mais coisas de uma vez.", 12));
 
+        Body.Children.Add(Heading("Animações"));
+        var animations = new System.Windows.Controls.CheckBox
+        {
+            Content = "Mostrar animações (telas entrando, botões, anel do Painel, seções do menu)",
+            IsChecked = AppServices.Settings.Animations, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 4),
+        };
+        animations.Click += (_, _) =>
+        {
+            AppServices.Settings.Animations = animations.IsChecked == true;
+            AppServices.Settings.Save();
+            SetStatus(animations.IsChecked == true
+                ? "Animações ligadas. O efeito dos botões ao passar o mouse volta quando o programa abrir de novo."
+                : "Animações desligadas: tudo aparece na hora. O efeito dos botões some quando o programa abrir de novo.", "OkBrush");
+        };
+        Body.Children.Add(animations);
+        Body.Children.Add(Muted("Se o Windows estiver com \"Efeitos de animação\" desligado (Configurações → Acessibilidade → Efeitos visuais), o MB Extreme também não anima.", 12));
+
         Body.Children.Add(Heading("Pelo teclado"));
         Body.Children.Add(Row("Tab e Shift+Tab", "Andam entre os botões e caixas. O item com o foco ganha um contorno amarelo."));
         Body.Children.Add(Row("Espaço ou Enter", "Apertam o botão ou marcam a caixa com o foco."));

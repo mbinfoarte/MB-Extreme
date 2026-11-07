@@ -100,11 +100,11 @@ internal sealed class UpdateController
         {
             case UpdateState.Required:
                 _lockText.Text = $"Esta versão ({AppInfo.DisplayVersion}, compilação {AppUpdates.CurrentBuild()}) não é mais aceita. Atualize para a compilação {manifest.Build} para continuar usando o MB Extreme." + news;
-                _lock.Visibility = Visibility.Visible;
+                if (_lock.Visibility != Visibility.Visible) { _lock.Visibility = Visibility.Visible; Motion.Enter(_lock, fromY: 0); }
                 break;
             case UpdateState.Available:
                 _bannerText.Text = $"Nova versão disponível: compilação {manifest.Build}." + news;
-                _banner.Visibility = Visibility.Visible;
+                if (_banner.Visibility != Visibility.Visible) { _banner.Visibility = Visibility.Visible; Motion.Enter(_banner, fromY: -24); }
                 _content.Margin = new Thickness(_contentMargin.Left, _contentMargin.Top + 56, _contentMargin.Right, _contentMargin.Bottom);
                 break;
         }
@@ -134,7 +134,7 @@ internal sealed class UpdateController
         try
         {
             string folder = Path.Combine(Path.GetTempPath(), "MBExtreme-update");
-            string file = await AppUpdates.DownloadAsync(Http, _manifest, folder, new Progress<double>(p => progress.Value = p), CancellationToken.None);
+            string file = await AppUpdates.DownloadAsync(Http, _manifest, folder, new Progress<double>(p => Motion.To(progress, System.Windows.Controls.Primitives.RangeBase.ValueProperty, p, Motion.Fast)), CancellationToken.None);
             if (MessageBox.Show("O MB Extreme vai fechar e abrir o instalador da nova versão. Continuar?", AppInfo.Name, MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
             Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
             Application.Current.Shutdown();

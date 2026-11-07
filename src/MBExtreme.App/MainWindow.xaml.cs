@@ -113,6 +113,7 @@ public partial class MainWindow : Window
         _suppressNav = true;
         foreach (var radio in NavRadios())
             radio.IsChecked = (string?)radio.Tag == sideKey;
+        if (sideKey is not null) RevealInMenu(sideKey);
         _suppressNav = false;
 
         ShowPage(key);
@@ -124,31 +125,71 @@ public partial class MainWindow : Window
         }
     }
 
+    private readonly Dictionary<string, (StackPanel Items, Action<bool> Set)> _sections = new();
+
     private void BuildMenu()
     {
-        // Menu em seções, como um painel de controle: cada item abre a tela direto.
+        // Menu em seções, como um painel de controle: cada item abre a tela direto. Cada seção recolhe pela setinha (fica guardado).
         bool first = true;
         foreach (var section in NavigationMap.Sidebar)
         {
+            var items = new StackPanel();
             if (section.Header.Length > 0)
-                NavPanel.Children.Add(new TextBlock
+            {
+                string header = section.Header;
+                var chevron = new TextBlock
                 {
-                    Text = section.Header,
-                    FontSize = 9.5,
-                    FontWeight = FontWeights.SemiBold,
+                    Text = "\uE70D", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 8.5, VerticalAlignment = VerticalAlignment.Center,
                     Foreground = (Brush)FindResource("MutedBrush"),
-                    Margin = new Thickness(10, first ? 4 : 12, 0, 3),
-                });
+                };
+                var label = new TextBlock { Text = header, FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("MutedBrush") };
+                var row = new DockPanel { LastChildFill = true };
+                DockPanel.SetDock(chevron, Dock.Right);
+                row.Children.Add(chevron);
+                row.Children.Add(label);
+                var toggle = new Button
+                {
+                    Content = row, Style = (Style)FindResource("SideHeaderButton"), Margin = new Thickness(0, first ? 2 : 8, 0, 1),
+                    ToolTip = "Clique para recolher ou abrir " + header.ToLowerInvariant(),
+                };
+                bool open = !AppServices.Settings.CollapsedSections.Contains(header);
+                void Set(bool value)
+                {
+                    open = value;
+                    Motion.Toggle(items, open);
+                    Motion.RotateTo(chevron, open ? 0 : -90);
+                    System.Windows.Automation.AutomationProperties.SetName(toggle, $"{header}: {(open ? "aberta" : "recolhida")}");
+                    var list = AppServices.Settings.CollapsedSections;
+                    if (open) list.Remove(header); else if (!list.Contains(header)) list.Add(header);
+                }
+                toggle.Click += (_, _) => { Set(!open); AppServices.Settings.Save(); };
+                NavPanel.Children.Add(toggle);
+                // estado inicial sem animação
+                items.LayoutTransform = new ScaleTransform(1, open ? 1 : 0);
+                items.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+                Motion.RotateTo(chevron, open ? 0 : -90);
+                System.Windows.Automation.AutomationProperties.SetName(toggle, $"{header}: {(open ? "aberta" : "recolhida")}");
+                _sections[header] = (items, Set);
+            }
+            NavPanel.Children.Add(items);
             foreach (var item in section.Items)
-                AddNavItem(item.Key, item.Title, item.Icon, item.Key == "home");
+                AddNavItem(items, item.Key, item.Title, item.Icon, item.Key == "home");
             first = false;
         }
+    }
+
+    /// <summary>Abre a seção do menu que tem o item (quando a tela é aberta por outro caminho com a seção recolhida).</summary>
+    private void RevealInMenu(string sideKey)
+    {
+        foreach (var section in NavigationMap.Sidebar)
+            if (section.Header.Length > 0 && section.Items.Any(i => i.Key == sideKey) && _sections.TryGetValue(section.Header, out var s) && s.Items.Visibility != Visibility.Visible)
+                s.Set(true);
     }
 
     private static readonly Brush IconIdle = new SolidColorBrush(Color.FromRgb(0x8E, 0x8E, 0x96));
     private static readonly Brush IconActive = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
 
-    private void AddNavItem(string key, string title, string glyph, bool selected)
+    private void AddNavItem(Panel host, string key, string title, string glyph, bool selected)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         var icon = new TextBlock
@@ -180,7 +221,7 @@ public partial class MainWindow : Window
         radio.Checked += (_, _) => icon.Foreground = IconActive;
         radio.Unchecked += (_, _) => icon.Foreground = IconIdle;
         radio.Checked += Nav_Checked;
-        NavPanel.Children.Add(radio);
+        host.Children.Add(radio);
     }
 
     private void FontSize_Click(object sender, RoutedEventArgs e) => Go("a11y");
@@ -200,7 +241,7 @@ public partial class MainWindow : Window
     private static string VersionLabel =>
         $"v{MBExtreme.Core.AppInfo.Version} · compilação {MBExtreme.Core.Update.AppUpdates.CurrentBuild()} · Verificar atualização";
 
-    private IEnumerable<RadioButton> NavRadios() => NavPanel.Children.OfType<RadioButton>();
+    private IEnumerable<RadioButton> NavRadios() => NavPanel.Children.OfType<StackPanel>().SelectMany(p => p.Children.OfType<RadioButton>());
 
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
@@ -288,7 +329,9 @@ public partial class MainWindow : Window
             _pages[key] = page;
         }
 
+        bool changed = !ReferenceEquals(ContentHost.Content, page);
         ContentHost.Content = page;
+        if (changed) Motion.Enter(page, fromY: 14);
         if (page is SubPageHost host)
         {
             string target = BackTarget(key);

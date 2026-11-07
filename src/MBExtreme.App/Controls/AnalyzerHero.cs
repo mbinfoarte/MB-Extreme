@@ -12,11 +12,24 @@ namespace MBExtreme.UI.Controls;
 /// <summary>Anel de progresso desenhado na hora (nota de saúde, uso de memória e de disco).</summary>
 internal sealed class RingGauge : FrameworkElement
 {
-    public double Percent { get => _percent; set { _percent = Math.Clamp(value, 0, 100); InvalidateVisual(); } }
-    public Brush Fill { get; set; } = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
+    public static readonly DependencyProperty PercentProperty = DependencyProperty.Register(nameof(Percent), typeof(double), typeof(RingGauge),
+        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender, null, (_, v) => Math.Clamp((double)v, 0, 100)));
+
+    /// <summary>Quanto do anel está cheio (0 a 100). Pode ser animado.</summary>
+    public double Percent { get => (double)GetValue(PercentProperty); set => SetValue(PercentProperty, value); }
+    public Brush Fill { get => _fill; set { _fill = value; InvalidateVisual(); } }
+    private Brush _fill = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
     public double Thickness { get; set; } = 10;
-    public bool Spinning { get; set; }
-    private double _percent;
+
+    /// <summary>Muda na hora, cancelando uma animação em andamento (senão ela seguraria o valor antigo).</summary>
+    public void Jump(double value)
+    {
+        BeginAnimation(PercentProperty, null);
+        Percent = value;
+    }
+
+    /// <summary>Anima até o valor (ou muda na hora, com as animações desligadas).</summary>
+    public void AnimateTo(double value) => Motion.To(this, PercentProperty, value);
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -25,7 +38,7 @@ internal sealed class RingGauge : FrameworkElement
         var center = new Point(ActualWidth / 2, ActualHeight / 2);
         double r = size / 2 - Thickness / 2;
         dc.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)), Thickness), center, r, r);
-        double sweep = 360 * _percent / 100;
+        double sweep = 360 * Percent / 100;
         if (sweep <= 0.1) return;
         var pen = new Pen(Fill, Thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
         if (sweep >= 359.9) { dc.DrawEllipse(null, pen, center, r, r); return; }
@@ -45,6 +58,7 @@ internal sealed class AnalyzerHero : UserControl
 {
     private static readonly Brush Yellow = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
     private readonly RingGauge _ring = new() { Width = 132, Height = 132, Thickness = 9 };
+    private readonly System.Windows.Shapes.Ellipse _halo = new() { Width = 132, Height = 132, StrokeThickness = 2, Opacity = 0 };
     private readonly Grid _center = new();
     private readonly TextBlock _title = new() { FontSize = 20, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _subtitle = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) };
@@ -62,6 +76,8 @@ internal sealed class AnalyzerHero : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         var ringHost = new Grid { Width = 132, Height = 132, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
+        _halo.Stroke = Yellow;
+        ringHost.Children.Add(_halo);
         ringHost.Children.Add(_ring);
         ringHost.Children.Add(_center);
         grid.Children.Add(ringHost);
@@ -85,9 +101,28 @@ internal sealed class AnalyzerHero : UserControl
 
     private static Brush Res(string key) => (Brush)Application.Current.FindResource(key);
 
+    /// <summary>Brilho em volta do anel que pulsa (parado: chama para o ANALISAR; trabalhando: mostra atividade).</summary>
+    private void Halo(bool on)
+    {
+        if (!on || !Motion.Enabled)
+        {
+            _halo.BeginAnimation(OpacityProperty, null);
+            _halo.Opacity = 0;
+            Motion.Stop(_halo);
+            return;
+        }
+        var fade = new System.Windows.Media.Animation.DoubleAnimation(0.1, 0.55, new Duration(TimeSpan.FromSeconds(1.4)))
+        { AutoReverse = true, RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever };
+        _halo.BeginAnimation(OpacityProperty, fade);
+        Motion.Breathe(_halo, 1.1, 1.4);
+    }
+
     private void ShowIdle()
     {
-        _ring.Percent = 100;
+        Motion.Stop(_ring);
+        Motion.Spin(_ring, 9);   // degradê girando devagar
+        Halo(true);
+        _ring.Jump(100);
         _ring.Fill = new LinearGradientBrush(Color.FromRgb(0xFF, 0xDD, 0x33), Color.FromRgb(0xFF, 0x8A, 0x00), 45);
         _center.Children.Clear();
         var button = new Button { Width = 104, Height = 104, Cursor = Cursors.Hand, ToolTip = "Analisa o PC sem mudar nada (menos de um minuto)" };
@@ -99,6 +134,7 @@ internal sealed class AnalyzerHero : UserControl
         System.Windows.Automation.AutomationProperties.SetName(button, "Analisar o PC");
         button.Click += async (_, _) => await AnalyzeAsync();
         _center.Children.Add(button);
+        Motion.Breathe(button, 1.04, 1.6);
 
         _title.Text = "Vamos deixar seu PC em dia?";
         _subtitle.Text = "Um clique confere arquivos inúteis, programas que abrem com o Windows, ajustes, segurança, discos, drivers, espaço livre e Windows Update. Nada é alterado durante a análise.";
@@ -148,7 +184,7 @@ internal sealed class AnalyzerHero : UserControl
         _center.Children.Clear();
         _center.Children.Add(new TextBlock { Text = "", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 34, Foreground = Yellow, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
         _ring.Fill = Yellow;
-        _ring.Percent = 0;
+        _ring.Jump(0);
         _title.Text = "Analisando seu PC...";
         _subtitle.Text = "Leva menos de um minuto. Nada é alterado durante a análise.";
         var current = Muted("Começando...");
@@ -164,8 +200,10 @@ internal sealed class AnalyzerHero : UserControl
         void OnCheck(CheckRun run) => Dispatcher.BeginInvoke(new System.Action(() =>
         {
             done++;
-            _ring.Percent = 100.0 * done / Math.Max(1, total);
-            _rows.Children.Insert(Math.Max(0, _rows.Children.Count - 1), CheckRow(run, interactive: false));
+            _ring.AnimateTo(100.0 * done / Math.Max(1, total));
+            var row = CheckRow(run, interactive: false);
+            _rows.Children.Insert(Math.Max(0, _rows.Children.Count - 1), row);
+            Motion.Enter(row, fromY: 6);
         }));
         try
         {
@@ -190,10 +228,15 @@ internal sealed class AnalyzerHero : UserControl
         int score = HealthScore.Of(_report.Findings, ignored);
         var color = HealthScore.Level(score) switch { 2 => Res("OkBrush"), 1 => Yellow, _ => Res("BadBrush") };
         _ring.Fill = color;
-        _ring.Percent = score;
+        Motion.Stop(_ring);
+        Halo(false);
+        _ring.Jump(0);
+        _ring.AnimateTo(score);   // o anel enche até a nota
         _center.Children.Clear();
         var center = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        center.Children.Add(new TextBlock { Text = score.ToString(), FontSize = 38, FontWeight = FontWeights.Bold, Foreground = color, HorizontalAlignment = HorizontalAlignment.Center });
+        var number = new TextBlock { Text = "0", FontSize = 38, FontWeight = FontWeights.Bold, Foreground = color, HorizontalAlignment = HorizontalAlignment.Center };
+        center.Children.Add(number);
+        Motion.CountUp(number, 0, score);
         center.Children.Add(new TextBlock { Text = "saúde do PC", FontSize = 11, Foreground = Res("MutedBrush"), HorizontalAlignment = HorizontalAlignment.Center });
         _center.Children.Add(center);
         System.Windows.Automation.AutomationProperties.SetName(_ring, $"Saúde do PC: {score} de 100");
@@ -207,12 +250,14 @@ internal sealed class AnalyzerHero : UserControl
         _rows.Children.Clear();
         _boxes.Clear();
         foreach (var run in _report.Checks) _rows.Children.Add(CheckRow(run, interactive: true));
+        Motion.Cascade(_rows, 30);
 
         _actions.Children.Clear();
         if (_boxes.Count > 0) _actions.Children.Add(Action("Corrigir tudo", true, () => FixAsync(_boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Finding).ToList())));
         _actions.Children.Add(Action("Analisar de novo", false, AnalyzeAsync));
         _actions.Children.Add(Action("Análise profunda", false, () => { MainWindow.Current?.Go("diagnose", autoStart: true, deep: true); return Task.CompletedTask; },
             "Imagem do Windows, arquivos do sistema e disco, só lendo (10 a 40 minutos). Abre no Painel inteligente."));
+        Motion.Cascade(_actions, 50);
         _actions.Children.Add(Action("Ver histórico", false, () => { MainWindow.Current?.Go("diagnose"); return Task.CompletedTask; }));
         if (ignored.Count > 0)
             _actions.Children.Add(Action($"Mostrar ignorados ({ignored.Count})", false, () =>
@@ -324,6 +369,9 @@ internal sealed class AnalyzerHero : UserControl
 
         _busy = true;
         _actions.Children.Clear();
+        Motion.Stop(_ring);
+        Motion.Spin(_ring, 1.6);
+        Halo(true);
         _title.Text = "Corrigindo...";
         _subtitle.Text = "Criando um ponto de restauração...";
         try

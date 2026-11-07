@@ -109,6 +109,7 @@ public sealed class InstallAppsPage : UserControl
             if (q.Length > 0 && !entry.Title.Contains(q, StringComparison.CurrentCultureIgnoreCase) && !entry.Description.Contains(q, StringComparison.CurrentCultureIgnoreCase)) continue;
             _grid.Children.Add(Card(entry));
         }
+        Motion.Cascade(_grid, 12);
     }
 
     private Border Card(CatalogEntry entry)

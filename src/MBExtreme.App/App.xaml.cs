@@ -63,6 +63,8 @@ public partial class App : Application
         SingleInstance.ListenForOthers(() => Dispatcher.BeginInvoke(new Action(() => (MainWindow as MainWindow)?.ActivateFromOther())));
 
         Accessibility.Install();
+        // animações desligadas (opção do programa ou do Windows): efeitos de passar o mouse instantâneos
+        Motion.ApplyToTheme(Resources.MergedDictionaries.Count > 0 ? Resources.MergedDictionaries[0] : Resources);
         base.OnStartup(e);
     }
 

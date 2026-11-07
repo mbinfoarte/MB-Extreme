@@ -12,6 +12,7 @@ namespace MBExtreme.UI.Controls;
 public partial class ProgressPanel : UserControl
 {
     private readonly List<(string Name, TextBlock Text)> _steps = new();
+    private int _current = -1;
 
     public ProgressPanel()
     {
@@ -29,6 +30,7 @@ public partial class ProgressPanel : UserControl
         TitleText.Text = title;
         StepsList.Children.Clear();
         _steps.Clear();
+        _current = -1;
 
         foreach (var name in steps)
         {
@@ -38,6 +40,7 @@ public partial class ProgressPanel : UserControl
             SetStep(text, name, StepState.Pending);
         }
 
+        Ring.BeginAnimation(ProgressRing.PercentProperty, null);
         Ring.Percent = 0;
         StatusText.Text = "Preparando...";
         DetailText.Text = "";
@@ -45,15 +48,22 @@ public partial class ProgressPanel : UserControl
         StopButton.Visibility = Visibility.Visible;
         CloseButton.Visibility = Visibility.Collapsed;
         Visibility = Visibility.Visible;
+        Motion.Enter(this, fromY: 16);
+        Motion.Cascade(StepsList, 45);
     }
 
     public void Report(ProgressEvent e)
     {
-        Ring.Percent = e.Percent;
+        Motion.To(Ring, ProgressRing.PercentProperty, e.Percent, Motion.Normal);   // o anel desliza até o valor novo
         StatusText.Text = e.Message;
 
         int current = _steps.FindIndex(s => s.Name == e.Step);
         if (current < 0) return;
+        if (current != _current)
+        {
+            _current = current;
+            Motion.Flash(_steps[current].Text);   // etapa nova acende
+        }
 
         for (int i = 0; i < _steps.Count; i++)
         {
@@ -66,9 +76,10 @@ public partial class ProgressPanel : UserControl
     {
         StatusText.Text = summary;
         DetailText.Text = detail ?? "";
+        Motion.Flash(StatusText);
         if (success)
         {
-            Ring.Percent = 100;
+            Motion.To(Ring, ProgressRing.PercentProperty, 100, Motion.Normal);
             foreach (var (name, text) in _steps) SetStep(text, name, StepState.Done);
         }
 

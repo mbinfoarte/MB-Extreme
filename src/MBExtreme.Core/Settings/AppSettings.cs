@@ -136,6 +136,12 @@ public sealed class AppSettings
     /// <summary>Compilação em que o "O que há de novo" já foi mostrado.</summary>
     public string LastWhatsNewBuild { get; set; } = "";
 
+    /// <summary>Animações da interface (desligar deixa tudo instantâneo, para PCs fracos ou quem prefere).</summary>
+    public bool Animations { get; set; } = true;
+
+    /// <summary>Seções do menu lateral que o usuário recolheu.</summary>
+    public List<string> CollapsedSections { get; set; } = new();
+
     /// <summary>Arrumação da tela do estúdio: 0 automática (prévia em cima quando a janela é estreita, como num monitor em pé), 1 lado a lado, 2 prévia em cima.</summary>
     public int StudioLayoutMode { get; set; }
 

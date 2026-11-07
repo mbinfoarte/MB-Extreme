@@ -44,6 +44,7 @@ internal sealed class AllToolsPage : UserControl
             var grid = new UniformGrid { Columns = 3 };
             foreach (var tile in tiles) grid.Children.Add(ToolCard.Build(tile.Title, tile.Description, tile.Icon, () => _open(tile.Key)));
             _list.Children.Add(grid);
+            Motion.Cascade(grid, 15);
         }
     }
 }

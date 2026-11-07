@@ -4,7 +4,8 @@ using System.Numerics;
 namespace MBExtreme.Core.Benchmark;
 
 /// <summary>Resultado da etapa de inteligência artificial.</summary>
-public sealed record AiResult(double CpuFp32Gflops, double CpuInt8Gops, double GpuFp32Gflops, int Score);
+public sealed record AiResult(double CpuFp32Gflops, double CpuInt8Gops, double GpuFp32Gflops, int Score,
+    double GenerationTokensPerSec = 0, double PromptTokensPerSec = 0);
 
 /// <summary>
 /// Inteligência artificial: o que uma rede neural faz por dentro é multiplicar matrizes. Mede essa conta em
@@ -13,12 +14,17 @@ public sealed record AiResult(double CpuFp32Gflops, double CpuInt8Gops, double G
 /// </summary>
 public static class AiBenchmark
 {
+    public const string PartGenerate = "Escrevendo a resposta";
+    public const string PartPrompt = "Lendo o seu pedido";
     public const string PartFp32 = "Rede neural FP32 (processador)";
     public const string PartInt8 = "Modelo quantizado INT8 (processador)";
     public const string PartGpu = "Rede neural na placa de vídeo";
 
     public static AiResult Run(int msPerPart, CancellationToken token, Action<string, double>? progress = null, Func<CancellationToken, double>? gpuGemm = null)
     {
+        var model = TinyModel.Create();
+        double generate = model.Generate(msPerPart, token, f => progress?.Invoke(PartGenerate, f));
+        double prompt = model.ReadPrompt(msPerPart, token, f => progress?.Invoke(PartPrompt, f));
         double fp32 = Gemm(msPerPart, token, f => progress?.Invoke(PartFp32, f));
         double int8 = Int8(msPerPart, token, f => progress?.Invoke(PartInt8, f));
         double gpu = 0;
@@ -29,7 +35,156 @@ public static class AiBenchmark
             catch (Exception ex) when (ex is not OperationCanceledException) { gpu = 0; }
             progress?.Invoke(PartGpu, 1);
         }
-        return new AiResult(fp32, int8, gpu, Score(fp32, int8, gpu));
+        return new AiResult(fp32, int8, gpu, Score(fp32, int8, gpu), generate, prompt);
+    }
+
+    /// <summary>
+    /// Rede de teste no formato dos modelos de linguagem: 4 camadas (projeções de atenção e a rede de cada camada),
+    /// largura 768, 28 milhões de parâmetros em FP32 (113 MB). Gerar um token passa por todos os pesos uma vez
+    /// (depende da memória); ler o pedido processa 64 tokens de uma vez (depende do cálculo).
+    /// </summary>
+    public sealed class TinyModel
+    {
+        public const int Width = 768, Hidden = 3072, Layers = 4, Batch = 64;
+        private readonly float[][] _weights; // por matriz: [saídas x entradas]
+        private readonly (int Out, int In)[] _shapes;
+
+        private TinyModel(float[][] weights, (int, int)[] shapes) { _weights = weights; _shapes = shapes; }
+
+        public long Parameters => _weights.Sum(w => (long)w.Length);
+
+        public static TinyModel Create(int seed = 5)
+        {
+            var shapes = new List<(int, int)>();
+            for (int l = 0; l < Layers; l++)
+            {
+                shapes.Add((3 * Width, Width)); // q, k, v
+                shapes.Add((Width, Width));     // saída da atenção
+                shapes.Add((Hidden, Width));    // sobe
+                shapes.Add((Width, Hidden));    // desce
+            }
+            var rng = new Random(seed);
+            var weights = shapes.Select(sh =>
+            {
+                var w = new float[sh.Item1 * sh.Item2];
+                for (int i = 0; i < w.Length; i++) w[i] = (float)(rng.NextDouble() - 0.5) * 0.04f;
+                return w;
+            }).ToArray();
+            return new TinyModel(weights, shapes.ToArray());
+        }
+
+        /// <summary>y = W x, dividindo as linhas de saída entre os núcleos.</summary>
+        private void MatVec(int m, float[] x, float[] y)
+        {
+            var (outs, ins) = _shapes[m];
+            var w = _weights[m];
+            int vw = Vector<float>.Count;
+            Parallel.For(0, (outs + 63) / 64, block =>
+            {
+                int end = Math.Min(outs, block * 64 + 64);
+                var xs = x.AsSpan(0, ins);
+                for (int o = block * 64; o < end; o++)
+                {
+                    var row = w.AsSpan(o * ins, ins);
+                    var acc = Vector<float>.Zero;
+                    int i = 0;
+                    for (; i <= ins - vw; i += vw) acc += new Vector<float>(row.Slice(i)) * new Vector<float>(xs.Slice(i));
+                    float sum = Vector.Dot(acc, Vector<float>.One);
+                    for (; i < ins; i++) sum += row[i] * xs[i];
+                    y[o] = sum;
+                }
+            });
+        }
+
+        /// <summary>Y[b] = W X[b] para os 64 tokens: cada linha de pesos é lida uma vez e usada 64 vezes.</summary>
+        private void MatMat(int m, float[] x, float[] y)
+        {
+            var (outs, ins) = _shapes[m];
+            var w = _weights[m];
+            int vw = Vector<float>.Count;
+            Parallel.For(0, (outs + 31) / 32, block =>
+            {
+                int end = Math.Min(outs, block * 32 + 32);
+                for (int o = block * 32; o < end; o++)
+                {
+                    var row = w.AsSpan(o * ins, ins);
+                    for (int b = 0; b < Batch; b++)
+                    {
+                        var xs = x.AsSpan(b * ins, ins);
+                        var acc = Vector<float>.Zero;
+                        int i = 0;
+                        for (; i <= ins - vw; i += vw) acc += new Vector<float>(row.Slice(i)) * new Vector<float>(xs.Slice(i));
+                        y[b * outs + o] = Vector.Dot(acc, Vector<float>.One);
+                    }
+                }
+            });
+        }
+
+        private static void Activate(float[] v, int count)
+        {
+            for (int i = 0; i < count; i++) { float a = v[i]; v[i] = a / (1f + MathF.Exp(-1.702f * a)); }
+        }
+
+        /// <summary>Tokens por segundo gerando um de cada vez (como o texto aparecendo no chat).</summary>
+        public double Generate(int ms, CancellationToken token, Action<double>? progress = null)
+        {
+            var x = new float[Hidden];
+            var y = new float[3 * Width + Hidden];
+            var rng = new Random(1);
+            for (int i = 0; i < Width; i++) x[i] = (float)rng.NextDouble();
+            long tokens = 0;
+            var watch = Stopwatch.StartNew();
+            while (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested)
+            {
+                for (int l = 0; l < Layers; l++)
+                {
+                    MatVec(l * 4, x, y);
+                    Array.Copy(y, 0, x, 0, Width);
+                    MatVec(l * 4 + 1, x, y);
+                    Array.Copy(y, 0, x, 0, Width);
+                    MatVec(l * 4 + 2, x, y);
+                    Activate(y, Hidden);
+                    Array.Copy(y, 0, x, 0, Hidden);
+                    MatVec(l * 4 + 3, x, y);
+                    for (int i = 0; i < Width; i++) x[i] = y[i] * 0.5f + 0.1f;
+                }
+                tokens++;
+                progress?.Invoke(Math.Min(1, watch.ElapsedMilliseconds / (double)ms));
+            }
+            token.ThrowIfCancellationRequested();
+            return tokens / Math.Max(watch.Elapsed.TotalSeconds, 0.001);
+        }
+
+        /// <summary>Tokens por segundo lendo um pedido longo (64 tokens de uma vez).</summary>
+        public double ReadPrompt(int ms, CancellationToken token, Action<double>? progress = null)
+        {
+            var x = new float[Batch * Hidden];
+            var y = new float[Batch * Hidden * 1];
+            var y3 = new float[Batch * 3 * Width];
+            var rng = new Random(2);
+            for (int i = 0; i < Batch * Width; i++) x[i] = (float)rng.NextDouble();
+            long tokens = 0;
+            var watch = Stopwatch.StartNew();
+            while (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested)
+            {
+                for (int l = 0; l < Layers; l++)
+                {
+                    MatMat(l * 4, x, y3);
+                    for (int b = 0; b < Batch; b++) Array.Copy(y3, b * 3 * Width, x, b * Width, Width);
+                    MatMat(l * 4 + 1, x, y);
+                    Array.Copy(y, x, Batch * Width);
+                    MatMat(l * 4 + 2, x, y);
+                    Activate(y, Batch * Hidden);
+                    Array.Copy(y, x, Batch * Hidden);
+                    MatMat(l * 4 + 3, x, y);
+                    for (int i = 0; i < Batch * Width; i++) x[i] = y[i] * 0.5f + 0.1f;
+                }
+                tokens += Batch;
+                progress?.Invoke(Math.Min(1, watch.ElapsedMilliseconds / (double)ms));
+            }
+            token.ThrowIfCancellationRequested();
+            return tokens / Math.Max(watch.Elapsed.TotalSeconds, 0.001);
+        }
     }
 
     public static int Score(double fp32Gflops, double int8Gops, double gpuGflops) =>

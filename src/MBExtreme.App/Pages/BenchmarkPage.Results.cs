@@ -175,171 +175,6 @@ public sealed partial class BenchmarkPage
         panel.Children.Add(Muted($"Medido em renderização 3D (CC0, {_index.Data.GeneratedAt:dd/MM/yyyy}); referência, não nota de jogos.", 10));
     }
 
-    // ================================================================== Resultados
-
-    private void RenderResults()
-    {
-        _resultsPanel.Children.Clear();
-        var history = BenchmarkHistory.Load();
-        var last = _viewing is not null ? history.FirstOrDefault(h => h.When == _viewing.When) ?? _viewing : history.LastOrDefault();
-        if (last is null)
-        {
-            _resultsPanel.Children.Add(CardOf(Muted("Nenhum teste feito ainda. Comece em Novo teste.")));
-            return;
-        }
-
-        var scored = history.Where(h => h.Score > 0).ToList();
-        int shown = last.Score > 0 ? last.Score : last.Gpu3DScore > 0 ? last.Gpu3DScore : last.RenderMultiScore;
-
-        // ---- cabeçalho com a nota
-        var header = new Grid();
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.ColumnDefinitions.Add(new ColumnDefinition());
-        var badge = new Border { Width = 120, Height = 120, CornerRadius = new CornerRadius(60), BorderThickness = new Thickness(7), BorderBrush = (Brush)FindResource("AccentGradientBrush"), Margin = new Thickness(0, 0, 18, 0) };
-        var badgeText = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        badgeText.Children.Add(new TextBlock { Text = shown.ToString("N0"), FontSize = 28, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center });
-        badgeText.Children.Add(new TextBlock { Text = last.Score > 0 ? "pontos" : last.Gpu3DScore > 0 ? "pts da GPU" : "pts de render", FontSize = 11, Foreground = Brush("MutedBrush"), HorizontalAlignment = HorizontalAlignment.Center });
-        badge.Child = badgeText;
-        header.Children.Add(badge);
-        var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        info.Children.Add(new TextBlock { Text = BenchmarkAdvice.Compare(last, history), FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-        info.Children.Add(Muted($"{last.When:dd/MM/yyyy HH:mm} · {last.Threads} threads" + (last.Mode is { Length: > 0 } m ? $" · modo {m}" : "") +
-                                (last.Resolution is { Length: > 0 } r ? $" · 3D em {r}" : "") + (last.DiskName is { Length: > 0 } d ? $" · disco {d}" : "") +
-                                (last.Label is { Length: > 0 } l ? $" · {l}" : "")));
-        if (scored.Count > 0)
-        {
-            var stats = new UniformGrid { Columns = 3, Margin = new Thickness(0, 10, 0, 0) };
-            void Stat(string title, string value, string color) => stats.Children.Add(new StackPanel
-            {
-                Children =
-                {
-                    new TextBlock { Text = title, FontSize = 11.5, Foreground = Brush("MutedBrush") },
-                    new TextBlock { Text = value, FontSize = 19, FontWeight = FontWeights.SemiBold, Foreground = Brush(color) },
-                },
-            });
-            Stat("Esta medição", last.Score > 0 ? last.Score.ToString("N0") : "—", "TextBrush");
-            Stat("Média das suas", ((int)scored.Average(h => h.Score)).ToString("N0"), "MutedBrush");
-            Stat("Melhor das suas", scored.Max(h => h.Score).ToString("N0"), "OkBrush");
-            info.Children.Add(stats);
-        }
-        Grid.SetColumn(info, 1);
-        header.Children.Add(info);
-        _resultsPanel.Children.Add(CardOf(header));
-
-        // ---- notas por parte, com barra em relação ao seu melhor
-        var parts = new UniformGrid { Columns = 3 };
-        void Part(string glyph, string title, string value, string detail, double now, Func<BenchmarkResult, double> pick)
-        {
-            double best = Math.Max(now, history.Select(pick).DefaultIfEmpty(0).Max());
-            var stack = new StackPanel();
-            var head = new StackPanel { Orientation = Orientation.Horizontal };
-            head.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily(IconFont), FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
-            head.Children.Add(new TextBlock { Text = title, FontSize = 11.5, Foreground = Brush("MutedBrush") });
-            stack.Children.Add(head);
-            stack.Children.Add(new TextBlock { Text = value, FontSize = 21, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Yellow) });
-            if (detail.Length > 0) stack.Children.Add(new TextBlock { Text = detail, FontSize = 10.5, Foreground = Brush("MutedBrush"), TextWrapping = TextWrapping.Wrap });
-            var bar = new ProgressBar { Height = 4, Maximum = 100, Value = best > 0 ? 100 * now / best : 0, Margin = new Thickness(0, 6, 0, 0), ToolTip = "Em relação ao seu melhor resultado nesta parte" };
-            stack.Children.Add(bar);
-            var card = CardOf(stack);
-            card.Margin = new Thickness(0, 0, 8, 8);
-            card.Padding = new Thickness(12, 9, 12, 9);
-            parts.Children.Add(card);
-        }
-        if (last.CpuSingleScore > 0) Part("\uE950", "Processador · 1 núcleo", $"{last.CpuSingleScore:N0} pts", $"{last.CpuSingleMops:0.#} Mop/s no cálculo", last.CpuSingleScore, h => h.CpuSingleScore);
-        else if (last.CpuSingleMops > 0) Part("\uE950", "CPU, 1 núcleo", $"{last.CpuSingleMops:0.#}", "milhões de operações por segundo", last.CpuSingleMops, h => h.CpuSingleMops);
-        if (last.CpuMultiScore > 0) Part("\uE950", "Processador · todos os núcleos", $"{last.CpuMultiScore:N0} pts", $"{last.Threads} linhas de execução", last.CpuMultiScore, h => h.CpuMultiScore);
-        else if (last.CpuMultiMops > 0) Part("\uE950", "CPU, todos os núcleos", $"{last.CpuMultiMops:0.#}", $"{last.Threads} linhas de execução", last.CpuMultiMops, h => h.CpuMultiMops);
-        if (last.RenderMultiScore > 0) Part("\uE950", "Render da CPU", $"{last.RenderMultiScore:N0} pts", $"1 núcleo: {last.RenderSingleScore:N0} pts", last.RenderMultiScore, h => h.RenderMultiScore);
-        if (last.MemoryGBps > 0) Part("\uE964", "Memória RAM", $"{last.MemoryGBps:0.#} GB/s", last.MemoryLatencyNs > 0 ? $"latência {last.MemoryLatencyNs:0} ns" : "", last.MemoryGBps, h => h.MemoryGBps);
-        if (last.DiskWriteMBps > 0) Part("\uEDA2", "Armazenamento" + (last.DiskName is { Length: > 0 } dn ? $" {dn}" : ""), $"{last.DiskWriteMBps:0} MB/s", $"gravação · leitura {last.DiskReadMBps:0} MB/s", last.DiskWriteMBps, h => h.DiskWriteMBps);
-        if (last.AiScore > 0) Part("\uE99A", "Inteligência artificial", $"{last.AiScore:N0} pts", $"FP32 {last.AiCpuGflops:0} GFLOPS · INT8 {last.AiInt8Gops:0} GOPS" + (last.AiGpuGflops > 0 ? $" · placa {last.AiGpuGflops:N0} GFLOPS" : ""), last.AiScore, h => h.AiScore);
-        if (last.DailyScore > 0) Part("\uE8A5", "Uso do dia a dia", $"{last.DailyScore:N0} pts", $"{last.DailyTasks?.Count(t => t.Seconds > 0) ?? 0} tarefas em {last.DailyTasks?.Sum(t => t.Seconds) ?? 0:0.0} s", last.DailyScore, h => h.DailyScore);
-        if (last.Gpu3DScore > 0) Part("\uE7F8", "Placa de vídeo 3D", last.Gpu3DScore.ToString("N0") + " pts", last.GpuName ?? "", last.Gpu3DScore, h => h.Gpu3DScore);
-        if (last.ReflectionsFps > 0) Part("\uE7F8", "Cena 1 · Reflexos", $"{last.ReflectionsFps:0} FPS", "raymarching com reflexos e sombras", last.ReflectionsFps, h => h.ReflectionsFps);
-        if (last.GeometryFps > 0) Part("\uE7F8", "Cena 2 · Geometria", $"{last.GeometryFps:0} FPS", "5,8 milhões de triângulos por quadro", last.GeometryFps, h => h.GeometryFps);
-        if (last.StudioMsps > 0) Part("\uE7F4", "Cena 3 · Estúdio", $"{last.StudioMsps:N0}", "milhões de amostras por segundo (path tracing)", last.StudioMsps, h => h.StudioMsps);
-        else
-        {
-            var studio = last.GpuScenes?.FirstOrDefault(s => s.Unit == "M amostras/s");
-            if (studio is not null) Part("\uE7F4", "Render 3D do estúdio", $"{studio.Fps:N0}", "milhões de amostras por segundo (path tracing)", studio.Fps,
-                h => h.GpuScenes?.FirstOrDefault(s => s.Unit == "M amostras/s")?.Fps ?? 0);
-        }
-        if (last.GameFps > 0) Part("\uE7FC", "Simulação de jogo", $"{last.GameFps:0} FPS", "terreno e 10 mil unidades", last.GameFps, h => h.GameFps);
-        if (parts.Children.Count > 0) _resultsPanel.Children.Add(parts);
-
-        if (last.ResolutionLimit is { Count: > 0 } limit) _resultsPanel.Children.Add(ResolutionCard(limit));
-        if (last.DailyTasks is { Count: > 0 } daily) _resultsPanel.Children.Add(DailyCard(daily));
-        if (last.Monitoring is { Count: > 0 } tracks) _resultsPanel.Children.Add(MonitoringCard(tracks, last.Phases));
-        if (scored.Count > 1) _resultsPanel.Children.Add(RankingCard(scored, last));
-
-        _resultsPanel.Children.Add(Heading("Detalhes"));
-        if (last.CpuTasksSingle is { Count: > 0 } ts && last.CpuTasksMulti is { Count: > 0 } tm)
-            _resultsPanel.Children.Add(Row("Tarefas do processador (1 núcleo → todos)",
-                string.Join("\n", ts.Select((t, i) => $"{t.Name}: {t.Rate:0.#} → {(i < tm.Count ? tm[i].Rate : 0):0.#} {t.Unit} ({(t.Rate > 0 && i < tm.Count ? tm[i].Rate / t.Rate : 0):0.0}x)"))));
-        if (last.Passes > 1) _resultsPanel.Children.Add(Muted($"Processador, memória, IA e dia a dia rodaram {last.Passes} vezes; o resultado é a mediana.", 11.5));
-        if (last.CpuSimdGflops > 0)
-            _resultsPanel.Children.Add(Row("CPU vetorial, criptografia e compressão",
-                $"{last.CpuSimdGflops:0.0} GFLOPS · AES {last.CryptoMBps:0} MB/s · compressão {last.CompressMBps:0} MB/s"));
-        if (last.MemoryGBps > 0)
-            _resultsPanel.Children.Add(Row("Memória",
-                $"Leitura {Fmt(last.MemoryReadGBps)} · escrita {Fmt(last.MemoryWriteGBps)} · cópia {last.MemoryGBps:0.0} GB/s" +
-                (last.MemoryLatencyNs > 0 ? $"\nLatência {last.MemoryLatencyNs:0} ns (acesso aleatório em memória grande)" : "")));
-        if (last.LatencyCurve is { Count: > 0 } curve)
-            _resultsPanel.Children.Add(Row("Curva de latência (cache e RAM)",
-                string.Join("  ·  ", curve.Select(p => $"{(p.SizeKb >= 1024 ? p.SizeKb / 1024 + " MB" : p.SizeKb + " KB")}: {p.Nanoseconds:0.0} ns"))));
-        if (last.DiskWriteMBps > 0)
-            _resultsPanel.Children.Add(Row("Disco" + (last.DiskName is { Length: > 0 } dk ? $" {dk}" : ""), $"Gravação {last.DiskWriteMBps:0} MB/s · leitura {last.DiskReadMBps:0} MB/s (a leitura pode vir do cache do Windows)"));
-        if (last.Gpu3DScore > 0 && last.GpuScenes is { Count: > 0 } sc)
-            _resultsPanel.Children.Add(Row($"GPU 3D: {last.GpuName}" + (last.Resolution is { Length: > 0 } rs ? $" em {rs}" : ""), string.Join(" · ", sc.Select(x => $"{x.Scene} {x.Display}"))));
-        else if (last.Gpu3DScore <= 0 && last.GpuName is { Length: > 0 } gpuNote)
-            _resultsPanel.Children.Add(Row("GPU 3D", gpuNote, null, "WarnBrush"));
-
-        BuildRanking();
-        _resultsPanel.Children.Add(CardOf(Free(_rankingPanel)));
-        Motion.Cascade(_resultsPanel, 30);
-    }
-
-    private Border ResolutionCard(IReadOnlyList<ResolutionFps> list)
-    {
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock { Text = "Limite por resolução (simulação de jogo)", FontSize = 14, FontWeight = FontWeights.SemiBold });
-        var best = list.Where(r => r.Fps >= 60).OrderByDescending(r => (long)r.Width * r.Height).FirstOrDefault();
-        stack.Children.Add(Muted(best is null ? "Nenhuma resolução passou de 60 FPS nesta cena pesada: em jogos, use 720p ou reduza a qualidade." :
-            $"Passa de 60 FPS até {best.Label}. Acima disso a placa de vídeo vira o limite.", 11.5));
-        double max = Math.Max(1, list.Max(r => r.Fps));
-        foreach (var r in list)
-        {
-            var row = new Grid { Margin = new Thickness(0, 5, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-            row.ColumnDefinitions.Add(new ColumnDefinition());
-            row.Children.Add(new TextBlock { Text = r.Label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
-            var bar = Bar(r.Fps / max, r.Fps >= 60 ? (Brush)FindResource("AccentGradientBrush") : new SolidColorBrush(Color.FromRgb(0x6A, 0x4A, 0x2A)), $"{r.Fps:0} FPS");
-            Grid.SetColumn(bar, 1);
-            row.Children.Add(bar);
-            stack.Children.Add(row);
-        }
-        return CardOf(stack);
-    }
-
-    private Border DailyCard(IReadOnlyList<DailyTask> tasks)
-    {
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock { Text = "Uso do dia a dia (pesado)", FontSize = 14, FontWeight = FontWeights.SemiBold });
-        stack.Children.Add(Muted("Tempo de cada tarefa (menor é melhor). Tudo offline, sem abrir programas.", 11.5));
-        var grid = new UniformGrid { Columns = 2, Margin = new Thickness(0, 6, 0, 0) };
-        foreach (var t in tasks)
-        {
-            var reference = DailyBenchmark.Tasks.FirstOrDefault(x => x.Name == t.Name);
-            var cell = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-            cell.Children.Add(new TextBlock { Text = t.Name, FontSize = 12, FontWeight = FontWeights.SemiBold });
-            cell.Children.Add(new TextBlock { Text = t.Seconds > 0 ? $"{t.Seconds:0.00} s" : t.Note ?? "não medido", FontSize = t.Seconds > 0 ? 16 : 11, Foreground = t.Seconds > 0 ? new SolidColorBrush(Yellow) : Brush("WarnBrush"), TextWrapping = TextWrapping.Wrap });
-            if (reference.Description is { Length: > 0 } d) cell.Children.Add(new TextBlock { Text = d, FontSize = 10.5, Foreground = Brush("MutedBrush"), TextWrapping = TextWrapping.Wrap });
-            grid.Children.Add(cell);
-        }
-        stack.Children.Add(grid);
-        return CardOf(stack);
-    }
-
     private Border MonitoringCard(IReadOnlyList<SensorTrack> tracks, IReadOnlyList<PhaseMark>? phases)
     {
         var wanted = new[] { ("Uso da GPU", Color.FromRgb(0xFF, 0x4D, 0x4D)), ("Temperatura da GPU", Color.FromRgb(0x4D, 0xD0, 0xFF)), ("Uso da CPU", Color.FromRgb(0xB0, 0x7C, 0xFF)), ("Temperatura da CPU", Color.FromRgb(0x3D, 0xDC, 0x97)) }
@@ -495,6 +330,48 @@ public sealed partial class BenchmarkPage
         a.SelectionChanged += (_, _) => Changed();
         b.SelectionChanged += (_, _) => Changed();
         _comparePanel.Children.Add(CardOf(pickers));
+
+        // ganho total (nota geral e cada categoria), quando os dois testes usam a mesma escala
+        if (before.Version == after.Version && before.Version >= BenchmarkScoring.Version && before.Score > 0 && after.Score > 0)
+        {
+            double total = BenchmarkScoring.Delta(before.Score, after.Score);
+            var gain = new StackPanel();
+            gain.Children.Add(new TextBlock { Text = "GANHO TOTAL", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush") });
+            gain.Children.Add(new TextBlock
+            {
+                Inlines =
+                {
+                    new System.Windows.Documents.Run($"{total:+0.0;-0.0;0.0}%") { FontSize = 30, FontWeight = FontWeights.Bold, Foreground = Math.Abs(total) < 3 ? Brush("MutedBrush") : total > 0 ? Brush("OkBrush") : Brush("BadBrush") },
+                    new System.Windows.Documents.Run($"   {before.Score:N0} → {after.Score:N0} pontos") { FontSize = 13, Foreground = Brush("MutedBrush") },
+                },
+            });
+            gain.Children.Add(new TextBlock { Text = BenchmarkScoring.Verdict(total), FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 2, 0, 8) });
+            foreach (var c in after.Categories ?? Array.Empty<CategoryScore>())
+            {
+                var old = before.Categories?.FirstOrDefault(x => x.Key == c.Key);
+                if (old is null) continue;
+                double d = BenchmarkScoring.Delta(old.Score, c.Score);
+                var line = new Grid { Margin = new Thickness(0, 3, 0, 0) };
+                line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+                line.ColumnDefinitions.Add(new ColumnDefinition());
+                line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+                line.Children.Add(new TextBlock { Text = $"{c.Name} (peso {c.WeightPercent}%)", FontSize = 12 });
+                var text = new TextBlock { Text = $"{old.Score:N0} → {c.Score:N0} pts", FontSize = 12, Foreground = Brush("MutedBrush") };
+                Grid.SetColumn(text, 1);
+                line.Children.Add(text);
+                var pct = new TextBlock { Text = $"{d:+0.0;-0.0;0.0}%", FontSize = 12, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right,
+                    Foreground = Math.Abs(d) < 3 ? Brush("MutedBrush") : d > 0 ? Brush("OkBrush") : Brush("BadBrush") };
+                Grid.SetColumn(pct, 2);
+                line.Children.Add(pct);
+                gain.Children.Add(line);
+            }
+            var gainCard = CardOf(gain);
+            gainCard.Background = (Brush)FindResource("GlassSelectedBrush");
+            gainCard.BorderBrush = (Brush)FindResource("AccentGradientBrush");
+            _comparePanel.Children.Add(gainCard);
+        }
+        else if (before.Version != after.Version)
+            _comparePanel.Children.Add(Muted("Os dois testes são de versões diferentes do benchmark: a nota geral usa outra escala. As medidas abaixo ainda valem.", 11.5));
 
         var deltas = BenchmarkComparison.Compare(before, after);
         var summary = CardOf(new TextBlock { Text = BenchmarkComparison.Summary(deltas), FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });

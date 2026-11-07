@@ -98,7 +98,7 @@ float3 Shade(float3 p, float3 rd, float m, out float3 n, out float refl)
 
 float4 PSReflections(VSOut i) : SV_Target
 {
-    float a = time * 0.22;
+    float a = time * 0.22 + variation * 2.1;
     float3 eye = float3(6.5 * cos(a), 2.4 + 0.4 * sin(time * 0.3), 6.5 * sin(a));
     float3 ro = eye; float3 rd = CameraRay(i.pos.xy, eye, float3(0.0, 1.2, 0.0), 1.8);
     float3 col = Sky(rd);

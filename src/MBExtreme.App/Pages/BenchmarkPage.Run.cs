@@ -23,13 +23,13 @@ public sealed partial class BenchmarkPage
         [BenchmarkService.StepSingle] = ("", "Cálculo, ray tracing, física, compressão, criptografia e ordenação em 1 linha de execução"),
         [BenchmarkService.StepMulti] = ("", "As mesmas tarefas em todas as linhas de execução, mais as instruções vetoriais"),
         [BenchmarkService.StepMemory] = ("", "Banda de leitura, escrita e cópia e o tempo de acesso do cache até a RAM"),
-        [BenchmarkService.StepDisk] = ("", "Grava e lê um arquivo temporário no disco escolhido (ele é apagado no fim)"),
-        [BenchmarkService.StepAi] = ("", "Rede neural em FP32 e modelo quantizado em INT8 no processador, e a mesma conta na placa de vídeo"),
+        [BenchmarkService.StepDisk] = ("", "Sequencial, aleatório 4K com 1 e 8 filas (IOPS), gravação aleatória e tempo de acesso, sem o cache do Windows"),
+        [BenchmarkService.StepAi] = ("", "Uma rede de 28 milhões de parâmetros escrevendo e lendo texto (tokens/s), cálculo em FP32 e INT8 e a mesma conta na placa de vídeo"),
         [BenchmarkService.StepDaily] = ("", "Documentos, sites, vídeo H.264 de verdade, planilhas, fotos, compactação e tudo ao mesmo tempo, sem internet"),
         [GpuWindowBench.Reflections] = ("", "Raymarching com reflexos, sombras suaves e oclusão, na janela 3D separada"),
         [GpuWindowBench.Geometry] = ("", "2.500 objetos deformados (5,8 milhões de triângulos por quadro) com 3 luzes que se movem"),
-        [GpuWindowBench.Studio] = ("", "Path tracing de estúdio: a luz rebate até 5 vezes e o ruído some a cada quadro"),
-        [GpuWindowBench.Game] = ("", "Terreno com montanhas e dois exércitos com 10 mil unidades andando"),
+        [GpuWindowBench.Studio] = ("", "Render em blocos: a imagem de estúdio vai sendo completada quadrado por quadrado (path tracing, a luz rebate até 5 vezes)"),
+        [GpuWindowBench.Game] = ("", "Processador + placa de vídeo, como um jogo: 10 mil unidades com IA calculada no processador, terreno e explosões com milhares de partículas"),
         [GpuWindowBench.ResolutionLimit] = ("", "A simulação de jogo em cada resolução até a escolhida: mostra até onde passa de 60 FPS"),
         ["1 núcleo"] = ("", "A cena desenhada por raios, bloco a bloco, com 1 linha de execução"),
         ["Todos os núcleos"] = ("", "A mesma cena com todas as linhas de execução"),
@@ -77,6 +77,7 @@ public sealed partial class BenchmarkPage
 
     private void BuildRunPanel()
     {
+        GradientBar(_overall);
         _previewCard.Child = new Grid { Children = { _preview, _previewCaption } };
         _passBadge.Background = (Brush)FindResource("AccentGradientBrush");
         _passBadge.Child = _passText;
@@ -191,8 +192,10 @@ public sealed partial class BenchmarkPage
             double estimate = options is null ? 0 : BenchmarkModes.StepSeconds(options, step);
             var ring = new RingGauge { Width = 22, Height = 22, Thickness = 2.6, Fill = (Brush)FindResource("AccentGradientBrush"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 8, 0) };
             var name = new TextBlock { Text = step, FontSize = 12.5, Foreground = Brush("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis };
-            var info = new TextBlock { Text = estimate > 0 ? "~" + Clock(estimate) : "", FontSize = 10.5, Foreground = Brush("MutedBrush") };
-            var progress = new ProgressBar { Height = 3, Maximum = 100, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
+            var info = new TextBlock { Text = estimate > 0 ? "~" + Clock(estimate) : "", FontSize = 10.5, Foreground = Brush("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis };
+            var progress = new ProgressBar { Maximum = 100, Margin = new Thickness(0, 3, 0, 0), Visibility = Visibility.Collapsed };
+            GradientBar(progress);
+            progress.Height = 3;
             var text = new StackPanel { Children = { name, info, progress } };
             var row = new Grid();
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -215,6 +218,14 @@ public sealed partial class BenchmarkPage
         UpdateClock();
         _clockTimer.Start();
         SelectTab(1);
+    }
+
+    /// <summary>Barra em degradê com brilho passando (o brilho some quando as animações estão desligadas).</summary>
+    private void GradientBar(ProgressBar bar)
+    {
+        bar.Style = (Style)FindResource("GradientProgress");
+        if (!AppServices.Settings.Animations || !SystemParameters.ClientAreaAnimation)
+            bar.Loaded += (_, _) => { if (bar.Template?.FindName("Shine", bar) is UIElement shine) shine.Visibility = Visibility.Collapsed; };
     }
 
     private static string Clock(double seconds) => TimeSpan.FromSeconds(Math.Max(0, seconds)).ToString(seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss");
@@ -244,6 +255,16 @@ public sealed partial class BenchmarkPage
         _overall.Value = Math.Clamp(e.Percent, 0, 100);
         _runPercent.Text = $"{e.Percent:0}%";
         if (!_rows.TryGetValue(e.Step, out var row)) return;
+        if (e.Result is { Length: > 0 } result)
+        {
+            // fim da etapa: o resultado aparece na lista
+            if (!row.Done) MarkDone(row);
+            row.Info.Text = "✓ " + result;
+            row.Info.ToolTip = $"{result} · {Clock(row.Watch.Elapsed.TotalSeconds)}";
+            if (_currentStep == e.Step) _currentStep = null;
+            return;
+        }
+        if (row.Done) return;
         if (e.Step != _currentStep)
         {
             if (_currentStep is { } previous && _rows.TryGetValue(previous, out var done)) MarkDone(done);
@@ -288,8 +309,8 @@ public sealed partial class BenchmarkPage
         {
             BenchmarkService.StepSingle or BenchmarkService.StepMulti => CpuTasks.Tasks.Select(t => t.Name).Concat(step == BenchmarkService.StepMulti ? new[] { "Vetorial" } : Array.Empty<string>()),
             BenchmarkService.StepMemory => new[] { "Banda", "Latência" },
-            BenchmarkService.StepDisk => new[] { "Gravação", "Leitura" },
-            BenchmarkService.StepAi => new[] { AiBenchmark.PartFp32, AiBenchmark.PartInt8 }.Concat(_runOptions?.Gpu3D == true ? new[] { AiBenchmark.PartGpu } : Array.Empty<string>()),
+            BenchmarkService.StepDisk => new[] { "Gravação sequencial", "Leitura sequencial", "Leitura aleatória 4K (1 fila)", "Leitura aleatória 4K (8 filas)", "Gravação aleatória 4K (1 fila)" },
+            BenchmarkService.StepAi => new[] { AiBenchmark.PartGenerate, AiBenchmark.PartPrompt, AiBenchmark.PartFp32, AiBenchmark.PartInt8 }.Concat(_runOptions?.Gpu3D == true ? new[] { AiBenchmark.PartGpu } : Array.Empty<string>()),
             BenchmarkService.StepDaily => DailyBenchmark.Tasks.Select(t => t.Name),
             _ => Array.Empty<string>(),
         };

@@ -88,7 +88,7 @@ float4 PSStudio(VSOut i) : SV_Target
     uint seed = Hash(px.x * 1973u + px.y * 9277u + uint(frameIndex) * 26699u) | 1u;
     float2 j = float2(Rnd(seed), Rnd(seed));
     float2 uv = ((floor(i.pos.xy) + j) / res * 2.0 - 1.0) * float2(res.x / res.y, -1.0);
-    float3 ro = float3(0.0, 1.25, 4.4); float3 at = float3(0.0, 0.55, 0.0);
+    float va = variation * 0.45 - 0.45; float3 ro = float3(4.4 * sin(va), 1.25 + 0.25 * variation, 4.4 * cos(va)); float3 at = float3(0.0, 0.55, 0.0);
     float3 fw = normalize(at - ro); float3 rt = normalize(cross(fw, float3(0, 1, 0))); float3 up = cross(rt, fw);
     float3 rd = normalize(fw * 2.1 + rt * uv.x + up * uv.y);
     return float4(Trace(ro, rd, seed), 1.0);
@@ -99,4 +99,52 @@ float4 PSResolve(VSOut i) : SV_Target
     float3 c = a.rgb / max(a.a, 1.0);
     c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
     return float4(pow(saturate(c), 1.0 / 2.2), 1);
+}
+
+// Render em blocos (como os benchmarks clássicos): cada quadrado recebe todas as amostras de uma vez.
+float4 PSStudioTile(VSOut i) : SV_Target
+{
+    uint2 px = uint2(i.pos.xy);
+    uint seed = Hash(px.x * 1973u + px.y * 9277u + uint(frameIndex) * 26699u) | 1u;
+    float3 sum = 0;
+    int count = max(1, (int)spp);
+    float va = variation * 0.45 - 0.45;
+    float3 eye = float3(4.4 * sin(va), 1.25 + 0.25 * variation, 4.4 * cos(va)); float3 at = float3(0.0, 0.55, 0.0);
+    float3 fw = normalize(at - eye); float3 rt = normalize(cross(fw, float3(0, 1, 0))); float3 up = cross(rt, fw);
+    [loop] for (int s = 0; s < count; s++)
+    {
+        float2 j = float2(Rnd(seed), Rnd(seed));
+        float2 uv = ((floor(i.pos.xy) + j) / res * 2.0 - 1.0) * float2(res.x / res.y, -1.0);
+        float3 rd = normalize(fw * 2.1 + rt * uv.x + up * uv.y);
+        sum += Trace(eye, rd, seed);
+    }
+    return float4(sum, (float)count);
+}
+
+// Mostra o que já foi renderizado; o que falta fica com um xadrez escuro e o quadrado atual ganha cantos amarelos.
+float4 PSResolveTiles(VSOut i) : SV_Target
+{
+    float4 a = Accum.Load(int3(i.pos.xy, 0));
+    float3 c;
+    if (a.a > 0.0)
+    {
+        c = a.rgb / a.a;
+        c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+        c = pow(saturate(c), 1.0 / 2.2);
+    }
+    else
+    {
+        float2 g = floor(i.pos.xy / 16.0);
+        c = fmod(g.x + g.y, 2.0) < 1.0 ? float3(0.07, 0.07, 0.08) : float3(0.1, 0.1, 0.11);
+    }
+    if (tile.w > 0.5)
+    {
+        float2 p = i.pos.xy - tile.xy;
+        float2 q = min(p, tile.z - p);
+        bool inside = p.x >= -2.0 && p.y >= -2.0 && p.x <= tile.z + 2.0 && p.y <= tile.z + 2.0;
+        bool edge = min(abs(q.x), abs(q.y)) < 2.0;
+        bool corner = (q.x < 14.0 && q.y < 14.0);
+        if (inside && edge && corner) c = float3(1.0, 0.77, 0.0);
+    }
+    return float4(c, 1.0);
 }

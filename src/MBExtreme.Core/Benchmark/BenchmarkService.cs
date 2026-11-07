@@ -59,7 +59,18 @@ public sealed record BenchmarkResult(
     double StudioMsps = 0,
     double GameFps = 0,
     IReadOnlyList<ResolutionFps>? ResolutionLimit = null,
-    int Passes = 1);
+    int Passes = 1,
+    double DiskRandReadMBps = 0,
+    double DiskRandQ8Iops = 0,
+    double DiskRandWriteMBps = 0,
+    double DiskAccessUs = 0,
+    double AiGenerateTps = 0,
+    double AiPromptTps = 0,
+    double GameLow1Fps = 0,
+    IReadOnlyList<GpuSceneStat>? GpuStats = null,
+    bool FocusLost = false,
+    IReadOnlyList<CategoryScore>? Categories = null,
+    int Version = 0);
 
 /// <summary>Em que segundo do teste começou cada etapa (para marcar no gráfico de monitoramento).</summary>
 public sealed record PhaseMark(string Name, double StartSeconds);
@@ -129,12 +140,19 @@ public static class BenchmarkService
         int taskMs = Math.Max(150, ms / 2);
         int threads = Environment.ProcessorCount;
 
-        void Report(string step, double fraction, string message, string? detail = null, int pass = 0)
+        void Report(string step, double fraction, string message, string? detail = null, int pass = 0, int ofPasses = 0)
         {
             int index = Math.Max(0, Array.IndexOf(steps, step));
             fraction = Math.Clamp(fraction, 0, 1);
             progress.Report(new ProgressEvent(step, 100.0 * (index + fraction) / total, message)
-                { StepPercent = fraction * 100, Detail = detail, Pass = pass, Passes = passes });
+                { StepPercent = fraction * 100, Detail = detail, Pass = pass, Passes = ofPasses > 0 ? ofPasses : passes });
+        }
+
+        // resultado da etapa (aparece na lista de etapas ao lado)
+        void ReportResult(string step, string result)
+        {
+            int index = Math.Max(0, Array.IndexOf(steps, step));
+            progress.Report(new ProgressEvent(step, 100.0 * (index + 1) / total, result) { StepPercent = 100, Result = result, Passes = passes });
         }
 
         // ---- processador: 1 núcleo e todos
@@ -151,6 +169,7 @@ public static class BenchmarkService
             }
             tasksSingle = MedianTasks(runs);
             single = tasksSingle[0].Rate;
+            ReportResult(StepSingle, $"{BenchmarkScoring.Cpu1(tasksSingle):N0} pts");
 
             runs.Clear();
             var simdRuns = new List<double>();
@@ -167,6 +186,7 @@ public static class BenchmarkService
             simd = Median(simdRuns);
             compress = tasksMulti.First(t => t.Name == "Compressão").Rate;
             crypto = tasksMulti.First(t => t.Name == "Criptografia").Rate;
+            ReportResult(StepMulti, $"{BenchmarkScoring.CpuN(tasksMulti):N0} pts · {tasksMulti[0].Rate / Math.Max(0.001, tasksSingle[0].Rate):0.0}x");
         }
 
         // ---- memória
@@ -187,14 +207,19 @@ public static class BenchmarkService
             (read, write, copy) = mid;
             curve = latencies.OrderBy(c => c.Count > 0 ? c[^1].Nanoseconds : 0).ElementAt(latencies.Count / 2);
             latency = curve.Count > 0 ? curve[^1].Nanoseconds : 0;
+            ReportResult(StepMemory, $"{BenchmarkScoring.Ram(read, write, copy, latency):N0} pts · {read:0.#} GB/s");
         }
 
         // ---- armazenamento
         double diskWrite = 0, diskRead = 0;
+        DiskNumbers? disk = null;
         if (options.Disk)
         {
             Report(StepDisk, 0, $"Gravando e lendo um arquivo temporário de {profile.DiskMegabytes} MB", "Gravação");
-            (diskWrite, diskRead) = DiskPhase(options.DiskDirectory ?? diskDirectory ?? Path.GetTempPath(), profile.DiskMegabytes, new SyncProgress(e => Report(StepDisk, e.Percent / 100.0, e.Message, e.Message.Contains("Lendo") ? "Leitura" : "Gravação")), 0, 100, token);
+            disk = DiskPhase(options.DiskDirectory ?? diskDirectory ?? Path.GetTempPath(), profile.DiskMegabytes,
+                new SyncProgress(e => Report(StepDisk, e.Percent / 100.0, e.Message, e.Message)), 0, 100, token, Math.Max(400, ms / 2));
+            (diskWrite, diskRead) = (disk.WriteMBps, disk.ReadMBps);
+            ReportResult(StepDisk, $"{disk.ReadMBps:N0} MB/s leitura · {disk.RandQ8Iops:N0} IOPS");
         }
 
         // ---- inteligência artificial
@@ -209,14 +234,17 @@ public static class BenchmarkService
                 if (pass == 0 && options.Gpu3D && OperatingSystem.IsWindows()) gpu = t => GpuWindowBench.GemmGflops(Math.Max(1000, ms), t);
                 aiRuns.Add(AiBenchmark.Run(taskMs, token, (part, f) =>
                 {
-                    int partIndex = part == AiBenchmark.PartFp32 ? 0 : part == AiBenchmark.PartInt8 ? 1 : 2;
-                    Report(StepAi, (pass + (partIndex + f) / 3.0) / passes, part, part, pass + 1);
+                    int partIndex = part switch { AiBenchmark.PartGenerate => 0, AiBenchmark.PartPrompt => 1, AiBenchmark.PartFp32 => 2, AiBenchmark.PartInt8 => 3, _ => 4 };
+                    Report(StepAi, (pass + (partIndex + f) / 5.0) / passes, part, part, pass + 1);
                 }, gpu));
             }
             double gpuGflops = aiRuns.Max(r => r.GpuFp32Gflops);
             double fp32 = Median(aiRuns.Select(r => r.CpuFp32Gflops).ToList());
             double int8 = Median(aiRuns.Select(r => r.CpuInt8Gops).ToList());
-            ai = new AiResult(fp32, int8, gpuGflops, AiBenchmark.Score(fp32, int8, gpuGflops));
+            double gen = Median(aiRuns.Select(r => r.GenerationTokensPerSec).ToList());
+            double prompt = Median(aiRuns.Select(r => r.PromptTokensPerSec).ToList());
+            ai = new AiResult(fp32, int8, gpuGflops, AiBenchmark.Score(fp32, int8, gpuGflops), gen, prompt);
+            ReportResult(StepAi, $"{BenchmarkScoring.Ai(gen, prompt, fp32, int8, gpuGflops):N0} pts · {gen:0} tokens/s");
         }
 
         // ---- uso do dia a dia
@@ -239,6 +267,7 @@ public static class BenchmarkService
                 return measured.Count == 0 ? all.FirstOrDefault() ?? new DailyTask(t.Name, 0) : new DailyTask(t.Name, Median(measured.Select(x => x.Seconds).ToList()));
             }).ToList();
             daily = new DailyResult(tasks, DailyBenchmark.Score(tasks));
+            ReportResult(StepDaily, $"{daily.Score:N0} pts · {tasks.Sum(t => t.Seconds):0.0} s no total");
         }
 
         // ---- placa de vídeo (janela 3D separada)
@@ -254,14 +283,24 @@ public static class BenchmarkService
                 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("o teste 3D precisa do Windows (Direct3D 11)");
                 var limit = LimitResolutions(options).Select(r => (r.Width, r.Height)).ToList();
                 window = GpuWindowBench.Run(options.GpuWidth, options.GpuHeight, profile.GpuSecondsPerScene, profile.StudioSamples, limit,
-                    (step, f, fps) => Report(step, f, fps > 0 ? $"{step}: {fps:0} FPS" : step, fps > 0 ? $"{fps:0} FPS" : null), token);
+                    e =>
+                    {
+                        Report(e.Step, e.Fraction, e.Fps > 0 ? $"{e.Step}: {e.Fps:0} FPS" : e.Step, e.Fps > 0 ? $"FPS atual: {e.Fps:0}" : null, e.Pass, e.Passes);
+                    }, token, passes: passes);
                 gpuName = window.GpuName;
-                gpuScore = window.Score;
+                long pixels = (long)options.GpuWidth * options.GpuHeight;
+                ReportResult(GpuWindowBench.Reflections, $"{window.ReflectionsFps:0.0} FPS · 1% low {window.Reflections?.Low1Fps ?? 0:0.0}");
+                ReportResult(GpuWindowBench.Geometry, $"{window.GeometryFps:0.0} FPS · 1% low {window.Geometry?.Low1Fps ?? 0:0.0}");
+                ReportResult(GpuWindowBench.Studio, $"{window.StudioMsps:N0} M amostras/s");
+                ReportResult(GpuWindowBench.Game, $"{window.GameFps:0.0} FPS · 1% low {window.Game?.Low1Fps ?? 0:0.0}");
+                if (window.Resolutions.Count > 0)
+                    ReportResult(GpuWindowBench.ResolutionLimit, window.Max60 is { } max ? $"60+ FPS até {max.Label}" : "abaixo de 60 FPS");
+                gpuScore = BenchmarkScoring.Gpu(window.ReflectionsFps, window.GeometryFps, window.StudioMsps, pixels);
                 scenes = new[]
                 {
                     new GpuSceneResult("Reflexos", window.ReflectionsFps),
                     new GpuSceneResult("Geometria", window.GeometryFps),
-                    new GpuSceneResult("Estúdio (path tracing)", window.StudioMsps, "M amostras/s"),
+                    new GpuSceneResult("Estúdio (render em blocos)", window.StudioMsps, "M amostras/s"),
                     new GpuSceneResult("Simulação de jogo", window.GameFps),
                 };
             }
@@ -273,11 +312,9 @@ public static class BenchmarkService
         }
 
         progress.Report(new ProgressEvent(steps.Length > 0 ? steps[^1] : StepDisk, 100, "Concluído") { StepPercent = 100, Passes = passes });
-        int cpuSingleScore = tasksSingle is null ? 0 : CpuTasks.Score(tasksSingle);
-        int cpuMultiScore = tasksMulti is null ? 0 : CpuTasks.Score(tasksMulti);
-        int score = ComputeScore(single, multi, copy, diskWrite, diskRead) + ExtraScore(simd, crypto, compress, latency)
-                    + (ai?.Score ?? 0) / 4 + (daily?.Score ?? 0) / 2;
-        return new BenchmarkResult(DateTime.Now, threads, single, multi, copy, diskWrite, diskRead, score,
+        int cpuSingleScore = BenchmarkScoring.Cpu1(tasksSingle);
+        int cpuMultiScore = BenchmarkScoring.CpuN(tasksMulti);
+        var result = new BenchmarkResult(DateTime.Now, threads, single, multi, copy, diskWrite, diskRead, 0,
             simd, crypto, compress, read, write, latency, curve, options.Label, gpuName, gpuScore, scenes,
             Mode: profile.Name, Resolution: options.Gpu3D ? $"{options.GpuWidth}×{options.GpuHeight}" : null,
             DiskName: options.Disk ? options.DiskName : null,
@@ -285,7 +322,13 @@ public static class BenchmarkService
             AiCpuGflops: ai?.CpuFp32Gflops ?? 0, AiInt8Gops: ai?.CpuInt8Gops ?? 0, AiGpuGflops: ai?.GpuFp32Gflops ?? 0, AiScore: ai?.Score ?? 0,
             DailyTasks: daily?.Tasks, DailyScore: daily?.Score ?? 0,
             ReflectionsFps: window?.ReflectionsFps ?? 0, GeometryFps: window?.GeometryFps ?? 0, StudioMsps: window?.StudioMsps ?? 0,
-            GameFps: window?.GameFps ?? 0, ResolutionLimit: window?.Resolutions, Passes: passes);
+            GameFps: window?.GameFps ?? 0, ResolutionLimit: window?.Resolutions, Passes: passes,
+            DiskRandReadMBps: disk?.RandReadMBps ?? 0, DiskRandQ8Iops: disk?.RandQ8Iops ?? 0, DiskRandWriteMBps: disk?.RandWriteMBps ?? 0, DiskAccessUs: disk?.AccessMicroseconds ?? 0,
+            AiGenerateTps: ai?.GenerationTokensPerSec ?? 0, AiPromptTps: ai?.PromptTokensPerSec ?? 0, GameLow1Fps: window?.Game?.Low1Fps ?? 0,
+            GpuStats: window is null ? null : new[] { window.Reflections, window.Geometry, window.Game }.Where(x => x is not null).Select(x => x!).ToList(),
+            FocusLost: window?.FocusLost ?? false, Version: BenchmarkScoring.Version);
+        var categories = BenchmarkScoring.For(result);
+        return result with { Categories = categories, Score = BenchmarkScoring.Overall(categories) };
     }
 
     public static double Median(IReadOnlyList<double> values)
@@ -541,7 +584,13 @@ public static class BenchmarkService
         return watch.Elapsed.TotalMilliseconds * 1_000_000 / steps;
     }
 
-    private static (double WriteMBps, double ReadMBps) DiskPhase(string directory, int megabytes, IProgress<ProgressEvent> progress, double from, double span, CancellationToken token)
+    /// <summary>Resultado do disco: sequencial, aleatório 4K (1 e 8 filas), gravação aleatória e tempo de acesso.</summary>
+    public sealed record DiskNumbers(double WriteMBps, double ReadMBps, double RandReadMBps = 0, double RandQ8Iops = 0, double RandWriteMBps = 0, double AccessMicroseconds = 0);
+
+    // FILE_FLAG_NO_BUFFERING: lê direto do disco, sem o cache do Windows (exige buffers alinhados de 4 KB)
+    private const FileOptions NoBuffering = (FileOptions)0x20000000;
+
+    private static unsafe DiskNumbers DiskPhase(string directory, int megabytes, IProgress<ProgressEvent> progress, double from, double span, CancellationToken token, int randomMs = 1000)
     {
         const int chunk = 4 * 1024 * 1024;
         int chunks = Math.Max(1, megabytes / 4);
@@ -549,42 +598,91 @@ public static class BenchmarkService
         bool ownFolder = !Directory.Exists(directory);
         if (ownFolder) Directory.CreateDirectory(directory);
         string path = Path.Combine(directory, "mbextreme-bench-" + Guid.NewGuid().ToString("N") + ".tmp");
-        var buffer = new byte[chunk];
-        new Random(7).NextBytes(buffer);
-
+        bool windows = OperatingSystem.IsWindows();
+        byte* big = (byte*)NativeMemory.AlignedAlloc(chunk, 4096);
         try
         {
+            var data = new Span<byte>(big, chunk);
+            new Random(7).NextBytes(data);
+            void Report(double f, string message) => progress.Report(new ProgressEvent(StepDisk, from + span * f, message));
+
+            // 1) gravação sequencial (40% da etapa)
             var watch = Stopwatch.StartNew();
-            using (var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.WriteThrough))
+            using (var handle = File.OpenHandle(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None, FileOptions.WriteThrough | (windows ? NoBuffering : FileOptions.None)))
             {
                 for (int i = 0; i < chunks; i++)
                 {
                     token.ThrowIfCancellationRequested();
-                    file.Write(buffer, 0, chunk);
-                    progress.Report(new ProgressEvent(StepDisk, from + span * 0.5 * i / chunks, "Gravando no disco"));
+                    RandomAccess.Write(handle, data, (long)i * chunk);
+                    Report(0.4 * i / chunks, "Gravação sequencial");
                 }
-
-                file.Flush(true);
+                RandomAccess.FlushToDisk(handle);
             }
-
             double write = diskMegabytes / Math.Max(watch.Elapsed.TotalSeconds, 0.001);
 
+            // 2) leitura sequencial sem cache (20%)
             watch.Restart();
-            using (var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None, 1 << 16, FileOptions.SequentialScan))
+            using (var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, windows ? NoBuffering : FileOptions.SequentialScan))
             {
-                int i = 0;
-                while (file.Read(buffer, 0, chunk) > 0)
+                for (int i = 0; i < chunks; i++)
                 {
                     token.ThrowIfCancellationRequested();
-                    progress.Report(new ProgressEvent(StepDisk, from + span * (0.5 + 0.5 * i++ / chunks), "Lendo do disco"));
+                    RandomAccess.Read(handle, data, (long)i * chunk);
+                    Report(0.4 + 0.2 * i / chunks, "Leitura sequencial");
                 }
             }
-
             double read = diskMegabytes / Math.Max(watch.Elapsed.TotalSeconds, 0.001);
-            return (write, read);
+
+            // 3) aleatório 4K: leitura com 1 fila, leitura com 8 filas e gravação com 1 fila
+            long blocks = (long)diskMegabytes * 1024 * 1024 / 4096;
+            (double Ops, double Seconds) Random4K(int queues, bool writes, double f0, double f1, string label)
+            {
+                long total = 0;
+                var w = Stopwatch.StartNew();
+                using var handle = File.OpenHandle(path, FileMode.Open, writes ? FileAccess.ReadWrite : FileAccess.Read, FileShare.ReadWrite,
+                    (windows ? NoBuffering : FileOptions.None) | (writes ? FileOptions.WriteThrough : FileOptions.None) | FileOptions.RandomAccess);
+                var counts = new long[queues];
+                Parallel.For(0, queues, new ParallelOptions { MaxDegreeOfParallelism = queues }, q =>
+                {
+                    byte* buffer = (byte*)NativeMemory.AlignedAlloc(4096, 4096);
+                    try
+                    {
+                        var span4k = new Span<byte>(buffer, 4096);
+                        span4k.Fill((byte)q);
+                        var rng = new Random(31 + q);
+                        long n = 0;
+                        while (w.ElapsedMilliseconds < randomMs && !token.IsCancellationRequested)
+                        {
+                            long offset = rng.NextInt64(0, blocks) * 4096;
+                            if (writes) RandomAccess.Write(handle, (ReadOnlySpan<byte>)span4k, offset);
+                            else RandomAccess.Read(handle, span4k, offset);
+                            n++;
+                            if (q == 0 && (n & 63) == 0) Report(f0 + (f1 - f0) * Math.Min(1, w.ElapsedMilliseconds / (double)randomMs), label);
+                        }
+                        counts[q] = n;
+                    }
+                    finally
+                    {
+                        NativeMemory.AlignedFree(buffer);
+                    }
+                });
+                token.ThrowIfCancellationRequested();
+                total = counts.Sum();
+                return (total, w.Elapsed.TotalSeconds);
+            }
+
+            var (r1, t1) = Random4K(1, false, 0.6, 0.73, "Leitura aleatória 4K (1 fila)");
+            var (r8, t8) = Random4K(8, false, 0.73, 0.86, "Leitura aleatória 4K (8 filas)");
+            var (w1, tw) = Random4K(1, true, 0.86, 1.0, "Gravação aleatória 4K (1 fila)");
+            double randRead = r1 * 4096 / Math.Max(t1, 0.001) / 1e6;
+            double iops = r8 / Math.Max(t8, 0.001);
+            double randWrite = w1 * 4096 / Math.Max(tw, 0.001) / 1e6;
+            double access = r1 > 0 ? t1 / r1 * 1e6 : 0;
+            return new DiskNumbers(write, read, randRead, iops, randWrite, access);
         }
         finally
         {
+            NativeMemory.AlignedFree(big);
             try
             {
                 File.Delete(path);

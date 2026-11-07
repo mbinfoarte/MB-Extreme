@@ -124,3 +124,20 @@ Marque cada item e anote o que der diferente.
 | Dia a dia sem FFmpeg | PC sem o FFmpeg do programa | "Vídeo H.264" aparece como não medido; o resto vale |
 | Comparar | Duas medições completas | Linhas novas: Processador 1 núcleo/todos, IA, Dia a dia, Reflexos, Geometria, Estúdio, Simulação de jogo |
 | Só a placa de vídeo | Testes avulsos | Roda só as 5 etapas da janela 3D |
+
+## Benchmark v4: resultados detalhados, render em blocos, jogo CPU+GPU, disco aleatório e consumo
+
+| Onde | O que fazer | O que deve acontecer |
+|---|---|---|
+| Em andamento | Teste completo | Barra geral em degradê amarelo→laranja com brilho passando; cada etapa terminada mostra o resultado na lista (ex.: "1.500 pts", "173,8 FPS · 1% low 86,2", "60+ FPS até 2560×1440") |
+| Janela 3D | Modo Preciso | Cada cena roda 3 vezes com a câmera em outro ângulo ("passada 2 de 3" no título); vale a do meio |
+| Janela 3D · Estúdio | Cena 3 | A imagem aparece quadrado por quadrado, do centro para fora, com cantos amarelos no quadrado atual |
+| Janela 3D · Jogo | Simulação de jogo | Exércitos amarelo e azul se encontram no vale, com explosões de partículas nos choques; uso de CPU alto junto com a GPU |
+| Disco | Etapa Armazenamento | Partes: gravação e leitura sequencial, leitura aleatória 4K com 1 e 8 filas, gravação aleatória 4K; o arquivo é apagado no fim |
+| Resultados | Depois de 2 testes completos | Nota geral com seta e % do anterior e a frase ("Ganho expressivo..."); 8 cartões por categoria com peso, nota, seta e a marca branca do anterior na barra |
+| Resultados | Dia a dia, IA e 3D | Barras lado a lado (este x anterior); IA em tokens/s; 3D com FPS médio, 1% low, 0,1% low e o frametime da cena clicada |
+| Resultados | Limite por resolução | Faixas Competitivo 144+ / Fluido 60+ / Jogável 30+ e o gargalo (processador ou placa de vídeo) |
+| Resultados | Consumo | Pico e média de watts do processador e da placa de vídeo e a fonte recomendada |
+| Resultados | Salvar imagem | PNG em Imagens\MB Extreme e o Explorer abre com o arquivo selecionado |
+| Resultados | Mexer em outra janela durante o 3D | Aviso de que o FPS pode ter ficado abaixo do real |
+| Comparar | Antes e depois de otimizar | Cartão "GANHO TOTAL" com o % da nota geral, a frase e a variação de cada categoria |

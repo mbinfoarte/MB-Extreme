@@ -539,6 +539,54 @@
         </Setter>
     </Style>
 
+    <!-- Barra de progresso do benchmark: degradê amarelo → laranja com um brilho passando -->
+    <Style x:Key="GradientProgress" TargetType="ProgressBar">
+        <Setter Property="Height" Value="8" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Grid>
+                        <Border x:Name="PART_Track" CornerRadius="4" Background="#1FFFFFFF" />
+                        <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="4" ClipToBounds="True">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#FFE066" Offset="0" />
+                                    <GradientStop Color="#FFC400" Offset="0.45" />
+                                    <GradientStop Color="#FF8A00" Offset="0.8" />
+                                    <GradientStop Color="#FF5A1F" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Border.Effect>
+                                <DropShadowEffect Color="#FFB000" BlurRadius="10" ShadowDepth="0" Opacity="0.55" />
+                            </Border.Effect>
+                            <Rectangle x:Name="Shine" Width="90" HorizontalAlignment="Left" RenderTransformOrigin="0,0">
+                                <Rectangle.Fill>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#00FFFFFF" Offset="0" />
+                                        <GradientStop Color="#70FFFFFF" Offset="0.5" />
+                                        <GradientStop Color="#00FFFFFF" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Rectangle.Fill>
+                                <Rectangle.RenderTransform>
+                                    <TranslateTransform x:Name="ShineMove" X="-90" />
+                                </Rectangle.RenderTransform>
+                            </Rectangle>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever">
+                                    <DoubleAnimation Storyboard.TargetName="ShineMove" Storyboard.TargetProperty="X" From="-90" To="1600" Duration="0:0:2.2" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Caixa de seleção arredondada -->
     <Style TargetType="CheckBox">
         <Setter Property="Foreground" Value="{StaticResource TextBrush}" />

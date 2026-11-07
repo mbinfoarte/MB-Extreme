@@ -9,24 +9,38 @@ using Vortice.Mathematics;
 namespace MBExtreme.Core.Benchmark;
 
 /// <summary>FPS de uma resolução no teste de limite por resolução.</summary>
-public sealed record ResolutionFps(int Width, int Height, double Fps)
+public sealed record ResolutionFps(int Width, int Height, double Fps, double Low1Fps = 0)
 {
     public string Label => $"{Width}×{Height}";
+
+    /// <summary>Faixa de uso: Competitivo (144+), Fluido (60+), Jogável (30+) ou Abaixo de 30.</summary>
+    public string Tier => Fps >= 144 ? "Competitivo 144+" : Fps >= 60 ? "Fluido 60+" : Fps >= 30 ? "Jogável 30+" : "Abaixo de 30";
 }
+
+/// <summary>Uma cena 3D: FPS médio, 1% low e 0,1% low (média dos piores quadros) e o tempo de cada quadro (reduzido para o gráfico).</summary>
+public sealed record GpuSceneStat(string Scene, double AvgFps, double Low1Fps, double Low01Fps, IReadOnlyList<double> FrameMs);
 
 /// <summary>Resultado das cenas 3D da janela separada.</summary>
 public sealed record GpuWindowResult(
     string GpuName,
-    double ReflectionsFps,
-    double GeometryFps,
+    GpuSceneStat? Reflections,
+    GpuSceneStat? Geometry,
     double StudioMsps,
-    double GameFps,
+    GpuSceneStat? Game,
     IReadOnlyList<ResolutionFps> Resolutions,
-    int Score)
+    int Score,
+    bool FocusLost = false)
 {
+    public double ReflectionsFps => Reflections?.AvgFps ?? 0;
+    public double GeometryFps => Geometry?.AvgFps ?? 0;
+    public double GameFps => Game?.AvgFps ?? 0;
+
     /// <summary>A maior resolução que passou de 60 FPS na simulação de jogo (null quando nenhuma passou).</summary>
     public ResolutionFps? Max60 => Resolutions.Where(r => r.Fps >= 60).OrderByDescending(r => (long)r.Width * r.Height).FirstOrDefault();
 }
+
+/// <summary>Progresso da janela 3D: etapa, fração dela (0 a 1), FPS atual (negativo = ainda sem) e passada.</summary>
+public readonly record struct GpuProgress(string Step, double Fraction, double Fps, int Pass, int Passes);
 
 /// <summary>
 /// Benchmark 3D numa janela separada (como os programas de benchmark), com o FPS no canto e a barra de progresso embaixo.
@@ -51,31 +65,45 @@ public static class GpuWindowBench
         return (int)Math.Round(reflectionsFps * scale * 20 + geometryFps * 2 + studioMsps * 4 + gameFps * scale * 8);
     }
 
-    /// <summary>Uma cena por vez; <paramref name="progress"/> recebe a cena, a fração dela (0 a 1) e o FPS atual.</summary>
+    /// <summary>
+    /// Roda as cenas, cada uma <paramref name="passes"/> vezes com a câmera em outro ângulo (vale a passada do meio),
+    /// e depois o limite por resolução com a simulação de jogo.
+    /// </summary>
     public static GpuWindowResult Run(int width, int height, int secondsPerScene, int studioSamples, IReadOnlyList<(int Width, int Height)> resolutions,
-        Action<string, double, double>? progress, CancellationToken token, bool resolutionLimit = true)
+        Action<GpuProgress>? progress, CancellationToken token, bool resolutionLimit = true, int passes = 1)
     {
+        passes = Math.Max(1, passes);
         using var host = new Host(width, height, token);
-        double refl = host.RunScene(Reflections, secondsPerScene, progress, host.DrawReflections);
-        double geo = host.RunScene(Geometry, secondsPerScene, progress, host.DrawGeometry);
-        double studio = host.RunStudio(secondsPerScene, studioSamples, progress);
-        double game = host.RunScene(Game, secondsPerScene, progress, host.DrawGame);
+        GpuSceneStat Scene(string name, Func<int, GpuSceneStat> run)
+        {
+            var list = new List<GpuSceneStat>();
+            for (int p = 0; p < passes; p++) list.Add(run(p));
+            return list.OrderBy(x => x.AvgFps).ElementAt(list.Count / 2);
+        }
+
+        var refl = Scene(Reflections, p => host.RunScene(Reflections, secondsPerScene, p, passes, progress, host.DrawReflections));
+        var geo = Scene(Geometry, p => host.RunScene(Geometry, secondsPerScene, p, passes, progress, host.DrawGeometry));
+        var studioRuns = new List<double>();
+        for (int p = 0; p < passes; p++) studioRuns.Add(host.RunStudioTiles(secondsPerScene, p, passes, progress));
+        double studio = studioRuns.OrderBy(x => x).ElementAt(studioRuns.Count / 2);
+        var game = Scene(Game, p => host.RunGame(Game, secondsPerScene, p, passes, progress));
         var list = new List<ResolutionFps>();
         if (resolutionLimit)
         {
-            int per = Math.Max(2, secondsPerScene / 2);
+            int per = Math.Max(3, secondsPerScene / 2);
             for (int i = 0; i < resolutions.Count; i++)
             {
                 var (w, h) = resolutions[i];
                 host.Resize(w, h);
                 int index = i;
-                double fps = host.RunScene($"{ResolutionLimit} · {w}×{h}", per,
-                    (_, f, current) => progress?.Invoke(ResolutionLimit, (index + f) / resolutions.Count, current), host.DrawGame, ResolutionLimit);
-                list.Add(new ResolutionFps(w, h, fps));
+                var stat = host.RunGame($"{ResolutionLimit} · {w}×{h}", per, 0, 1,
+                    e => progress?.Invoke(new GpuProgress(ResolutionLimit, (index + e.Fraction) / resolutions.Count, e.Fps, 1, 1)));
+                list.Add(new ResolutionFps(w, h, stat.AvgFps, stat.Low1Fps));
             }
         }
-        progress?.Invoke(ResolutionLimit, 1, -1);
-        return new GpuWindowResult(host.GpuName, refl, geo, studio, game, list, Score(refl, geo, studio, game, (long)width * height));
+        progress?.Invoke(new GpuProgress(ResolutionLimit, 1, -1, 1, 1));
+        return new GpuWindowResult(host.GpuName, refl, geo, studio, game, list,
+            Score(refl.AvgFps, geo.AvgFps, studio, game.AvgFps, (long)width * height), host.FocusLost);
     }
 
     /// <summary>Multiplicação de matrizes 1024 x 1024 num compute shader (etapa de IA). Devolve GFLOPS.</summary>
@@ -197,6 +225,8 @@ public static class GpuWindowBench
     {
         public float Time, Progress, Fps, FrameIndex;
         public float ResX, ResY, Spp, Units;
+        public float TileX, TileY, TileSize, TileOn;
+        public float Variation, Sparks, Pad0, Pad1;
     }
 
     // ------------------------------------------------------------------ janela + Direct3D
@@ -214,7 +244,9 @@ public static class GpuWindowBench
         private readonly ID3D11Buffer _constants;
         private readonly ID3D11RasterizerState _noCull;
         private readonly ID3D11BlendState _opaque, _alpha, _sum;
-        private readonly ID3D11DepthStencilState _depthOn, _depthOff;
+        private readonly ID3D11DepthStencilState _depthOn, _depthOff, _depthRead;
+        private readonly ID3D11BlendState _additive;
+        private readonly ID3D11RasterizerState _scissor;
         private readonly ID3D11VertexShader _vsFull;
         private readonly ID3D11PixelShader _psOverlay;
         private readonly Dictionary<string, ID3D11DeviceChild> _shaders = new();
@@ -261,6 +293,9 @@ public static class GpuWindowBench
             _sum = _device.CreateBlendState(new BlendDescription(Blend.One, Blend.One, Blend.One, Blend.One));
             _depthOn = _device.CreateDepthStencilState(DepthStencilDescription.Default);
             _depthOff = _device.CreateDepthStencilState(DepthStencilDescription.None);
+            _depthRead = _device.CreateDepthStencilState(DepthStencilDescription.DepthRead);
+            _additive = _device.CreateBlendState(new BlendDescription(Blend.SourceAlpha, Blend.One, Blend.One, Blend.One));
+            _scissor = _device.CreateRasterizerState(new RasterizerDescription(CullMode.None, FillMode.Solid) { ScissorEnable = true });
             string common = ShaderSource("Reflections");
             _vsFull = _device.CreateVertexShader(Gpu3DBenchmark.CompileShader(common, "VSFull", "vs_5_0"));
             _psOverlay = _device.CreatePixelShader(Gpu3DBenchmark.CompileShader(common, "PSOverlay", "ps_5_0"));
@@ -339,19 +374,6 @@ public static class GpuWindowBench
             _ctx.DrawInstanced(GeoSlices * GeoStacks * 6, GeoGrid * GeoGrid, 0, 0);
         }
 
-        public void DrawGame()
-        {
-            Begin(true, new Color4(0, 0, 0, 1));
-            FullScreen(Shader<ID3D11PixelShader>("Game", "PSSky", "ps_5_0"));
-            _ctx.OMSetDepthStencilState(_depthOn);
-            var ps = Shader<ID3D11PixelShader>("Game", "PSGame", "ps_5_0");
-            _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSTerrain", "vs_5_0"));
-            _ctx.PSSetShader(ps);
-            _ctx.Draw((TerrainSize - 1) * (TerrainSize - 1) * 6, 0);
-            _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSUnits", "vs_5_0"));
-            _ctx.DrawInstanced(36, (uint)(_frame.Units * 2), 0, 0);
-        }
-
         private void Overlay()
         {
             _ctx.OMSetRenderTargets(_rtv, null);
@@ -374,7 +396,7 @@ public static class GpuWindowBench
             _frame.ResX = _width;
             _frame.ResY = _height;
             _frame.Spp = (float)spp;
-            _frame.Units = 5000;
+            _frame.Units = UnitsPerArmy;
             _ctx.UpdateSubresource(in _frame, _constants);
         }
 
@@ -384,43 +406,138 @@ public static class GpuWindowBench
             if (result.Failure) throw new InvalidOperationException("A placa de vídeo parou de responder durante o teste (" + result.Code.ToString("X8") + ").");
         }
 
-        /// <summary>Roda uma cena por <paramref name="seconds"/>; o primeiro meio segundo é aquecimento e não conta. Devolve o FPS médio.</summary>
-        public double RunScene(string title, int seconds, Action<string, double, double>? progress, Action draw, string? step = null)
+        private double _unfocused;
+        public bool FocusLost => _unfocused > 0.5;
+
+        private static GpuSceneStat Stats(string scene, List<double> frameMs, double seconds)
         {
-            Win32.SetTitle(_hwnd, $"MB Bench · {title} (não feche esta janela)");
-            step ??= title;
+            if (frameMs.Count < 2) return new GpuSceneStat(scene, frameMs.Count / Math.Max(seconds, 0.001), 0, 0, frameMs);
+            var m = MBExtreme.Core.Fps.FrameAnalysis.Compute(frameMs);
+            return new GpuSceneStat(scene, frameMs.Count / Math.Max(seconds, 0.001), m.Low1Fps, m.Low01Fps, MBExtreme.Core.Fps.FrameAnalysis.DownsampleMax(frameMs, 600));
+        }
+
+        /// <summary>
+        /// Laço de uma cena: aquece meio segundo, depois mede cada quadro (tempo entre um e outro) pelo tempo pedido.
+        /// <paramref name="beforeDraw"/> roda antes de desenhar (a simulação de jogo calcula as unidades ali, no processador).
+        /// </summary>
+        private GpuSceneStat Loop(string title, string step, int seconds, int pass, int passes, Action<GpuProgress>? progress, Action draw, Action<double, double>? beforeDraw = null)
+        {
+            Win32.SetTitle(_hwnd, $"MB Bench · {title}" + (passes > 1 ? $" · passada {pass + 1} de {passes}" : "") + " (não feche esta janela)");
+            _frame.Variation = pass;
             const double warmup = 0.5;
             var watch = Stopwatch.StartNew();
-            long frames = 0, shownFrames = 0;
-            double shownAt = 0, shownFps = -1, lastReport = -1;
+            var frameMs = new List<double>(8192);
+            long shownFrames = 0;
+            double shownAt = 0, shownFps = -1, lastReport = -1, last = 0;
             while (true)
             {
                 Pump();
                 double t = watch.Elapsed.TotalSeconds;
                 if (t >= seconds + warmup) break;
                 double fraction = Math.Max(0, t - warmup) / seconds;
-                Upload(t, fraction, shownFps, frames);
+                beforeDraw?.Invoke(t, t - last);
+                Upload(t, fraction, shownFps, frameMs.Count);
                 draw();
                 Overlay();
                 Present();
-                if (t >= warmup) frames++;
+                double now = watch.Elapsed.TotalSeconds;
+                if (now > warmup && last >= warmup) frameMs.Add((now - last) * 1000);
+                if (now > warmup && !Win32.IsForeground(_hwnd)) _unfocused += now - last;
+                last = now;
                 shownFrames++;
-                if (t - shownAt >= 0.5)
-                {
-                    shownFps = shownFrames / (t - shownAt);
-                    shownFrames = 0;
-                    shownAt = t;
-                }
-                if (t - lastReport >= 0.25) { lastReport = t; progress?.Invoke(step, fraction, shownFps); }
+                if (now - shownAt >= 0.5) { shownFps = shownFrames / (now - shownAt); shownFrames = 0; shownAt = now; }
+                if (now - lastReport >= 0.25) { lastReport = now; progress?.Invoke(new GpuProgress(step, (pass + fraction) / passes, shownFps, pass + 1, passes)); }
             }
             _ctx.Flush();
-            return frames / Math.Max(watch.Elapsed.TotalSeconds - warmup, 0.001);
+            return Stats(title, frameMs, frameMs.Sum() / 1000);
         }
 
-        /// <summary>Estúdio: soma amostras numa textura e mostra a média; devolve milhões de amostras por segundo.</summary>
-        public double RunStudio(int seconds, int samples, Action<string, double, double>? progress)
+        public GpuSceneStat RunScene(string title, int seconds, int pass, int passes, Action<GpuProgress>? progress, Action draw) =>
+            Loop(title, title, seconds, pass, passes, progress, draw);
+
+        // ---- simulação de jogo: unidades calculadas no processador a cada quadro
+        public const int UnitsPerArmy = 5000;
+        private ID3D11Buffer? _unitBuffer, _sparkBuffer;
+        private ID3D11ShaderResourceView? _unitView, _sparkView;
+        private readonly float[] _unitData = new float[UnitsPerArmy * 2 * 4];
+
+        private void EnsureGameBuffers()
         {
-            Win32.SetTitle(_hwnd, $"MB Bench · {Studio} (não feche esta janela)");
+            if (_unitBuffer is not null) return;
+            _unitBuffer = _device.CreateBuffer(new BufferDescription((uint)(_unitData.Length * sizeof(float)), BindFlags.ShaderResource, ResourceUsage.Dynamic, CpuAccessFlags.Write, ResourceOptionFlags.BufferStructured, 16));
+            _sparkBuffer = _device.CreateBuffer(new BufferDescription((uint)(ArmySim.MaxSparks * 4 * sizeof(float)), BindFlags.ShaderResource, ResourceUsage.Dynamic, CpuAccessFlags.Write, ResourceOptionFlags.BufferStructured, 16));
+            _unitView = _device.CreateShaderResourceView(_unitBuffer);
+            _sparkView = _device.CreateShaderResourceView(_sparkBuffer);
+        }
+
+        private void Upload(ID3D11Buffer buffer, ReadOnlySpan<float> data)
+        {
+            var mapped = _ctx.Map(buffer, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+            try { Marshal.Copy(data.ToArray(), 0, mapped.DataPointer, data.Length); }
+            finally { _ctx.Unmap(buffer, 0); }
+        }
+
+        public GpuSceneStat RunGame(string title, int seconds, int pass, int passes, Action<GpuProgress>? progress)
+        {
+            EnsureGameBuffers();
+            var sim = new ArmySim(UnitsPerArmy, 7 + pass);
+            return Loop(title, title.StartsWith(ResolutionLimit, StringComparison.Ordinal) ? ResolutionLimit : Game, seconds, pass, passes, progress, DrawGame, (t, dt) =>
+            {
+                sim.Step((float)dt, (float)t);
+                sim.WriteUnits(_unitData);
+                Upload(_unitBuffer!, _unitData);
+                Upload(_sparkBuffer!, sim.Sparks);
+                _frame.Sparks = ArmySim.MaxSparks;
+            });
+        }
+
+        public void DrawGame()
+        {
+            Begin(true, new Color4(0, 0, 0, 1));
+            FullScreen(Shader<ID3D11PixelShader>("Game", "PSSky", "ps_5_0"));
+            _ctx.OMSetDepthStencilState(_depthOn);
+            var ps = Shader<ID3D11PixelShader>("Game", "PSGame", "ps_5_0");
+            _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSTerrain", "vs_5_0"));
+            _ctx.PSSetShader(ps);
+            _ctx.Draw((TerrainSize - 1) * (TerrainSize - 1) * 6, 0);
+            _ctx.VSSetShaderResource(0, _unitView!);
+            _ctx.VSSetShaderResource(1, _sparkView!);
+            _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSUnits", "vs_5_0"));
+            _ctx.DrawInstanced(36, UnitsPerArmy * 2, 0, 0);
+            // explosões: partículas somadas, lendo a profundidade sem gravar
+            _ctx.OMSetDepthStencilState(_depthRead);
+            _ctx.OMSetBlendState(_additive);
+            _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSSparks", "vs_5_0"));
+            _ctx.PSSetShader(Shader<ID3D11PixelShader>("Game", "PSSparks", "ps_5_0"));
+            _ctx.DrawInstanced(6, ArmySim.MaxSparks * 24, 0, 0);
+            _ctx.OMSetBlendState(_opaque);
+        }
+
+        // ---- estúdio em blocos (o render vai aparecendo quadrado por quadrado)
+        private ID3D11Query? _event;
+        private IntPtr _eventData;
+
+        private void WaitGpu()
+        {
+            _event ??= _device.CreateQuery(new QueryDescription(QueryType.Event, QueryFlags.None));
+            if (_eventData == IntPtr.Zero) _eventData = Marshal.AllocHGlobal(4);
+            _ctx.End(_event);
+            _ctx.Flush();
+            while (true)
+            {
+                Pump();
+                var state = _ctx.GetData(_event, _eventData, 4, AsyncGetDataFlags.None);
+                if (state.Failure) throw new InvalidOperationException("A placa de vídeo foi reiniciada pelo Windows durante o teste (TDR).");
+                if (state.Code == 0) return;
+                Thread.Yield();
+            }
+        }
+
+        public double RunStudioTiles(int seconds, int pass, int passes, Action<GpuProgress>? progress)
+        {
+            Win32.SetTitle(_hwnd, $"MB Bench · {Studio}" + (passes > 1 ? $" · passada {pass + 1} de {passes}" : "") + " (não feche esta janela)");
+            _frame.Variation = pass;
+            const int size = 64;
             using var accum = _device.CreateTexture2D(new Texture2DDescription
             {
                 Width = (uint)_width, Height = (uint)_height, MipLevels = 1, ArraySize = 1, Format = Format.R32G32B32A32_Float,
@@ -428,53 +545,85 @@ public static class GpuWindowBench
             });
             using var accumRtv = _device.CreateRenderTargetView(accum);
             using var accumSrv = _device.CreateShaderResourceView(accum);
-            var psStudio = Shader<ID3D11PixelShader>("Studio", "PSStudio", "ps_5_0");
-            var psResolve = Shader<ID3D11PixelShader>("Studio", "PSResolve", "ps_5_0");
+            var psTile = Shader<ID3D11PixelShader>("Studio", "PSStudioTile", "ps_5_0");
+            var psResolve = Shader<ID3D11PixelShader>("Studio", "PSResolveTiles", "ps_5_0");
             _ctx.ClearRenderTargetView(accumRtv, new Color4(0, 0, 0, 0));
-            int spp = Math.Max(1, samples);
-            long total = 0;
-            var watch = Stopwatch.StartNew();
-            double shownAt = 0, shownFps = -1, lastReport = -1;
-            long shownFrames = 0;
-            while (watch.Elapsed.TotalSeconds < seconds)
+
+            // ordem dos quadrados: do centro para fora
+            var tiles = new List<(int X, int Y)>();
+            for (int y = 0; y < _height; y += size)
+                for (int x = 0; x < _width; x += size) tiles.Add((x, y));
+            double cx = _width / 2.0, cy = _height / 2.0;
+            tiles = tiles.OrderBy(t => Math.Pow(t.X + size / 2.0 - cx, 2) + Math.Pow(t.Y + size / 2.0 - cy, 2)).ToList();
+
+            void DrawTile((int X, int Y) tile, int spp, long seed)
             {
-                Pump();
-                double frameStart = watch.Elapsed.TotalSeconds;
                 _ctx.RSSetViewport(0, 0, _width, _height);
-                _ctx.RSSetState(_noCull);
+                _ctx.RSSetState(_scissor);
+                _ctx.RSSetScissorRect(new Vortice.RawRect(tile.X, tile.Y, tile.X + size, tile.Y + size)); // esquerda, topo, direita, base
                 _ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
                 _ctx.VSSetConstantBuffer(0, _constants);
                 _ctx.PSSetConstantBuffer(0, _constants);
                 _ctx.OMSetRenderTargets(accumRtv, null);
                 _ctx.OMSetBlendState(_sum);
-                for (int s = 0; s < spp; s++)
-                {
-                    Upload(frameStart, frameStart / seconds, shownFps, total + s, spp);
-                    FullScreen(psStudio);
-                    _ctx.Flush();
-                }
-                total += spp;
-                // mostra a média na janela
-                Upload(frameStart, frameStart / seconds, shownFps, total, spp);
-                _ctx.OMSetRenderTargets(_rtv, null);
-                _ctx.OMSetBlendState(_opaque);
-                _ctx.PSSetShaderResource(0, accumSrv);
-                FullScreen(psResolve);
-                Overlay();
-                Present();
-                shownFrames++;
-                double t = watch.Elapsed.TotalSeconds;
-                if (t - frameStart > 0.8 && spp > 1) spp = Math.Max(1, spp / 2);
-                if (t - shownAt >= 0.5) { shownFps = shownFrames / (t - shownAt); shownFrames = 0; shownAt = t; }
-                if (t - lastReport >= 0.25) { lastReport = t; progress?.Invoke(Studio, t / seconds, shownFps); }
+                Upload(0, 0, -1, seed, spp);
+                FullScreen(psTile);
             }
-            return total * (double)_width * _height / Math.Max(watch.Elapsed.TotalSeconds, 0.001) / 1e6;
+
+            // calibra: quantas amostras por pixel cabem no tempo pedido
+            var calib = Stopwatch.StartNew();
+            DrawTile(tiles[0], 16, 1);
+            WaitGpu();
+            double perSample = calib.Elapsed.TotalSeconds / (16.0 * size * size);
+            int spp = (int)Math.Clamp(Math.Pow(2, Math.Round(Math.Log2(Math.Max(1, seconds / (perSample * _width * _height))))), 4, 2048);
+            _ctx.ClearRenderTargetView(accumRtv, new Color4(0, 0, 0, 0));
+
+            long samples = 0;
+            var watch = Stopwatch.StartNew();
+            double lastShow = -1;
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                Pump();
+                var tileStart = watch.Elapsed.TotalSeconds;
+                DrawTile(tiles[i], spp, 1000 + i * 7919L);
+                samples += (long)spp * Math.Min(size, _width - tiles[i].X) * Math.Min(size, _height - tiles[i].Y);
+                double t = watch.Elapsed.TotalSeconds;
+                if (t - lastShow > 0.03 || i == tiles.Count - 1)
+                {
+                    lastShow = t;
+                    _frame.TileX = i + 1 < tiles.Count ? tiles[i + 1].X : 0;
+                    _frame.TileY = i + 1 < tiles.Count ? tiles[i + 1].Y : 0;
+                    _frame.TileSize = size;
+                    _frame.TileOn = i + 1 < tiles.Count ? 1 : 0;
+                    _ctx.RSSetState(_noCull);
+                    Upload(t, (pass + (i + 1.0) / tiles.Count) / passes, -1, 0, spp);
+                    _ctx.OMSetRenderTargets(_rtv, null);
+                    _ctx.OMSetBlendState(_opaque);
+                    _ctx.PSSetShaderResource(0, accumSrv);
+                    FullScreen(psResolve);
+                    Overlay();
+                    Present();
+                    progress?.Invoke(new GpuProgress(Studio, (pass + (i + 1.0) / tiles.Count) / passes, -1, pass + 1, passes));
+                }
+                if (watch.Elapsed.TotalSeconds - tileStart > 1.0 && spp > 4) spp /= 2; // proteção contra a placa travar
+            }
+            WaitGpu();
+            _frame.TileOn = 0;
+            double msps = samples / Math.Max(watch.Elapsed.TotalSeconds, 0.001) / 1e6;
+            // deixa a imagem pronta na tela por um instante
+            var pause = Stopwatch.StartNew();
+            while (pause.Elapsed.TotalSeconds < 0.8) { Pump(); Thread.Sleep(15); }
+            return msps;
         }
 
         public void Dispose()
         {
             try { _ctx.ClearState(); _ctx.Flush(); } catch (SharpGen.Runtime.SharpGenException) { }
             foreach (var s in _shaders.Values) s.Dispose();
+            _unitView?.Dispose(); _sparkView?.Dispose(); _unitBuffer?.Dispose(); _sparkBuffer?.Dispose();
+            _event?.Dispose();
+            if (_eventData != IntPtr.Zero) Marshal.FreeHGlobal(_eventData);
+            _depthRead.Dispose(); _additive.Dispose(); _scissor.Dispose();
             _vsFull.Dispose();
             _psOverlay.Dispose();
             _depthOn.Dispose();
@@ -532,6 +681,7 @@ public static class GpuWindowBench
         [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
         [DllImport("user32.dll")] private static extern IntPtr LoadCursor(IntPtr inst, IntPtr name);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr GetModuleHandle(string? name);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
         private const uint Style = 0x00C00000 | 0x00080000 | 0x00020000; // título, menu do sistema, minimizar (tamanho fixo)
@@ -590,6 +740,8 @@ public static class GpuWindowBench
             }
             lock (Closed) return Closed.Contains(hwnd);
         }
+
+        public static bool IsForeground(IntPtr hwnd) => GetForegroundWindow() == hwnd;
 
         public static void SetTitle(IntPtr hwnd, string title) => SetWindowText(hwnd, title);
 

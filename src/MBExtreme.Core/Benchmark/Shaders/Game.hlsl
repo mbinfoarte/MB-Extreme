@@ -10,7 +10,7 @@ float Height(float2 xz)
     return Fbm(xz * 0.035 + 3.0) * 26.0 * ring + Fbm(xz * 0.11) * 1.6 - 0.8;
 }
 
-float3 GameEye() { float a = 0.9 + time * 0.07; return float3(46.0 * cos(a), 17.0 + 3.0 * sin(time * 0.15), 46.0 * sin(a)); }
+float3 GameEye() { float a = 0.9 + time * 0.07 + variation * 2.4; return float3(46.0 * cos(a), 17.0 + 3.0 * sin(time * 0.15), 46.0 * sin(a)); }
 
 float3 TerrainNormal(float2 xz)
 {
@@ -39,34 +39,63 @@ TerrOut VSTerrain(uint vid : SV_VertexID)
     return o;
 }
 
+// Unidades: a posição vem do processador a cada quadro (x, z, direção, time), como num jogo de verdade.
+StructuredBuffer<float4> Units : register(t0);
+// Explosões: ponto e instante de cada choque entre unidades (x, y, z, início).
+StructuredBuffer<float4> Sparks : register(t1);
+
 TerrOut VSUnits(uint vid : SV_VertexID, uint inst : SV_InstanceID)
 {
     const float3 C[8] = { float3(-1, -1, -1), float3(1, -1, -1), float3(1, 1, -1), float3(-1, 1, -1), float3(-1, -1, 1), float3(1, -1, 1), float3(1, 1, 1), float3(-1, 1, 1) };
     const int I[36] = { 0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 6, 2, 3, 7, 6, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5 };
     const float3 N[6] = { float3(0, 0, -1), float3(0, 0, 1), float3(0, -1, 0), float3(0, 1, 0), float3(-1, 0, 0), float3(1, 0, 0) };
-    uint count = (uint)max(units, 1.0);
-    bool blue = inst >= count;
-    uint k = blue ? inst - count : inst;
-    uint cols = (uint)sqrt((float)count);
-    float2 slot = float2(k % cols, k / cols) / max((float)cols - 1.0, 1.0) - 0.5;
-    float side = blue ? 1.0 : -1.0;
-    float2 start = float2(side * (8.0 + (slot.x + 0.5) * 30.0), slot.y * 56.0);
-    float2 goal = float2(-side * 4.0 + sin(slot.y * 9.0 + side) * 10.0 + slot.x * 14.0, slot.y * 44.0 + cos(slot.x * 7.0) * 8.0);
-    float advance = saturate(time / 14.0);
-    float2 xz = lerp(start, goal, advance * advance * (3.0 - 2.0 * advance));
-    xz += float2(sin(time * 2.0 + k * 0.7), cos(time * 1.7 + k * 1.3)) * 0.6 * advance;
-    float heading = atan2(goal.y - start.y, goal.x - start.x) + sin(time + k) * 0.3;
+    float4 u = Units[inst];
+    bool blue = u.w > 0.5;
+    float heading = u.z;
     float3 local = C[I[vid]] * float3(0.2, 0.3, 0.16);
     float ch = cos(heading), sh = sin(heading);
     local = float3(local.x * ch - local.z * sh, local.y, local.x * sh + local.z * ch);
     float3 n = N[vid / 6];
     n = float3(n.x * ch - n.z * sh, n.y, n.x * sh + n.z * ch);
     TerrOut o;
-    o.world = float3(xz.x, Height(xz) + 0.3, xz.y) + local;
+    o.world = float3(u.x, Height(u.xy) + 0.3, u.y) + local;
     o.normal = n;
-    o.tint = (blue ? float3(0.22, 0.42, 1.0) : float3(1.0, 0.72, 0.08)) * (0.8 + 0.4 * Hash21(float2(k, blue ? 3.0 : 1.0)));
+    o.tint = (blue ? float3(0.22, 0.42, 1.0) : float3(1.0, 0.72, 0.08)) * (0.8 + 0.4 * Hash21(float2(inst, blue ? 3.0 : 1.0)));
     o.pos = Project(o.world, GameEye(), float3(0, 0, 0), 1.5);
     return o;
+}
+
+#define SPARK_PARTICLES 24
+
+struct SparkOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; float3 color : TEXCOORD1; float fade : TEXCOORD2; };
+
+SparkOut VSSparks(uint vid : SV_VertexID, uint inst : SV_InstanceID)
+{
+    const float2 corners[6] = { float2(-1, -1), float2(1, -1), float2(-1, 1), float2(-1, 1), float2(1, -1), float2(1, 1) };
+    uint spark = inst / SPARK_PARTICLES; uint k = inst % SPARK_PARTICLES;
+    float4 s = Sparks[spark];
+    float age = time - s.w;
+    float life = 1.1;
+    float t = saturate(age / life);
+    float h1 = Hash21(float2(spark, k)), h2 = Hash21(float2(k, spark + 7.0)), h3 = Hash21(float2(spark + k, 3.3));
+    float3 dir = normalize(float3(h1 - 0.5, 0.6 + h2, h3 - 0.5));
+    float3 center = float3(s.x, Height(s.xz) + 0.4, s.z) + dir * (age * (4.0 + 3.0 * h2)) + float3(0, -4.9 * age * age, 0);
+    float3 rt, up; CamBasis(GameEye(), float3(0, 0, 0), rt, up);
+    float size = 0.18 * (1.0 - t * 0.6);
+    float2 c = corners[vid];
+    SparkOut o;
+    float3 world = center + (rt * c.x + up * c.y) * size;
+    o.pos = (spark < (uint)sparks && age >= 0.0 && age < life) ? Project(world, GameEye(), float3(0, 0, 0), 1.5) : float4(0, 0, -1, 1);
+    o.uv = c;
+    o.color = lerp(float3(1.0, 0.9, 0.5), float3(1.0, 0.35, 0.05), t);
+    o.fade = 1.0 - t;
+    return o;
+}
+
+float4 PSSparks(SparkOut i) : SV_Target
+{
+    float d = 1.0 - saturate(length(i.uv));
+    return float4(i.color * d * d * 2.0 * i.fade, d * i.fade);
 }
 
 float4 PSGame(TerrOut i) : SV_Target

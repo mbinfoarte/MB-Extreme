@@ -8,6 +8,10 @@ cbuffer Frame : register(b0)
     float2 res;       // resolução em pixels
     float spp;        // amostras por desenho (estúdio)
     float units;      // unidades por exército (simulação de jogo)
+    float4 tile;      // quadrado do render em blocos: x, y, tamanho, 1 = ligado
+    float variation;  // muda a câmera a cada passada (a imagem não fica sempre igual)
+    float sparks;     // quantas explosões na simulação de jogo
+    float2 pad;
 };
 
 struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
@@ -46,6 +50,13 @@ float4 Project(float3 p, float3 eye, float3 at, float zoom)
     float3 d = p - eye;
     float x = dot(d, rt), y = dot(d, up), z = dot(d, fw);
     return float4(x * zoom * res.y / res.x, y * zoom, (z - 0.1) / 599.9 * z, z);
+}
+
+void CamBasis(float3 eye, float3 at, out float3 rt, out float3 up)
+{
+    float3 fw = normalize(at - eye);
+    rt = normalize(cross(fw, float3(0, 1, 0)));
+    up = cross(rt, fw);
 }
 
 float3 CameraRay(float2 pixel, float3 eye, float3 at, float zoom)

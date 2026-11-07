@@ -21,7 +21,7 @@ public static class BenchmarkModes
     {
         new BenchmarkProfile(BenchmarkMode.Rapido, "Rápido", "Uma conferida rápida. Carga leve e curta: bom para ver se algo mudou.", 1200, 128, 4, 2, true, 1),
         new BenchmarkProfile(BenchmarkMode.Padrao, "Padrão", "O equilíbrio entre tempo e precisão. Recomendado para comparar antes e depois.", 2500, 512, 8, 4, false, 1),
-        new BenchmarkProfile(BenchmarkMode.Preciso, "Preciso", "Carga longa e pesada em tudo: 3 passadas e vale a mediana. Varia menos, mas o PC esquenta mais.", 5000, 2048, 15, 8, false, 3),
+        new BenchmarkProfile(BenchmarkMode.Preciso, "Preciso", "Carga longa e pesada em tudo: 3 passadas e vale a mediana. Varia menos, mas o PC esquenta mais.", 5000, 2048, 10, 8, false, 3),
     };
 
     public static BenchmarkProfile Get(BenchmarkMode mode) => All.First(p => p.Mode == mode);
@@ -36,16 +36,18 @@ public static class BenchmarkModes
         var p = For(options);
         double task = Math.Max(150, p.PhaseMs / 2) / 1000.0;
         int resolutions = BenchmarkService.LimitResolutions(options).Count;
+        double random = 3 * Math.Max(400, p.PhaseMs / 2) / 1000.0;
         return step switch
         {
             BenchmarkService.StepSingle => CpuTasks.Tasks.Count * task * p.Passes + 0.3,
             BenchmarkService.StepMulti => (CpuTasks.Tasks.Count + 1) * task * p.Passes + 0.3,
             BenchmarkService.StepMemory => (1.5 * p.PhaseMs / 1000.0 + (p.QuickLatency ? 1 : 3)) * p.Passes,
-            BenchmarkService.StepDisk => p.DiskMegabytes * 2 / 400.0 + 1,
-            BenchmarkService.StepAi => 2 * task * p.Passes + (options.Gpu3D ? Math.Max(1.0, p.PhaseMs / 1000.0) + 1 : 0),
+            BenchmarkService.StepDisk => p.DiskMegabytes * 2 / 400.0 + random + 1,
+            BenchmarkService.StepAi => (4 * task + 1) * p.Passes + (options.Gpu3D ? Math.Max(1.0, p.PhaseMs / 1000.0) + 1 : 0),
             BenchmarkService.StepDaily => 14.0 * p.Passes,
-            GpuWindowBench.ResolutionLimit => resolutions * (Math.Max(2, p.GpuSecondsPerScene / 2) + 0.5),
-            _ when BenchmarkService.GpuSteps.Contains(step) => p.GpuSecondsPerScene + 1.5,
+            GpuWindowBench.ResolutionLimit => resolutions * (Math.Max(3, p.GpuSecondsPerScene / 2) + 0.6),
+            GpuWindowBench.Studio => (p.GpuSecondsPerScene + 1.5) * p.Passes,
+            _ when BenchmarkService.GpuSteps.Contains(step) => (p.GpuSecondsPerScene + 0.7) * p.Passes + 0.5,
             _ => 1,
         };
     }

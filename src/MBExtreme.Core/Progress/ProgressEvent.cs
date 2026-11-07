@@ -30,5 +30,8 @@ public sealed class ProgressEvent
 
     /// <summary>Passada atual e total de passadas (modo Preciso repete as medições e usa a mediana).</summary>
     public int Pass { get; init; }
+
+    /// <summary>Resultado da etapa quando ela termina (ex.: "1.500 pts" ou "173,8 FPS · 1% low 86,2").</summary>
+    public string? Result { get; init; }
     public int Passes { get; init; }
 }

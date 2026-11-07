@@ -5,7 +5,7 @@
 
 struct GeoOut { float4 pos : SV_Position; float3 world : TEXCOORD0; float3 normal : TEXCOORD1; float3 tint : TEXCOORD2; };
 
-float3 CamEye() { float a = time * 0.12; return float3(24.0 * cos(a), 6.5 + 1.5 * sin(time * 0.2), 24.0 * sin(a)); }
+float3 CamEye() { float a = time * 0.12 + variation * 1.9; return float3(24.0 * cos(a), 6.5 + 1.5 * sin(time * 0.2), 24.0 * sin(a)); }
 
 float Bump(float3 d, float seed)
 {

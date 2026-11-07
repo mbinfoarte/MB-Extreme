@@ -67,7 +67,8 @@ public sealed class InternetTestPage : ToolPageBase
         Motion.Breathe(_go, 1.05, 1.5);
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
         left.Children.Add(top);
-        left.Children.Add(_gaugeHost);
+        // a tela é remontada a cada teste: o velocímetro sai do painel antigo antes de entrar no novo
+        left.Children.Add(Free(_gaugeHost));
         var right = new StackPanel { Margin = new Thickness(16, 0, 0, 0) };
         if (_map.Parent is Panel mp) mp.Children.Remove(_map);
         right.Children.Add(_map);
@@ -410,7 +411,7 @@ public sealed class InternetTestPage : ToolPageBase
             _stepCards[key] = card;
             _steps.Children.Add(card);
         }
-        Body.Children.Add(_steps);
+        Body.Children.Add(UiTree.Free(_steps));
         if (result is not null)
         {
             Set("router", Ms(result.RouterMs)); Set("ping", Ms(result.PingMs)); Set("dns", Ms(result.DnsMs));
@@ -421,7 +422,7 @@ public sealed class InternetTestPage : ToolPageBase
         _lastResult = result ?? _lastResult;
         Body.Children.Add(Muted("Conexões ao mesmo tempo (mais conexões medem melhor internet acima de 300 Mbps):", 12));
         Body.Children.Add(Choice(Connections.Select(c => c == 1 ? "Automático" : c + " conexões").ToList(), Array.IndexOf(Connections, _connections), i => _connections = Connections[i]));
-        Body.Children.Add(_stage);
+        Body.Children.Add(UiTree.Free(_stage));
         Body.Children.Add(ServerCard());
         Body.Children.Add(GameCard());
         Body.Children.Add(DnsCard());

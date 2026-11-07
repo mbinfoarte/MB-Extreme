@@ -428,7 +428,7 @@ public sealed partial class BenchmarkPage : ToolPageBase
         {
             _previewCaption.Text = "Última imagem renderizada";
             _previewCard.Visibility = Visibility.Visible;
-            _runPanel.Children.Add(_previewCard);
+            _runPanel.Children.Add(Free(_previewCard));
         }
     }
 
@@ -453,11 +453,11 @@ public sealed partial class BenchmarkPage : ToolPageBase
         head.ColumnDefinitions.Add(new ColumnDefinition());
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var titles = new StackPanel();
-        titles.Children.Add(_runTitle);
-        titles.Children.Add(_runDetail);
+        titles.Children.Add(Free(_runTitle));
+        titles.Children.Add(Free(_runDetail));
         head.Children.Add(titles);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
-        right.Children.Add(_runClock);
+        right.Children.Add(Free(_runClock));
         var stop = new Button { Content = "Parar", Style = (Style)FindResource("GhostButton"), Margin = new Thickness(12, 0, 0, 0) };
         stop.Click += (_, _) => Cts?.Cancel();
         right.Children.Add(stop);
@@ -466,7 +466,7 @@ public sealed partial class BenchmarkPage : ToolPageBase
 
         var card = new StackPanel();
         card.Children.Add(head);
-        card.Children.Add(_overall);
+        card.Children.Add(Free(_overall));
         foreach (var step in steps)
         {
             var row = new Grid { Margin = new Thickness(0, 4, 0, 0) };
@@ -484,11 +484,11 @@ public sealed partial class BenchmarkPage : ToolPageBase
             _stepList.Children.Add(row);
             _stepRows[step] = (icon, name, detail);
         }
-        card.Children.Add(_stepList);
-        card.Children.Add(_live);
+        card.Children.Add(Free(_stepList));
+        card.Children.Add(Free(_live));
         _runPanel.Children.Add(CardOf(card));
         _previewCard.Visibility = Visibility.Collapsed;
-        _runPanel.Children.Add(_previewCard);
+        _runPanel.Children.Add(Free(_previewCard));
         _runWatch = Stopwatch.StartNew();
         _runClock.Text = "0:00";
         _clockTimer.Start();

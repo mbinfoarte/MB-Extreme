@@ -182,8 +182,8 @@ public sealed class ProgramsPage : ToolPageBase
         Body.Children.Clear();
         Body.Children.Add(Heading($"Programas instalados ({_inventory.Count})"));
         Body.Children.Add(Muted("Lidos do próprio Windows (Aplicativos instalados) e da Microsoft Store. A última vez que cada um foi aberto não é mostrada: o Windows não guarda isso de forma confiável.", 11.5));
-        Body.Children.Add(_search);
-        Body.Children.Add(_inventoryList);
+        Body.Children.Add(UiTree.Free(_search));
+        Body.Children.Add(UiTree.Free(_inventoryList));
         FillInventory();
         if (!keepStatus) SetStatus("");
     }

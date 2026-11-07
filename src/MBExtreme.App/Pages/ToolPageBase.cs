@@ -97,6 +97,12 @@ public abstract class ToolPageBase : UserControl
 
     protected Brush Brush(string key) => (Brush)FindResource(key);
 
+    /// <summary>
+    /// Tira o elemento de onde ele estava (painel, borda ou conteúdo) para poder colocá-lo num lugar novo.
+    /// No WPF um elemento só pode ter um pai: remontar a tela sem isto derruba o programa.
+    /// </summary>
+    protected static T Free<T>(T element) where T : FrameworkElement => UiTree.Free(element);
+
     protected Button AddButton(string text, RoutedEventHandler click, bool primary = true)
     {
         var button = new Button

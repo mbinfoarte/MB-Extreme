@@ -125,8 +125,8 @@ public sealed class RepairPage : ToolPageBase
     private void BuildDiskSelector()
     {
         Body.Children.Add(Muted("Escolha qual disco verificar ou reparar. Os comandos abaixo valem só para a unidade escolhida.", 12));
-        Body.Children.Add(_driveChips);
-        Body.Children.Add(_diskHost);
+        Body.Children.Add(UiTree.Free(_driveChips));
+        Body.Children.Add(UiTree.Free(_diskHost));
         PaintDriveChips();
         RebuildDiskTasks();
     }

@@ -149,7 +149,7 @@ internal sealed class RemoteSupportController
             Text = $"● Sessão remota ativa: {technician} está no seu computador",
             Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
         };
-        panel.Children.Add(_bannerText);
+        panel.Children.Add(UiTree.Free(_bannerText));
         panel.Children.Add(button);
         _banner = new Window
         {

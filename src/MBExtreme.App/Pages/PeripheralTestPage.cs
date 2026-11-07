@@ -102,7 +102,7 @@ public sealed partial class PeripheralTestPage : ToolPageBase
         _host.Children.Add(Muted("Clique no teclado abaixo e aperte as teclas. Amarelo = funcionou; claro = apertada agora. Teste também várias juntas (jogos usam W, A, Shift e Espaço ao mesmo tempo).", 12));
         _host.Children.Add(CardOf(board));
         Detach(_keyInfo);
-        _host.Children.Add(_keyInfo);
+        _host.Children.Add(UiTree.Free(_keyInfo));
         _keyInfo.Text = "Nenhuma tecla apertada ainda.";
         Dispatcher.BeginInvoke(new Action(() => board.Focus()), DispatcherPriority.Input);
     }
@@ -169,8 +169,8 @@ public sealed partial class PeripheralTestPage : ToolPageBase
         _host.Children.Add(area);
         Detach(_mouseInfo);
         Detach(_rateInfo);
-        _host.Children.Add(_mouseInfo);
-        _host.Children.Add(_rateInfo);
+        _host.Children.Add(UiTree.Free(_mouseInfo));
+        _host.Children.Add(UiTree.Free(_rateInfo));
         _rateInfo.Text = "Taxa de atualização: mexa o mouse em círculos rápidos por uns segundos.";
         UpdateMouseInfo();
         RegisterRaw();
@@ -295,15 +295,15 @@ public sealed partial class PeripheralTestPage : ToolPageBase
         Detach(_padInfo);
         Detach(_padButtons);
         Detach(_stickResult);
-        _host.Children.Add(_padInfo);
-        _host.Children.Add(_padButtons);
+        _host.Children.Add(UiTree.Free(_padInfo));
+        _host.Children.Add(UiTree.Free(_padButtons));
         Detach(_lt);
         Detach(_rt);
         var triggers = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 8) };
         triggers.Children.Add(new TextBlock { Text = "LT ", VerticalAlignment = VerticalAlignment.Center });
-        triggers.Children.Add(_lt);
+        triggers.Children.Add(UiTree.Free(_lt));
         triggers.Children.Add(new TextBlock { Text = "   RT ", VerticalAlignment = VerticalAlignment.Center });
-        triggers.Children.Add(_rt);
+        triggers.Children.Add(UiTree.Free(_rt));
         _host.Children.Add(triggers);
         var sticks = new StackPanel { Orientation = Orientation.Horizontal };
         Detach(_left.Canvas);
@@ -317,7 +317,7 @@ public sealed partial class PeripheralTestPage : ToolPageBase
         actions.Children.Add(SmallButton("Vibrar esquerdo", async (_, _) => await PulseAsync(left: true)));
         actions.Children.Add(SmallButton("Vibrar direito", async (_, _) => await PulseAsync(left: false)));
         _host.Children.Add(actions);
-        _host.Children.Add(_stickResult);
+        _host.Children.Add(UiTree.Free(_stickResult));
         _host.Children.Add(Muted("Funciona com controles XInput (Xbox e compatíveis). Controles de PlayStation e Switch aparecem aqui só com um programa que os traduz (ex.: Steam ou DS4Windows).", 11.5));
         _padTimer.Tick -= PadTick;
         _padTimer.Tick += PadTick;

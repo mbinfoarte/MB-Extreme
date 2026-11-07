@@ -284,7 +284,7 @@ public sealed class ShortsPage : ToolPageBase
         _info.Text = _video is null
             ? (_ffmpeg is null ? "Precisa do FFmpeg (instale na página Gravação e transmissão, aba Avançado)." : "Clique em \"Escolher vídeo...\" ou use uma das gravações recentes abaixo.")
             : $"{TimeText.Format(_duration)} · {(_size is { } sz ? $"{sz.W}×{sz.H}" : "tamanho desconhecido")} · {(_hasAudio ? "com áudio" : "sem áudio")}";
-        _videoCard.Children.Add(_info);
+        _videoCard.Children.Add(UiTree.Free(_info));
 
         var recent = RecentRecordings();
         if (recent.Count > 0)

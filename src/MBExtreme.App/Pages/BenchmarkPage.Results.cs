@@ -278,7 +278,7 @@ public sealed partial class BenchmarkPage
             _resultsPanel.Children.Add(Row("GPU 3D", gpuNote, null, "WarnBrush"));
 
         BuildRanking();
-        _resultsPanel.Children.Add(CardOf(_rankingPanel));
+        _resultsPanel.Children.Add(CardOf(Free(_rankingPanel)));
         Motion.Cascade(_resultsPanel, 30);
     }
 

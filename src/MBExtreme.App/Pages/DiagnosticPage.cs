@@ -65,7 +65,7 @@ public sealed class DiagnosticPage : ToolPageBase
         _cts = new CancellationTokenSource();
         RefreshButtons();
         Body.Children.Clear();
-        Body.Children.Add(_progress);
+        Body.Children.Add(UiTree.Free(_progress));
         _progress.Text = deep ? "Começando a análise profunda..." : "Começando a análise rápida...";
         _progress.Foreground = Brush("TextBrush");
         SetStatus(deep ? "Análise profunda: pode levar de 10 a 30 minutos. Nada é alterado no Windows." : "Análise rápida: só leitura, nada é alterado.");
@@ -207,7 +207,7 @@ public sealed class DiagnosticPage : ToolPageBase
             rows[op] = line;
             Body.Children.Add(line);
         }
-        Body.Children.Add(_progress);
+        Body.Children.Add(UiTree.Free(_progress));
         void OnChanged(QueueItem item) => Dispatcher.BeginInvoke(new Action(() =>
         {
             if (!rows.TryGetValue(item.Operation, out var line)) return;

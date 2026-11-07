@@ -60,7 +60,7 @@ public sealed class RestorePointsPage : ToolPageBase
         Body.Children.Add(CardOf(status));
 
         var create = new StackPanel { Orientation = Orientation.Horizontal };
-        create.Children.Add(_name);
+        create.Children.Add(UiTree.Free(_name));
         create.Children.Add(SmallButton("Criar ponto agora", async (_, _) => await CreateAsync(), true));
         var createCard = new StackPanel();
         createCard.Children.Add(new TextBlock { Text = "Criar um ponto agora", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });

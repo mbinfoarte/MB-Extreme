@@ -116,7 +116,7 @@ public partial class CleanupPage : UserControl
             RowsHost.Children.Add(Card(box));
         }
 
-        RowsHost.Children.Add(_previousHost);
+        RowsHost.Children.Add(UiTree.Free(_previousHost));
         _ = ShowPreviousWindowsAsync();
         RowsHost.Children.Add(BuildExclusions());
 

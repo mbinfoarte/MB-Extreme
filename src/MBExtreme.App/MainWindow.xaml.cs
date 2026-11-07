@@ -33,6 +33,7 @@ public partial class MainWindow : Window
         Go("home");
         _updates = new UpdateController(RootGrid, ContentHost);
         Closed += (_, _) => _updates?.InstallPendingOnExit();   // atualização baixada: instala ao fechar
+        AppServices.Videos.Start();   // vídeo novo do canal: aviso no canto e faixa no Painel
         Loaded += async (_, _) => await _updates.CheckAsync();
         ContentRendered += (_, _) => Pages.WhatsNew.ShowOnceAfterUpdate(this);
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
@@ -410,7 +411,11 @@ public partial class MainWindow : Window
         "repair" => new RepairPage(),
         "diskmgr" => new DiskManagerPage(),
         "license" => new LicensePage(),
-        "support" => new SupportPage(),
+        "support" => new SupportHubPage(),
+        "support-anydesk" => new SupportPage(),
+        "social" => new SocialPage(),
+        "suggest" => new SuggestionsPage(),
+        "news" => new NewsPage(),
         "remote" or "remote-console" => new RemoteAccessPage(),
         "processes" => new ProcessesPage(),
         "largefiles" => new LargeFilesPage(),

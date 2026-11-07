@@ -45,13 +45,13 @@ Como usar:
 - Ativação por **chave** (para quem compra com você no balcão): já existe; deixar a tela de chave mais simples.
 - **Precisa** do servidor no ar com domínio (ex.: `app.mbinfoarte.com.br`). Opções baratas/grátis para começar: Render, Railway, Fly.io ou um VPS pequeno.
 
-### Etapa 4 — Vídeo novo do canal (YouTube)
+### Etapa 4 — Vídeo novo do canal (YouTube) — FEITA
 - Usa o feed público do canal (`youtube.com/feeds/videos.xml?channel_id=…`): grátis, sem chave de API.
 - No Painel: faixa "Vídeo novo no canal" com a miniatura, título, "Assistir" e "X" para fechar.
 - Aviso do Windows quando sair vídeo novo (mesmo com o programa minimizado na bandeja), no máximo um aviso por vídeo; dá para desligar.
 - **Preciso:** o link do canal.
 
-### Etapa 5 — Nossas redes, ofertas e parceiros
+### Etapa 5 — Nossas redes, ofertas e parceiros — FEITA (links, cupons e parceiros em `config/canal.json`)
 No estilo da tela que você mostrou, com as cores da MB:
 - Topo com o logo e o nome da MB InfoArt, botões **Inscrever-se** e **Seja membro**.
 - Cartões das redes (YouTube, Instagram, TikTok, Facebook, WhatsApp, site).
@@ -60,11 +60,11 @@ No estilo da tela que você mostrou, com as cores da MB:
 - **Tudo vem de um arquivo online** (no GitHub ou no servidor): você troca links, cupons e parceiros sem lançar versão nova.
 - **Preciso:** os links, os cupons e os parceiros.
 
-### Etapa 6 — Sugestões e "O que há de novo"
+### Etapa 6 — Sugestões e "O que há de novo" — FEITA
 - Aba **Sugestões**: tipo (ideia, problema, elogio), texto e, se quiser, contato. Envia para o servidor (com o servidor fora do ar, abre o WhatsApp/e-mail com o texto pronto). Opção de anexar o relatório do PC.
 - **O que há de novo**: lista das versões com as novidades de cada uma, alimentada pelas notas das Releases.
 
-### Etapa 7 — Suporte e acesso remoto (tela nova, mais simples)
+### Etapa 7 — Suporte e acesso remoto (tela nova, mais simples) — FEITA
 - Uma tela só, com 3 cartões grandes:
   1. **Falar com o suporte** (WhatsApp, horário de atendimento).
   2. **Deixar o técnico acessar** — seu ID e a senha em letras grandes, botão Copiar, status ("Aguardando o técnico"), e cada acesso continua pedindo a sua permissão.
@@ -72,7 +72,7 @@ No estilo da tela que você mostrou, com as cores da MB:
 - Modo técnico separado (para a equipe MB), escondido do cliente comum.
 - Perguntas frequentes.
 
-### Etapa 8 — Servidores LibreSpeed (código aberto) no teste de internet
+### Etapa 8 — Servidores LibreSpeed (código aberto) no teste de internet — FEITA
 - Lista pública de servidores LibreSpeed: escolher um perto de você para download e upload (além da Cloudflare), aparecendo no mapa.
 - Observação: a lista é mantida por voluntários e pode não ter servidor perto de Jacobina; mostramos a distância e o ping de cada um.
 

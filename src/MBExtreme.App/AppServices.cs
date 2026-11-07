@@ -24,6 +24,14 @@ internal static class AppServices
         return pro ? Tweaks : Tweaks.Where(t => !MBExtreme.Core.Licensing.LicenseExpiry.ProTweakCategories.Contains(t.Category)).ToList();
     }
 
+    /// <summary>Redes, ofertas, parceiros e suporte da MB InfoArt (arquivo online com cópia local; atualizado ao abrir).</summary>
+    public static MBExtreme.Core.Social.ChannelConfig Channel { get; set; } = MBExtreme.Core.Social.ChannelConfig.Load();
+
+    public static readonly System.Net.Http.HttpClient Web = new() { Timeout = TimeSpan.FromSeconds(20) };
+
+    /// <summary>Vídeo novo do canal (feed do YouTube).</summary>
+    public static VideoWatcher Videos { get; } = new();
+
     /// <summary>Configurações do usuário: uma única cópia, para um salvamento não apagar o do outro.</summary>
     public static MBExtreme.Core.Settings.AppSettings Settings { get; } = LoadSettings();
 

@@ -57,6 +57,8 @@ public partial class DashboardPage : UserControl
         foreach (var (key, title, description, icon) in Tools)
             ToolsGrid.Children.Add(ToolCard.Build(title, description, icon, () => MainWindow.Current?.Go(key)));
         _ = LoadPcSummaryAsync();
+        ShowVideo(AppServices.Videos.Latest);
+        AppServices.Videos.Found += v => Dispatcher.BeginInvoke(new Action(() => ShowVideo(v)));
         // entrada: ferramentas em cascata na primeira vez que o Painel aparece
         bool entered = false;
         Loaded += (_, _) =>
@@ -137,6 +139,43 @@ public partial class DashboardPage : UserControl
             DiskSummaryText.Text = $"{drive.AvailableFreeSpace / BytesPerGb:0.0} GB livres de {drive.TotalSize / BytesPerGb:0.0} GB";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
+    }
+
+    /// <summary>Faixa "Vídeo novo no canal" (some quando a pessoa fecha aquele vídeo).</summary>
+    private void ShowVideo(MBExtreme.Core.Social.YouTubeVideo? video)
+    {
+        if (video is null || !AppServices.Settings.NotifyNewVideos || AppServices.Settings.DismissedVideoId == video.Id) { VideoHost.Content = null; return; }
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var thumb = new Image { Width = 112, Height = 63, Stretch = Stretch.UniformToFill };
+        try { thumb.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(video.Thumbnail)); } catch (UriFormatException) { }
+        grid.Children.Add(new Border { CornerRadius = new CornerRadius(8), ClipToBounds = true, Child = thumb });
+        var text = new StackPanel { Margin = new Thickness(14, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = "▶ VÍDEO NOVO NO CANAL", FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) });
+        text.Children.Add(new TextBlock { Text = video.Title, FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        text.Children.Add(new TextBlock { Text = MBExtreme.Core.Social.YouTubeFeed.Ago(video.Published, DateTimeOffset.Now), FontSize = 11.5, Foreground = (Brush)FindResource("MutedBrush") });
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var watch = new Button { Content = "▶ Assistir", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(16, 6, 16, 6), FontSize = 13 };
+        watch.Click += (_, _) => { try { Process.Start(new ProcessStartInfo(video.Url) { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { } };
+        var close = new Button { Content = "✕", Style = (Style)FindResource("SideFooterButton"), Margin = new Thickness(8, 0, 0, 0), ToolTip = "Esconder este vídeo" };
+        System.Windows.Automation.AutomationProperties.SetName(close, "Esconder o aviso do vídeo");
+        close.Click += (_, _) =>
+        {
+            AppServices.Settings.DismissedVideoId = video.Id;
+            AppServices.Settings.Save();
+            VideoHost.Content = null;
+        };
+        buttons.Children.Add(watch);
+        buttons.Children.Add(close);
+        Grid.SetColumn(buttons, 2);
+        grid.Children.Add(buttons);
+        var card = new Border { Style = (Style)FindResource("Card"), Padding = new Thickness(12, 10, 12, 10), Child = grid };
+        VideoHost.Content = card;
+        Motion.Enter(card, fromY: 8);
     }
 
     private static string Rate(double bytesPerSecond)

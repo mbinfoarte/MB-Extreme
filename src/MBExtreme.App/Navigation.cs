@@ -104,6 +104,10 @@ internal static class NavigationMap
         {
             new("remote", "Acesso remoto", "Seu ID, conexão com outro PC (tela, mouse, teclado e som).", "\uE8AF", ""),
             new("a11y", "Acessibilidade e tamanho", "Interface maior ou menor, teclado e Narrador.", "\uE776", ""),
+            new("social", "Nossas redes", "Canal, redes sociais, ofertas e parceiros com cupom.", "\uE716", ""),
+            new("suggest", "Sugestões", "Mande uma ideia, avise de um problema ou elogie.", "\uE8BD", ""),
+            new("news", "O que há de novo", "As novidades de cada versão do MB Extreme.", "\uE789", ""),
+            new("support-anydesk", "AnyDesk", "Suporte pelo AnyDesk (alternativa ao acesso remoto do MB Extreme).", "\uE8AF", ""),
             new("about", "Sobre", "Versão, novidades, como o programa protege o seu PC e créditos.", "\uE946", ""),
             new("support", "Pedir suporte", "Descreva o problema e envie o relatório do PC; AnyDesk como alternativa.", "\uE8F2", ""),
         }),
@@ -167,9 +171,11 @@ internal static class NavigationMap
         }),
         new("MB INFOARTE", new SideItem[]
         {
-            new("alltools", "Todas as ferramentas", "\uE8A9"),
+            new("social", "Nossas redes", "\uE716"),
+            new("suggest", "Sugestões", "\uE8BD"),
+            new("news", "O que há de novo", "\uE789"),
             new("support", "Suporte", "\uE8F2"),
-            new("remote", "Acesso remoto", "\uE8AF"),
+            new("alltools", "Todas as ferramentas", "\uE8A9"),
             new("about", "Sobre", "\uE946"),
         }),
     };

@@ -69,6 +69,23 @@ public sealed class SpeedTest(HttpClient http, string baseUrl = "https://speed.c
 {
     private const int ChunkBytes = 25_000_000;
 
+    // endereços do teste (Cloudflare por padrão; LibreSpeed troca pelos do servidor escolhido)
+    private Func<string> _pingUrl = () => $"{baseUrl}/__down?bytes=0";
+    private Func<string> _downUrl = () => $"{baseUrl}/__down?bytes={ChunkBytes}";
+    private Func<string> _upUrl = () => $"{baseUrl}/__up";
+
+    /// <summary>Nome do servidor usado (para mostrar).</summary>
+    public string ServerName { get; private init; } = "Cloudflare";
+
+    /// <summary>Teste por um servidor LibreSpeed (código aberto): garbage.php para baixar, empty.php para enviar e para o ping.</summary>
+    public static SpeedTest ForLibreSpeed(HttpClient http, LibreServer server) => new(http, server.BaseUrl)
+    {
+        _pingUrl = () => server.Url(server.PingUrl) + "?r=" + Guid.NewGuid().ToString("N")[..8],
+        _downUrl = () => server.Url(server.DownloadUrl) + "?ckSize=25&r=" + Guid.NewGuid().ToString("N")[..8],
+        _upUrl = () => server.Url(server.UploadUrl) + "?r=" + Guid.NewGuid().ToString("N")[..8],
+        ServerName = server.Name,
+    };
+
     /// <summary>Latência (mediana) e variação: tempo até a resposta de pedidos vazios.</summary>
     public async Task<(double? PingMs, double? JitterMs)> LatencyAsync(int samples, CancellationToken ct)
     {
@@ -79,7 +96,7 @@ public sealed class SpeedTest(HttpClient http, string baseUrl = "https://speed.c
             var clock = Stopwatch.StartNew();
             try
             {
-                using var response = await http.GetAsync($"{baseUrl}/__down?bytes=0", HttpCompletionOption.ResponseHeadersRead, ct);
+                using var response = await http.GetAsync(_pingUrl(), HttpCompletionOption.ResponseHeadersRead, ct);
                 if (!response.IsSuccessStatusCode) continue;
                 times.Add(clock.Elapsed.TotalMilliseconds);
             }
@@ -94,7 +111,7 @@ public sealed class SpeedTest(HttpClient http, string baseUrl = "https://speed.c
     public Task<double?> DownloadAsync(int connections, TimeSpan warmup, TimeSpan measure, IProgress<double>? live, CancellationToken ct) =>
         MeasureAsync(connections, warmup, measure, live, ct, async (counter, token) =>
         {
-            using var response = await http.GetAsync($"{baseUrl}/__down?bytes={ChunkBytes}", HttpCompletionOption.ResponseHeadersRead, token);
+            using var response = await http.GetAsync(_downUrl(), HttpCompletionOption.ResponseHeadersRead, token);
             response.EnsureSuccessStatusCode();
             await using var stream = await response.Content.ReadAsStreamAsync(token);
             var buffer = new byte[64 * 1024];
@@ -108,7 +125,7 @@ public sealed class SpeedTest(HttpClient http, string baseUrl = "https://speed.c
         {
             var data = new byte[2 * 1024 * 1024];
             using var content = new ByteArrayContent(data);
-            using var response = await http.PostAsync($"{baseUrl}/__up", content, token);
+            using var response = await http.PostAsync(_upUrl(), content, token);
             response.EnsureSuccessStatusCode();
             counter(data.Length);
         });
@@ -161,7 +178,7 @@ public sealed class SpeedTest(HttpClient http, string baseUrl = "https://speed.c
             var clock = Stopwatch.StartNew();
             try
             {
-                using var response = await http.GetAsync($"{baseUrl}/__down?bytes=0", HttpCompletionOption.ResponseHeadersRead, ct);
+                using var response = await http.GetAsync(_pingUrl(), HttpCompletionOption.ResponseHeadersRead, ct);
                 if (response.IsSuccessStatusCode) times.Add(clock.Elapsed.TotalMilliseconds);
             }
             catch (HttpRequestException) { }

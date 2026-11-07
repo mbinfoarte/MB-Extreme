@@ -148,6 +148,16 @@ public sealed class AppSettings
     /// <summary>Receber também as compilações de teste (beta). Fora do beta, só as versões estáveis.</summary>
     public bool BetaUpdates { get; set; } = true;
 
+    /// <summary>Avisar quando sair vídeo novo no canal (cartão no canto da tela e faixa no Painel).</summary>
+    public bool NotifyNewVideos { get; set; } = true;
+
+    /// <summary>Último vídeo já avisado e o que a pessoa fechou no Painel.</summary>
+    public string LastNotifiedVideoId { get; set; } = "";
+    public string DismissedVideoId { get; set; } = "";
+
+    /// <summary>Código do canal (UC...) descoberto pelo @ (guardado para não buscar toda vez).</summary>
+    public string YouTubeChannelId { get; set; } = "";
+
     /// <summary>Seções do menu lateral que o usuário recolheu.</summary>
     public List<string> CollapsedSections { get; set; } = new();
 

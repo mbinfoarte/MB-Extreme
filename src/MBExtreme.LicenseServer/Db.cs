@@ -33,6 +33,7 @@ public sealed class Db
             CREATE TABLE IF NOT EXISTS referrals (user_id INTEGER PRIMARY KEY, affiliate_user_id INTEGER NOT NULL, created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS commissions (id INTEGER PRIMARY KEY, affiliate_user_id INTEGER NOT NULL, referred_user_id INTEGER NOT NULL, payment_ref TEXT NOT NULL UNIQUE, amount_paid_cents INTEGER NOT NULL, rate REAL NOT NULL, commission_cents INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'approved', payout_id INTEGER, created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS payouts (id INTEGER PRIMARY KEY, affiliate_user_id INTEGER NOT NULL, amount_cents INTEGER NOT NULL, pix_key TEXT NOT NULL, requested_at TEXT NOT NULL, paid_at TEXT, note TEXT NOT NULL DEFAULT '');
+            CREATE TABLE IF NOT EXISTS suggestions (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, text TEXT NOT NULL, contact TEXT NOT NULL DEFAULT '', app_version TEXT NOT NULL DEFAULT '', windows TEXT NOT NULL DEFAULT '', report TEXT NOT NULL DEFAULT '', ip_hash TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS remote_audit (id INTEGER PRIMARY KEY, client_id TEXT NOT NULL, technician TEXT NOT NULL, requested_at TEXT NOT NULL, accepted INTEGER NOT NULL DEFAULT 0, ended_at TEXT, bytes INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL DEFAULT '');
             """);
         try { Exec(c, "ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''"); } // bancos criados antes da coluna de nome
@@ -522,4 +523,31 @@ public sealed class Db
         cmd.Parameters.AddWithValue("$i", payoutId);
         return cmd.ExecuteNonQuery() > 0;
     }
+
+    public sealed record SuggestionRow(long Id, string Kind, string Text, string Contact, string AppVersion, string Windows, bool HasReport, DateTimeOffset CreatedAt);
+
+    /// <summary>Guarda uma sugestão enviada pelo programa (textos cortados no tamanho máximo).</summary>
+    public void AddSuggestion(string kind, string text, string contact, string appVersion, string windows, string report, string ipHash)
+    {
+        static string Cut(string? s, int max) => (s ?? "").Length > max ? s![..max] : s ?? "";
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "INSERT INTO suggestions (kind, text, contact, app_version, windows, report, ip_hash, created_at) VALUES ($k, $t, $c, $v, $w, $r, $i, $at)";
+        cmd.Parameters.AddWithValue("$k", Cut(kind, 20));
+        cmd.Parameters.AddWithValue("$t", Cut(text, 4000));
+        cmd.Parameters.AddWithValue("$c", Cut(contact, 200));
+        cmd.Parameters.AddWithValue("$v", Cut(appVersion, 40));
+        cmd.Parameters.AddWithValue("$w", Cut(windows, 120));
+        cmd.Parameters.AddWithValue("$r", Cut(report, 20000));
+        cmd.Parameters.AddWithValue("$i", ipHash);
+        cmd.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
+        cmd.ExecuteNonQuery();
+    }
+
+    public List<SuggestionRow> Suggestions(int limit) => QueryAll(
+        "SELECT id, kind, text, contact, app_version, windows, length(report) > 0, created_at FROM suggestions ORDER BY id DESC LIMIT $n",
+        r => new SuggestionRow(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5), r.GetInt64(6) == 1, DateTimeOffset.Parse(r.GetString(7))),
+        ("$n", limit));
+
+    public string? SuggestionReport(long id) => Query("SELECT report FROM suggestions WHERE id = $id", r => r.GetString(0), ("$id", id));
 }

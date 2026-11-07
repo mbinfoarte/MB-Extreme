@@ -35,6 +35,10 @@ public sealed class AboutPage : ToolPageBase
         updates.Children.Add(Muted("O MB Extreme procura versão nova ao abrir e a cada 6 horas. Antes de instalar, ele confere a impressão digital (SHA-256) do instalador; se não bater, o arquivo é apagado. Versões marcadas como obrigatórias precisam ser instaladas para continuar usando.", 11.5));
         Body.Children.Add(CardOf(updates));
 
+        var videos = new CheckBox { Content = "Avisar quando sair vídeo novo no canal da MB InfoArt", IsChecked = AppServices.Settings.NotifyNewVideos, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 6, 0, 0) };
+        videos.Click += (_, _) => { AppServices.Settings.NotifyNewVideos = videos.IsChecked == true; AppServices.Settings.Save(); };
+        Body.Children.Add(CardOf(videos));
+
         Body.Children.Add(Heading("Como o MB Extreme protege você"));
         foreach (var line in new[]
         {
@@ -73,12 +77,13 @@ internal static class WhatsNew
 {
     public static readonly string[] Items =
     {
-        "Visual novo: menu lateral em seções (Meu PC, Testes, Otimizar, Segurança) com cada tela a um clique, e o rodapé com tamanho da letra e versão.",
-        "Painel: botão ANALISAR com a nota de saúde do PC (0 a 100). Os itens aparecem conforme são conferidos e cada um tem Corrigir, Resolver e Ignorar.",
-        "Novas telas: Windows 11 (requisitos), Mapa do disco, Pontos de restauração, Backup para formatar (drivers e Wi-Fi) e Pendrive original? (capacidade falsa).",
-        "Otimizações: todos os ajustes numa tela só, separados por assunto. Desinstalador: programas e aplicativos do Windows em abas.",
-        "Programas: instalar e atualizar na mesma tela.",
-        "Sobre: versão, proteções e créditos; \"Verificar atualização\" no rodapé do menu.",
+        "Atualização automática: o MB Extreme baixa a versão nova sozinho e instala quando você mandar ou ao fechar (Sobre → Atualizações).",
+        "Nossas redes: canal da MB InfoArt, redes sociais, ofertas e parceiros com cupom.",
+        "Vídeo novo no canal: aviso no canto da tela e faixa no Painel.",
+        "Sugestões: mande ideias, problemas ou elogios direto do programa.",
+        "Suporte novo e mais simples: WhatsApp, acesso do técnico (sempre com o seu aceite) e relatório do PC.",
+        "Rede: mapa da conexão, IP local e real, ping para servidores de jogos, DNS mais rápido, velocímetro e servidores LibreSpeed.",
+        "Tela maximizada sem corte e sensores iguais aos do Gerenciador de Tarefas.",
     };
 
     public static void Show(Window? owner)

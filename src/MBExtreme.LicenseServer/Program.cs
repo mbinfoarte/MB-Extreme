@@ -587,6 +587,29 @@ app.MapPost("/v1/admin/keys", async (HttpContext c) =>
     return Results.Json(new { keys, days, maxDevices = devices });
 });
 
+// ---- sugestões enviadas pelo programa (aba Sugestões); lidas pelos administradores
+app.MapPost("/v1/suggestions", async (HttpContext c) =>
+{
+    if (!limiter.Allow("sug|" + Ip(c), 5 * limitScale, TimeSpan.FromMinutes(10))) return Results.Json(new { message = "Muitas sugestões seguidas. Tente daqui a pouco." }, statusCode: 429);
+    if (c.Request.ContentLength is > 64_000) return Results.BadRequest();
+    JsonElement body;
+    try { body = await JsonSerializer.DeserializeAsync<JsonElement>(c.Request.Body, jsonOptions); }
+    catch (JsonException) { return Results.BadRequest(); }
+    string S(string name) => body.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+    string text = S("text").Trim();
+    if (text.Length < 10) return Results.BadRequest(new { message = "Texto curto demais." });
+    string kind = S("kind") is "Ideia" or "Problema" or "Elogio" ? S("kind") : "Ideia";
+    db.AddSuggestion(kind, text, S("contact"), S("appVersion"), S("windows"), S("report"), RemoteRelay.Hash(Ip(c)));
+    return Results.Json(new { ok = true });
+});
+
+app.MapGet("/v1/admin/suggestions", (HttpContext c) =>
+{
+    if (adminEmails.Count == 0) return Results.NotFound();
+    if (AdminEmail(c) is null) return Results.Json(new { message = "Não autorizado." }, statusCode: 403);
+    return Results.Json(new { suggestions = db.Suggestions(200) });
+});
+
 /// <summary>Saques de afiliados em aberto (para pagar por Pix). Só administradores.</summary>
 app.MapGet("/v1/admin/payouts", (HttpContext c) =>
 {

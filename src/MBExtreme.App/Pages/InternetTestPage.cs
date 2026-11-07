@@ -151,7 +151,7 @@ public sealed class InternetTestPage : ToolPageBase
         Line("Provedor", _isp);
         Line("IP local (na sua rede)", LocalIp());
         Line("IP real (na internet)", _publicIp);
-        Line("Servidor de teste", _colo is null ? null : "Cloudflare " + _colo.Name);
+        Line("Servidor de teste", _libre is not null ? "LibreSpeed · " + _libre.Name : _colo is null ? null : "Cloudflare " + _colo.Name);
         if (ping is double p) Line("Ping até o servidor", $"{p:0} ms");
         _info.Children.Add(Muted("A cidade vem do seu IP público (é a do provedor, aproximada) e não é guardada. No mapa, os saltos aparecem ao longo da linha pelo tempo de resposta de cada roteador, não pela posição real dele.", 10.5));
     }
@@ -171,6 +171,54 @@ public sealed class InternetTestPage : ToolPageBase
         for (int i = 0; i < hops.Count; i++)
             link.Hops.Add((pos[i], $"{hops[i].Hop} · " + (ms[i] is double v ? $"{v:0} ms" : "*")));
         _map.InvalidateVisual();
+    }
+
+    // ---------------------------------------------------------------- servidor do teste (Cloudflare ou LibreSpeed)
+
+    private LibreServer? _libre;
+    private readonly StackPanel _libreList = new();
+
+    private UIElement ServerCard()
+    {
+        var card = new StackPanel();
+        card.Children.Add(new TextBlock { Text = "Servidor do teste de velocidade", FontSize = 15, FontWeight = FontWeights.SemiBold });
+        card.Children.Add(Muted("Cloudflare escolhe sozinho o servidor mais perto de você. LibreSpeed (código aberto) tem uma lista pública de servidores mantidos por voluntários e provedores: o programa mede o ping de cada um e mostra os mais rápidos.", 11.5));
+        card.Children.Add(Choice(new[] { "Cloudflare (automático)", "LibreSpeed (escolher servidor)" }, _libre is null ? 0 : 1, async i =>
+        {
+            if (i == 0) { _libre = null; _libreList.Children.Clear(); SetStatus("Usando a Cloudflare.", "OkBrush"); }
+            else await FindLibreAsync();
+        }));
+        if (_libreList.Parent is Panel lp) lp.Children.Remove(_libreList);
+        card.Children.Add(_libreList);
+        return CardOf(card);
+    }
+
+    private async Task FindLibreAsync()
+    {
+        _libreList.Children.Clear();
+        _libreList.Children.Add(Muted("Buscando a lista e medindo o ping dos servidores (pode levar uns segundos)...", 12));
+        var all = await LibreSpeed.ListAsync(Http, CancellationToken.None);
+        if (all.Count == 0) { _libreList.Children.Clear(); _libreList.Children.Add(Muted("Não foi possível buscar a lista do LibreSpeed agora. Continua a Cloudflare.", 12)); return; }
+        // mede primeiro os da região (Brasil, América do Sul e EUA) e alguns outros
+        var candidates = all.OrderBy(LibreSpeed.RegionRank).Take(24).ToList();
+        var ranked = await LibreSpeed.RankAsync(Http, candidates, CancellationToken.None);
+        _libreList.Children.Clear();
+        var ok = ranked.Where(r => r.Ping is not null).Take(8).ToList();
+        if (ok.Count == 0) { _libreList.Children.Add(Muted("Nenhum servidor respondeu. Continua a Cloudflare.", 12)); return; }
+        _libreList.Children.Add(Muted("Os mais rápidos para você (clique para escolher):", 12));
+        foreach (var (server, ping) in ok)
+        {
+            var s = server;
+            var radio = new RadioButton
+            {
+                GroupName = "libre", Content = $"{s.Name}  ·  {ping:0} ms" + (s.Sponsor.Length > 0 ? $"  ·  {s.Sponsor}" : ""), Foreground = Brush("TextBrush"), Margin = new Thickness(0, 3, 0, 3),
+                IsChecked = _libre?.Id == s.Id,
+            };
+            radio.Checked += (_, _) => { _libre = s; SetStatus($"Servidor escolhido: {s.Name}. Clique em INICIAR.", "OkBrush"); };
+            _libreList.Children.Add(radio);
+        }
+        if (_libre is null && _libreList.Children.OfType<RadioButton>().FirstOrDefault() is { } first) first.IsChecked = true;
+        Motion.Cascade(_libreList, 30);
     }
 
     // ---------------------------------------------------------------- servidores de jogos
@@ -364,6 +412,7 @@ public sealed class InternetTestPage : ToolPageBase
         Body.Children.Add(Muted("Conexões ao mesmo tempo (mais conexões medem melhor internet acima de 300 Mbps):", 12));
         Body.Children.Add(Choice(Connections.Select(c => c == 1 ? "Automático" : c + " conexões").ToList(), Array.IndexOf(Connections, _connections), i => _connections = Connections[i]));
         Body.Children.Add(_stage);
+        Body.Children.Add(ServerCard());
         Body.Children.Add(GameCard());
         Body.Children.Add(DnsCard());
         if (result is not null)
@@ -394,12 +443,12 @@ public sealed class InternetTestPage : ToolPageBase
         _start.IsEnabled = false;
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
-        var test = new SpeedTest(Http);
+        var test = _libre is not null ? SpeedTest.ForLibreSpeed(Http, _libre) : new SpeedTest(Http);
         int connections = _connections == 1 ? 4 : _connections;
         _adapter = await Task.Run(NetworkStatus.Active);
         Build(null);
         GaugeRunning();
-        if (_mainLink is not null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Ping; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Ping; _map.InvalidateVisual(); }
+        if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Ping; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Ping; _map.InvalidateVisual(); }
         if (_mainLink is not null) _ = TraceToMapAsync(_mainLink, "speed.cloudflare.com", token);
         _downBig.Text = _upBig.Text = "—";
         var live = new Progress<double>(v => _gauge.Show(v));
@@ -412,7 +461,7 @@ public sealed class InternetTestPage : ToolPageBase
             double? dns = await SpeedTest.DnsTimeAsync(token);
             Set("dns", Ms(dns));
             _stage.Text = "Achando o servidor...";
-            var (code, city) = await test.ServerAsync(token);
+            var (code, city) = _libre is not null ? ((string?)"LibreSpeed", (string?)_libre.Name) : await test.ServerAsync(token);
             _stage.Text = $"Latência ({code ?? "servidor"}{(city is null ? "" : ", " + city)})...";
             var (ping, jitter) = await test.LatencyAsync(12, token);
             if (ping is null) { SetStatus("Sem resposta do servidor de teste. Confira a internet.", "BadBrush"); return; }
@@ -425,7 +474,7 @@ public sealed class InternetTestPage : ToolPageBase
             _gauge.CenterText = null;
             _gauge.Caption = "Mbps";
             _gauge.Upload = false;
-            if (_mainLink is not null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Download; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Download; _map.InvalidateVisual(); }
+            if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Download; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Download; _map.InvalidateVisual(); }
             var (down, loaded) = await test.DownloadWithLoadedPingAsync(connections, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8), live, token);
             Set("down", Fmt(down));
             Set("load", Ms(loaded));
@@ -434,12 +483,12 @@ public sealed class InternetTestPage : ToolPageBase
             _stage.Text = $"Upload com {connections} conexões (2 s de aquecimento + 8 s de medição)...";
             _gauge.Reset();
             _gauge.Upload = true;
-            if (_mainLink is not null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Upload; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Upload; _map.InvalidateVisual(); }
+            if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Upload; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Upload; _map.InvalidateVisual(); }
             var up = await test.UploadAsync(connections, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8), live, token);
             var result = new SpeedResult(DateTimeOffset.Now, down, up, ping, jitter, code, city, connections, loaded, router, dns, _name.Text.Trim());
             _history.Add(result);
             _stage.Text = "Pronto.";
-            if (_mainLink is not null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Idle; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Download; _map.InvalidateVisual(); }
+            if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Idle; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Download; _map.InvalidateVisual(); }
             _upBig.Text = up is double uv ? $"{uv:0.0}" : "—";
             Build(result);
             SetStatus($"Download {Fmt(down)}, upload {Fmt(up)}, latência {Ms(ping)}.", "OkBrush");

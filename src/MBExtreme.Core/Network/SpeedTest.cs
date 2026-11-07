@@ -186,6 +186,17 @@ public sealed class SpeedTest(HttpClient http, string baseUrl = "https://speed.c
         return times.Count == 0 ? null : SpeedMath.Median(times);
     }
 
+    /// <summary>Servidor (código do aeroporto), o IP público que a internet vê e o país, numa pergunta só.</summary>
+    public async Task<(string? Code, string? Ip, string? Country)> TraceAsync(CancellationToken ct)
+    {
+        try
+        {
+            var trace = SpeedMath.ParseTrace(await http.GetStringAsync($"{baseUrl}/cdn-cgi/trace", ct));
+            return (trace.GetValueOrDefault("colo"), trace.GetValueOrDefault("ip"), trace.GetValueOrDefault("loc"));
+        }
+        catch (HttpRequestException) { return (null, null, null); }
+    }
+
     /// <summary>Qual servidor respondeu (código do aeroporto, ex.: GRU) e a cidade, quando conhecida.</summary>
     public async Task<(string? Code, string? City)> ServerAsync(CancellationToken ct)
     {

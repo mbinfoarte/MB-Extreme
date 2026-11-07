@@ -88,3 +88,66 @@ public class SensoresVelocimetroTests
         Assert.Equal("1000", SpeedScale.Label(1000));
     }
 }
+
+/// <summary>Mapa do teste de internet, localização pelo IP e ping de jogo.</summary>
+public class MapaInternetTests
+{
+    [Fact]
+    public void Mapa_tem_os_paises_e_o_Brasil()
+    {
+        var countries = NetMap.Rings(WorldMapData.Countries).ToList();
+        var brazil = NetMap.Rings(WorldMapData.Brazil).ToList();
+        Assert.True(countries.Count > 150);
+        Assert.NotEmpty(brazil);
+        Assert.All(brazil.SelectMany(r => r), p => Assert.InRange(p.Lon, -75, -28));
+        Assert.All(countries.SelectMany(r => r), p => { Assert.InRange(p.Lon, -180, 180); Assert.InRange(p.Lat, -90, 90); });
+    }
+
+    [Fact]
+    public void Enquadramento_mostra_no_minimo_a_America_do_Sul_e_inclui_servidores_longe()
+    {
+        var sa = NetMap.Fit(new[] { (-11.18, -40.51), (-23.43, -46.47) }, 560.0 / 300);
+        Assert.True(sa.MinLon <= -85 && sa.MaxLon >= -32 && sa.MinLat <= -56 && sa.MaxLat >= 13);
+        var far = NetMap.Fit(new[] { (-11.18, -40.51), (50.1, 8.7) }, 560.0 / 300);
+        Assert.True(far.MaxLat >= 56 && far.MaxLon >= 16);
+        var (x, y) = NetMap.Project(-11.18, -40.51, sa, 560, 300);
+        Assert.InRange(x, 0, 560);
+        Assert.InRange(y, 0, 300);
+    }
+
+    [Fact]
+    public void Saltos_ficam_na_linha_em_ordem_pelo_tempo()
+    {
+        var pos = NetMap.HopPositions(new double?[] { 1, 3, null, 12, 10, 20 });
+        Assert.Equal(6, pos.Count);
+        for (int i = 1; i < pos.Count; i++) Assert.True(pos[i] > pos[i - 1]);
+        Assert.All(pos, t => Assert.InRange(t, 0.04, 0.96));
+    }
+
+    [Fact]
+    public void Localizacao_pelo_ipwho_e_pelo_ipapi()
+    {
+        var a = NetMap.ParseLocation("""{"ip":"177.154.91.14","success":true,"city":"Jacobina","region":"Bahia","country":"Brasil","latitude":-11.18,"longitude":-40.51,"connection":{"isp":"Heptanet"}}""");
+        Assert.Equal(("Jacobina", "Heptanet", -11.18), (a!.City, a.Isp, a.Lat));
+        var b = NetMap.ParseLocation("""{"ip":"1.2.3.4","city":"Salvador","region":"Bahia","country_name":"Brazil","latitude":-12.97,"longitude":-38.5,"org":"Provedor X"}""");
+        Assert.Equal(("Salvador", "Provedor X", "Brazil"), (b!.City, b.Isp, b.Country));
+        Assert.Null(NetMap.ParseLocation("""{"success":false,"message":"limite"}"""));
+        Assert.Null(NetMap.ParseLocation("quebrado"));
+    }
+
+    [Fact]
+    public void Servidores_de_jogo_tem_Sao_Paulo_e_regioes_validas()
+    {
+        Assert.Contains(NetMap.GameTargets, t => t.Key == "aws-sa-east-1" && t.Group == "Brasil");
+        Assert.All(NetMap.GameTargets, t => Assert.Contains(t.Group, NetMap.Groups));
+        Assert.All(NetMap.GameTargets.Where(t => t.Key.StartsWith("aws-")), t => Assert.Matches(@"^dynamodb\.[a-z]{2}-[a-z]+-\d\.amazonaws\.com$", t.Host));
+        Assert.Equal(NetMap.GameTargets.Count, NetMap.GameTargets.Select(t => t.Key).Distinct().Count());
+        Assert.True(NetMap.Colos.ContainsKey("GRU") && NetMap.Colos.ContainsKey("SSA"));
+    }
+
+    [Theory]
+    [InlineData(12.0, "Excelente")]
+    [InlineData(40.0, "Muito bom")]
+    [InlineData(200.0, "Alto demais")]
+    public void Frase_do_ping_de_jogo(double ms, string part) => Assert.Contains(part, NetMap.GameVerdict(ms));
+}

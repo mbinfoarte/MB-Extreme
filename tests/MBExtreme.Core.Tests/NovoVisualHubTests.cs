@@ -333,3 +333,38 @@ public class NovoVisualHubTests
         Assert.Null(boots[1].MainPath);
     }
 }
+
+/// <summary>Ícones da tela de instalar programas.</summary>
+public class IconesProgramasTests
+{
+    private static readonly System.Text.RegularExpressions.Regex Token =
+        new(@"^(?:[MmLlHhVvCcSsQqTtAaZz]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)$");
+
+    [Fact]
+    public void Todo_icone_e_de_um_programa_do_catalogo_e_tem_cor_e_desenho_validos()
+    {
+        Assert.True(AppIcons.Known.Count >= 40);
+        foreach (var (id, (color, path)) in AppIcons.Known)
+        {
+            Assert.Contains(AppCatalog.All, a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase));
+            Assert.Matches("^#[0-9A-Fa-f]{6}$", color);
+            Assert.True(path[0] is 'M' or 'm', id);
+            Assert.All(path.Split(' '), t => Assert.True(Token.IsMatch(t), $"{id}: \"{t}\""));
+        }
+    }
+
+    [Theory]
+    [InlineData("Visual Studio Code", "VS")]
+    [InlineData("WinRAR", "WR")]
+    [InlineData("7-Zip", "7Z")]
+    [InlineData("Rufus", "Ru")]
+    [InlineData(".NET 8 Desktop Runtime", "N8")]
+    public void Iniciais_do_icone_de_reserva(string title, string initials) => Assert.Equal(initials, AppIcons.Initials(title));
+
+    [Fact]
+    public void Cor_de_reserva_e_sempre_a_mesma_para_o_mesmo_programa()
+    {
+        Assert.Equal(AppIcons.FallbackColor("RARLab.WinRAR"), AppIcons.FallbackColor("rarlab.winrar"));
+        Assert.Matches("^#[0-9A-F]{6}$", AppIcons.FallbackColor("Rufus.Rufus"));
+    }
+}

@@ -124,6 +124,9 @@ public sealed class InstallAppsPage : UserControl
         var row = new DockPanel();
         DockPanel.SetDock(box, Dock.Left);
         row.Children.Add(box);
+        var icon = Icon(entry);
+        DockPanel.SetDock(icon, Dock.Left);
+        row.Children.Add(icon);
         row.Children.Add(text);
         var border = new Border
         {
@@ -132,6 +135,47 @@ public sealed class InstallAppsPage : UserControl
         };
         border.MouseLeftButtonUp += (_, e) => { if (e.OriginalSource is not CheckBox) box.IsChecked = box.IsChecked != true; };
         return border;
+    }
+
+    private static readonly Dictionary<string, Geometry> Shapes = new();
+
+    /// <summary>Ícone do programa (desenho da marca na cor dela) ou, se não houver, as iniciais num quadrado colorido.</summary>
+    private static FrameworkElement Icon(CatalogEntry entry)
+    {
+        var tile = new Border
+        {
+            Width = 34, Height = 34, CornerRadius = new CornerRadius(8), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top,
+            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x23)),
+        };
+        if (AppIcons.Known.TryGetValue(entry.Id, out var known))
+        {
+            if (!Shapes.TryGetValue(entry.Id, out var shape))
+            {
+                try { shape = Geometry.Parse("F1 " + known.Path); shape.Freeze(); }
+                catch (FormatException) { shape = Geometry.Empty; }
+                Shapes[entry.Id] = shape;
+            }
+            if (!shape.IsEmpty())
+            {
+                var color = (Color)ColorConverter.ConvertFromString(known.Color);
+                // marcas pretas ou muito escuras somem no fundo escuro: desenha em branco
+                double light = (0.299 * color.R + 0.587 * color.G + 0.114 * color.B) / 255;
+                tile.Child = new System.Windows.Shapes.Path
+                {
+                    Data = shape, Stretch = Stretch.Uniform, Width = 20, Height = 20,
+                    Fill = new SolidColorBrush(light < 0.22 ? Colors.White : color),
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                };
+                return tile;
+            }
+        }
+        tile.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(AppIcons.FallbackColor(entry.Id)));
+        tile.Child = new TextBlock
+        {
+            Text = AppIcons.Initials(entry.Title), FontSize = 12.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        return tile;
     }
 
     private void MarkKit(AppKit kit)

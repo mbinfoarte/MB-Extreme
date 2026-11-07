@@ -49,6 +49,9 @@ public partial class ProgressPanel : UserControl
         CloseButton.Visibility = Visibility.Collapsed;
         Visibility = Visibility.Visible;
         Motion.Enter(this, fromY: 16);
+        Spinner.Visibility = Visibility.Visible;
+        Motion.Stop(Spinner);
+        Motion.Spin(Spinner, 1.2);
         Motion.Cascade(StepsList, 45);
     }
 
@@ -77,6 +80,8 @@ public partial class ProgressPanel : UserControl
         StatusText.Text = summary;
         DetailText.Text = detail ?? "";
         Motion.Flash(StatusText);
+        Motion.Stop(Spinner);
+        Spinner.Visibility = Visibility.Collapsed;
         if (success)
         {
             Motion.To(Ring, ProgressRing.PercentProperty, 100, Motion.Normal);

@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using MBExtreme.Core.Network;
 
 namespace MBExtreme.UI.Pages;
@@ -24,6 +25,59 @@ public sealed class InternetTestPage : ToolPageBase
     private readonly Dictionary<string, TextBlock> _stepValues = new();
 
     private static readonly int[] Connections = { 1, 4, 8 };
+    private readonly MBExtreme.UI.Controls.SpeedGauge _gauge = new() { Width = 340, Height = 340 };
+    private readonly Grid _gaugeHost = new() { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
+    private readonly TextBlock _downBig = new() { Text = "—", FontSize = 34, FontWeight = FontWeights.Light, HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly TextBlock _upBig = new() { Text = "—", FontSize = 34, FontWeight = FontWeights.Light, HorizontalAlignment = HorizontalAlignment.Center };
+    private Button? _go;
+
+    /// <summary>Topo do teste, como os testes de velocidade conhecidos: download e upload grandes, o velocímetro e o botão redondo de começar.</summary>
+    private UIElement GaugeCard()
+    {
+        var top = new UniformGrid { Columns = 2, Margin = new Thickness(0, 0, 0, 4), HorizontalAlignment = HorizontalAlignment.Center, Width = 420 };
+        foreach (var (title, value, color) in new[] { ("↓ DOWNLOAD Mbps", _downBig, "#FFC400"), ("↑ UPLOAD Mbps", _upBig, "#B57CFF") })
+        {
+            var cell = new StackPanel();
+            cell.Children.Add(new TextBlock { Text = title, FontSize = 12, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)) });
+            if (value.Parent is Panel old) old.Children.Remove(value);
+            cell.Children.Add(value);
+            top.Children.Add(cell);
+        }
+        if (_gauge.Parent is Panel g) g.Children.Remove(_gauge);
+        _gaugeHost.Children.Clear();
+        _gaugeHost.Children.Add(_gauge);
+        _go = new Button { Width = 132, Height = 132, Cursor = System.Windows.Input.Cursors.Hand, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var t = new ControlTemplate(typeof(Button));
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(66));
+        border.SetValue(Border.BackgroundProperty, Application.Current.FindResource("ButtonBrush"));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(presenter);
+        t.VisualTree = border;
+        _go.Template = t;
+        _go.Content = new TextBlock { Text = "INICIAR", FontSize = 20, FontWeight = FontWeights.Bold, Foreground = Brushes.Black };
+        System.Windows.Automation.AutomationProperties.SetName(_go, "Iniciar o teste de internet");
+        _go.Click += async (_, _) => await RunAsync();
+        _gaugeHost.Children.Add(_go);
+        _gauge.BeginAnimation(OpacityProperty, null);
+        _gauge.Opacity = 0.35;
+        Motion.Breathe(_go, 1.05, 1.5);
+        var card = new StackPanel();
+        card.Children.Add(top);
+        card.Children.Add(_gaugeHost);
+        return card;
+    }
+
+    /// <summary>Some com o botão e acende o velocímetro (o teste começou).</summary>
+    private void GaugeRunning()
+    {
+        if (_go is not null) { Motion.Stop(_go); _gaugeHost.Children.Remove(_go); _go = null; }
+        _gauge.Reset();
+        Motion.To(_gauge, OpacityProperty, 1, Motion.Normal);
+    }
 
     public InternetTestPage() : base("Teste de internet",
         "Mede a latência, a variação, o download e o upload com várias conexões ao mesmo tempo, descartando os primeiros segundos (aquecimento). " +
@@ -37,6 +91,8 @@ public sealed class InternetTestPage : ToolPageBase
     private void Build(SpeedResult? result)
     {
         Body.Children.Clear();
+        Body.Children.Add(GaugeCard());
+        if (result is not null) { _downBig.Text = Fmt(result.DownloadMbps).Replace(" Mbps", ""); _upBig.Text = Fmt(result.UploadMbps).Replace(" Mbps", ""); }
         if (_adapter is not null)
             Body.Children.Add(Muted($"Conectado por {_adapter.Name}" + (_adapter.LinkSpeedBitsPerSecond > 0 ? $" · link de {_adapter.LinkSpeedBitsPerSecond / 1_000_000} Mbps" : "")
                 + (_adapter.Gateway is null ? "" : $" · roteador {_adapter.Gateway}") + (_adapter.Dns.Count > 0 ? $" · DNS {string.Join(", ", _adapter.Dns.Take(2))}" : ""), 12));
@@ -66,7 +122,6 @@ public sealed class InternetTestPage : ToolPageBase
         Body.Children.Add(Muted("Conexões ao mesmo tempo (mais conexões medem melhor internet acima de 300 Mbps):", 12));
         Body.Children.Add(Choice(Connections.Select(c => c == 1 ? "Automático" : c + " conexões").ToList(), Array.IndexOf(Connections, _connections), i => _connections = Connections[i]));
         Body.Children.Add(_stage);
-        Body.Children.Add(_live);
         if (result is not null)
         {
             Body.Children.Add(Row($"Download {Fmt(result.DownloadMbps)} · Upload {Fmt(result.UploadMbps)}",
@@ -99,7 +154,9 @@ public sealed class InternetTestPage : ToolPageBase
         int connections = _connections == 1 ? 4 : _connections;
         _adapter = await Task.Run(NetworkStatus.Active);
         Build(null);
-        var live = new Progress<double>(v => _live.Text = $"{v:0.0} Mbps");
+        GaugeRunning();
+        _downBig.Text = _upBig.Text = "—";
+        var live = new Progress<double>(v => _gauge.Show(v));
         try
         {
             _stage.Text = "Ping até o roteador...";
@@ -113,18 +170,27 @@ public sealed class InternetTestPage : ToolPageBase
             _stage.Text = $"Latência ({code ?? "servidor"}{(city is null ? "" : ", " + city)})...";
             var (ping, jitter) = await test.LatencyAsync(12, token);
             if (ping is null) { SetStatus("Sem resposta do servidor de teste. Confira a internet.", "BadBrush"); return; }
-            _live.Text = $"{ping:0} ms";
+            _gauge.CenterText = $"{ping:0}";
+            _gauge.Caption = "ms de ping";
+            _gauge.InvalidateVisual();
             Set("ping", Ms(ping));
             _stage.Text = $"Download com {connections} conexões (2 s de aquecimento + 8 s de medição) e ping sob carga...";
+            _gauge.CenterText = null;
+            _gauge.Caption = "Mbps";
+            _gauge.Upload = false;
             var (down, loaded) = await test.DownloadWithLoadedPingAsync(connections, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8), live, token);
             Set("down", Fmt(down));
             Set("load", Ms(loaded));
+            _downBig.Text = down is double dv ? $"{dv:0.0}" : "—";
+            Motion.Flash(_downBig);
             _stage.Text = $"Upload com {connections} conexões (2 s de aquecimento + 8 s de medição)...";
+            _gauge.Reset();
+            _gauge.Upload = true;
             var up = await test.UploadAsync(connections, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8), live, token);
             var result = new SpeedResult(DateTimeOffset.Now, down, up, ping, jitter, code, city, connections, loaded, router, dns, _name.Text.Trim());
             _history.Add(result);
             _stage.Text = "Pronto.";
-            _live.Text = "";
+            _upBig.Text = up is double uv ? $"{uv:0.0}" : "—";
             Build(result);
             SetStatus($"Download {Fmt(down)}, upload {Fmt(up)}, latência {Ms(ping)}.", "OkBrush");
         }

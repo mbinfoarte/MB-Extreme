@@ -151,7 +151,11 @@ public sealed class ComponentMonitorPage : ToolPageBase
 
     private void ShowGpuExtra(IReadOnlyList<SensorGroup> groups)
     {
-        var gpu = groups.FirstOrDefault(g => g.Type is "GpuNvidia" or "GpuAmd" or "GpuIntel");
+        // com placa integrada + dedicada, mostra a dedicada (a mesma que o Painel usa)
+        var gpu = groups.Where(g => g.Type is "GpuNvidia" or "GpuAmd" or "GpuIntel")
+            .OrderBy(g => MBExtreme.Core.Sensors.UsageRules.LooksIntegrated(g.Type, g.Name) ? 1 : 0)
+            .ThenBy(g => g.Type == "GpuNvidia" ? 0 : 1)
+            .FirstOrDefault();
         if (gpu is null) return;
 
         _extra.Children.Clear();

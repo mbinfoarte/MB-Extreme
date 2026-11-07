@@ -8,6 +8,7 @@ namespace MBExtreme.Core.Sensors;
 public sealed class SensorService : IDisposable
 {
     private readonly Computer? _computer;
+    private readonly WindowsUsage _usage = new();
     private readonly string? _openError;
 
     public SensorService()
@@ -52,6 +53,8 @@ public sealed class SensorService : IDisposable
         double? cpuTemp = null, cpuLoad = null, cpuPower = null, cpuClock = null;
         double? gpuTemp = null, gpuLoad = null, gpuPower = null, gpuClock = null;
         var fans = new List<FanReading>();
+        var cpuTemps = new List<(string Name, double Value)>();
+        var gpus = new List<GpuReading>();
 
         try
         {
@@ -93,27 +96,29 @@ public sealed class SensorService : IDisposable
                                 break;
                         }
                     }
-                    else if (isGpu)
+                }
+                if (isCpu)
+                    cpuTemps.AddRange(hardware.Sensors.Where(x => x.SensorType == SensorType.Temperature && x.Value is float t && SensorRules.IsValidTemperature(t))
+                        .Select(x => (x.Name, (double)x.Value!.Value)));
+                if (isGpu)
+                {
+                    // cada placa separada: com integrada + dedicada, a dedicada é a que aparece
+                    double? t = null, l = null, p = null, c = null;
+                    foreach (var sensor in hardware.Sensors)
                     {
+                        if (sensor.Value is not float raw) continue;
+                        double value = raw;
                         switch (sensor.SensorType)
                         {
-                            case SensorType.Temperature when name == "GPU Core":
-                                gpuTemp = value;
-                                break;
-                            case SensorType.Temperature:
-                                gpuTemp ??= value;
-                                break;
-                            case SensorType.Load when name == "GPU Core":
-                                gpuLoad = value;
-                                break;
-                            case SensorType.Power:
-                                gpuPower ??= value;
-                                break;
-                            case SensorType.Clock when name == "GPU Core":
-                                gpuClock = value;
-                                break;
+                            case SensorType.Temperature when !SensorRules.IsValidTemperature(value): break;
+                            case SensorType.Temperature when sensor.Name == "GPU Core": t = value; break;
+                            case SensorType.Temperature: t ??= value; break;
+                            case SensorType.Load when sensor.Name == "GPU Core": l = value; break;
+                            case SensorType.Power: p ??= value; break;
+                            case SensorType.Clock when sensor.Name == "GPU Core": c = value; break;
                         }
                     }
+                    gpus.Add(new GpuReading(hardware.HardwareType.ToString(), hardware.Name, t, l, p, c));
                 }
             }
         }
@@ -121,6 +126,12 @@ public sealed class SensorService : IDisposable
         {
             return SensorSnapshot.Unavailable("Falha ao ler os sensores: " + ex.Message);
         }
+
+        if (UsageRules.CpuTemperature(cpuTemps) is { } bestCpu) cpuTemp = bestCpu;
+        if (UsageRules.PickGpu(gpus) is { } gpu) (gpuTemp, gpuLoad, gpuPower, gpuClock) = (gpu.Temperature, gpu.Load, gpu.Power, gpu.Clock);
+        // uso igual ao do Gerenciador de Tarefas (contadores do Windows); a biblioteca fica de reserva
+        if (_usage.Cpu() is { } windowsCpu) cpuLoad = windowsCpu;
+        if (_usage.Gpu() is { } windowsGpu) gpuLoad = windowsGpu;
 
         string? message = null;
         if (cpuTemp is null)
@@ -174,5 +185,9 @@ public sealed class SensorService : IDisposable
         }
     }
 
-    public void Dispose() => _computer?.Close();
+    public void Dispose()
+    {
+        _usage.Dispose();
+        _computer?.Close();
+    }
 }

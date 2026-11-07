@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        WorkArea.Attach(this);   // maximizada, respeita a barra de tarefas
         BuildMenu();
         Current = this;
         StateChanged += (_, _) => UpdateMaximizeState();
@@ -96,7 +97,8 @@ public partial class MainWindow : Window
     private void UpdateMaximizeState()
     {
         bool maximized = WindowState == WindowState.Maximized;
-        WindowFrame.Margin = maximized ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
+        // o tamanho maximizado já vem certo do Windows (WorkArea): sem margem extra, senão sobra uma faixa
+        WindowFrame.Margin = new Thickness(0);
         WindowFrame.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(22);
         MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
         MaximizeButton.ToolTip = maximized ? "Restaurar" : "Maximizar";
@@ -218,7 +220,8 @@ public partial class MainWindow : Window
             Content = content,
         };
         System.Windows.Automation.AutomationProperties.SetName(radio, title);
-        radio.Checked += (_, _) => icon.Foreground = IconActive;
+        radio.MouseEnter += (_, _) => Motion.Pop(icon);
+        radio.Checked += (_, _) => { icon.Foreground = IconActive; Motion.Pop(icon); };
         radio.Unchecked += (_, _) => icon.Foreground = IconIdle;
         radio.Checked += Nav_Checked;
         host.Children.Add(radio);

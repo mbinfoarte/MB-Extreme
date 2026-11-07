@@ -75,6 +75,7 @@ internal static class ToolCard
         var button = new Button { Style = (Style)Application.Current.FindResource("ToolTileButton"), Margin = new Thickness(0, 0, 10, 10), Content = content };
         System.Windows.Automation.AutomationProperties.SetName(button, title);
         button.Click += (_, _) => click();
+        button.MouseEnter += (_, _) => Motion.Wiggle(icon);
         return button;
     }
 }

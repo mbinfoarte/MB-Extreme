@@ -82,6 +82,38 @@ internal static class Motion
         rotate.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, new Duration(TimeSpan.FromSeconds(seconds))) { RepeatBehavior = RepeatBehavior.Forever });
     }
 
+    /// <summary>Balança e cresce um pouco (ícone de ferramenta ao passar o mouse).</summary>
+    public static void Wiggle(FrameworkElement element)
+    {
+        if (!Enabled) return;
+        var scale = new ScaleTransform(1, 1);
+        var rotate = new RotateTransform(0);
+        element.RenderTransformOrigin = new Point(0.5, 0.5);
+        element.RenderTransform = new TransformGroup { Children = { scale, rotate } };
+        var grow = new DoubleAnimation(1, 1.15, new Duration(TimeSpan.FromMilliseconds(140))) { AutoReverse = true, EasingFunction = Ease };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        var swing = new DoubleAnimationUsingKeyFrames { Duration = new Duration(TimeSpan.FromMilliseconds(420)) };
+        foreach (var (t, a) in new[] { (0.0, 0.0), (0.2, -10.0), (0.45, 8.0), (0.7, -4.0), (1.0, 0.0) })
+            swing.KeyFrames.Add(new EasingDoubleKeyFrame(a, KeyTime.FromPercent(t)));
+        rotate.BeginAnimation(RotateTransform.AngleProperty, swing);
+    }
+
+    /// <summary>Pulinho rápido (ícone do menu ao passar o mouse ou ao ser escolhido).</summary>
+    public static void Pop(FrameworkElement element)
+    {
+        if (!Enabled) return;
+        if (element.RenderTransform is not ScaleTransform scale)
+        {
+            scale = new ScaleTransform(1, 1);
+            element.RenderTransformOrigin = new Point(0.5, 0.5);
+            element.RenderTransform = scale;
+        }
+        var anim = new DoubleAnimation(1, 1.22, new Duration(TimeSpan.FromMilliseconds(110))) { AutoReverse = true, EasingFunction = Ease };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+    }
+
     /// <summary>Para giros e respiração (volta ao normal).</summary>
     public static void Stop(FrameworkElement element)
     {

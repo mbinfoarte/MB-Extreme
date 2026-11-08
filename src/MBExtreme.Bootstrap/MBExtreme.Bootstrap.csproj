@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Instalador pequeno (online): baixa a versão mais nova do MB Extreme das Releases, confere o SHA-256 e instala.
+    .NET Framework 4.8 já vem no Windows 10 (1903+) e no Windows 11, então o .exe fica com poucos KB e não precisa de nada instalado.
+    Compilar: dotnet build src/MBExtreme.Bootstrap -c Release  →  bin/Release/net48/MBExtreme-Instalar.exe
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>MBExtreme-Instalar</AssemblyName>
+    <RootNamespace>MBExtreme.Bootstrap</RootNamespace>
+    <ApplicationIcon>..\MBExtreme.App\Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <Product>MB Extreme</Product>
+    <Company>MB InfoArt</Company>
+    <Description>Instalador online do MB Extreme</Description>
+    <GenerateAppConfigFile>false</GenerateAppConfigFile>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web.Extensions" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\MBExtreme.App\Assets\logo.png" LogicalName="logo.png" Condition="Exists('..\MBExtreme.App\Assets\logo.png')" />
+  </ItemGroup>
+
+</Project>

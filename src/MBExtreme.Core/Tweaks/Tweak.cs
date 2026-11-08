@@ -12,6 +12,17 @@ public enum TweakCategory
     Storage,
 }
 
+/// <summary>Objetivo do ajuste, usado nos filtros da tela Otimizações. Um ajuste pode ter mais de um.</summary>
+[Flags]
+public enum TweakGoal
+{
+    None = 0,
+    FpsLatency = 1,
+    Network = 2,
+    QualityOfLife = 4,
+    Privacy = 8,
+}
+
 public enum TweakRisk
 {
     Low,
@@ -50,6 +61,29 @@ public abstract class Tweak
     public bool Recommended { get; init; }
 
     public bool RequiresRestart { get; init; }
+
+    /// <summary>Selo na tela: "Novo" (entrou nesta versão) ou "Atualizado" (mudou nesta versão). Vazio = sem selo.</summary>
+    public string Badge { get; init; } = "";
+
+    /// <summary>Explicação mais longa do botão "i": o que muda por dentro e como conferir.</summary>
+    public string Details { get; init; } = "";
+
+    private TweakGoal? _goals;
+
+    /// <summary>Objetivos do ajuste. Sem definir, vem da categoria.</summary>
+    public TweakGoal Goals
+    {
+        get => _goals ?? DefaultGoals(Category);
+        init => _goals = value;
+    }
+
+    public static TweakGoal DefaultGoals(TweakCategory category) => category switch
+    {
+        TweakCategory.Performance or TweakCategory.Gaming or TweakCategory.Peripherals => TweakGoal.FpsLatency,
+        TweakCategory.Network => TweakGoal.Network,
+        TweakCategory.Privacy => TweakGoal.Privacy,
+        _ => TweakGoal.QualityOfLife,
+    };
 
     /// <summary>Quando definido, o ajuste só aparece se devolver true (ex.: só em PCs com placa de vídeo AMD).</summary>
     public Func<bool>? AppliesTo { get; init; }

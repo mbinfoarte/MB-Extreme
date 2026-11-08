@@ -157,3 +157,19 @@ Marque cada item e anote o que der diferente.
 | Atendimento | Preencher cliente e Gerar laudo | Página HTML em Documentos\MB Extreme\Controles com antes, depois e se foi gravado |
 | Controle clone / DualSense Edge | Ligar | Testes funcionam; calibração desligada com o motivo |
 | Xbox / Nintendo | Escolher a marca | Aviso de que a calibração ainda é só PlayStation e botão para Periféricos |
+
+## Recursos da comparação com o Hone
+
+1. **Otimizações**: os chips FPS e latência, Rede e ping, Qualidade de vida e Privacidade e segurança filtram a lista. Os títulos de categoria vazios somem. A busca ignora acentos ("classico" acha "clássico"). O contador "x de y ativas" bate com o que está aplicado.
+2. Itens com selo **Novo** e botão **i**: o "i" abre a explicação sem marcar ou desmarcar a caixa.
+3. **Menu clássico (Windows 11)**: aplicar, sair e entrar na conta. O botão direito mostra o menu completo. Desfazer volta o menu novo.
+4. **Atalhos sem "- Atalho"**, **Explorador compacto**, **abrir em Este Computador** e **mostrar extensões**: conferir cada um e o desfazer.
+5. **Papel de parede 100%**: aplicar e escolher o papel de parede de novo. **Tela de login sem desfoque** e **ir direto para a senha**: bloquear com Win+L.
+6. **Menu de inicialização em 3 s**: `bcdedit /enum {bootmgr}` mostra timeout 3; desfazer volta o valor anterior. **Mensagens detalhadas**: reiniciar e ver os textos.
+7. **Visualizador de Fotos**: aparece em Abrir com > Escolher outro aplicativo.
+8. **Buffers da placa de rede**, **LSO** e **modo MSI** (risco médio): criar um ponto de restauração antes. Conferir em Gerenciador de Dispositivos > placa > Avançado. Para o MSI, use o Diagnóstico de latência antes e depois. Desfazer e reiniciar.
+9. **NVIDIA: indicador do DLSS**: só aparece com placa NVIDIA. Num jogo com DLSS, o texto aparece no canto.
+10. **Limpeza**: Cache do Discord (feche o Discord), Cache e registros do Steam e Documentos recentes. Jogos, saves e mensagens não são apagados.
+11. **Reparar o Windows > Reconstruir o cache de fontes**: o serviço FontCache para e volta a funcionar.
+12. **Programas > kit Técnico**: Process Explorer, Autoruns e Process Monitor pelo winget.
+13. **MBExtreme-Instalar.exe** (instalador pequeno, ~175 KB): com o repositório público, ele baixa a versão mais nova, mostra o progresso, confere o SHA-256 e abre o instalador completo. Com o repositório privado, mostra "O download ainda não está público" e o botão "Baixar pelo site".

@@ -9,6 +9,7 @@ public static class CleanupCatalog
         string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         string programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
         string userTemp = Path.GetTempPath();
+        string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var day = TimeSpan.FromDays(1);
 
         return new[]
@@ -66,6 +67,26 @@ public static class CleanupCatalog
                 DefaultSelected: false,
                 Note: "Os jogos recompilam os shaders na próxima abertura; a primeira partida pode ter travadas."),
 
+            new CleanupCategory("discord-cache", "Cache do Discord",
+                "Imagens, figurinhas e vídeos que o Discord guardou. Não apaga mensagens, login nem configurações.",
+                DiscordCaches(roaming),
+                Note: "Feche o Discord antes. As imagens são baixadas de novo quando você abre as conversas."),
+
+            new CleanupCategory("steam-cache", "Cache e registros do Steam",
+                "Páginas da loja guardadas, registros (logs) e relatórios de erro do Steam. Não apaga jogos nem saves.",
+                SteamCaches(local),
+                DefaultSelected: false,
+                Note: "Feche o Steam antes. A loja e a biblioteca podem demorar um pouco mais na primeira abertura."),
+
+            new CleanupCategory("recent-docs", "Lista de documentos recentes",
+                "Histórico de arquivos abertos que aparece no Explorador, no Iniciar e nas listas de atalhos da barra de tarefas.",
+                new[]
+                {
+                    Path.Combine(roaming, "Microsoft", "Windows", "Recent"),
+                },
+                DefaultSelected: false,
+                Note: "Apaga só os atalhos da lista; os arquivos continuam onde estão. Itens fixados nas listas de atalhos também saem."),
+
             new CleanupCategory("windows-update", "Cache de download do Windows Update",
                 "Arquivos de atualização já baixados.",
                 new[] { Path.Combine(windows, "SoftwareDistribution", "Download") },
@@ -95,6 +116,50 @@ public static class CleanupCatalog
         }
 
         return roots;
+    }
+
+    /// <summary>Discord estável, PTB e Canary: só as pastas de cache (Cache, Code Cache e GPUCache).</summary>
+    public static IReadOnlyList<string> DiscordCaches(string roaming)
+    {
+        var roots = new List<string>();
+        foreach (string app in new[] { "discord", "discordptb", "discordcanary" })
+        {
+            string folder = Path.Combine(roaming, app);
+            if (!Directory.Exists(folder)) continue;
+            roots.Add(Path.Combine(folder, "Cache"));
+            roots.Add(Path.Combine(folder, "Code Cache"));
+            roots.Add(Path.Combine(folder, "GPUCache"));
+        }
+        return roots;
+    }
+
+    /// <summary>Pasta do Steam (do registro, ou a padrão) e as pastas de cache e registros. Nunca steamapps nem userdata.</summary>
+    public static IReadOnlyList<string> SteamCaches(string local, string? steamPath = null)
+    {
+        steamPath ??= SteamFolder();
+        var roots = new List<string> { Path.Combine(local, "Steam", "htmlcache") };
+        if (steamPath is not null && Directory.Exists(steamPath))
+        {
+            roots.Add(Path.Combine(steamPath, "appcache", "httpcache"));
+            roots.Add(Path.Combine(steamPath, "logs"));
+            roots.Add(Path.Combine(steamPath, "dumps"));
+        }
+        return roots;
+    }
+
+    private static string? SteamFolder()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+                if (key?.GetValue("SteamPath") is string path && path.Length > 0) return path.Replace('/', '\\');
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { }
+        }
+        string x86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        return x86.Length > 0 ? Path.Combine(x86, "Steam") : null;
     }
 
     private static IReadOnlyList<string> FirefoxCaches(string local)

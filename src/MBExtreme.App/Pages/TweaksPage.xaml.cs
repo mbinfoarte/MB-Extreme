@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using MBExtreme.Core.Progress;
 using MBExtreme.Core.Tweaks;
@@ -13,6 +14,9 @@ public partial class TweaksPage : UserControl
     private readonly TweakCategory[] _categories;
     private readonly Dictionary<Tweak, CheckBox> _boxes = new();
     private CancellationTokenSource? _cts;
+    private readonly List<(Tweak Tweak, Border Row, TextBlock? Header)> _rows = new();
+    private readonly List<ToggleButton> _filterChips = new();
+    private TweakGoal _goal = TweakGoal.None;
 
     public TweaksPage(string title, string subtitle, params TweakCategory[] categories)
     {
@@ -28,6 +32,50 @@ public partial class TweaksPage : UserControl
             BuildRows();
         };
         Loaded += (_, _) => BuildRows();
+        BuildFilters();
+    }
+
+    /// <summary>Chips por objetivo (só na tela com várias categorias; nas telas de uma categoria fica só a busca).</summary>
+    private void BuildFilters()
+    {
+        FilterHost.Children.Clear();
+        _filterChips.Clear();
+        if (_categories.Length <= 1) return;
+        foreach (var (goal, title) in TweakFilter.Goals)
+        {
+            var chip = new ToggleButton
+            {
+                Style = (Style)FindResource("ChipToggle"), Content = title, IsChecked = goal == _goal,
+                Margin = new Thickness(0, 0, 8, 6), Tag = goal,
+            };
+            chip.Click += (_, _) =>
+            {
+                _goal = (TweakGoal)chip.Tag;
+                foreach (var c in _filterChips) c.IsChecked = (TweakGoal)c.Tag == _goal;
+                ApplyFilter();
+            };
+            _filterChips.Add(chip);
+            FilterHost.Children.Add(chip);
+        }
+    }
+
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
+
+    /// <summary>Mostra só as linhas que passam no objetivo e na busca; esconde o título da categoria que ficou vazia.</summary>
+    private void ApplyFilter()
+    {
+        string search = SearchBox.Text;
+        var visibleHeaders = new HashSet<TextBlock>();
+        int shown = 0;
+        foreach (var (tweak, row, header) in _rows)
+        {
+            bool visible = TweakFilter.Matches(tweak, _goal, search);
+            row.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            if (visible) { shown++; if (header is not null) visibleHeaders.Add(header); }
+        }
+        foreach (var header in _rows.Select(r => r.Header).OfType<TextBlock>().Distinct())
+            header.Visibility = visibleHeaders.Contains(header) ? Visibility.Visible : Visibility.Collapsed;
+        EmptyText.Visibility = shown == 0 && _rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static bool? SafeIsApplied(Tweak tweak)
@@ -58,6 +106,9 @@ public partial class TweaksPage : UserControl
 
         RowsHost.Children.Clear();
         _boxes.Clear();
+        _rows.Clear();
+        CounterText.Text = TweakFilter.Counter(states.Count(x => x.Applied == true), states.Count);
+        CounterText.ToolTip = "Otimizações desta tela que já estão aplicadas no PC.";
         if (_categories.Length > 1 && source.Count < AppServices.Tweaks.Count)
             RowsHost.Children.Add(new TextBlock
             {
@@ -66,17 +117,19 @@ public partial class TweaksPage : UserControl
             });
 
         TweakCategory? lastCategory = null;
+        TextBlock? currentHeader = null;
         foreach (var (tweak, applied) in states.OrderBy(x => Array.IndexOf(_categories, x.Tweak.Category)))
         {
             // tela "Otimizações" (todas as categorias): um título por assunto
             if (_categories.Length > 1 && tweak.Category != lastCategory)
             {
                 lastCategory = tweak.Category;
-                RowsHost.Children.Add(new TextBlock
+                currentHeader = new TextBlock
                 {
                     Text = CategoryTitle(tweak.Category), FontSize = 15, FontWeight = FontWeights.SemiBold,
                     Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)), Margin = new Thickness(2, 14, 0, 8),
-                });
+                };
+                RowsHost.Children.Add(currentHeader);
             }
             var content = BuildContent(tweak);
             content.Margin = new Thickness(8, 0, 0, 0);
@@ -89,15 +142,27 @@ public partial class TweaksPage : UserControl
                 Foreground = (Brush)FindResource("TextBrush"),
             };
 
-            RowsHost.Children.Add(new Border
+            var row = new Border
             {
                 Style = (Style)FindResource("Card"),
                 Margin = new Thickness(0, 0, 0, 10),
                 Child = box,
-            });
+            };
+            RowsHost.Children.Add(row);
             _boxes[tweak] = box;
+            _rows.Add((tweak, row, currentHeader));
         }
+
+        EmptyText = new TextBlock
+        {
+            Text = "Nenhuma otimização com esse filtro ou essa busca.", FontSize = 13, Margin = new Thickness(2, 8, 0, 8),
+            Foreground = (Brush)FindResource("MutedBrush"), Visibility = Visibility.Collapsed,
+        };
+        RowsHost.Children.Add(EmptyText);
+        ApplyFilter();
     }
+
+    private TextBlock EmptyText { get; set; } = new();
 
     private static string CategoryTitle(TweakCategory category) => category switch
     {
@@ -120,11 +185,34 @@ public partial class TweaksPage : UserControl
         header.Children.Add(new TextBlock { Text = tweak.Title, FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         header.Children.Add(Badge(RiskText(tweak.Risk), RiskBrush(tweak.Risk)));
         if (tweak.RequiresRestart) header.Children.Add(Badge("reiniciar", "MutedBrush"));
+        if (tweak.Badge.Length > 0) header.Children.Add(Badge(tweak.Badge, "AccentBrush"));
+
+        string more = string.Join("\n", new[] { tweak.Details, tweak.CompatibilityText }.Where(x => x.Length > 0));
+        TextBlock? details = null;
+        if (more.Length > 0)
+        {
+            var detailLine = Line(more, "MutedBrush", 12);
+            detailLine.Visibility = Visibility.Collapsed;
+            details = detailLine;
+            var info = new Button
+            {
+                Content = "i", Width = 22, Height = 22, Padding = new Thickness(0), Margin = new Thickness(10, 0, 0, 0),
+                FontWeight = FontWeights.Bold, FontSize = 12, Cursor = System.Windows.Input.Cursors.Hand,
+                Style = (Style)FindResource("GhostButton"), ToolTip = "Como funciona", VerticalAlignment = VerticalAlignment.Center,
+            };
+            info.Click += (_, e) =>
+            {
+                detailLine.Visibility = detailLine.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+                e.Handled = true;
+            };
+            header.Children.Add(info);
+        }
         panel.Children.Add(header);
 
         panel.Children.Add(Line(tweak.Description, "TextBrush", 13));
         if (tweak.Effect.Length > 0) panel.Children.Add(Line("Efeito: " + tweak.Effect, "MutedBrush", 12));
         if (tweak.Warning.Length > 0) panel.Children.Add(Line("Atenção: " + tweak.Warning, "WarnBrush", 12));
+        if (details is not null) panel.Children.Add(details);
         return panel;
     }
 

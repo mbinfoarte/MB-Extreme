@@ -26,6 +26,20 @@
                 </StackPanel>
                 <TextBlock x:Name="StatusText" Margin="0,12,0,0" TextWrapping="Wrap" />
 
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <WrapPanel x:Name="FilterHost" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="CounterText" VerticalAlignment="Center" Margin="0,0,12,0" FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}" />
+                        <TextBox x:Name="SearchBox" Width="220" ToolTip="Procurar otimização pelo nome ou pelo que ela faz"
+                                 TextChanged="SearchBox_TextChanged" />
+                    </StackPanel>
+                </Grid>
+
                 <StackPanel x:Name="RowsHost" Margin="0,18,0,0" />
 
                 <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"

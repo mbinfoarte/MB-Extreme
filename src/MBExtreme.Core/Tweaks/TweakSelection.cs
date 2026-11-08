@@ -5,6 +5,40 @@ namespace MBExtreme.Core.Tweaks;
 /// <summary>Grupos de seleção das páginas de ajustes.</summary>
 public enum TweakGroup { Recommended, Safe, Moderate, Advanced, All }
 
+/// <summary>Filtros por objetivo e busca da tela Otimizações.</summary>
+public static class TweakFilter
+{
+    public static readonly IReadOnlyList<(TweakGoal Goal, string Title)> Goals = new[]
+    {
+        (TweakGoal.None, "Todos"),
+        (TweakGoal.FpsLatency, "FPS e latência"),
+        (TweakGoal.Network, "Rede e ping"),
+        (TweakGoal.QualityOfLife, "Qualidade de vida"),
+        (TweakGoal.Privacy, "Privacidade e segurança"),
+    };
+
+    /// <summary>O ajuste passa no objetivo (None = todos) e contém todas as palavras da busca (sem diferenciar acentos e maiúsculas).</summary>
+    public static bool Matches(Tweak t, TweakGoal goal, string? search)
+    {
+        if (goal != TweakGoal.None && (t.Goals & goal) == 0) return false;
+        if (string.IsNullOrWhiteSpace(search)) return true;
+        string haystack = Fold($"{t.Title} {t.Description} {t.Effect} {t.Details} {t.Badge}");
+        return search.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(w => haystack.Contains(Fold(w), StringComparison.Ordinal));
+    }
+
+    /// <summary>"x de y ativas".</summary>
+    public static string Counter(int active, int total) => $"{active} de {total} ativa{(total == 1 ? "" : "s")}";
+
+    private static string Fold(string text)
+    {
+        var normalized = text.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(normalized.Length);
+        foreach (char c in normalized)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark) sb.Append(c);
+        return sb.ToString();
+    }
+}
+
 /// <summary>Perfis do assistente de pós-formatação.</summary>
 public enum PostInstallProfile { Light, Balanced, Extreme }
 

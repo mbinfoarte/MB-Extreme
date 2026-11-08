@@ -22,6 +22,12 @@ public static class CommandTweaks
 
     private static void BcdWrite(string name, string value)
     {
+        if (name == "/timeout")
+        {
+            var (c, _, e) = Shell.Run("bcdedit.exe", "/timeout", value == "-" ? "30" : value);
+            if (c != 0) throw new InvalidOperationException($"bcdedit /timeout: {e}".Trim());
+            return;
+        }
         var (code, _, error) = value == "-"
             ? Shell.Run("bcdedit.exe", "/deletevalue", name)
             : Shell.Run("bcdedit.exe", "/set", name, value);
@@ -41,6 +47,21 @@ public static class CommandTweaks
 
     public static IEnumerable<Tweak> Create(TweakStore store)
     {
+        yield return new CommandTweak(store, "boot-menu-timeout", TweakCategory.Boot, TweakRisk.Low,
+            "Menu de inicialização em 3 segundos",
+            "Quando há mais de um sistema (ou opções de recuperação), o menu de escolha espera 3 segundos em vez de 30.",
+            () =>
+            {
+                var (code, output, _) = Shell.Run("bcdedit.exe", "/enum", "{bootmgr}");
+                return code == 0 ? CommandParsers.BcdValue(output, "timeout") : null;
+            },
+            "3", v => BcdWrite("/timeout", v), "30", BcdBackup)
+        {
+            Effect = "O PC liga mais rápido quando o menu de inicialização aparece. Sem o menu, nada muda.",
+            Details = "Roda bcdedit /timeout 3. O valor original fica guardado para desfazer e o app exporta um backup do BCD antes.",
+            Badge = TweakCatalogExtra.New,
+        };
+
         yield return new CommandTweak(store, "storage-trim", TweakCategory.Storage, TweakRisk.Low,
             "Garantir o TRIM do SSD",
             "Liga o envio do comando TRIM ao SSD, que mantém a escrita rápida ao longo do tempo.",

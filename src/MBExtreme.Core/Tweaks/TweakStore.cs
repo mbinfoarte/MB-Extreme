@@ -53,6 +53,12 @@ public sealed class TweakStore
         lock (_lock) return _data.Keys.Any(k => k.StartsWith(prefix, StringComparison.Ordinal));
     }
 
+    /// <summary>Chaves guardadas que começam com o prefixo (cópia, para poder remover enquanto percorre).</summary>
+    public IReadOnlyList<string> KeysWithPrefix(string prefix)
+    {
+        lock (_lock) return _data.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+    }
+
     private static Dictionary<string, string> Load(string path)
     {
         try

@@ -16,6 +16,7 @@
   <ItemGroup>
     <!-- o mapa do menu não depende do WPF: o teste confere as chaves sem abrir o aplicativo -->
     <Compile Include="..\..\src\MBExtreme.App\Navigation.cs" Link="Navigation.cs" />
+    <Compile Include="..\..\src\MBExtreme.Bootstrap\ReleasePicker.cs" Link="ReleasePicker.cs" />
   </ItemGroup>
 
   <ItemGroup>

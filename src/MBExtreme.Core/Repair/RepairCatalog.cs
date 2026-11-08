@@ -145,6 +145,17 @@ public static class RepairCatalog
                 }),
 
             // ---- Etapa 8: correções comuns (técnicas estudadas no pacote Lobo Alpha, reescritas como tarefas do app)
+            new("fonts", GroupNetwork, "Reconstruir o cache de fontes",
+                "Para o serviço de cache de fontes, apaga o cache e liga de novo. Resolve letras trocadas, quadradinhos no lugar do texto e programas lentos para abrir por causa das fontes.",
+                "Menos de 1 minuto",
+                new[]
+                {
+                    new RepairStep("Parando o cache de fontes", "net.exe", "stop FontCache /y", StepKind.Generic, true),
+                    Ps("Apagando o cache de fontes",
+                        "Get-ChildItem -Path (Join-Path $env:WinDir 'ServiceProfiles\\LocalService\\AppData\\Local\\FontCache') -Filter '*.dat' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath (Join-Path $env:WinDir 'System32\\FNTCACHE.DAT') -Force -ErrorAction SilentlyContinue; 'Cache apagado.'", true),
+                    new RepairStep("Ligando o cache de fontes", "net.exe", "start FontCache", StepKind.Generic, true, null, true),
+                }, NeedsRestart: true),
+
             new("dns-renew", GroupNetwork, "Limpar o DNS e renovar o IP",
                 "Limpa o cache de DNS e pede um IP novo ao roteador. Mais leve que reiniciar a pilha de rede: não apaga configurações manuais nem exige reiniciar.",
                 "Menos de 1 minuto",

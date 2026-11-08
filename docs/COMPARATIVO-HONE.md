@@ -33,6 +33,8 @@ Regra que continua valendo: **nada que desligue Defender, Firewall, Windows Upda
 
 ## 2. O que vale acrescentar (seguro e com como desfazer)
 
+**Situação:** implementado, exceto a predefinição de efeitos visuais (já coberta pelos itens de transparência, animações e menus; gravar a máscara binária do Windows não tem desfazer confiável). A Desinstalação do OneDrive e do Xbox já existia, o instalador de driver NVIDIA já existia em Drivers e os navegadores já tinham o ajuste de segundo plano.
+
 | Recurso do Hone | Proposta para o MB Extreme | Risco |
 |---|---|---|
 | Optimize Message Signal Interrupts | Ligar o modo MSI na placa de vídeo e na placa de rede (quando o driver suporta), com desfazer | Médio |
@@ -75,3 +77,12 @@ Hoje o instalador tem ~200 MB porque leva o programa inteiro (com FFmpeg). Propo
 - O instalador completo (~200 MB) continua existindo para PCs sem internet.
 - **Depende de:** o repositório ficar público (ou o servidor estar no ar), porque o download não pode pedir login.
 - **Mexe no CI:** compilar e assinar o instalador pequeno e publicá-lo junto na Release. Precisa da sua autorização.
+
+**Situação:** o projeto `src/MBExtreme.Bootstrap` está pronto. Gera o `MBExtreme-Instalar.exe` com ~175 KB, em .NET Framework 4.8 e com o tema MB. Ele procura a Release mais nova, baixa com progresso, confere o SHA-256 e abre o instalador completo, que pede administrador. Falta incluí-lo no CI (com autorização). Seriam três passos depois do instalador completo:
+
+```yaml
+      - name: Instalador pequeno
+        run: dotnet build src/MBExtreme.Bootstrap/MBExtreme.Bootstrap.csproj -c Release "-p:Version=1.0.${{ github.run_number }}"
+      # assinar com o mesmo signtool do instalador completo
+      # e incluir src/MBExtreme.Bootstrap/bin/Release/net48/MBExtreme-Instalar.exe no gh release create
+```

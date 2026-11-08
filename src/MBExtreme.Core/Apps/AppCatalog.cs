@@ -109,6 +109,9 @@ public static class AppCatalog
         new("CrystalDewWorld.CrystalDiskMark", "CrystalDiskMark", "Velocidade de SSD e HD.", "Diagnóstico", "tecnico"),
         new("Rufus.Rufus", "Rufus", "Cria pendrive de instalação do Windows.", "Diagnóstico", "tecnico"),
         new("Ventoy.Ventoy", "Ventoy", "Um pendrive com várias ISOs de boot.", "Diagnóstico", "tecnico"),
+        new("Microsoft.Sysinternals.ProcessExplorer", "Process Explorer", "Gerenciador de tarefas avançado da Microsoft: mostra quem abriu cada arquivo e o que cada processo carrega.", "Diagnóstico", "tecnico"),
+        new("Microsoft.Sysinternals.Autoruns", "Autoruns", "Tudo o que inicia com o Windows (serviços, tarefas, extensões), da Microsoft.", "Diagnóstico", "tecnico"),
+        new("Microsoft.Sysinternals.ProcessMonitor", "Process Monitor", "Mostra em tempo real o que os programas leem e gravam no disco e no registro.", "Diagnóstico", "tecnico"),
         new("AntibodySoftware.WizTree", "WizTree", "Mostra o que ocupa o disco, muito rápido.", "Diagnóstico"),
         new("WiresharkFoundation.Wireshark", "Wireshark", "Análise de tráfego de rede.", "Diagnóstico"),
 

@@ -55,7 +55,7 @@ public sealed class AboutPage : ToolPageBase
         foreach (var line in new[]
         {
             "Programas instalados pelo winget, o instalador oficial da Microsoft, direto dos sites de cada fabricante. O MB Extreme não redistribui esses programas.",
-            "Sensores por LibreHardwareMonitor (MPL 2.0). Gravação e transmissão por FFmpeg (LGPL/GPL). Áudio por NAudio (MIT). QR Code por QRCoder (MIT).",
+            "Sensores por LibreHardwareMonitor (MPL 2.0). Gravação e transmissão por FFmpeg (LGPL/GPL). Áudio por NAudio (MIT). QR Code por QRCoder (MIT). Calibração de controles PlayStation baseada no dualshock-tools (MIT, © 2024 the_al).",
             "Drivers e redes Wi-Fi do backup pelas ferramentas do próprio Windows (pnputil e netsh).",
             "Teste de internet pelo servidor público de velocidade da Cloudflare. Mapa com os contornos do Natural Earth (domínio público, via world-atlas). Localização aproximada pelo IP público com ipwho.is ou ipapi.co (nada é guardado). Ping de jogo até as regiões públicas da AWS.",
             "Ícones dos programas do projeto Simple Icons (CC0); as marcas são dos seus donos e aparecem só para identificar cada programa.",

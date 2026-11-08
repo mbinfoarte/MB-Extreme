@@ -60,6 +60,7 @@ internal static class NavigationMap
             new("speedtest", "Teste de internet", "Download, upload, latência e variação com várias conexões, e o histórico.", "\uE774", "Rede"),
             new("netanalyzer", "Analisador de rede", "Ping, TCPing, MTR e jitter.", "\uE9D9", "Rede"),
             new("periphtest", "Teste de periféricos", "Teclado, mouse (taxa e clique duplo) e controle (deriva, circularidade e vibração).", "\uE765", "Periféricos"),
+            new("padcalib", "Calibrar controle", "Corrige o drift do DualSense e do DualShock 4 gravando a calibração no controle, com laudo para o cliente.", "\uE7FC", "Periféricos"),
             new("wifi", "Diagnóstico de Wi-Fi", "Sinal, banda e dicas.", "\uE774", "Rede"),
             new("sysinfo", "Informações do sistema", "Estilo CPU-Z, GPU-Z e AIDA.", "\uE770", "Informações e sensores"),
             new("cpu-detail", "Processador", "Uso, temperatura, velocidade e energia, por núcleo.", "\uE950", "Informações e sensores"),
@@ -142,6 +143,7 @@ internal static class NavigationMap
             new("bench", "Benchmark", "\uE9D9"),
             new("gamefps", "Jogo (FPS)", "\uE7FC"),
             new("periphtest", "Periféricos", "\uE765"),
+            new("padcalib", "Calibrar controle", "\uE7FC"),
             new("stress", "Teste de estresse", "\uE7BA"),
         }),
         new("OTIMIZAR", new SideItem[]

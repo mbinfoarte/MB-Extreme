@@ -141,3 +141,19 @@ Marque cada item e anote o que der diferente.
 | Resultados | Salvar imagem | PNG em Imagens\MB Extreme e o Explorer abre com o arquivo selecionado |
 | Resultados | Mexer em outra janela durante o 3D | Aviso de que o FPS pode ter ficado abaixo do real |
 | Comparar | Antes e depois de otimizar | Cartão "GANHO TOTAL" com o % da nota geral, a frase e a variação de cada categoria |
+
+## Calibrar controle (DualSense e DualShock 4)
+
+| Onde | O que fazer | O que deve acontecer |
+|---|---|---|
+| Calibrar controle | Abrir sem controle; depois ligar o DualSense pelo cabo USB | "Procurando controle..."; ao ligar, a faixa mostra conexão USB, bateria, série, placa, cor e memória "Temporária" |
+| Calibrar controle | Ligar pelo Bluetooth | Aviso para usar o cabo USB |
+| Calibrar controle | Steam ou DS4Windows abertos | Se não abrir o controle, aparece o motivo (outro programa usando) |
+| Modo simples | Começar → seguir as 6 etapas | Diagnóstico (drift 3 s + girar), Centro, Alcance (desenho fecha), Conferir, tabela Antes × Depois; Gravar pede confirmação e grava |
+| Modo simples | Reiniciar o controle antes de gravar | A calibração volta ao que era |
+| Modo avançado | Mexer em tudo | Botões acendem, L2/R2 enchem, giroscópio e acelerômetro mudam, circularidade com erro médio |
+| Modo avançado | Medir drift; Calibrar centro; Começar/Concluir alcance; Gravar | Resultados na linha de status; cada passo funciona separado |
+| Modo avançado | Restaurar cópia (DualSense) | Volta à calibração guardada no primeiro contato e grava |
+| Atendimento | Preencher cliente e Gerar laudo | Página HTML em Documentos\MB Extreme\Controles com antes, depois e se foi gravado |
+| Controle clone / DualSense Edge | Ligar | Testes funcionam; calibração desligada com o motivo |
+| Xbox / Nintendo | Escolher a marca | Aviso de que a calibração ainda é só PlayStation e botão para Periféricos |

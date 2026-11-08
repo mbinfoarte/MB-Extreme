@@ -443,6 +443,7 @@ public partial class MainWindow : Window
         "postinstall" => new PostInstallPage(),
         "speedtest" => new InternetTestPage(),
         "periphtest" => new PeripheralTestPage(),
+        "padcalib" => new PadCalibrationPage(),
         "a11y" => new AccessibilityPage(),
         "recommended" => new RecommendedPage(),
         "cpu-detail" => new ComponentMonitorPage(gpu: false),

@@ -50,20 +50,26 @@ public static class CpuTasks
     /// <summary>Cada linha de execução repete o trabalho até acabar o tempo; o total é somado.</summary>
     private static double Measure(int threads, int ms, CancellationToken token, Func<Func<double>> createWorker, Action<double> progress)
     {
+        // prepara os dados de cada linha antes de ligar o cronômetro (senão o preparo conta como tempo da tarefa)
+        var work = Enumerable.Range(0, threads).Select(_ => createWorker()).ToArray();
         var totals = new double[threads];
-        var watch = Stopwatch.StartNew();
+        var watch = new Stopwatch();
+        using var start = new ManualResetEventSlim(false);
         var workers = Enumerable.Range(0, threads).Select(i => new Thread(() =>
         {
-            var work = createWorker();
+            start.Wait();
             double done = 0;
-            while (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested)
+            do
             {
-                done += work();
+                done += work[i]();
                 if (i == 0) progress(Math.Min(1, watch.ElapsedMilliseconds / (double)ms));
             }
+            while (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested); // ao menos uma rodada por linha
             totals[i] = done;
         }) { IsBackground = true }).ToList();
         workers.ForEach(t => t.Start());
+        watch.Start();
+        start.Set();
         workers.ForEach(t => t.Join());
         token.ThrowIfCancellationRequested();
         return totals.Sum() / Math.Max(watch.Elapsed.TotalSeconds, 0.001);

@@ -134,7 +134,7 @@ public static class AiBenchmark
             for (int i = 0; i < Width; i++) x[i] = (float)rng.NextDouble();
             long tokens = 0;
             var watch = Stopwatch.StartNew();
-            while (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested)
+            while (tokens == 0 || (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested))
             {
                 for (int l = 0; l < Layers; l++)
                 {
@@ -165,7 +165,7 @@ public static class AiBenchmark
             for (int i = 0; i < Batch * Width; i++) x[i] = (float)rng.NextDouble();
             long tokens = 0;
             var watch = Stopwatch.StartNew();
-            while (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested)
+            while (tokens == 0 || (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested))
             {
                 for (int l = 0; l < Layers; l++)
                 {
@@ -206,7 +206,7 @@ public static class AiBenchmark
             for (int i = 0; i < a.Length; i++) { a[i] = (float)rng.NextDouble() - 0.5f; b[i] = (float)rng.NextDouble() - 0.5f; }
             int w = Vector<float>.Count;
             long done = 0;
-            while (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested)
+            while (done == 0 || (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested))
             {
                 Array.Clear(c);
                 for (int i = 0; i < n; i++)
@@ -251,7 +251,7 @@ public static class AiBenchmark
             var y = new int[outputs];
             int w = Vector<sbyte>.Count;
             long done = 0;
-            while (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested)
+            while (done == 0 || (watch.ElapsedMilliseconds < ms && !token.IsCancellationRequested))
             {
                 for (int o = 0; o < outputs; o++)
                 {

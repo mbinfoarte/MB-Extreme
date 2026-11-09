@@ -16,7 +16,7 @@ namespace MBExtreme.Bootstrap
 {
     internal static class Program
     {
-        public const string Repository = "mbinfoarte/MB-Extreme";
+        public const string Repository = "mbinfoarte/MB-Extreme-Download";
         public const string ReleasesPage = "https://github.com/" + Repository + "/releases";
 
         [STAThread]

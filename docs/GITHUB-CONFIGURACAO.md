@@ -46,8 +46,8 @@ As páginas Início, Planos, Download, Afiliados, Termos e Privacidade, com o me
 
 ## 6. Links fixos de download (sempre a versão mais nova)
 
-- Instalador: `https://github.com/mbinfoarte/MB-Extreme/releases/latest/download/MBExtreme-Beta-Setup.exe`
-- Instalador pequeno: `https://github.com/mbinfoarte/MB-Extreme/releases/latest/download/MBExtreme-Instalar.exe`
-- Portátil: `https://github.com/mbinfoarte/MB-Extreme/releases/latest/download/MBExtreme-Beta-portatil-win-x64.zip`
+- Instalador: `https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Beta-Setup.exe`
+- Instalador pequeno: `https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Instalar.exe`
+- Portátil: `https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Beta-portatil-win-x64.zip`
 
 Cada compilação publica a versão como **Latest** (não mais como pré-lançamento), para esses links funcionarem.

@@ -38,8 +38,8 @@ jobs:
       - name: Gerar o site estático
         env:
           # o botão de download sempre aponta para a versão mais nova publicada
-          Download__SetupUrl: https://github.com/${{ github.repository }}/releases/latest/download/MBExtreme-Beta-Setup.exe
-          Download__PortableUrl: https://github.com/${{ github.repository }}/releases/latest/download/MBExtreme-Beta-portatil-win-x64.zip
+          Download__SetupUrl: https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Beta-Setup.exe
+          Download__PortableUrl: https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Beta-portatil-win-x64.zip
         run: dotnet run --project src/MBExtreme.LicenseServer/MBExtreme.LicenseServer.csproj -c Release -- --export-site "${{ github.workspace }}/_site" "${{ vars.MBX_SITE_DOMAIN != '' && '/' || steps.pages.outputs.base_path || format('/{0}', github.event.repository.name) }}"
 
       - name: Domínio próprio (opcional)

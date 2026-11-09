@@ -26,6 +26,6 @@ public static class AppInfo
     public const bool EnforceLicense = false;
 
     /// <summary>Repositório do GitHub com as Releases (atualização sem servidor; só funciona com o repositório público).</summary>
-    public const string UpdateRepository = "mbinfoarte/MB-Extreme";
+    public const string UpdateRepository = "mbinfoarte/MB-Extreme-Download";   // repositório público só de downloads; o código-fonte fica privado em mbinfoarte/MB-Extreme
     public const string DefaultPublicKey = "";
 }

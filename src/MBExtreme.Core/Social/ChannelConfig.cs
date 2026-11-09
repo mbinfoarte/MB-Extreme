@@ -75,7 +75,7 @@ public sealed record ChannelConfig
         return $"https://wa.me/{digits}" + (message.Length > 0 ? "?text=" + Uri.EscapeDataString(message) : "");
     }
 
-    public const string RemoteUrl = "https://raw.githubusercontent.com/mbinfoarte/MB-Extreme/main/config/canal.json";
+    public const string RemoteUrl = "https://raw.githubusercontent.com/mbinfoarte/MB-Extreme-Download/main/config/canal.json";
 
     private static string CachePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "canal.json");
 

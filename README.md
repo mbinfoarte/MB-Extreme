@@ -10,24 +10,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mbinfoarte/MB-Extreme/releases/latest/download/MBExtreme-Beta-Setup.exe"><b>⬇ Baixar o instalador</b></a> ·
-  <a href="https://github.com/mbinfoarte/MB-Extreme/releases/latest/download/MBExtreme-Instalar.exe">Instalador pequeno (online)</a> ·
-  <a href="https://github.com/mbinfoarte/MB-Extreme/releases/latest/download/MBExtreme-Beta-portatil-win-x64.zip">Versão portátil</a> ·
+  <a href="https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Beta-Setup.exe"><b>⬇ Baixar o instalador</b></a> ·
+  <a href="https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Instalar.exe">Instalador pequeno (online)</a> ·
+  <a href="https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Beta-portatil-win-x64.zip">Versão portátil</a> ·
   <a href="https://mbinfoarte.github.io/MB-Extreme/">Site</a> ·
-  <a href="https://github.com/mbinfoarte/MB-Extreme/releases">Todas as versões</a>
+  <a href="https://github.com/mbinfoarte/MB-Extreme-Download/releases">Todas as versões</a>
 </p>
 
 <p align="center">
   <img alt="Windows 10 e 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0b0b0e?style=flat-square&labelColor=ffc400&color=0b0b0e">
-  <img alt="Versão" src="https://img.shields.io/github/v/release/mbinfoarte/MB-Extreme?style=flat-square&label=vers%C3%A3o&labelColor=0b0b0e&color=ffc400">
-  <img alt="Compilação" src="https://img.shields.io/github/actions/workflow/status/mbinfoarte/MB-Extreme/build.yml?style=flat-square&label=compila%C3%A7%C3%A3o&labelColor=0b0b0e">
+  <img alt="Versão" src="https://img.shields.io/github/v/release/mbinfoarte/MB-Extreme-Download?style=flat-square&label=vers%C3%A3o&labelColor=0b0b0e&color=ffc400">
 </p>
 
 ---
 
 ## Instalar
 
-1. Baixe o **[MBExtreme-Beta-Setup.exe](https://github.com/mbinfoarte/MB-Extreme/releases/latest/download/MBExtreme-Beta-Setup.exe)**. Se preferir um arquivo pequeno, baixe o **[MBExtreme-Instalar.exe](https://github.com/mbinfoarte/MB-Extreme/releases/latest/download/MBExtreme-Instalar.exe)** (~200 KB), que baixa e confere a versão mais nova sozinho.
+1. Baixe o **[MBExtreme-Beta-Setup.exe](https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Beta-Setup.exe)**. Se preferir um arquivo pequeno, baixe o **[MBExtreme-Instalar.exe](https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Instalar.exe)** (~200 KB), que baixa e confere a versão mais nova sozinho.
 2. Execute e aceite o pedido de administrador. O programa mexe em configurações do Windows.
 3. Pronto: o MB Extreme abre no Painel com a nota de saúde do PC.
 

@@ -87,7 +87,10 @@ jobs:
 
       - name: Publicar o MB Extreme (Beta 01)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # token com permissão de escrita no repositório PÚBLICO de downloads (crie em Settings > Secrets > RELEASES_TOKEN).
+          # Sem ele, publica no próprio repositório (enquanto a separação não estiver pronta).
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || secrets.GITHUB_TOKEN }}
+          RELEASE_REPO: ${{ secrets.RELEASES_TOKEN != '' && 'mbinfoarte/MB-Extreme-Download' || github.repository }}
         shell: pwsh
         run: |
           # impressão digital do instalador: o programa confere antes de instalar uma atualização
@@ -98,8 +101,8 @@ jobs:
           $notes = @("## Novidades", "") + $lines + @("", "---", "Compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador) ou o MBExtreme-Instalar.exe, que é pequeno e baixa a versão mais nova. MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes.")
           Set-Content -Path notes.md -Value $notes -Encoding utf8
           gh release create "beta-${{ github.run_number }}" setup/MBExtreme-Beta-Setup.exe setup/MBExtreme-Beta-Setup.exe.sha256 MBExtreme-Beta-portatil-win-x64.zip bootstrap/MBExtreme-Instalar.exe `
+            --repo $env:RELEASE_REPO `
             --latest `
-            --target "${{ github.sha }}" `
             --title "MB Extreme (Beta 01) - compilação ${{ github.run_number }}" `
             --notes-file notes.md
 
@@ -114,6 +117,7 @@ jobs:
           if (-not $env:UPDATE_URL -or -not $env:UPDATE_TOKEN) { Write-Host "Servidor de atualizacao nao configurado; pulando."; exit 0 }
           $setup = "setup\MBExtreme-Beta-Setup.exe"
           $sha = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
-          $base = if ($env:DOWNLOAD_BASE) { $env:DOWNLOAD_BASE.TrimEnd('/') } else { "https://github.com/${{ github.repository }}/releases/download/beta-${{ github.run_number }}" }
+          $repo = if ("${{ secrets.RELEASES_TOKEN }}") { "mbinfoarte/MB-Extreme-Download" } else { "${{ github.repository }}" }
+          $base = if ($env:DOWNLOAD_BASE) { $env:DOWNLOAD_BASE.TrimEnd('/') } else { "https://github.com/$repo/releases/download/beta-${{ github.run_number }}" }
           $manifest = @{ build = [int]"${{ github.run_number }}"; version = "0.9.${{ github.run_number }}"; url = "$base/MBExtreme-Beta-Setup.exe"; sha256 = $sha; size = (Get-Item $setup).Length; notes = "Nova compilação do MB Extreme."; minimumBuild = 0 } | ConvertTo-Json
           Invoke-RestMethod -Method Post -Uri "$($env:UPDATE_URL.TrimEnd('/'))/v1/admin/app/latest" -Headers @{ Authorization = "Bearer $env:UPDATE_TOKEN" } -ContentType "application/json" -Body $manifest

@@ -15,10 +15,11 @@ public class ReleCameraTests
     [Fact]
     public void Tamanho_do_rele_segue_a_proporcao_da_camera()
     {
-        Assert.Equal((960, 540), CameraRelayPlan.Size(new CameraMode(1280, 720, 30, "mjpeg", null)));
+        Assert.Equal((1280, 720), CameraRelayPlan.Size(new CameraMode(1280, 720, 30, "mjpeg", null)));   // 720p inteiro
+        Assert.Equal((1280, 720), CameraRelayPlan.Size(new CameraMode(1920, 1080, 30, "mjpeg", null)));
         Assert.Equal((640, 480), CameraRelayPlan.Size(new CameraMode(640, 480, 30, null, "yuyv422")));
-        Assert.Equal((960, 720), CameraRelayPlan.Size(new CameraMode(1440, 1080, 30, "mjpeg", null)));
-        Assert.Equal((960, 540), CameraRelayPlan.Size(null));   // sem saber o modo: 16:9 com faixas
+        Assert.Equal((1280, 960), CameraRelayPlan.Size(new CameraMode(1440, 1080, 30, "mjpeg", null)));
+        Assert.Equal((1280, 720), CameraRelayPlan.Size(null));   // sem saber o modo: 16:9 com faixas
         Assert.Equal(960 * 540 * 3 / 2, CameraRelayPlan.FrameBytes(960, 540));
     }
 

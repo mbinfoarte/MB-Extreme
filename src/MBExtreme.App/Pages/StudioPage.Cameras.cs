@@ -21,7 +21,8 @@ public sealed partial class StudioPage
     private readonly Dictionary<StudioCameraSetting, ImageBrush> _liveBrushes = new();
     private readonly Dictionary<StudioCameraSetting, TextBlock> _camNotes = new();
     private readonly Dictionary<StudioCameraSetting, string> _failedSignature = new();
-    private readonly System.Windows.Threading.DispatcherTimer _camTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    // prioridade de desenho (não "Background"): a câmera não fica esperando o resto da tela e não engasga
+    private readonly System.Windows.Threading.DispatcherTimer _camTimer = new(System.Windows.Threading.DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
 
     private ImageBrush LiveBrush(StudioCameraSetting cam)
     {
@@ -73,7 +74,7 @@ public sealed partial class StudioPage
         if (_relaySignatures.Count == 0) _camTimer.Stop();
     }
 
-    /// <summary>Desenha a última imagem de cada câmera (até 30 vezes por segundo, só quando chega imagem nova).</summary>
+    /// <summary>Desenha a última imagem de cada câmera (confere a cada ~16 ms e só desenha quando chega imagem nova).</summary>
     private void DrawCameraFrames()
     {
         foreach (var (cam, signature) in _relaySignatures)
@@ -88,7 +89,7 @@ public sealed partial class StudioPage
             }
             if (relay.LatestFrame is not { } frame) continue;
             long sequence = relay.Sequence;
-            int step = relay.Width >= 800 ? 2 : 1;
+            int step = relay.Width > 1280 ? 2 : 1;   // até 1280 px a câmera aparece inteira, sem cortar a resolução pela metade
             var (w, h) = Yuv420Preview.OutputSize(relay.Width, relay.Height, step);
             if (!_camBitmaps.TryGetValue(cam, out var entry) || !ReferenceEquals(entry.Relay, relay) || entry.Bitmap.PixelWidth != w || entry.Bitmap.PixelHeight != h)
                 entry = (new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null), new byte[w * h * 4], -1, relay);

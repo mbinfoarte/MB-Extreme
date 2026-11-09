@@ -13,9 +13,9 @@ public class PreviaFluidaTests
     public void Previa_da_tela_usa_a_placa_e_sai_crua_no_tamanho_exato()
     {
         var args = ScreenPreview.RawArgs(1, null, null, 1280, 720);
-        Assert.Contains("ddagrab=output_idx=1:framerate=24:draw_mouse=1", args);
+        Assert.Contains("ddagrab=output_idx=1:framerate=60:draw_mouse=1", args);   // 60 qps: fluida como a tela
         string vf = args[args.ToList().IndexOf("-vf") + 1];
-        Assert.Equal("hwdownload,format=bgra,scale=1280:720:flags=bicubic,format=bgra", vf);
+        Assert.Equal("hwdownload,format=bgra,scale=1280:720:flags=bilinear,format=bgra", vf);
         Assert.Contains("rawvideo", args);   // sem JPEG: nítida e sem gastar processador comprimindo
         Assert.Equal("pipe:1", args[^1]);
     }
@@ -32,12 +32,26 @@ public class PreviaFluidaTests
     [Theory]
     [InlineData(600, 2560, 1440, 640, 360)]
     [InlineData(800, 2560, 1440, 960, 540)]
-    [InlineData(1500, 2560, 1440, 1280, 720)]
+    [InlineData(1100, 2560, 1440, 1280, 720)]
+    [InlineData(1500, 2560, 1440, 1920, 1080)]   // espaço grande: Full HD
+    [InlineData(1650, 3440, 1440, 1920, 804)]    // ultrawide: Full HD de largura, na proporção da tela
     [InlineData(1500, 1080, 1920, 1080, 1920)]   // monitor em pé: não passa do tamanho da tela
     [InlineData(1500, 1281, 721, 1280, 720)]
     public void Tamanho_da_previa_acompanha_o_espaco_na_tela(double shown, int w, int h, int ew, int eh)
     {
         Assert.Equal((ew, eh), ScreenPreview.Size(shown, w, h));
+    }
+
+    [Fact]
+    public void Previa_de_janela_usa_o_windows_graphics_capture_e_reduz_na_placa()
+    {
+        var args = ScreenPreview.WindowArgs(0x1A2B3C, "eq=brightness=0.1", 1920, 1080).ToList();
+        string grab = args[args.IndexOf("-i") + 1];
+        Assert.StartsWith("gfxcapture=hwnd=1715004:max_framerate=60:", grab);
+        Assert.Contains(":width=1920:height=1080:resize_mode=scale_aspect", grab);   // reduz na placa, sem distorcer
+        Assert.Contains("display_border=0", grab);                                   // sem a borda amarela do Windows na janela
+        Assert.Equal("hwdownload,format=bgra,eq=brightness=0.1,format=bgra", args[args.IndexOf("-vf") + 1]);
+        Assert.Equal("pipe:1", args[^1]);
     }
 
     [Fact]

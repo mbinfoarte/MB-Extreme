@@ -5,8 +5,9 @@ using MBExtreme.Core.Recording;
 namespace MBExtreme.UI.Pages;
 
 /// <summary>
-/// Prévia da tela pela placa de vídeo: um FFmpeg leve (ddagrab, 20 quadros por segundo, 640 px) no lugar de copiar a tela pelo GDI a cada 0,1 s.
-/// Vale para a tela inteira e para o recorte de uma janela de jogo; o modo "conteúdo da janela" continua pelo GDI.
+/// Prévia da tela pela placa de vídeo: um FFmpeg leve (ddagrab, 60 quadros por segundo, até Full HD) no lugar de copiar a tela pelo GDI.
+/// Vale para a tela inteira e para o recorte de uma janela de jogo; o modo "conteúdo da janela" usa o Windows.Graphics.Capture
+/// (gfxcapture) e só cai na cópia pelo GDI se o FFmpeg não tiver esse filtro.
 /// </summary>
 public sealed partial class StudioPage
 {
@@ -30,6 +31,14 @@ public sealed partial class StudioPage
             double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
             size = ScreenPreview.Size(shown, source.Width, source.Height);
             args = ScreenPreview.RawArgs(target.Output, target.Crop, CurrentFilter().ToChain(), size.W, size.H);
+            signature = string.Join(" ", args);
+        }
+        else if (allowed && WindowFeedTarget() is { } window)
+        {
+            // "conteúdo da janela": pelo Windows.Graphics.Capture, na placa de vídeo (se o FFmpeg não tiver, volta para a cópia pelo GDI)
+            double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
+            size = ScreenPreview.Size(shown, Math.Max(2, window.Area.Width), Math.Max(2, window.Area.Height));
+            args = ScreenPreview.WindowArgs(window.Handle.ToInt64(), CurrentFilter().ToChain(), size.W, size.H);
             signature = string.Join(" ", args);
         }
 
@@ -76,6 +85,19 @@ public sealed partial class StudioPage
         _screenFeed?.Dispose();
         _screenFeed = null;
         _screenFeedShowing = false;
+    }
+
+    /// <summary>Janela capturada pelo conteúdo (modo GDI na gravação): a prévia vem dela pelo Windows.Graphics.Capture.</summary>
+    private (IntPtr Handle, PixelRect Area)? WindowFeedTarget()
+    {
+        if (SceneGrabTarget() is { } own)
+            return own.Problem is null && own.Gdi is { } handle && handle != IntPtr.Zero ? (handle, own.Area) : null;
+        if (_sourceTab != 0 && _windowMode == 1 && _windows.Selected >= 0 && _windows.Selected < _windowList.Count)
+        {
+            var w = _windowList[_windows.Selected];
+            return w.Handle != IntPtr.Zero ? (w.Handle, w.Bounds) : null;
+        }
+        return null;
     }
 
     /// <summary>A tela (saída da placa) e o recorte que a prévia deve mostrar; null quando a origem é o conteúdo de uma janela (GDI) ou não existe.</summary>

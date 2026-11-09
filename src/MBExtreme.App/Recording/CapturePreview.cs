@@ -15,7 +15,7 @@ internal sealed record PreviewFrame(BitmapSource Image, bool MostlyBlack);
 /// </summary>
 internal static class CapturePreview
 {
-    private const int MaxWidth = 480;
+    private const int MaxWidth = 1280;   // reserva (quando o FFmpeg não tem a captura pela placa): nítida o bastante para ler a tela
 
     [DllImport("user32.dll")]
     private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
@@ -41,7 +41,7 @@ internal static class CapturePreview
             using var small = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
             using (var g = Graphics.FromImage(small))
             {
-                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Bilinear;
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
                 g.DrawImage(full, 0, 0, w, h);
             }
 

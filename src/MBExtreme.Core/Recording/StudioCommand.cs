@@ -12,7 +12,7 @@ public static class StudioCommand
     public const int MaxLiveScenes = 6;
 
     /// <summary>Tamanho e ritmo da imagem pequena "No ar" (leve: só para conferir na tela do programa).</summary>
-    private const string ProgramChain = "fps=24,scale=960:-2:flags=bicubic,format=yuvj420p";
+    private const string ProgramChain = "fps=30,scale=1280:-2:flags=bilinear,format=yuvj420p";
 
     /// <summary>Cópia de cada câmera para o quadro dela na tela do programa (pequena e leve).</summary>
     private const string CameraPreviewChain = "fps=12,scale=320:-2:flags=bilinear,format=yuvj420p";
@@ -163,7 +163,7 @@ public static class StudioCommand
         {
             if (complex is not null) complex += $";[v]split=2[vo][pvsrc];[pvsrc]{ProgramChain}[pv]";
             else if (filter is not null) complex = $"[0:v]{filter}[vf];[vf]split=2[vo][pvsrc];[pvsrc]{ProgramChain}[pv]";
-            else complex = $"[0:v]split=2[vo][pvsrc];[pvsrc]fps=24,hwdownload,format=bgra,scale=960:-2:flags=bicubic,format=yuvj420p[pv]";   // quadros na placa: só a cópia pequena desce
+            else complex = $"[0:v]split=2[vo][pvsrc];[pvsrc]fps=30,hwdownload,format=bgra,scale=1280:-2:flags=bilinear,format=yuvj420p[pv]";   // quadros na placa: só a cópia pequena desce
             filter = null;
             videoMap = "[vo]";
         }

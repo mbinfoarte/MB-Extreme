@@ -31,25 +31,49 @@ public static class ScreenPreview
         return -1;
     }
 
-    /// <summary>Largura da prévia conforme o espaço na tela (640, 960 ou 1280) e a altura na proporção da imagem (medidas pares).</summary>
+    /// <summary>Taxa da prévia: 60 quadros por segundo, para ficar tão fluida quanto a tela de verdade.</summary>
+    public const int Fps = 60;
+
+    /// <summary>
+    /// Largura da prévia conforme o espaço na tela, em pixels de verdade (640, 960, 1280 ou 1920 = Full HD) e a altura na proporção
+    /// da imagem (medidas pares). Nunca passa do tamanho da própria origem.
+    /// </summary>
     public static (int Width, int Height) Size(double shownWidth, int sourceWidth, int sourceHeight)
     {
-        int width = shownWidth > 1000 ? 1280 : shownWidth > 680 ? 960 : 640;
+        int width = shownWidth > 1280 ? 1920 : shownWidth > 960 ? 1280 : shownWidth > 680 ? 960 : 640;
         width = Math.Min(width, Math.Max(160, sourceWidth - sourceWidth % 2));
         int height = (int)Math.Round(width * Math.Max(2, sourceHeight) / (double)Math.Max(2, sourceWidth));
         return (width, Math.Max(2, height - height % 2));
     }
 
     /// <summary>Versão nítida: imagem crua BGRA do tamanho exato (sem JPEG), desenhada direto na tela.</summary>
-    public static IReadOnlyList<string> RawArgs(int output, PixelRect? crop, string? chain, int width, int height, int fps = 24)
+    public static IReadOnlyList<string> RawArgs(int output, PixelRect? crop, string? chain, int width, int height, int fps = Fps)
     {
-        string rate = Math.Clamp(fps, 5, 30).ToString(CultureInfo.InvariantCulture);
+        string rate = Math.Clamp(fps, 5, 60).ToString(CultureInfo.InvariantCulture);
         string cut = crop is { } c ? $"crop={c.Width}:{c.Height}:{c.X}:{c.Y}," : "";
-        string filters = $"hwdownload,format=bgra,{cut}scale={width}:{height}:flags=bicubic," + (string.IsNullOrEmpty(chain) ? "" : chain + ",") + "format=bgra";
+        string filters = $"hwdownload,format=bgra,{cut}scale={width}:{height}:flags=bilinear," + (string.IsNullOrEmpty(chain) ? "" : chain + ",") + "format=bgra";
+        return new[]
+        {
+            "-hide_banner", "-loglevel", "error", "-nostats", "-filter_threads", "4",
+            "-f", "lavfi", "-i", $"ddagrab=output_idx={Math.Max(0, output)}:framerate={rate}:draw_mouse=1",
+            "-an", "-vf", filters, "-f", "rawvideo", "-pix_fmt", "bgra", "pipe:1",
+        };
+    }
+
+    /// <summary>
+    /// Prévia de uma janela pelo Windows.Graphics.Capture (filtro gfxcapture do FFmpeg 8.1+): pega o conteúdo da janela mesmo atrás de outras,
+    /// já reduzido na placa de vídeo para o tamanho da prévia. Bem mais nítida e fluida que copiar a janela pelo GDI (PrintWindow).
+    /// </summary>
+    public static IReadOnlyList<string> WindowArgs(long hwnd, string? chain, int width, int height, int fps = Fps)
+    {
+        string rate = Math.Clamp(fps, 5, 60).ToString(CultureInfo.InvariantCulture);
+        string grab = $"gfxcapture=hwnd={hwnd}:max_framerate={rate}:capture_cursor=1:capture_border=0:display_border=0"
+                      + $":width={width}:height={height}:resize_mode=scale_aspect:scale_mode=bicubic";
+        string filters = "hwdownload,format=bgra," + (string.IsNullOrEmpty(chain) ? "" : chain + ",") + "format=bgra";
         return new[]
         {
             "-hide_banner", "-loglevel", "error", "-nostats",
-            "-f", "lavfi", "-i", $"ddagrab=output_idx={Math.Max(0, output)}:framerate={rate}:draw_mouse=1",
+            "-f", "lavfi", "-i", grab,
             "-an", "-vf", filters, "-f", "rawvideo", "-pix_fmt", "bgra", "pipe:1",
         };
     }

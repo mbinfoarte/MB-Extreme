@@ -20,13 +20,13 @@ public sealed record RelayInput(string PipePath, int Width, int Height, int Fps)
 /// <summary>Contas do relé (separadas para testar sem câmera nem Windows).</summary>
 public static class CameraRelayPlan
 {
-    public const int MaxWidth = 960;
+    public const int MaxWidth = 1280;   // 720p: a câmera sai nítida na live mesmo em tela grande
     public const int Fps = 30;
 
-    /// <summary>Tamanho da imagem do relé: até 960 de largura na proporção da câmera (medidas pares); sem o modo, 960×540 com faixas.</summary>
+    /// <summary>Tamanho da imagem do relé: até 1280 de largura na proporção da câmera (medidas pares); sem o modo, 1280×720 com faixas.</summary>
     public static (int Width, int Height) Size(CameraMode? mode)
     {
-        if (mode is null || mode.Width < 16 || mode.Height < 16) return (MaxWidth, 540);
+        if (mode is null || mode.Width < 16 || mode.Height < 16) return (MaxWidth, 720);
         int w = Math.Min(MaxWidth, mode.Width);
         w -= w % 2;
         int h = (int)Math.Round(w * mode.Height / (double)mode.Width);

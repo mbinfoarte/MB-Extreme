@@ -95,7 +95,7 @@ public class CenasAoVivoTests
     {
         var r = Request() with { ProgramPipe = @"\\.\pipe\mbx-program-teste" };
         var args = StudioCommand.Build(r).ToList();
-        Assert.Contains("[v]split=2[vo][pvsrc];[pvsrc]fps=24,scale=960:-2:flags=bicubic,format=yuvj420p[pv]", Graph(r));
+        Assert.Contains("[v]split=2[vo][pvsrc];[pvsrc]fps=30,scale=1280:-2:flags=bilinear,format=yuvj420p[pv]", Graph(r));
         Assert.Equal("[vo]", args[args.IndexOf("-map") + 1]);
         int pv = args.IndexOf("[pv]");
         Assert.True(pv > 0);
@@ -112,7 +112,7 @@ public class CenasAoVivoTests
             RecordFile = "grav.mkv", ProgramPipe = @"\\.\pipe\mbx-program-teste",
         };
         Assert.False(r.LiveScenes);
-        Assert.Equal("[0:v]split=2[vo][pvsrc];[pvsrc]fps=24,hwdownload,format=bgra,scale=960:-2:flags=bicubic,format=yuvj420p[pv]", Graph(r));
+        Assert.Equal("[0:v]split=2[vo][pvsrc];[pvsrc]fps=30,hwdownload,format=bgra,scale=1280:-2:flags=bilinear,format=yuvj420p[pv]", Graph(r));
     }
 
     [Fact]

@@ -196,3 +196,13 @@ Marque cada item e anote o que der diferente.
 O `Progress<string>` criado dentro de um `Task.Run` guardava a thread de fundo e, ao mexer na tela, estourava "O thread de chamada não pode acessar este objeto porque ele pertence a um thread diferente". Criado o ajudante `UiProgress` (entrega sempre no Dispatcher da interface) e aplicado em Programas, Painel (AnalyzerHero e Diagnóstico), Mapa do disco e Backup para formatar.
 
 Testar: marcar programas em **Programas > Instalar programas** e clicar em Instalar (não pode fechar com erro; o status muda para "Instalando..."). Repetir em: Painel > Analisar e Corrigir, Mapa do disco (ler uma unidade) e Backup para formatar (criar e restaurar).
+
+## Drivers: baixar o driver que falta dentro do programa
+
+A tela Drivers já mostra os aparelhos sem driver ou com problema (Gerenciador de Dispositivos). Agora, em vez de só copiar o ID, ela baixa e instala o driver direto do Windows Update (fonte oficial da Microsoft), casando o ID de hardware do aparelho com o do driver — sem abrir o site do fabricante.
+
+- **Baixar os drivers que faltam** (botão no topo da lista): procura no Windows Update uma vez, casa com todos os aparelhos com problema, cria ponto de restauração e instala os que achou.
+- **Baixar e instalar o driver** (em cada aparelho): mesma coisa, só para aquele aparelho.
+- Quando o Windows Update não tem o driver, a mensagem orienta a copiar o ID e procurar no Catálogo do Windows Update ou no site do fabricante (o botão Copiar ID e o Gerenciador de Dispositivos continuam ali).
+
+Testar num notebook com algum aparelho sem driver (ex.: logo após formatar): abrir Drivers, conferir a lista "Aparelhos sem driver ou com problema", clicar em Baixar os drivers que faltam e ver o progresso (Procurar → Ponto de restauração → Instalar). A busca do Windows Update pode levar alguns minutos.

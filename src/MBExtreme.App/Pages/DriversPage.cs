@@ -75,19 +75,31 @@ public sealed class DriversPage : ToolPageBase
         _more.Children.Clear();
 
         // aparelhos com problema vão para o topo da página
+        _problems = problems;
         foreach (var old in Body.Children.OfType<FrameworkElement>().Where(e => e.Tag as string == "problem").ToList()) Body.Children.Remove(old);
         int at = 0;
         if (problems.Count > 0)
         {
-            var title = Heading($"Aparelhos com problema ({problems.Count})");
+            var title = Heading($"Aparelhos sem driver ou com problema ({problems.Count})");
             title.Tag = "problem";
             title.Foreground = Brush("BadBrush");
             Body.Children.Insert(at++, title);
+
+            var intro = Muted("O MB Extreme procura o driver de cada aparelho direto no Windows Update (fonte oficial da Microsoft) e instala aqui mesmo, sem abrir o site do fabricante.");
+            intro.Tag = "problem";
+            Body.Children.Insert(at++, intro);
+
+            var allButton = SmallButton("Baixar os drivers que faltam", async (_, _) => await FetchAllMissingAsync(), true);
+            allButton.Tag = "problem";
+            allButton.Margin = new Thickness(0, 4, 0, 8);
+            Body.Children.Insert(at++, allButton);
+
             foreach (var p in problems)
             {
                 var device = p;
                 var right = new StackPanel { Orientation = Orientation.Horizontal };
-                right.Children.Add(SmallButton("Copiar ID", (_, _) => { if (TryCopy(device.DeviceId)) SetStatus("ID copiado: cole no Google para achar o driver.", "OkBrush"); }));
+                right.Children.Add(SmallButton("Baixar e instalar o driver", async (_, _) => await FetchDeviceAsync(device), true));
+                right.Children.Add(SmallButton("Copiar ID", (_, _) => { if (TryCopy(device.DeviceId)) SetStatus("ID copiado.", "OkBrush"); }));
                 right.Children.Add(SmallButton("Gerenciador de Dispositivos", (_, _) => StartTool("devmgmt.msc")));
                 var row = Row($"⚠  {p.Name}" + (p.Class.Length > 0 ? $"  ·  {p.Class}" : ""), $"{p.Explanation}  (código {p.Code})", right, "WarnBrush");
                 row.Tag = "problem";
@@ -280,6 +292,76 @@ public sealed class DriversPage : ToolPageBase
         catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException)
         {
             Progress.Finish("Não foi possível atualizar", false, ex.Message);
+        }
+    }
+
+    private IReadOnlyList<ProblemDevice> _problems = Array.Empty<ProblemDevice>();
+    private IReadOnlyList<PendingDriver>? _wuDrivers;
+    private DateTime _wuAt;
+
+    /// <summary>Procura os drivers no Windows Update uma vez só (guardado por alguns minutos, porque a busca é demorada).</summary>
+    private IReadOnlyList<PendingDriver> SearchWindowsUpdate(IProgress<ProgressEvent> progress)
+    {
+        if (_wuDrivers is not null && DateTime.Now - _wuAt < TimeSpan.FromMinutes(5)) return _wuDrivers;
+        progress.Report(new ProgressEvent("Procurar", 10, "Procurando os drivers no Windows Update (pode levar alguns minutos)"));
+        _wuDrivers = DriverService.SearchWindowsUpdateDrivers();
+        _wuAt = DateTime.Now;
+        return _wuDrivers;
+    }
+
+    private (bool Ok, bool Reboot, string Message) InstallMatched(IReadOnlyList<string> ids, string restoreName, IProgress<ProgressEvent> progress)
+    {
+        progress.Report(new ProgressEvent("Ponto de restauração", 40, "Criando ponto de restauração"));
+        RestorePointService.TryCreate(restoreName);
+        progress.Report(new ProgressEvent("Instalar", 55, $"Baixando e instalando {ids.Count} driver(s) pelo Windows Update"));
+        var r = DriverService.InstallWindowsUpdateDrivers(ids);
+        progress.Report(new ProgressEvent("Instalar", 100, "Concluído"));
+        return (r.Ok, r.RebootRequired, r.Message);
+    }
+
+    /// <summary>Procura e instala o driver de um aparelho específico pelo Windows Update (casando o ID de hardware).</summary>
+    private async Task FetchDeviceAsync(ProblemDevice device)
+    {
+        ShowProgress($"Driver de {device.Name}", "Procurar", "Ponto de restauração", "Instalar");
+        IProgress<ProgressEvent> progress = new Progress<ProgressEvent>(Progress.Report);
+        try
+        {
+            var outcome = await Task.Run<(bool Ok, bool Reboot, string Message)>(() =>
+            {
+                var matched = DriverService.DriversForDevice(device, SearchWindowsUpdate(progress));
+                if (matched.Count == 0)
+                    return (false, false, "O Windows Update não tem o driver deste aparelho agora. Clique em \"Copiar ID\" e procure no Catálogo do Windows Update ou no site do fabricante.");
+                return InstallMatched(matched.Select(m => m.Id).ToList(), "MB Extreme - driver " + device.Name, progress);
+            });
+            Progress.Finish(outcome.Ok ? (outcome.Reboot ? "Driver instalado. Reinicie o PC." : "Driver instalado.") : "Não foi possível instalar", outcome.Ok, outcome.Message);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException)
+        {
+            Progress.Finish("Não foi possível instalar", false, ex.Message);
+        }
+    }
+
+    /// <summary>Procura e instala, de uma vez, os drivers de todos os aparelhos sem driver ou com problema.</summary>
+    private async Task FetchAllMissingAsync()
+    {
+        if (_problems.Count == 0) { SetStatus("Nenhum aparelho com problema."); return; }
+        ShowProgress("Drivers que faltam", "Procurar", "Ponto de restauração", "Instalar");
+        IProgress<ProgressEvent> progress = new Progress<ProgressEvent>(Progress.Report);
+        try
+        {
+            var outcome = await Task.Run<(bool Ok, bool Reboot, string Message)>(() =>
+            {
+                var pending = SearchWindowsUpdate(progress);
+                var ids = _problems.SelectMany(d => DriverService.DriversForDevice(d, pending)).Select(m => m.Id).Distinct().ToList();
+                if (ids.Count == 0)
+                    return (false, false, "O Windows Update não tem driver para os aparelhos com problema agora. Use \"Copiar ID\" em cada um e procure no Catálogo do Windows Update ou no site do fabricante.");
+                return InstallMatched(ids, "MB Extreme - drivers que faltam", progress);
+            });
+            Progress.Finish(outcome.Ok ? (outcome.Reboot ? "Instalado. Reinicie o PC." : "Instalado.") : "Não foi possível instalar", outcome.Ok, outcome.Message);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException)
+        {
+            Progress.Finish("Não foi possível instalar", false, ex.Message);
         }
     }
 

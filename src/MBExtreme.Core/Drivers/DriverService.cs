@@ -10,7 +10,7 @@ public enum GpuVendor { Nvidia, Amd, Intel, Other }
 
 public sealed record GpuDriverInfo(string Name, GpuVendor Vendor, string WindowsVersion, string DisplayVersion, DateTime? DriverDate);
 
-public sealed record PendingDriver(string Id, string Title, string Manufacturer, string Model, string Date);
+public sealed record PendingDriver(string Id, string Title, string Manufacturer, string Model, string Date, string HardwareId = "");
 
 /// <summary>Drivers de vídeo instalados e atualizações de driver do Windows Update. Páginas oficiais dos fabricantes para baixar o mais recente.</summary>
 [SupportedOSPlatform("windows")]
@@ -95,7 +95,7 @@ public static class DriverService
         const string script =
             "$s = New-Object -ComObject Microsoft.Update.Session; " +
             "$r = $s.CreateUpdateSearcher().Search(\"IsInstalled=0 and Type='Driver'\"); " +
-            "$items = @($r.Updates | ForEach-Object { [pscustomobject]@{ Id=$_.Identity.UpdateID; Title=$_.Title; Manufacturer=$_.DriverManufacturer; Model=$_.DriverModel; Date=([string]$_.DriverVerDate) } }); " +
+            "$items = @($r.Updates | ForEach-Object { [pscustomobject]@{ Id=$_.Identity.UpdateID; Title=$_.Title; Manufacturer=$_.DriverManufacturer; Model=$_.DriverModel; Date=([string]$_.DriverVerDate); HardwareId=$(try { [string]$_.DriverHardwareID } catch { '' }) } }); " +
             "if ($items.Count -eq 0) { '[]' } else { ConvertTo-Json -InputObject $items -Compress }";
 
         var result = Shell.PowerShellUtf8(script);
@@ -118,7 +118,7 @@ public static class DriverService
             ? document.RootElement.EnumerateArray().ToList()
             : new List<JsonElement> { document.RootElement };
         return elements
-            .Select(e => new PendingDriver(Get(e, "Id"), Get(e, "Title"), Get(e, "Manufacturer"), Get(e, "Model"), Get(e, "Date")))
+            .Select(e => new PendingDriver(Get(e, "Id"), Get(e, "Title"), Get(e, "Manufacturer"), Get(e, "Model"), Get(e, "Date"), Get(e, "HardwareId")))
             .Where(d => GuidPattern.IsMatch(d.Id))
             .ToList();
     }
@@ -152,5 +152,26 @@ public static class DriverService
         bool ok = parts.Length >= 3 && (parts[1] == "2" || parts[1] == "3");
         bool reboot = parts.Length >= 3 && parts[2].Equals("True", StringComparison.OrdinalIgnoreCase);
         return (ok, reboot, ok ? "Instalado." : "O Windows não conseguiu instalar (código " + (parts.Length > 1 ? parts[1] : "?") + ").");
+    }
+
+    /// <summary>
+    /// Normaliza um ID de hardware para comparar (maiúsculas, sem espaços e sem a parte de revisão &amp;REV_xx,
+    /// que muda sem trocar o driver). Ex.: "PCI\\VEN_8086&amp;DEV_1234&amp;REV_05" vira "PCI\\VEN_8086&amp;DEV_1234".
+    /// </summary>
+    public static string NormalizeHardwareId(string id)
+    {
+        string t = id.Trim().ToUpperInvariant();
+        int rev = t.IndexOf("&REV_", StringComparison.Ordinal);
+        if (rev >= 0) t = t[..rev];
+        return t;
+    }
+
+    /// <summary>Drivers do Windows Update que servem para um aparelho, comparando o ID de hardware do aparelho com o do driver.</summary>
+    public static IReadOnlyList<PendingDriver> DriversForDevice(ProblemDevice device, IEnumerable<PendingDriver> pending)
+    {
+        var ids = device.HardwareIds.Select(NormalizeHardwareId).Where(x => x.Length > 0).ToHashSet();
+        if (ids.Count == 0) return Array.Empty<PendingDriver>();
+        return pending.Where(d => d.HardwareId.Length > 0 && ids.Contains(NormalizeHardwareId(d.HardwareId)))
+            .GroupBy(d => d.Id).Select(g => g.First()).ToList();
     }
 }

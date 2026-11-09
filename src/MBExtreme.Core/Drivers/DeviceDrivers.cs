@@ -4,9 +4,12 @@ using System.Management;
 namespace MBExtreme.Core.Drivers;
 
 /// <summary>Aparelho com problema no Gerenciador de Dispositivos.</summary>
-public sealed record ProblemDevice(string Name, string Class, int Code, string DeviceId)
+public sealed record ProblemDevice(string Name, string Class, int Code, string DeviceId, IReadOnlyList<string> HardwareIds)
 {
     public string Explanation => DeviceDrivers.Explain(Code);
+
+    /// <summary>Sem driver instalado (código 28): o Windows não achou nenhum driver para o aparelho.</summary>
+    public bool Missing => Code == 28;
 }
 
 /// <summary>Um driver instalado.</summary>
@@ -113,11 +116,16 @@ public static class DeviceDrivers
     }
 
     public static IReadOnlyList<ProblemDevice> Problems() =>
-        Query("SELECT Name, PNPClass, ConfigManagerErrorCode, DeviceID FROM Win32_PnPEntity WHERE ConfigManagerErrorCode <> 0")
+        Query("SELECT Name, PNPClass, ConfigManagerErrorCode, DeviceID, HardwareID FROM Win32_PnPEntity WHERE ConfigManagerErrorCode <> 0")
             .Select(o => new ProblemDevice(o["Name"] as string ?? "Aparelho desconhecido", o["PNPClass"] as string ?? "",
-                Convert.ToInt32(o["ConfigManagerErrorCode"] ?? 0, CultureInfo.InvariantCulture), o["DeviceID"] as string ?? ""))
+                Convert.ToInt32(o["ConfigManagerErrorCode"] ?? 0, CultureInfo.InvariantCulture), o["DeviceID"] as string ?? "",
+                (o["HardwareID"] as string[])?.Where(h => !string.IsNullOrWhiteSpace(h)).ToList() ?? new List<string>()))
             .Where(p => p.Code is not (45 or 0))   // 45 = não conectado agora: não é problema
             .ToList();
+
+    /// <summary>Endereço da busca oficial do Catálogo do Windows Update por um ID de hardware (reserva, quando o Windows Update não traz o driver).</summary>
+    public static string CatalogUrl(string hardwareId) =>
+        "https://www.catalog.update.microsoft.com/Search.aspx?q=" + Uri.EscapeDataString(hardwareId);
 
     public static IReadOnlyList<InstalledDriver> All() =>
         Query("SELECT DeviceName, DeviceClass, Manufacturer, DriverVersion, DriverDate, IsSigned, InfName FROM Win32_PnPSignedDriver")

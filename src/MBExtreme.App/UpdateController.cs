@@ -11,7 +11,7 @@ using MBExtreme.Core.Update;
 namespace MBExtreme.UI;
 
 /// <summary>
-/// Atualização dentro do programa: pergunta ao servidor pela compilação mais nova (ao abrir e a cada 6 horas), mostra um aviso no alto,
+/// Atualização dentro do programa: pergunta ao servidor e ao GitHub pela compilação mais nova (ao abrir, a cada 15 minutos e sempre que você volta para a janela), mostra um aviso no alto,
 /// e, quando a versão instalada é mais antiga que a mínima aceita, cobre a tela e só deixa atualizar. Baixa, confere o SHA-256 e abre o instalador.
 /// </summary>
 internal sealed class UpdateController
@@ -29,9 +29,10 @@ internal sealed class UpdateController
     private readonly TextBlock _lockText = new() { TextWrapping = TextWrapping.Wrap, FontSize = 14, TextAlignment = TextAlignment.Center, MaxWidth = 460, Margin = new Thickness(0, 10, 0, 16) };
     private readonly ProgressBar _lockProgress = new() { Height = 6, Width = 320, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 12) };
     private readonly Button _lockButton = new() { Content = "Atualizar agora", Padding = new Thickness(26, 9, 26, 9) };
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromHours(6) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMinutes(15) };
     private UpdateManifest? _manifest;
     private bool _busy;
+    private DateTime _lastCheck = DateTime.MinValue;
 
     public UpdateController(Grid root, FrameworkElement content)
     {
@@ -41,6 +42,25 @@ internal sealed class UpdateController
         Build();
         _timer.Tick += async (_, _) => await CheckAsync();
         _timer.Start();
+        HookWindowActivation();
+    }
+
+    /// <summary>Checa também sempre que a pessoa volta para a janela do MB Extreme (no máximo uma vez a cada 5 minutos), para avisar quase na hora.</summary>
+    private void HookWindowActivation()
+    {
+        void Hook()
+        {
+            if (Window.GetWindow(_host) is { } window) window.Activated += async (_, _) => await OnActivatedAsync();
+        }
+        if (Window.GetWindow(_host) is not null) Hook();
+        else _host.Loaded += (_, _) => Hook();
+    }
+
+    private async Task OnActivatedAsync()
+    {
+        if (_busy || _ready is not null || _lock.Visibility == Visibility.Visible) return;
+        if (DateTime.Now - _lastCheck < TimeSpan.FromMinutes(5)) return;
+        await CheckAsync();
     }
 
     private static Brush Res(string key) => (Brush)Application.Current.FindResource(key);
@@ -103,10 +123,11 @@ internal sealed class UpdateController
         return best;
     }
 
-    /// <summary>Ao abrir e a cada 6 horas: atualização obrigatória cobre a tela; as outras são baixadas sozinhas (ou só avisadas).</summary>
+    /// <summary>Ao abrir, a cada 15 minutos e ao voltar para a janela: atualização obrigatória cobre a tela; as outras são baixadas sozinhas (ou só avisadas).</summary>
     public async Task CheckAsync()
     {
         if (_busy) return;
+        _lastCheck = DateTime.Now;
         var manifest = await FindAsync();
         if (manifest is null) return;
         _manifest = manifest;

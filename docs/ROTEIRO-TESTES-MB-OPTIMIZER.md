@@ -206,3 +206,10 @@ A tela Drivers já mostra os aparelhos sem driver ou com problema (Gerenciador d
 - Quando o Windows Update não tem o driver, a mensagem orienta a copiar o ID e procurar no Catálogo do Windows Update ou no site do fabricante (o botão Copiar ID e o Gerenciador de Dispositivos continuam ali).
 
 Testar num notebook com algum aparelho sem driver (ex.: logo após formatar): abrir Drivers, conferir a lista "Aparelhos sem driver ou com problema", clicar em Baixar os drivers que faltam e ver o progresso (Procurar → Ponto de restauração → Instalar). A busca do Windows Update pode levar alguns minutos.
+
+## Atualização quase em tempo real + aviso de versão beta
+
+- **Checagem de atualização:** além de ao abrir, agora o programa checa a cada 15 minutos e sempre que você volta para a janela do MB Extreme (no máximo uma vez a cada 5 minutos). Assim, logo depois de sair uma versão nova no GitHub, o balão "Nova versão disponível" aparece sozinho, sem clicar em Verificar atualização. O GitHub não empurra o aviso; o programa é que pergunta com frequência.
+- **Aviso de versão beta (Painel):** um cartão amarelo logo abaixo da análise avisa que é uma avaliação gratuita e que os recursos Pro vão exigir assinatura, com "Ver planos" (abre Licença e conta) e "✕" para esconder. Some quando a pessoa assina o Pro e volta a aparecer quando sai uma versão nova.
+
+Testar: deixar o programa aberto, alternar para outra janela e voltar — ele checa atualização. No Painel, conferir o aviso de beta, clicar em Ver planos e no ✕ (some e não volta até a próxima versão).

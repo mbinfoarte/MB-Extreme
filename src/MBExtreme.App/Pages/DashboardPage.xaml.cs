@@ -45,6 +45,53 @@ public partial class DashboardPage : UserControl
     private bool _busy;
     private double? _lastPing;
 
+    /// <summary>Aviso de versão beta de avaliação (some quando a pessoa assina o Pro; pode fechar, e volta a aparecer quando sai uma versão nova).</summary>
+    private void ShowBetaNotice()
+    {
+        var license = AppServices.License;
+        bool isPro = MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status);
+        if (isPro || AppServices.Settings.BetaNoticeHiddenBuild == MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString())
+        {
+            BetaHost.Content = null;
+            return;
+        }
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var star = new TextBlock { Text = "★", FontSize = 22, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) };
+        grid.Children.Add(star);
+
+        var text = new StackPanel { Margin = new Thickness(14, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = "VERSÃO BETA DE AVALIAÇÃO", FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) });
+        text.Children.Add(new TextBlock { Text = "Você está testando o MB Extreme de graça. Em breve os recursos Pro vão precisar de assinatura — aproveite enquanto está tudo liberado e conheça os planos.", FontSize = 13, TextWrapping = TextWrapping.Wrap });
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var plans = new Button { Content = "Ver planos", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(16, 6, 16, 6), FontSize = 13 };
+        plans.Click += (_, _) => MainWindow.Current?.Go("license");
+        var close = new Button { Content = "✕", Style = (Style)FindResource("SideFooterButton"), Margin = new Thickness(8, 0, 0, 0), ToolTip = "Esconder até a próxima versão" };
+        close.Click += (_, _) =>
+        {
+            AppServices.Settings.BetaNoticeHiddenBuild = MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString();
+            AppServices.Settings.Save();
+            BetaHost.Content = null;
+        };
+        buttons.Children.Add(plans);
+        buttons.Children.Add(close);
+        Grid.SetColumn(buttons, 2);
+        grid.Children.Add(buttons);
+
+        BetaHost.Content = new Border
+        {
+            Background = (Brush)FindResource("Surface2Brush"), BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Child = grid,
+        };
+    }
+
     public DashboardPage()
     {
         InitializeComponent();
@@ -57,6 +104,7 @@ public partial class DashboardPage : UserControl
         foreach (var (key, title, description, icon) in Tools)
             ToolsGrid.Children.Add(ToolCard.Build(title, description, icon, () => MainWindow.Current?.Go(key)));
         _ = LoadPcSummaryAsync();
+        ShowBetaNotice();
         ShowVideo(AppServices.Videos.Latest);
         AppServices.Videos.Found += v => Dispatcher.BeginInvoke(new Action(() => ShowVideo(v)));
         // entrada: ferramentas em cascata na primeira vez que o Painel aparece

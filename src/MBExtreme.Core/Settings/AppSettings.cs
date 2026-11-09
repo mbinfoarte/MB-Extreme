@@ -136,6 +136,9 @@ public sealed class AppSettings
     /// <summary>Compilação em que o "O que há de novo" já foi mostrado.</summary>
     public string LastWhatsNewBuild { get; set; } = "";
 
+    /// <summary>Compilação em que a pessoa fechou o aviso de versão beta (volta a aparecer quando sai uma versão nova).</summary>
+    public string BetaNoticeHiddenBuild { get; set; } = "";
+
     /// <summary>Animações da interface (desligar deixa tudo instantâneo, para PCs fracos ou quem prefere).</summary>
     public bool Animations { get; set; } = true;
 

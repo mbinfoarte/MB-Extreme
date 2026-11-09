@@ -153,13 +153,19 @@ public abstract class ToolPageBase : UserControl
         Foreground = Brush("MutedBrush"),
     };
 
-    protected Border CardOf(UIElement child) => new()
+    protected Border CardOf(UIElement child)
     {
-        Style = (Style)FindResource("Card"),
-        Margin = new Thickness(0, 0, 0, 8),
-        Padding = new Thickness(16, 12, 16, 12),
-        Child = child,
-    };
+        // Telas que se remontam reaproveitam painéis guardados: solta o filho do pai antigo
+        // para não dar "O elemento especificado já é o filho lógico de outro elemento".
+        if (child is FrameworkElement fe) UiTree.Free(fe);
+        return new()
+        {
+            Style = (Style)FindResource("Card"),
+            Margin = new Thickness(0, 0, 0, 8),
+            Padding = new Thickness(16, 12, 16, 12),
+            Child = child,
+        };
+    }
 
     /// <summary>Linha "título + detalhe" com um controle à direita (botão ou interruptor).</summary>
     protected Border Row(string title, string detail, UIElement? right = null, string detailBrush = "MutedBrush")

@@ -297,7 +297,7 @@ public sealed class PadCalibrationPage : ToolPageBase
 
     private void AddColumn(StackPanel panel, int column)
     {
-        var card = CardOf(panel);
+        var card = CardOf(UiTree.Free(panel));
         card.Margin = new Thickness(column == 0 ? 0 : 5, 0, column == 2 ? 0 : 5, 8);
         card.MinHeight = 480;
         Grid.SetColumn(card, column);

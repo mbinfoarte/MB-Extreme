@@ -1,0 +1,63 @@
+name: Site (GitHub Pages)
+
+# Publica a versão estática do site (início, planos, download, afiliados, termos e privacidade).
+# Para funcionar: Settings > Pages > Source: GitHub Actions (com o repositório público ou num plano que permita Pages privado).
+on:
+  push:
+    branches: [main, claude/elegant-bohr-w9chcw]
+    paths:
+      - "src/MBExtreme.LicenseServer/**"
+      - "docs/TERMOS-DE-USO.md"
+      - "docs/POLITICA-PRIVACIDADE.md"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Gerar o site estático
+        env:
+          # o botão de download sempre aponta para a versão mais nova publicada
+          Download__SetupUrl: https://github.com/${{ github.repository }}/releases/latest/download/MBExtreme-Beta-Setup.exe
+          Download__PortableUrl: https://github.com/${{ github.repository }}/releases/latest/download/MBExtreme-Beta-portatil-win-x64.zip
+        run: dotnet run --project src/MBExtreme.LicenseServer/MBExtreme.LicenseServer.csproj -c Release -- --export-site "${{ github.workspace }}/_site" "${{ vars.MBX_SITE_DOMAIN != '' && '/' || steps.pages.outputs.base_path || format('/{0}', github.event.repository.name) }}"
+
+      - name: Domínio próprio (opcional)
+        if: vars.MBX_SITE_DOMAIN != ''
+        run: echo "${{ vars.MBX_SITE_DOMAIN }}" > _site/CNAME
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # enquanto o Pages não estiver ligado nas configurações, a publicação falha sem marcar a compilação como quebrada
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

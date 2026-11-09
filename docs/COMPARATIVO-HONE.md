@@ -78,7 +78,7 @@ Hoje o instalador tem ~200 MB porque leva o programa inteiro (com FFmpeg). Propo
 - **Depende de:** o repositório ficar público (ou o servidor estar no ar), porque o download não pode pedir login.
 - **Mexe no CI:** compilar e assinar o instalador pequeno e publicá-lo junto na Release. Precisa da sua autorização.
 
-**Situação:** o projeto `src/MBExtreme.Bootstrap` está pronto. Gera o `MBExtreme-Instalar.exe` com ~175 KB, em .NET Framework 4.8 e com o tema MB. Ele procura a Release mais nova, baixa com progresso, confere o SHA-256 e abre o instalador completo, que pede administrador. Falta incluí-lo no CI (com autorização). Seriam três passos depois do instalador completo:
+**Situação:** o projeto `src/MBExtreme.Bootstrap` está pronto. Gera o `MBExtreme-Instalar.exe` com ~175 KB, em .NET Framework 4.8 e com o tema MB. Ele procura a Release mais nova, baixa com progresso, confere o SHA-256 e abre o instalador completo, que pede administrador. Ele já foi incluído no CI: é assinado junto com o instalador completo e publicado em cada Release. Os passos são estes:
 
 ```yaml
       - name: Instalador pequeno

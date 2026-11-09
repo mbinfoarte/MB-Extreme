@@ -49,6 +49,14 @@ var site = new SiteOptions(
     config["Download:SetupUrl"] ?? "", config["Download:PortableUrl"] ?? "", config["Download:Version"] ?? "Beta 01",
     config["Google:ClientId"] ?? "", trialDays, fixedPrices, monthlyCents, affiliateProgram);
 Pages.Options = site;
+
+// versão estática do site para o GitHub Pages: gera os arquivos e sai, sem abrir o servidor
+if (args.Length >= 2 && args[0] == "--export-site")
+{
+    var files = StaticSite.Export(site, args[1], args.Length >= 3 ? args[2] : "/", Path.Combine(AppContext.BaseDirectory, "legal"), builder.Environment.WebRootPath);
+    Console.WriteLine($"Site estático: {files.Count} páginas em {Path.GetFullPath(args[1])}");
+    return;
+}
 builder.Services.AddSingleton(sp => new GoogleAuth(site.GoogleClientId));
 var adminEmails = new HashSet<string>((config["Admin:Emails"] ?? "").Split(new[] { ',', ';' }).Select(e => e.Trim().ToLowerInvariant()).Where(e => e.Length > 0));
 string stripeWebhookSecret = config["Stripe:WebhookSecret"] ?? "";

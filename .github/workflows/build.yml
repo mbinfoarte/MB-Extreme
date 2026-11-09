@@ -72,6 +72,9 @@ jobs:
       - name: Gerar o instalador (.exe)
         run: dotnet publish src/MBExtreme.Installer/MBExtreme.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:Version=0.9.${{ github.run_number }}" "-p:PayloadZip=${{ github.workspace }}\payload.zip" -o setup
 
+      - name: Gerar o instalador pequeno (online)
+        run: dotnet build src/MBExtreme.Bootstrap/MBExtreme.Bootstrap.csproj -c Release "-p:Version=1.0.${{ github.run_number }}" -o bootstrap
+
       - name: Assinar o instalador
         if: env.HAS_CERT == 'true'
         shell: pwsh
@@ -79,7 +82,7 @@ jobs:
           PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
         run: |
           $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
-          & $signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 setup\MBExtreme-Beta-Setup.exe
+          & $signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 setup\MBExtreme-Beta-Setup.exe bootstrap\MBExtreme-Instalar.exe
           if ($LASTEXITCODE -ne 0) { throw "Falha ao assinar o instalador" }
 
       # cópia extra do instalador nas Actions: o lançamento (abaixo) já publica os arquivos,
@@ -101,10 +104,10 @@ jobs:
           "$sha  MBExtreme-Beta-Setup.exe" | Out-File -Encoding ascii setup\MBExtreme-Beta-Setup.exe.sha256
           # texto da Release = descrição do commit (vira o "O que há de novo" dentro do programa)
           $lines = (git log -1 --pretty=%B) | Where-Object { $_ -notmatch '^(Co-Authored-By|Claude-Session):' }
-          $notes = @("## Novidades", "") + $lines + @("", "---", "Compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador). MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes.")
+          $notes = @("## Novidades", "") + $lines + @("", "---", "Compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador) ou o MBExtreme-Instalar.exe, que é pequeno e baixa a versão mais nova. MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes.")
           Set-Content -Path notes.md -Value $notes -Encoding utf8
-          gh release create "beta-${{ github.run_number }}" setup/MBExtreme-Beta-Setup.exe setup/MBExtreme-Beta-Setup.exe.sha256 MBExtreme-Beta-portatil-win-x64.zip `
-            --prerelease `
+          gh release create "beta-${{ github.run_number }}" setup/MBExtreme-Beta-Setup.exe setup/MBExtreme-Beta-Setup.exe.sha256 MBExtreme-Beta-portatil-win-x64.zip bootstrap/MBExtreme-Instalar.exe `
+            --latest `
             --target "${{ github.sha }}" `
             --title "MB Extreme (Beta 01) - compilação ${{ github.run_number }}" `
             --notes-file notes.md

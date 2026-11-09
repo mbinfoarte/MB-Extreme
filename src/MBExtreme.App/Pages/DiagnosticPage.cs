@@ -236,7 +236,7 @@ public sealed class DiagnosticPage : ToolPageBase
                 if (!ok) _progress.Text = "Ponto de restauração não criado (" + error + "). As correções seguem; os ajustes têm volta pela Central Desfazer.";
             }
             SetStatus("Corrigindo, um item de cada vez...");
-            results = await Task.Run(() => OperationQueue.Shared.Run(operations, new Progress<string>(t => _progress.Text = t), token));
+            results = await Task.Run(() => OperationQueue.Shared.Run(operations, UiProgress.Text(t => _progress.Text = t), token));
         }
         catch (InvalidOperationException ex)
         {

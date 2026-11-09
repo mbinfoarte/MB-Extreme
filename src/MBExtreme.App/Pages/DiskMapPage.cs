@@ -137,7 +137,7 @@ public sealed class DiskMapPage : UserControl
         _status.Text = "Lendo " + root + "...";
         try
         {
-            var node = await Task.Run(() => DiskMap.Scan(root, new Progress<string>(p => _status.Text = "Lendo " + p), token));
+            var node = await Task.Run(() => DiskMap.Scan(root, UiProgress.Text(p => _status.Text = "Lendo " + p), token));
             Show(node);
             _status.Text = $"{node.Files:N0} arquivos · {Size(node.Size)} · lido em {clock.Elapsed.TotalSeconds:0} s" + (node.Denied ? " · algumas pastas do sistema não deixam ler (normal)" : "");
         }

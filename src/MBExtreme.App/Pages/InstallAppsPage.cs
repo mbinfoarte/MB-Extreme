@@ -242,7 +242,7 @@ public sealed class InstallAppsPage : UserControl
         try
         {
             _status.Text = $"Instalando {chosen.Count} programa(s), um de cada vez...";
-            var results = await Task.Run(() => OperationQueue.Shared.Run(operations, new Progress<string>(t => _status.Text = t), CancellationToken.None));
+            var results = await Task.Run(() => OperationQueue.Shared.Run(operations, UiProgress.Text(t => _status.Text = t), CancellationToken.None));
             int ok = results.Count(r => r.State is OperationState.Succeeded or OperationState.RebootRequired);
             _status.Text = $"{ok} instalado(s), {results.Count - ok} com erro." + (results.Any(r => r.State == OperationState.RebootRequired) ? " Reinicie para terminar." : "");
         }

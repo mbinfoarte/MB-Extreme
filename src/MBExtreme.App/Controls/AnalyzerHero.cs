@@ -378,7 +378,7 @@ internal sealed class AnalyzerHero : UserControl
         {
             if (chosen.Any(f => f.Fix!.ChangesSystem))
                 await Task.Run(() => RestorePointService.TryCreate("MB Extreme - antes das correções do Painel"));
-            var results = await Task.Run(() => OperationQueue.Shared.Run(operations, new Progress<string>(t => _subtitle.Text = t), CancellationToken.None));
+            var results = await Task.Run(() => OperationQueue.Shared.Run(operations, UiProgress.Text(t => _subtitle.Text = t), CancellationToken.None));
             bool reboot = results.Any(r => r.State == OperationState.RebootRequired);
             if (reboot) MessageBox.Show("Pronto. Reinicie o computador para terminar algumas correções.", "Corrigir", MessageBoxButton.OK, MessageBoxImage.Information);
         }

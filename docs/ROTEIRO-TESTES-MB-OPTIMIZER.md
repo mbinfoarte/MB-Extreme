@@ -190,3 +190,9 @@ Marque cada item e anote o que der diferente.
    - Usar troca o DNS na hora (a faixa "DNS em uso" muda); Voltar ao automático restaura o DNS do provedor.
 6. **Roteador e rota:** dados da conexão, Medir o roteador, Traçar rota até o servidor escolhido (10 s, com média, perda e pior tempo por salto).
 7. **Histórico:** os últimos 15 testes com a barra do download e a comparação com os anteriores.
+
+## Correção: erro de thread ao instalar programas (e telas parecidas)
+
+O `Progress<string>` criado dentro de um `Task.Run` guardava a thread de fundo e, ao mexer na tela, estourava "O thread de chamada não pode acessar este objeto porque ele pertence a um thread diferente". Criado o ajudante `UiProgress` (entrega sempre no Dispatcher da interface) e aplicado em Programas, Painel (AnalyzerHero e Diagnóstico), Mapa do disco e Backup para formatar.
+
+Testar: marcar programas em **Programas > Instalar programas** e clicar em Instalar (não pode fechar com erro; o status muda para "Instalando..."). Repetir em: Painel > Analisar e Corrigir, Mapa do disco (ler uma unidade) e Backup para formatar (criar e restaurar).

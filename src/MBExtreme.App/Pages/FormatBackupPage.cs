@@ -73,7 +73,7 @@ public sealed class FormatBackupPage : ToolPageBase
         try
         {
             var (info, _) = await Task.Run(() => FormatBackup.Create(_destination, _drivers.IsChecked == true, _wifi.IsChecked == true,
-                new Progress<string>(t => SetStatus(t)), CancellationToken.None));
+                UiProgress.Text(t => SetStatus(t)), CancellationToken.None));
             SetStatus($"Backup feito em {info.Folder}: {info.Drivers} driver(s) e {info.WifiNetworks} rede(s) Wi-Fi.", "OkBrush");
             FindBackups();
         }
@@ -116,7 +116,7 @@ public sealed class FormatBackupPage : ToolPageBase
         _busy = true;
         try
         {
-            await Task.Run(() => FormatBackup.Restore(backup, new Progress<string>(t => SetStatus(t)), CancellationToken.None));
+            await Task.Run(() => FormatBackup.Restore(backup, UiProgress.Text(t => SetStatus(t)), CancellationToken.None));
             SetStatus("Pronto: drivers e redes Wi-Fi devolvidos. Se algum aparelho ainda estiver sem driver, reinicie o PC.", "OkBrush");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)

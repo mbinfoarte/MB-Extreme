@@ -8,7 +8,8 @@ namespace MBExtreme.Core.Network;
 public sealed record GeoPoint(string Name, double Lat, double Lon);
 
 /// <summary>Um servidor para medir o ping (região de nuvem onde muitos jogos online ficam hospedados).</summary>
-public sealed record PingTarget(string Key, string Name, string Group, string Host, double Lat, double Lon, string Note = "");
+/// <summary>Servidor para medir o ping. <paramref name="Icmp"/> = ping comum (servidores sem HTTPS, como os da Valve); senão, conexão TCP na porta 443.</summary>
+public sealed record PingTarget(string Key, string Name, string Group, string Host, double Lat, double Lon, string Note = "", string Provider = "", bool Icmp = false);
 
 /// <summary>Onde a pessoa está, segundo o endereço de IP público (aproximado: cidade do provedor).</summary>
 public sealed record IpLocation(string Ip, string City, string Region, string Country, double Lat, double Lon, string Isp);
@@ -111,9 +112,20 @@ public static class NetMap
             minLon = Math.Min(minLon, lon - 8); maxLon = Math.Max(maxLon, lon + 8);
             minLat = Math.Min(minLat, lat - 6); maxLat = Math.Max(maxLat, lat + 6);
         }
+        return FitArea(minLon, maxLon, minLat, maxLat, aspect);
+    }
+
+    /// <summary>Brasil inteiro, com uma folga para os nomes.</summary>
+    public static MapBounds BrazilArea(double aspect) => FitArea(-76, -32, -35, 7, aspect);
+
+    /// <summary>O mundo, sem a Antártida.</summary>
+    public static MapBounds WorldArea(double aspect) => FitArea(-170, 180, -56, 76, aspect);
+
+    /// <summary>Acerta a área à proporção da janela (largura/altura), crescendo o lado que falta.</summary>
+    public static MapBounds FitArea(double minLon, double maxLon, double minLat, double maxLat, double aspect)
+    {
         minLon = Math.Max(-180, minLon); maxLon = Math.Min(180, maxLon);
         minLat = Math.Max(-60, minLat); maxLat = Math.Min(80, maxLat);
-        // acerta a proporção da janela (largura/altura), crescendo o lado que falta
         double midLat = (minLat + maxLat) / 2;
         double kx = Math.Cos(midLat * Math.PI / 180);
         double w = (maxLon - minLon) * kx, h = maxLat - minLat;
@@ -129,6 +141,10 @@ public static class NetMap
         }
         return new MapBounds(minLon, maxLon, minLat, maxLat);
     }
+
+    /// <summary>O ponto cabe na área (com folga em graus)?</summary>
+    public static bool Contains(MapBounds b, double lat, double lon, double margin = 0) =>
+        lon >= b.MinLon - margin && lon <= b.MaxLon + margin && lat >= b.MinLat - margin && lat <= b.MaxLat + margin;
 
     /// <summary>Longitude/latitude para a posição na tela (projeção simples, norte para cima).</summary>
     public static (double X, double Y) Project(double lat, double lon, MapBounds b, double width, double height) =>
@@ -172,12 +188,12 @@ public static class NetMap
         for (int i = 0; i < tries; i++)
         {
             ct.ThrowIfCancellationRequested();
-            var ms = await NetAnalyzer.TcpPingAsync(target.Host, 443, 2000, ct);
+            var ms = target.Icmp ? await NetAnalyzer.PingAsync(target.Host, 2000) : await NetAnalyzer.TcpPingAsync(target.Host, 443, 2000, ct);
             if (ms is double v) times.Add(v); else lost++;
             await Task.Delay(150, ct);
         }
         if (times.Count == 0) return new PingResult(target, null, null, lost, tries);
-        var useful = times.Count > 2 ? times.Skip(1).ToList() : times;   // a primeira inclui o DNS
+        var useful = times.Count > 2 && !target.Icmp ? times.Skip(1).ToList() : times;   // a primeira conexão TCP inclui o DNS
         return new PingResult(target, SpeedMath.Median(useful), SpeedMath.Jitter(useful), lost, tries);
     }
 

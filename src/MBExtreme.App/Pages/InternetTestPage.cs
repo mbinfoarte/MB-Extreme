@@ -4,92 +4,293 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using MBExtreme.Core.Network;
+using MBExtreme.UI.Controls;
 
 namespace MBExtreme.UI.Pages;
 
 /// <summary>
-/// Teste de internet: latência e variação, download e upload com várias conexões e aquecimento, o servidor usado e a cidade,
-/// e o histórico para comparar. Usa o servidor público de velocidade da Cloudflare.
+/// Internet: topo com o provedor, o servidor do teste, as conexões e o botão de iniciar; faixa com os resultados sempre visível;
+/// abas Velocidade, Jogos e servidores (mapa do Brasil ou do mundo com setas até cada servidor), DNS (testar e trocar aqui mesmo),
+/// Roteador e rota, e Histórico.
 /// </summary>
-public sealed class InternetTestPage : ToolPageBase
+public sealed partial class InternetTestPage : ToolPageBase
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly SpeedHistory _history = new();
-    private readonly TextBlock _live = new() { FontSize = 30, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 0) };
-    private readonly TextBlock _stage = new() { FontSize = 13, TextWrapping = TextWrapping.Wrap };
-    private readonly Button _start;
+    private readonly TextBlock _stage = new() { FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly TextBlock _statusLine = new() { FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 8, 0, 0) };
+    private readonly TextBlock _connLine = new() { FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
     private CancellationTokenSource? _cts;
     private int _connections = 1;
-    private readonly TextBox _name = new() { Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 4, 0, 10) };
-    private readonly UniformGrid _steps = new() { Columns = 6, Margin = new Thickness(0, 6, 0, 6) };
-    private readonly Dictionary<string, TextBlock> _stepValues = new();
-
+    private readonly TextBox _name = new() { Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 4, 0, 0) };
     private static readonly int[] Connections = { 1, 4, 8 };
-    private readonly MBExtreme.UI.Controls.SpeedGauge _gauge = new() { Width = 340, Height = 340 };
-    private readonly Grid _gaugeHost = new() { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-    private readonly TextBlock _downBig = new() { Text = "—", FontSize = 34, FontWeight = FontWeights.Light, HorizontalAlignment = HorizontalAlignment.Center };
-    private readonly TextBlock _upBig = new() { Text = "—", FontSize = 34, FontWeight = FontWeights.Light, HorizontalAlignment = HorizontalAlignment.Center };
-    private Button? _go;
 
-    /// <summary>Topo do teste, como os testes de velocidade conhecidos: download e upload grandes, o velocímetro e o botão redondo de começar.</summary>
-    private UIElement GaugeCard()
+    private readonly SpeedGauge _gauge = new() { Width = 300, Height = 300 };
+    private readonly Grid _gaugeHost = new() { HorizontalAlignment = HorizontalAlignment.Center };
+    private Button? _go;
+    private Button _startButton = new();
+    private Button _stopButton = new();
+    private bool _running;
+
+    private readonly NetMapControl _speedMap = new() { Height = 300, MinWidth = 300 };
+    private MapLink? _mainLink;
+    private GeoPoint? _colo;
+    private string? _coloCode;
+    private string? _publicIp, _isp, _city;
+    private double _userLat = double.NaN, _userLon = double.NaN;
+    private ActiveAdapter? _adapter;
+    private SpeedResult? _lastResult;
+    private double? _routerMs;
+
+    private string _tab = "speed";
+    private readonly Dictionary<string, ToggleButton> _tabs = new();
+    private readonly ContentControl _tabHost = new();
+
+    public InternetTestPage() : base("Internet", "")
     {
-        var top = new UniformGrid { Columns = 2, Margin = new Thickness(0, 0, 0, 4), HorizontalAlignment = HorizontalAlignment.Center, Width = 420 };
-        foreach (var (title, value, color) in new[] { ("↓ DOWNLOAD Mbps", _downBig, "#FFC400"), ("↑ UPLOAD Mbps", _upBig, "#B57CFF") })
+        HideHeader();
+        _gaugeHost.Children.Add(_gauge);
+        _speedMap.Arrows = false;
+        _gameMap.Scope = MapScope.Brazil;
+        _gameMap.Arrows = true;
+        Loaded += async (_, _) =>
+        {
+            if (Body.Children.Count > 0) return;
+            BuildShell();
+            await LocateAsync();
+        };
+    }
+
+    // ================================================================ moldura: topo, resultados e abas
+
+    private void Say(string text, string brush = "MutedBrush")
+    {
+        _statusLine.Text = text;
+        _statusLine.Foreground = Brush(brush);
+    }
+
+    private void BuildShell()
+    {
+        Body.Margin = new Thickness(0);
+        Body.Children.Clear();
+
+        // topo: título e conexão à esquerda; servidor, conexões e iniciar à direita
+        var top = new Grid();
+        top.ColumnDefinitions.Add(new ColumnDefinition());
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = new StackPanel();
+        title.Children.Add(new TextBlock { Text = "Internet", FontSize = 26, FontWeight = FontWeights.SemiBold });
+        _connLine.Foreground = Brush("MutedBrush");
+        title.Children.Add(Free(_connLine));
+        top.Children.Add(title);
+
+        var controls = new WrapPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        controls.Children.Add(Label("Servidor"));
+        controls.Children.Add(Segmented(new[] { ServerLabel(), _libre is null ? "LibreSpeed ▾" : "LibreSpeed · " + Short(_libre.Name) }, _libre is null ? 0 : 1, async i =>
+        {
+            if (i == 0) { _libre = null; _libreList.Children.Clear(); Say("Teste pela Cloudflare (servidor mais perto de você).", "OkBrush"); BuildShell(); }
+            else { SelectTab("speed"); await FindLibreAsync(); }
+        }));
+        controls.Children.Add(Label("Conexões"));
+        controls.Children.Add(Segmented(Connections.Select(c => c == 1 ? "Auto" : c.ToString()).ToList(), Array.IndexOf(Connections, _connections), i => _connections = Connections[i],
+            "Conexões ao mesmo tempo. Auto usa 4; 8 mede melhor internet acima de 300 Mbps."));
+        _startButton = new Button { Content = "INICIAR TESTE", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(20, 8, 20, 8), FontSize = 13, Margin = new Thickness(12, 0, 0, 0), IsEnabled = !_running };
+        _startButton.Click += async (_, _) => await RunAsync();
+        controls.Children.Add(_startButton);
+        _stopButton = new Button { Content = "Parar", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(14, 7, 14, 7), FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0),
+            Visibility = _running ? Visibility.Visible : Visibility.Collapsed };
+        _stopButton.Click += (_, _) => _cts?.Cancel();
+        controls.Children.Add(_stopButton);
+        Grid.SetColumn(controls, 1);
+        top.Children.Add(controls);
+        Body.Children.Add(top);
+
+        Body.Children.Add(Tiles());
+        Body.Children.Add(Free(_statusLine));
+
+        // abas
+        var tabs = new WrapPanel { Margin = new Thickness(0, 12, 0, 12) };
+        _tabs.Clear();
+        foreach (var (key, text) in new[] { ("speed", "Velocidade"), ("games", "Jogos e servidores"), ("dns", "DNS"), ("route", "Roteador e rota"), ("history", "Histórico") })
+        {
+            var tab = new ToggleButton { Style = (Style)FindResource("ChipToggle"), Content = text, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(14, 6, 14, 6), IsChecked = key == _tab };
+            string k = key;
+            tab.Click += (_, _) => SelectTab(k);
+            _tabs[key] = tab;
+            tabs.Children.Add(tab);
+        }
+        Body.Children.Add(tabs);
+        Body.Children.Add(Free(_tabHost));
+        SelectTab(_tab);
+    }
+
+    private static string Short(string text) => text.Length > 22 ? text[..21] + "…" : text;
+
+    private string ServerLabel() => _coloCode is null ? "Cloudflare" : "Cloudflare · " + _coloCode;
+
+    private TextBlock Label(string text) => new() { Text = text, FontSize = 12.5, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 6, 0) };
+
+    /// <summary>Botões juntos numa pílula (o escolhido fica amarelo), pequenos.</summary>
+    private Border Segmented(IReadOnlyList<string> options, int selected, Action<int> onChange, string? tip = null)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var buttons = new List<ToggleButton>();
+        for (int i = 0; i < options.Count; i++)
+        {
+            int index = i;
+            var b = new ToggleButton { Style = (Style)FindResource("ChipToggle"), Content = options[i], IsChecked = i == selected, Margin = new Thickness(i == 0 ? 0 : 2, 0, 0, 0), Padding = new Thickness(10, 3, 10, 3) };
+            b.Click += (_, _) =>
+            {
+                for (int j = 0; j < buttons.Count; j++) buttons[j].IsChecked = j == index;
+                onChange(index);
+            };
+            buttons.Add(b);
+            row.Children.Add(b);
+        }
+        return new Border { Child = row, Background = Brush("SurfaceBrush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(2), BorderBrush = Brush("Surface2Brush"), BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center, ToolTip = tip };
+    }
+
+    private void SelectTab(string key)
+    {
+        _tab = key;
+        foreach (var (k, t) in _tabs) t.IsChecked = k == key;
+        _tabHost.Content = null;
+        UIElement content = key switch
+        {
+            "games" => GamesTab(),
+            "dns" => DnsTab(),
+            "route" => RouteTab(),
+            "history" => HistoryTab(),
+            _ => SpeedTab(),
+        };
+        _tabHost.Content = content;
+        if (content is FrameworkElement fe) Motion.Enter(fe);
+    }
+
+    // ---------------------------------------------------------------- faixa de resultados
+
+    private readonly Dictionary<string, TextBlock> _tileValues = new();
+    private readonly Dictionary<string, Border> _tileCards = new();
+    private readonly Dictionary<string, string> _tileText = new();
+
+    private UIElement Tiles()
+    {
+        var grid = new UniformGrid { Columns = 6, Margin = new Thickness(0, 14, 0, 0) };
+        _tileValues.Clear();
+        _tileCards.Clear();
+        foreach (var (key, label) in new[] { ("down", "Download"), ("up", "Upload"), ("ping", "Ping"), ("jitter", "Variação"), ("load", "Sob carga"), ("dns", "DNS em uso") })
         {
             var cell = new StackPanel();
-            cell.Children.Add(new TextBlock { Text = title, FontSize = 12, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)) });
-            if (value.Parent is Panel old) old.Children.Remove(value);
+            cell.Children.Add(new TextBlock { Text = label, FontSize = 11.5, Foreground = Brush("MutedBrush") });
+            var value = new TextBlock { Text = _tileText.GetValueOrDefault(key, "—"), FontSize = 19, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+            _tileValues[key] = value;
             cell.Children.Add(value);
-            top.Children.Add(cell);
+            var card = new Border { Child = cell, Background = Brush("SurfaceBrush"), CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 9, 14, 10), Margin = new Thickness(0, 0, 8, 0),
+                BorderThickness = new Thickness(1), BorderBrush = Brush("Surface2Brush") };
+            _tileCards[key] = card;
+            grid.Children.Add(card);
+            Paint(key);
         }
-        if (_gauge.Parent is Panel g) g.Children.Remove(_gauge);
-        _gaugeHost.Children.Clear();
-        _gaugeHost.Children.Add(_gauge);
-        _go = new Button { Width = 132, Height = 132, Cursor = System.Windows.Input.Cursors.Hand, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var t = new ControlTemplate(typeof(Button));
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(66));
-        border.SetValue(Border.BackgroundProperty, Application.Current.FindResource("ButtonBrush"));
-        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
-        presenter.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        presenter.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
-        border.AppendChild(presenter);
-        t.VisualTree = border;
-        _go.Template = t;
-        _go.Content = new TextBlock { Text = "INICIAR", FontSize = 20, FontWeight = FontWeights.Bold, Foreground = Brushes.Black };
-        System.Windows.Automation.AutomationProperties.SetName(_go, "Iniciar o teste de internet");
-        _go.Click += async (_, _) => await RunAsync();
-        _gaugeHost.Children.Add(_go);
-        _gauge.BeginAnimation(OpacityProperty, null);
-        _gauge.Opacity = 0.35;
-        Motion.Breathe(_go, 1.05, 1.5);
-        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
-        left.Children.Add(top);
-        // a tela é remontada a cada teste: o velocímetro sai do painel antigo antes de entrar no novo
-        left.Children.Add(Free(_gaugeHost));
-        var right = new StackPanel { Margin = new Thickness(16, 0, 0, 0) };
-        if (_map.Parent is Panel mp) mp.Children.Remove(_map);
-        right.Children.Add(_map);
-        if (_info.Parent is Panel ip) ip.Children.Remove(_info);
-        right.Children.Add(_info);
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.Children.Add(left);
-        Grid.SetColumn(right, 1);
-        grid.Children.Add(right);
-        if (!_mapLoaded) { _mapLoaded = true; _ = LoadMapAsync(); }
         return grid;
     }
 
-    private readonly MBExtreme.UI.Controls.NetMapControl _map = new() { Height = 300, MinWidth = 300 };
-    private readonly StackPanel _info = new() { Margin = new Thickness(0, 10, 0, 0) };
-    private MBExtreme.UI.Controls.MapLink? _mainLink;
-    private GeoPoint? _colo;
-    private bool _mapLoaded;
-    private string? _publicIp, _isp, _city;
+    /// <summary>Mostra o valor (com a cor do ping quando for tempo) e tira o destaque de "medindo".</summary>
+    private void Set(string key, string text)
+    {
+        _tileText[key] = text;
+        if (_tileValues.TryGetValue(key, out var t)) { t.Text = text; Motion.Flash(t); }
+        if (_tileCards.TryGetValue(key, out var card)) { Motion.Stop(card); card.BorderBrush = Brush("Surface2Brush"); }
+        Paint(key);
+    }
+
+    private void Paint(string key)
+    {
+        if (!_tileValues.TryGetValue(key, out var t)) return;
+        t.Foreground = key switch
+        {
+            "ping" or "jitter" when _lastPing(key) is double ms => LevelBrush(GameServers.Level(key == "jitter" ? ms * 4 : ms)),
+            "load" when _lastResult is { } r => Brush(SpeedMath.Bufferbloat(r.PingMs, r.LoadedPingMs).Grade is "A+" or "A" or "B" ? "OkBrush" : "WarnBrush"),
+            _ => Brush("TextBrush"),
+        };
+    }
+
+    private double? _lastPing(string key) => key == "ping" ? _lastResult?.PingMs ?? _livePing : _lastResult?.JitterMs ?? _liveJitter;
+    private double? _livePing, _liveJitter;
+
+    /// <summary>Etapa em andamento: borda amarela pulsando.</summary>
+    private void Working(string key)
+    {
+        if (!_tileCards.TryGetValue(key, out var card)) return;
+        card.BorderBrush = new SolidColorBrush(Color.FromArgb(0xB0, 0xFF, 0xC4, 0x00));
+        Motion.Breathe(card, 1.02, 0.8);
+    }
+
+    private static readonly Color[] LevelColors =
+    {
+        Color.FromRgb(0x3D, 0xDC, 0x97), Color.FromRgb(0xFF, 0xD2, 0x3F), Color.FromRgb(0xFF, 0xA9, 0x4D), Color.FromRgb(0xFF, 0x5A, 0x5F),
+    };
+
+    private static SolidColorBrush LevelBrush(int level) => new(LevelColors[Math.Clamp(level, 0, 3)]);
+
+    private static string Fmt(double? mbps) => mbps is double v ? $"{v:0.0} Mbps" : "—";
+
+    private static string Ms(double? ms) => ms is double v ? $"{v:0} ms" : "—";
+
+    // ================================================================ onde você está
+
+    /// <summary>Acha você (cidade pelo IP público), o servidor da Cloudflare e o DNS em uso; preenche o topo e os mapas.</summary>
+    private async Task LocateAsync()
+    {
+        _adapter = await Task.Run(NetworkStatus.Active);
+        if (!_tileText.ContainsKey("dns")) Set("dns", DnsName(CurrentDns()) ?? "—");
+        var test = new SpeedTest(Http);
+        try
+        {
+            var trace = await test.TraceAsync(CancellationToken.None);
+            _publicIp = trace.Ip;
+            _coloCode = trace.Code;
+            if (trace.Code is { } code && NetMap.Colos.TryGetValue(code, out var colo)) _colo = colo with { Name = $"{colo.Name} ({code})" };
+            var where = await NetMap.LocateAsync(Http, CancellationToken.None);
+            if (where is not null)
+            {
+                _isp = where.Isp;
+                _city = string.Join(", ", new[] { where.City, where.Region }.Where(x => x.Length > 0));
+                _publicIp ??= where.Ip;
+                _userLat = where.Lat;
+                _userLon = where.Lon;
+                var me = new GeoPoint(where.City.Length > 0 ? where.City : "sua cidade", where.Lat, where.Lon);
+                _speedMap.User = me;
+                _gameMap.User = me;
+            }
+            else if (_colo is not null)
+            {
+                _userLat = _colo.Lat;
+                _userLon = _colo.Lon;
+                _speedMap.User = _colo with { Name = "perto de " + _colo.Name };
+                _gameMap.User = _speedMap.User;
+            }
+            _speedMap.UserDetail = _gameMap.UserDetail = _isp is { Length: > 0 } isp ? "Provedor: " + isp : null;
+            if (_colo is not null) _mainLink = _speedMap.SetLink(_colo, LinkMode.Idle, NetMapControl.Download, "Servidor de teste · " + _colo.Name);
+        }
+        catch (HttpRequestException) { }
+        catch (TaskCanceledException) { }
+        UpdateConnLine();
+        PickNearestIfEmpty();
+        if (_tab == "games") RefreshGames();
+        BuildShell();   // o nome do servidor da Cloudflare entra no topo
+    }
+
+    private void UpdateConnLine()
+    {
+        var parts = new List<string>();
+        if (_isp is { Length: > 0 }) parts.Add(_isp);
+        if (_city is { Length: > 0 }) parts.Add(_city);
+        if (_publicIp is { Length: > 0 }) parts.Add("IP " + _publicIp);
+        if (_adapter is not null)
+            parts.Add(_adapter.Name + (_adapter.LinkSpeedBitsPerSecond > 0 ? $" ({_adapter.LinkSpeedBitsPerSecond / 1_000_000} Mbps)" : ""));
+        _connLine.Text = parts.Count > 0 ? string.Join(" · ", parts) : "Localizando a sua conexão...";
+    }
 
     /// <summary>Endereço IPv4 deste PC na rede de casa (o do adaptador que tem roteador).</summary>
     private static string? LocalIp()
@@ -109,98 +310,91 @@ public sealed class InternetTestPage : ToolPageBase
         return null;
     }
 
-    /// <summary>Acha você (cidade pelo IP público), o servidor da Cloudflare e liga os dois no mapa; preenche os dados da conexão.</summary>
-    private async Task LoadMapAsync()
+    // ================================================================ aba Velocidade
+
+    private UIElement SpeedTab()
     {
-        var test = new SpeedTest(Http);
-        try
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+
+        var left = new StackPanel();
+        if (!_running && _go is null) AddGoButton();
+        left.Children.Add(Free(_gaugeHost));
+        left.Children.Add(Free(_stage));
+        grid.Children.Add(CardOf(left));
+
+        var right = new StackPanel();
+        right.Children.Add(Title("Servidor do teste", _libre is not null ? "LibreSpeed · " + _libre.Name : _colo is null ? "Cloudflare, o servidor mais perto de você." : "Cloudflare · " + _colo.Name));
+        right.Children.Add(Free(_speedMap));
+        right.Children.Add(Free(_libreList));
+        right.Children.Add(Muted("Nome do teste (opcional, para comparar depois. Ex.: antes de trocar o roteador):", 11.5));
+        System.Windows.Automation.AutomationProperties.SetName(_name, "Nome do teste");
+        right.Children.Add(Free(_name));
+        if (_lastResult is { } r)
         {
-            var trace = await test.TraceAsync(CancellationToken.None);
-            _publicIp = trace.Ip;
-            if (trace.Code is { } code && NetMap.Colos.TryGetValue(code, out var colo)) _colo = colo with { Name = $"{colo.Name} ({code})" };
-            var where = await NetMap.LocateAsync(Http, CancellationToken.None);
-            if (where is not null)
-            {
-                _isp = where.Isp;
-                _city = string.Join(", ", new[] { where.City, where.Region }.Where(x => x.Length > 0));
-                _publicIp ??= where.Ip;
-                _map.User = new GeoPoint(where.City.Length > 0 ? where.City : "sua cidade", where.Lat, where.Lon);
-            }
-            else if (_colo is not null)
-                _map.User = _colo with { Name = "perto de " + _colo.Name };   // sem localização: aproxima pelo servidor
-            if (_colo is not null) _mainLink = _map.SetLink(_colo, MBExtreme.UI.Controls.LinkMode.Idle, MBExtreme.UI.Controls.NetMapControl.Download, "Servidor de teste · " + _colo.Name);
+            var (grade, text) = SpeedMath.Bufferbloat(r.PingMs, r.LoadedPingMs);
+            right.Children.Add(Row($"Ping sob carga: nota {grade}", text, null, grade is "A+" or "A" or "B" ? "OkBrush" : grade == "?" ? "MutedBrush" : "WarnBrush"));
+            right.Children.Add(Muted($"Servidor {r.ServerCode ?? "?"}{(r.City is null ? "" : " (" + r.City + ")")} · {r.Connections} conexões · roteador {Ms(r.RouterMs)} · DNS {Ms(r.DnsMs)}", 11.5));
         }
-        catch (HttpRequestException) { }
-        FillInfo(null);
+        var rightCard = CardOf(right);
+        rightCard.Margin = new Thickness(14, 0, 0, 0);
+        Grid.SetColumn(rightCard, 1);
+        grid.Children.Add(rightCard);
+        return grid;
     }
 
-    private void FillInfo(double? ping)
+    private StackPanel Title(string title, string subtitle)
     {
-        _info.Children.Clear();
-        void Line(string label, string? value)
-        {
-            var g = new Grid { Margin = new Thickness(0, 1, 0, 1) };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
-            g.ColumnDefinitions.Add(new ColumnDefinition());
-            g.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = Brush("MutedBrush") });
-            var v = new TextBlock { Text = string.IsNullOrWhiteSpace(value) ? "—" : value, FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(v, 1);
-            g.Children.Add(v);
-            _info.Children.Add(g);
-        }
-        Line("Você", _city);
-        Line("Provedor", _isp);
-        Line("IP local (na sua rede)", LocalIp());
-        Line("IP real (na internet)", _publicIp);
-        Line("Servidor de teste", _libre is not null ? "LibreSpeed · " + _libre.Name : _colo is null ? null : "Cloudflare " + _colo.Name);
-        if (ping is double p) Line("Ping até o servidor", $"{p:0} ms");
-        _info.Children.Add(Muted("A cidade vem do seu IP público (é a do provedor, aproximada) e não é guardada. No mapa, os saltos aparecem ao longo da linha pelo tempo de resposta de cada roteador, não pela posição real dele.", 10.5));
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        panel.Children.Add(new TextBlock { Text = title, FontSize = 14.5, FontWeight = FontWeights.SemiBold });
+        if (subtitle.Length > 0) panel.Children.Add(Muted(subtitle, 11.5));
+        return panel;
     }
 
-    /// <summary>Saltos até o servidor (uma rodada do traceroute) desenhados na linha do mapa.</summary>
-    private async Task TraceToMapAsync(MBExtreme.UI.Controls.MapLink link, string host, CancellationToken ct)
+    /// <summary>Botão redondo de começar no meio do velocímetro.</summary>
+    private void AddGoButton()
     {
-        using var round = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        IReadOnlyList<HopStats>? hops = null;
-        try { await NetAnalyzer.TraceAsync(host, 20, h => { hops = h; round.Cancel(); }, round.Token); }
-        catch (OperationCanceledException) { }
-        catch (System.Net.NetworkInformation.PingException) { }
-        if (hops is null || hops.Count == 0) return;
-        var ms = hops.Select(h => h.Received > 0 ? (double?)h.Average : null).ToList();
-        var pos = NetMap.HopPositions(ms);
-        link.Hops.Clear();
-        for (int i = 0; i < hops.Count; i++)
-            link.Hops.Add((pos[i], $"{hops[i].Hop} · " + (ms[i] is double v ? $"{v:0} ms" : "*")));
-        _map.InvalidateVisual();
+        _go = new Button { Width = 118, Height = 118, Cursor = System.Windows.Input.Cursors.Hand, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var t = new ControlTemplate(typeof(Button));
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(59));
+        border.SetValue(Border.BackgroundProperty, Application.Current.FindResource("ButtonBrush"));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(presenter);
+        t.VisualTree = border;
+        _go.Template = t;
+        _go.Content = new TextBlock { Text = "INICIAR", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.Black };
+        System.Windows.Automation.AutomationProperties.SetName(_go, "Iniciar o teste de internet");
+        _go.Click += async (_, _) => await RunAsync();
+        _gaugeHost.Children.Add(_go);
+        _gauge.BeginAnimation(OpacityProperty, null);
+        _gauge.Opacity = 0.35;
+        Motion.Breathe(_go, 1.05, 1.5);
     }
 
-    // ---------------------------------------------------------------- servidor do teste (Cloudflare ou LibreSpeed)
+    /// <summary>Some com o botão e acende o velocímetro (o teste começou).</summary>
+    private void GaugeRunning()
+    {
+        if (_go is not null) { Motion.Stop(_go); _gaugeHost.Children.Remove(_go); _go = null; }
+        _gauge.Reset();
+        Motion.To(_gauge, OpacityProperty, 1, Motion.Normal);
+    }
+
+    // ---------------------------------------------------------------- servidor LibreSpeed
 
     private LibreServer? _libre;
-    private readonly StackPanel _libreList = new();
-
-    private UIElement ServerCard()
-    {
-        var card = new StackPanel();
-        card.Children.Add(new TextBlock { Text = "Servidor do teste de velocidade", FontSize = 15, FontWeight = FontWeights.SemiBold });
-        card.Children.Add(Muted("Cloudflare escolhe sozinho o servidor mais perto de você. LibreSpeed (código aberto) tem uma lista pública de servidores mantidos por voluntários e provedores: o programa mede o ping de cada um e mostra os mais rápidos.", 11.5));
-        card.Children.Add(Choice(new[] { "Cloudflare (automático)", "LibreSpeed (escolher servidor)" }, _libre is null ? 0 : 1, async i =>
-        {
-            if (i == 0) { _libre = null; _libreList.Children.Clear(); SetStatus("Usando a Cloudflare.", "OkBrush"); }
-            else await FindLibreAsync();
-        }));
-        if (_libreList.Parent is Panel lp) lp.Children.Remove(_libreList);
-        card.Children.Add(_libreList);
-        return CardOf(card);
-    }
+    private readonly StackPanel _libreList = new() { Margin = new Thickness(0, 8, 0, 4) };
 
     private async Task FindLibreAsync()
     {
         _libreList.Children.Clear();
-        _libreList.Children.Add(Muted("Buscando a lista e medindo o ping dos servidores (pode levar uns segundos)...", 12));
+        _libreList.Children.Add(Muted("Buscando a lista do LibreSpeed e medindo o ping dos servidores (uns segundos)...", 12));
         var all = await LibreSpeed.ListAsync(Http, CancellationToken.None);
         if (all.Count == 0) { _libreList.Children.Clear(); _libreList.Children.Add(Muted("Não foi possível buscar a lista do LibreSpeed agora. Continua a Cloudflare.", 12)); return; }
-        // mede primeiro os da região (Brasil, América do Sul e EUA) e alguns outros
+        _libreAll = all;
         var candidates = all.OrderBy(LibreSpeed.RegionRank).Take(24).ToList();
         var ranked = await LibreSpeed.RankAsync(Http, candidates, CancellationToken.None);
         _libreList.Children.Clear();
@@ -215,337 +409,114 @@ public sealed class InternetTestPage : ToolPageBase
                 GroupName = "libre", Content = $"{s.Name}  ·  {ping:0} ms" + (s.Sponsor.Length > 0 ? $"  ·  {s.Sponsor}" : ""), Foreground = Brush("TextBrush"), Margin = new Thickness(0, 3, 0, 3),
                 IsChecked = _libre?.Id == s.Id,
             };
-            radio.Checked += (_, _) => { _libre = s; SetStatus($"Servidor escolhido: {s.Name}. Clique em INICIAR.", "OkBrush"); };
+            radio.Checked += (_, _) => { _libre = s; Say($"Servidor escolhido: {s.Name}. Clique em INICIAR TESTE.", "OkBrush"); };
             _libreList.Children.Add(radio);
         }
         if (_libre is null && _libreList.Children.OfType<RadioButton>().FirstOrDefault() is { } first) first.IsChecked = true;
         Motion.Cascade(_libreList, 30);
     }
 
-    // ---------------------------------------------------------------- servidores de jogos
+    private IReadOnlyList<LibreServer>? _libreAll;
 
-    private string _group = "Brasil";
-    private readonly HashSet<string> _picked = new() { "aws-sa-east-1" };
-    private readonly StackPanel _gameList = new();
-    private readonly StackPanel _gameResults = new();
-    private static readonly Color[] PingColors = { Color.FromRgb(0xE8, 0xE8, 0xEC), Color.FromRgb(0x3F, 0xD0, 0xE0) };
+    // ================================================================ o teste de velocidade
 
-    private UIElement GameCard()
+    private void SetRunning(bool running)
     {
-        var card = new StackPanel();
-        card.Children.Add(new TextBlock { Text = "Ping para servidores de jogos", FontSize = 15, FontWeight = FontWeights.SemiBold });
-        card.Children.Add(Muted("Escolha a região e marque até 2 servidores para testar ao mesmo tempo. São as regiões de nuvem (AWS) onde muitos jogos online ficam hospedados — São Paulo é a principal para quem joga no Brasil. Cada jogo tem os próprios servidores: isto mostra como está a rota até a região.", 11.5));
-        var chips = new WrapPanel { Margin = new Thickness(0, 8, 0, 4) };
-        foreach (var g in NetMap.Groups)
-        {
-            string group = g;
-            var b = new Button { Content = g, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(12, 4, 12, 4), FontSize = 12,
-                Style = (Style)Application.Current.FindResource(g == _group ? "PrimaryButton" : "GhostButton") };
-            b.Click += (_, _) => { _group = group; Rebuild(); };
-            chips.Children.Add(b);
-        }
-        card.Children.Add(chips);
-        if (_gameList.Parent is Panel gl) gl.Children.Remove(_gameList);
-        card.Children.Add(_gameList);
-        FillGameList();
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 6) };
-        buttons.Children.Add(SmallButton("Testar os marcados", async (_, _) => await PingGamesAsync(NetMap.GameTargets.Where(t => _picked.Contains(t.Key)).ToList()), true));
-        buttons.Children.Add(SmallButton("Testar todos desta região", async (_, _) => await PingGamesAsync(NetMap.GameTargets.Where(t => t.Group == _group).ToList())));
-        card.Children.Add(buttons);
-        if (_gameResults.Parent is Panel gr) gr.Children.Remove(_gameResults);
-        card.Children.Add(_gameResults);
-        return CardOf(card);
+        _running = running;
+        _startButton.IsEnabled = !running;
+        _stopButton.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
     }
-
-    private void Rebuild() => Build(_lastResult);
-    private SpeedResult? _lastResult;
-
-    private void FillGameList()
-    {
-        _gameList.Children.Clear();
-        foreach (var t in NetMap.GameTargets.Where(t => t.Group == _group))
-        {
-            var target = t;
-            var box = new CheckBox
-            {
-                Content = t.Name + (t.Note.Length > 0 ? "  ·  " + t.Note : ""), IsChecked = _picked.Contains(t.Key), Foreground = Brush("TextBrush"), Margin = new Thickness(0, 2, 0, 2),
-            };
-            box.Click += (_, _) =>
-            {
-                if (box.IsChecked == true)
-                {
-                    if (_picked.Count >= 2) { box.IsChecked = false; SetStatus("Até 2 servidores ao mesmo tempo. Desmarque um para escolher outro.", "WarnBrush"); return; }
-                    _picked.Add(target.Key);
-                }
-                else _picked.Remove(target.Key);
-            };
-            _gameList.Children.Add(box);
-        }
-    }
-
-    private async Task PingGamesAsync(IReadOnlyList<PingTarget> targets)
-    {
-        if (targets.Count == 0) { SetStatus("Marque pelo menos um servidor.", "WarnBrush"); return; }
-        _gameResults.Children.Clear();
-        _gameResults.Children.Add(Muted($"Medindo {targets.Count} servidor(es) ao mesmo tempo (8 tentativas cada)...", 12));
-        // no mapa: os servidores com posição; até 2 com linha colorida e as bolinhas de ping
-        _map.ClearLinks();
-        if (_colo is not null) _mainLink = _map.SetLink(_colo, MBExtreme.UI.Controls.LinkMode.Idle, MBExtreme.UI.Controls.NetMapControl.Download, "Servidor de teste · " + _colo.Name);
-        var links = new Dictionary<string, MBExtreme.UI.Controls.MapLink>();
-        int color = 0;
-        foreach (var t in targets.Where(t => !double.IsNaN(t.Lat)))
-            links[t.Key] = _map.SetLink(new GeoPoint(t.Name, t.Lat, t.Lon), MBExtreme.UI.Controls.LinkMode.Ping, PingColors[Math.Min(color++, PingColors.Length - 1)], t.Name);
-        var traces = targets.Where(t => links.ContainsKey(t.Key)).Take(2).Select(t => TraceToMapAsync(links[t.Key], t.Host, CancellationToken.None)).ToList();
-        var results = await Task.WhenAll(targets.Select(t => NetMap.PingAsync(t, 8, CancellationToken.None)));
-        await Task.WhenAll(traces);
-        _gameResults.Children.Clear();
-        foreach (var r in results.OrderBy(r => r.Median ?? double.MaxValue))
-        {
-            string brush = r.Median switch { null => "BadBrush", < 50 => "OkBrush", < 90 => "WarnBrush", _ => "BadBrush" };
-            _gameResults.Children.Add(Row($"{r.Target.Name}:  {(r.Median is double m ? $"{m:0} ms" : "sem resposta")}",
-                $"{NetMap.GameVerdict(r.Median)} · variação {(r.Jitter is double j ? $"{j:0} ms" : "—")} · perdidos {r.Lost} de {r.Sent} · {r.Target.Host}", null, brush));
-            if (links.TryGetValue(r.Target.Key, out var link))
-            {
-                link.Mode = MBExtreme.UI.Controls.LinkMode.Idle;
-                link.Label = $"{r.Target.Name} · {(r.Median is double mm ? $"{mm:0} ms" : "sem resposta")}";
-            }
-        }
-        _map.InvalidateVisual();
-        SetStatus("Ping dos servidores medido.", "OkBrush");
-    }
-
-    // ---------------------------------------------------------------- DNS
-
-    private readonly StackPanel _dnsResults = new();
-
-    private UIElement DnsCard()
-    {
-        var card = new StackPanel();
-        card.Children.Add(new TextBlock { Text = "Qual DNS está mais rápido agora", FontSize = 15, FontWeight = FontWeights.SemiBold });
-        card.Children.Add(Muted("O DNS transforma nomes (google.com) em endereços. Um DNS lento atrasa o começo de cada site e jogo. O teste compara o DNS que você usa hoje com os públicos mais conhecidos.", 11.5));
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 6) };
-        buttons.Children.Add(SmallButton("Testar DNS agora", async (_, _) => await DnsAsync(), true));
-        buttons.Children.Add(SmallButton("Trocar o DNS", (_, _) => MainWindow.Current?.Go("dns")));
-        card.Children.Add(buttons);
-        if (_dnsResults.Parent is Panel dp) dp.Children.Remove(_dnsResults);
-        card.Children.Add(_dnsResults);
-        return CardOf(card);
-    }
-
-    private async Task DnsAsync()
-    {
-        _dnsResults.Children.Clear();
-        _dnsResults.Children.Add(Muted("Testando (cada DNS responde a 5 sites, 2 vezes)...", 12));
-        var adapter = _adapter ?? await Task.Run(NetworkStatus.Active);
-        var current = adapter?.Dns.FirstOrDefault(d => System.Net.IPAddress.TryParse(d, out var a) && a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-        var providers = new List<MBExtreme.Core.Dns.DnsProvider>();
-        if (current is not null && !MBExtreme.Core.Dns.DnsProviders.Defaults.Any(p => p.Primary == current))
-            providers.Add(new MBExtreme.Core.Dns.DnsProvider("O seu DNS atual", current, "", current));
-        providers.AddRange(MBExtreme.Core.Dns.DnsProviders.Defaults);
-        var results = await MBExtreme.Core.Dns.DnsBenchmark.RunAsync(providers, MBExtreme.Core.Dns.DnsBenchmark.DefaultDomains, 2, TimeSpan.FromSeconds(1.5));
-        _dnsResults.Children.Clear();
-        var ranked = results.OrderBy(r => r.AverageMs ?? double.MaxValue).ToList();
-        bool first = true;
-        foreach (var r in ranked)
-        {
-            bool inUse = r.Provider.Primary == current;
-            string title = $"{(first && r.AverageMs is not null ? "🏆 " : "")}{r.Provider.Name}  ·  {(r.AverageMs is double ms ? $"{ms:0} ms" : "sem resposta")}{(inUse ? "   (em uso)" : "")}";
-            _dnsResults.Children.Add(Row(title, $"{r.Provider.Primary} · respondeu {r.Successes} de {r.Attempts}" + (r.Provider.Note.Length > 0 && r.Provider.Note != r.Provider.Primary ? " · " + r.Provider.Note : ""),
-                null, first ? "OkBrush" : "MutedBrush"));
-            first = false;
-        }
-        var best = ranked.FirstOrDefault(r => r.AverageMs is not null);
-        var mine = ranked.FirstOrDefault(r => r.Provider.Primary == current);
-        if (best is not null && mine?.AverageMs is double now && best.AverageMs is double fast)
-            _dnsResults.Children.Add(Muted(best.Provider.Primary == current ? "O DNS que você usa já é o mais rápido agora." :
-                $"Trocando para {best.Provider.Name}, cada nome resolve uns {now - fast:0} ms mais rápido. Use \"Trocar o DNS\" se quiser.", 12));
-    }
-
-    /// <summary>Some com o botão e acende o velocímetro (o teste começou).</summary>
-    private void GaugeRunning()
-    {
-        if (_go is not null) { Motion.Stop(_go); _gaugeHost.Children.Remove(_go); _go = null; }
-        _gauge.Reset();
-        Motion.To(_gauge, OpacityProperty, 1, Motion.Normal);
-    }
-
-    public InternetTestPage() : base("Teste de internet",
-        "Mede a latência, a variação, o download e o upload com várias conexões ao mesmo tempo, descartando os primeiros segundos (aquecimento). " +
-        "O servidor é o teste público da Cloudflare, perto de você; os números podem diferir do Speedtest, que usa outros servidores e outro método.")
-    {
-        _start = AddButton("Testar", async (_, _) => await RunAsync());
-        AddButton("Parar", (_, _) => _cts?.Cancel(), false);
-        Loaded += (_, _) => { if (Body.Children.Count == 0) Build(null); };
-    }
-
-    private void Build(SpeedResult? result)
-    {
-        Body.Children.Clear();
-        Body.Children.Add(GaugeCard());
-        if (result is not null) { _downBig.Text = Fmt(result.DownloadMbps).Replace(" Mbps", ""); _upBig.Text = Fmt(result.UploadMbps).Replace(" Mbps", ""); }
-        if (_adapter is not null)
-            Body.Children.Add(Muted($"Conectado por {_adapter.Name}" + (_adapter.LinkSpeedBitsPerSecond > 0 ? $" · link de {_adapter.LinkSpeedBitsPerSecond / 1_000_000} Mbps" : "")
-                + (_adapter.Gateway is null ? "" : $" · roteador {_adapter.Gateway}") + (_adapter.Dns.Count > 0 ? $" · DNS {string.Join(", ", _adapter.Dns.Take(2))}" : ""), 12));
-        Body.Children.Add(Muted("Nome do teste (opcional, para comparar depois. Ex.: antes de trocar o roteador):", 12));
-        System.Windows.Automation.AutomationProperties.SetName(_name, "Nome do teste");
-        if (_name.Parent is Panel p) p.Children.Remove(_name);
-        Body.Children.Add(_name);
-        _steps.Children.Clear();
-        _stepValues.Clear();
-        _stepIcons.Clear();
-        _stepCards.Clear();
-        foreach (var (key, label, glyph) in new[] { ("router", "Roteador", "\uE839"), ("ping", "Ping", "\uE774"), ("dns", "DNS", "\uE71B"), ("down", "Download", "\uE896"), ("up", "Upload", "\uE898"), ("load", "Sob carga", "\uE916") })
-        {
-            var value = new TextBlock { Text = "—", FontSize = 18, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
-            _stepValues[key] = value;
-            var icon = new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 16, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Brush("MutedBrush") };
-            var iconBox = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(17), Background = Brush("Surface2Brush"), HorizontalAlignment = HorizontalAlignment.Center, Child = icon, Margin = new Thickness(0, 0, 0, 4) };
-            iconBox.Child = icon;
-            icon.VerticalAlignment = VerticalAlignment.Center;
-            _stepIcons[key] = iconBox;
-            var cell = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
-            cell.Children.Add(iconBox);
-            cell.Children.Add(new TextBlock { Text = label, FontSize = 11.5, Foreground = Brush("MutedBrush"), HorizontalAlignment = HorizontalAlignment.Center });
-            cell.Children.Add(value);
-            var card = new Border { Child = cell, Background = Brush("SurfaceBrush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(8), Margin = new Thickness(0, 0, 6, 0), BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent };
-            _stepCards[key] = card;
-            _steps.Children.Add(card);
-        }
-        Body.Children.Add(UiTree.Free(_steps));
-        if (result is not null)
-        {
-            Set("router", Ms(result.RouterMs)); Set("ping", Ms(result.PingMs)); Set("dns", Ms(result.DnsMs));
-            Set("down", Fmt(result.DownloadMbps)); Set("up", Fmt(result.UploadMbps)); Set("load", Ms(result.LoadedPingMs));
-            var (grade, text) = SpeedMath.Bufferbloat(result.PingMs, result.LoadedPingMs);
-            Body.Children.Add(Row($"Ping sob carga: nota {grade}", text, null, grade is "A+" or "A" or "B" ? "OkBrush" : grade == "?" ? "MutedBrush" : "WarnBrush"));
-        }
-        _lastResult = result ?? _lastResult;
-        Body.Children.Add(Muted("Conexões ao mesmo tempo (mais conexões medem melhor internet acima de 300 Mbps):", 12));
-        Body.Children.Add(Choice(Connections.Select(c => c == 1 ? "Automático" : c + " conexões").ToList(), Array.IndexOf(Connections, _connections), i => _connections = Connections[i]));
-        Body.Children.Add(UiTree.Free(_stage));
-        Body.Children.Add(ServerCard());
-        Body.Children.Add(GameCard());
-        Body.Children.Add(DnsCard());
-        if (result is not null)
-        {
-            Body.Children.Add(Row($"Download {Fmt(result.DownloadMbps)} · Upload {Fmt(result.UploadMbps)}",
-                $"Latência {Ms(result.PingMs)} · variação {Ms(result.JitterMs)} · servidor {result.ServerCode ?? "?"}{(result.City is null ? "" : " (" + result.City + ")")} · {result.Connections} conexões"));
-        }
-        var history = _history.Load();
-        if (SpeedHistory.Compare(history) is { } compare) Body.Children.Add(Muted(compare, 12.5));
-        if (history.Count > 0)
-        {
-            Body.Children.Add(Heading("Testes anteriores"));
-            foreach (var h in history.Take(10))
-                Body.Children.Add(Muted($"{h.At.ToLocalTime():dd/MM HH:mm}{(h.Name is { Length: > 0 } n ? " · " + n : "")} · ↓ {Fmt(h.DownloadMbps)} · ↑ {Fmt(h.UploadMbps)} · {Ms(h.PingMs)}{(h.LoadedPingMs is double l ? $" (sob carga {l:0} ms)" : "")} · {h.ServerCode ?? "?"}", 12));
-        }
-    }
-
-    private ActiveAdapter? _adapter;
-
-    private readonly Dictionary<string, Border> _stepIcons = new();
-    private readonly Dictionary<string, Border> _stepCards = new();
-
-    /// <summary>Mostra o valor da etapa e marca como feita (ícone verde).</summary>
-    private void Set(string key, string text)
-    {
-        if (_stepValues.TryGetValue(key, out var t)) { t.Text = text; Motion.Flash(t); }
-        if (_stepIcons.TryGetValue(key, out var icon))
-        {
-            Motion.Stop(icon);
-            icon.Background = new SolidColorBrush(Color.FromArgb(0x30, 0x3D, 0xDC, 0x97));
-            if (icon.Child is TextBlock g) g.Foreground = Brush("OkBrush");
-        }
-        if (_stepCards.TryGetValue(key, out var card)) card.BorderBrush = Brushes.Transparent;
-    }
-
-    /// <summary>Etapa em andamento: ícone amarelo pulsando e borda amarela.</summary>
-    private void Working(string key)
-    {
-        if (_stepIcons.TryGetValue(key, out var icon))
-        {
-            icon.Background = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xC4, 0x00));
-            if (icon.Child is TextBlock g) g.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
-            Motion.Breathe(icon, 1.15, 0.6);
-        }
-        if (_stepCards.TryGetValue(key, out var card)) card.BorderBrush = new SolidColorBrush(Color.FromArgb(0x90, 0xFF, 0xC4, 0x00));
-    }
-
-    private static string Fmt(double? mbps) => mbps is double v ? $"{v:0.0} Mbps" : "—";
-
-    private static string Ms(double? ms) => ms is double v ? $"{v:0} ms" : "—";
 
     private async Task RunAsync()
     {
-        _start.IsEnabled = false;
+        if (_running) return;
+        SetRunning(true);
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         var test = _libre is not null ? SpeedTest.ForLibreSpeed(Http, _libre) : new SpeedTest(Http);
         int connections = _connections == 1 ? 4 : _connections;
         _adapter = await Task.Run(NetworkStatus.Active);
-        Build(null);
+        UpdateConnLine();
+        _lastResult = null;
+        _livePing = _liveJitter = null;
+        foreach (var key in new[] { "down", "up", "ping", "jitter", "load" }) Set(key, "—");
+        SelectTab("speed");
         GaugeRunning();
-        if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Ping; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Ping; _map.InvalidateVisual(); }
-        if (_mainLink is not null) _ = TraceToMapAsync(_mainLink, "speed.cloudflare.com", token);
-        _downBig.Text = _upBig.Text = "—";
+        if (_mainLink is not null && _libre is null) { _mainLink.Mode = LinkMode.Ping; _mainLink.Color = NetMapControl.Ping; _speedMap.InvalidateVisual(); }
+        if (_mainLink is not null) _ = TraceToMapAsync(_speedMap, _mainLink, "speed.cloudflare.com", token);
         var live = new Progress<double>(v => _gauge.Show(v));
         try
         {
-            _stage.Text = "Ping até o roteador..."; Working("router");
-            double? router = _adapter?.Gateway is { } gw ? await NetAnalyzer.PingAsync(gw, 1000) : null;
-            Set("router", Ms(router));
+            _stage.Text = "Ping até o roteador...";
+            _routerMs = _adapter?.Gateway is { } gw ? await NetAnalyzer.PingAsync(gw, 1000) : null;
             _stage.Text = "Tempo de resposta do DNS..."; Working("dns");
             double? dns = await SpeedTest.DnsTimeAsync(token);
-            Set("dns", Ms(dns));
+            Set("dns", $"{DnsName(CurrentDns()) ?? "DNS"} · {Ms(dns)}");
             _stage.Text = "Achando o servidor...";
             var (code, city) = _libre is not null ? ((string?)"LibreSpeed", (string?)_libre.Name) : await test.ServerAsync(token);
             _stage.Text = $"Latência ({code ?? "servidor"}{(city is null ? "" : ", " + city)})...";
-            Working("ping");
+            Working("ping"); Working("jitter");
             var (ping, jitter) = await test.LatencyAsync(12, token);
-            if (ping is null) { SetStatus("Sem resposta do servidor de teste. Confira a internet.", "BadBrush"); return; }
+            if (ping is null) { Say("Sem resposta do servidor de teste. Confira a internet.", "BadBrush"); return; }
+            _livePing = ping; _liveJitter = jitter;
+            Set("ping", Ms(ping)); Set("jitter", Ms(jitter));
             _gauge.CenterText = $"{ping:0}";
-            FillInfo(ping);
             _gauge.Caption = "ms de ping";
             _gauge.InvalidateVisual();
-            Set("ping", Ms(ping));
             _stage.Text = $"Download com {connections} conexões (2 s de aquecimento + 8 s de medição) e ping sob carga...";
             _gauge.CenterText = null;
             _gauge.Caption = "Mbps";
             _gauge.Upload = false;
-            if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Download; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Download; _map.InvalidateVisual(); }
-            Working("down");
-            Working("load");
+            if (_mainLink is not null && _libre is null) { _mainLink.Mode = LinkMode.Download; _mainLink.Color = NetMapControl.Download; _speedMap.InvalidateVisual(); }
+            Working("down"); Working("load");
             var (down, loaded) = await test.DownloadWithLoadedPingAsync(connections, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8), live, token);
-            Set("down", Fmt(down));
-            Set("load", Ms(loaded));
-            _downBig.Text = down is double dv ? $"{dv:0.0}" : "—";
-            Motion.Flash(_downBig);
+            Set("down", Fmt(down)); Set("load", Ms(loaded));
             _stage.Text = $"Upload com {connections} conexões (2 s de aquecimento + 8 s de medição)...";
             _gauge.Reset();
             _gauge.Upload = true;
             Working("up");
-            if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Upload; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Upload; _map.InvalidateVisual(); }
+            if (_mainLink is not null && _libre is null) { _mainLink.Mode = LinkMode.Upload; _mainLink.Color = NetMapControl.Upload; _speedMap.InvalidateVisual(); }
             var up = await test.UploadAsync(connections, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8), live, token);
-            var result = new SpeedResult(DateTimeOffset.Now, down, up, ping, jitter, code, city, connections, loaded, router, dns, _name.Text.Trim());
+            var result = new SpeedResult(DateTimeOffset.Now, down, up, ping, jitter, code, city, connections, loaded, _routerMs, dns, _name.Text.Trim());
             _history.Add(result);
+            _lastResult = result;
+            Set("up", Fmt(up));
+            var (grade, _) = SpeedMath.Bufferbloat(ping, loaded);
+            Set("load", loaded is double l && ping is double p0 ? $"{grade} · +{Math.Max(0, l - p0):0} ms" : Ms(loaded));
             _stage.Text = "Pronto.";
-            if (_mainLink is not null && _libre is null) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Idle; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Download; _map.InvalidateVisual(); }
-            _upBig.Text = up is double uv ? $"{uv:0.0}" : "—";
-            Build(result);
-            SetStatus($"Download {Fmt(down)}, upload {Fmt(up)}, latência {Ms(ping)}.", "OkBrush");
+            Say($"Download {Fmt(down)}, upload {Fmt(up)}, latência {Ms(ping)}.", "OkBrush");
         }
         catch (OperationCanceledException)
         {
-            SetStatus("Teste parado.", "WarnBrush");
+            Say("Teste parado.", "WarnBrush");
         }
         catch (HttpRequestException ex)
         {
-            SetStatus("Não foi possível testar: " + ex.Message, "BadBrush");
+            Say("Não foi possível testar: " + ex.Message, "BadBrush");
         }
         finally
         {
-            _start.IsEnabled = true;
-            if (_mainLink is not null && _mainLink.Mode != MBExtreme.UI.Controls.LinkMode.Idle) { _mainLink.Mode = MBExtreme.UI.Controls.LinkMode.Idle; _mainLink.Color = MBExtreme.UI.Controls.NetMapControl.Download; _map.InvalidateVisual(); }
+            foreach (var card in _tileCards.Values) { Motion.Stop(card); card.BorderBrush = Brush("Surface2Brush"); }
+            if (_mainLink is not null && _mainLink.Mode != LinkMode.Idle) { _mainLink.Mode = LinkMode.Idle; _mainLink.Color = NetMapControl.Download; _speedMap.InvalidateVisual(); }
+            SetRunning(false);
+            if (_tab == "speed") SelectTab("speed");   // o botão redondo volta para um novo teste
         }
+    }
+
+    /// <summary>Saltos até o servidor (uma rodada do traceroute) desenhados na linha do mapa.</summary>
+    private static async Task TraceToMapAsync(NetMapControl map, MapLink link, string host, CancellationToken ct)
+    {
+        using var round = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        IReadOnlyList<HopStats>? hops = null;
+        try { await NetAnalyzer.TraceAsync(host, 20, h => { hops = h; round.Cancel(); }, round.Token); }
+        catch (OperationCanceledException) { }
+        catch (System.Net.NetworkInformation.PingException) { }
+        if (hops is null || hops.Count == 0) return;
+        var ms = hops.Select(h => h.Received > 0 ? (double?)h.Average : null).ToList();
+        var pos = NetMap.HopPositions(ms);
+        link.Hops.Clear();
+        for (int i = 0; i < hops.Count; i++)
+            link.Hops.Add((pos[i], $"{hops[i].Hop} · " + (ms[i] is double v ? $"{v:0} ms" : "*")));
+        map.InvalidateVisual();
     }
 }

@@ -7,6 +7,9 @@ namespace MBExtreme.UI.Controls;
 
 public enum LinkMode { Idle, Ping, Download, Upload }
 
+/// <summary>Área do mapa: Auto (cabe tudo, mínimo a América do Sul), só o Brasil ou o mundo.</summary>
+public enum MapScope { Auto, Brazil, World }
+
 /// <summary>Uma ligação no mapa: até um servidor, com a cor e o sentido das bolinhas.</summary>
 public sealed class MapLink
 {
@@ -49,6 +52,17 @@ internal sealed class NetMapControl : FrameworkElement
     }
 
     public GeoPoint? User { get => _user; set { _user = value; Refit(); } }
+
+    /// <summary>Segunda linha do rótulo "Você" (ex.: o provedor).</summary>
+    public string? UserDetail { get => _userDetail; set { _userDetail = value; InvalidateVisual(); } }
+    private string? _userDetail;
+
+    /// <summary>Área mostrada.</summary>
+    public MapScope Scope { get => _scope; set { _scope = value; Refit(); } }
+    private MapScope _scope = MapScope.Auto;
+
+    /// <summary>Ponta de seta no servidor (mapa de ping).</summary>
+    public bool Arrows { get; set; }
     public IReadOnlyList<MapLink> Links => _links;
 
     public MapLink SetLink(GeoPoint to, LinkMode mode, Color color, string? label = null)
@@ -143,7 +157,13 @@ internal sealed class NetMapControl : FrameworkElement
             var points = new List<(double, double)>();
             if (_user is not null) points.Add((_user.Lat, _user.Lon));
             points.AddRange(_links.Where(l => !double.IsNaN(l.To.Lat)).Select(l => (l.To.Lat, l.To.Lon)));
-            _bounds = NetMap.Fit(points, ActualWidth / ActualHeight);
+            double aspect = ActualWidth / ActualHeight;
+            _bounds = _scope switch
+            {
+                MapScope.Brazil => NetMap.BrazilArea(aspect),
+                MapScope.World => NetMap.WorldArea(aspect),
+                _ => NetMap.Fit(points, aspect),
+            };
             _land = Build(Countries);
             _brazil = Build(BrazilRings);
             _lastSize = size;
@@ -157,10 +177,27 @@ internal sealed class NetMapControl : FrameworkElement
         double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var typeface = new Typeface("Segoe UI");
         Point? user = _user is null ? null : P(_user.Lat, _user.Lon);
+        var placed = new List<Rect>();
+        if (user is { } uu) { placed.Add(new Rect(uu.X - 8, uu.Y - 8, 16, 16)); placed.Add(new Rect(uu.X + 8, uu.Y + 6, 150, 32)); }
+
+        // nome sem encobrir outro: tenta a posição normal e depois um pouco acima ou abaixo
+        Point Place(FormattedText text, Point anchor)
+        {
+            double x = anchor.X + 9 + text.Width > ActualWidth ? anchor.X - 9 - text.Width : anchor.X + 9;
+            foreach (double dy in new[] { 0.0, -14, 14, -28, 28, -42, 42 })
+            {
+                var r = new Rect(x, anchor.Y - text.Height / 2 + dy, text.Width, text.Height);
+                if (!placed.Any(p => p.IntersectsWith(r))) { placed.Add(r); return r.TopLeft; }
+            }
+            var fallback = new Rect(x, anchor.Y - text.Height / 2, text.Width, text.Height);
+            placed.Add(fallback);
+            return fallback.TopLeft;
+        }
 
         foreach (var link in _links)
         {
             if (user is null || double.IsNaN(link.To.Lat)) continue;
+            if (_scope == MapScope.Brazil && !NetMap.Contains(_bounds, link.To.Lat, link.To.Lon, 1)) continue;   // fora do Brasil: aparece no mapa-múndi
             var a = user.Value;
             var b = P(link.To.Lat, link.To.Lon);
             var c = Control(a, b);
@@ -204,12 +241,32 @@ internal sealed class NetMapControl : FrameworkElement
                 }
             }
 
+            // ponta de seta chegando no servidor
+            if (Arrows)
+            {
+                var from = Bezier(a, c, b, 0.94);
+                double ax = b.X - from.X, ay = b.Y - from.Y, al = Math.Sqrt(ax * ax + ay * ay);
+                if (al > 0.5)
+                {
+                    ax /= al; ay /= al;
+                    var tip = new Point(b.X - ax * 6, b.Y - ay * 6);
+                    var head = new StreamGeometry();
+                    using (var ctx = head.Open())
+                    {
+                        ctx.BeginFigure(tip, true, true);
+                        ctx.LineTo(new Point(tip.X - ax * 8 - ay * 4.5, tip.Y - ay * 8 + ax * 4.5), true, false);
+                        ctx.LineTo(new Point(tip.X - ax * 8 + ay * 4.5, tip.Y - ay * 8 - ax * 4.5), true, false);
+                    }
+                    head.Freeze();
+                    dc.DrawGeometry(new SolidColorBrush(link.Color), null, head);
+                }
+            }
+
             // servidor
             dc.DrawEllipse(new SolidColorBrush(link.Color), new Pen(Brushes.Black, 1.5), b, 5.5, 5.5);
             var name = new FormattedText(link.Label ?? link.To.Name, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                 new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal), 11, Brushes.White, dpi);
-            double nx = b.X + 9 + name.Width > ActualWidth ? b.X - 9 - name.Width : b.X + 9;
-            dc.DrawText(name, new Point(nx, b.Y - name.Height / 2));
+            dc.DrawText(name, Place(name, b));
         }
 
         // você: ponto amarelo com um anel pulsando
@@ -221,6 +278,11 @@ internal sealed class NetMapControl : FrameworkElement
             var me = new FormattedText("Você · " + _user!.Name, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                 new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal), 11.5, Brushes.White, dpi);
             dc.DrawText(me, new Point(Math.Min(u.X + 10, ActualWidth - me.Width - 4), u.Y + 8));
+            if (!string.IsNullOrEmpty(_userDetail))
+            {
+                var detail = new FormattedText(_userDetail, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, 10.5, new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA3)), dpi);
+                dc.DrawText(detail, new Point(Math.Min(u.X + 10, ActualWidth - detail.Width - 4), u.Y + 8 + me.Height));
+            }
         }
         else
         {

@@ -173,3 +173,20 @@ Marque cada item e anote o que der diferente.
 11. **Reparar o Windows > Reconstruir o cache de fontes**: o serviço FontCache para e volta a funcionar.
 12. **Programas > kit Técnico**: Process Explorer, Autoruns e Process Monitor pelo winget.
 13. **MBExtreme-Instalar.exe** (instalador pequeno, ~175 KB): com o repositório público, ele baixa a versão mais nova, mostra o progresso, confere o SHA-256 e abre o instalador completo. Com o repositório privado, mostra "O download ainda não está público" e o botão "Baixar pelo site".
+
+## Internet em abas (mapa do Brasil, servidores perto de você e DNS)
+
+1. **Topo:** provedor, cidade, IP e adaptador. Servidor do teste (Cloudflare com o código da cidade, ou LibreSpeed), Conexões (Auto/4/8) e INICIAR TESTE. O botão Parar aparece durante o teste.
+2. **Faixa de resultados:** Download, Upload, Ping, Variação, Sob carga e DNS em uso. O cartão da etapa em andamento fica com a borda amarela pulsando. O ping e a variação ganham cor (verde, amarelo, laranja, vermelho).
+3. **Velocidade:** velocímetro com o botão redondo, mapa do servidor do teste, nome do teste, nota do ping sob carga. LibreSpeed abre a lista dos servidores mais rápidos nessa aba.
+4. **Jogos e servidores:**
+   - O mapa começa no Brasil; o botão Mundo mostra o mapa-múndi, com as setas e a cor do ping.
+   - "Perto de mim" lista os 12 mais perto pela sua cidade; há filtros por região e por provedor (Valve, AWS, Oracle, LibreSpeed, Referência).
+   - "Testar os 10 mais perto" e "Testar marcados" medem 8 servidores de cada vez; a lista se reordena pelo ping.
+   - A frase embaixo compara o ping com o mínimo possível pela distância.
+   - Conferir se aparecem as cidades da Valve (precisa da Steam acessível) e os servidores do LibreSpeed no Brasil.
+5. **DNS:**
+   - O teste roda sozinho ao abrir a aba; cada linha tem a barra, os ms e o botão Usar.
+   - Usar troca o DNS na hora (a faixa "DNS em uso" muda); Voltar ao automático restaura o DNS do provedor.
+6. **Roteador e rota:** dados da conexão, Medir o roteador, Traçar rota até o servidor escolhido (10 s, com média, perda e pior tempo por salto).
+7. **Histórico:** os últimos 15 testes com a barra do download e a comparação com os anteriores.

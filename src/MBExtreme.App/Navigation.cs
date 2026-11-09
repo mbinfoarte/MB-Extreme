@@ -136,6 +136,7 @@ internal static class NavigationMap
             new("storage", "Saúde dos discos", "\uEDA2"),
             new("win11", "Windows 11", "\uE770"),
             new("drivers", "Drivers", "\uE964"),
+            new("wallpaper", "Papel de parede", "\uE771"),
             new("speedtest", "Rede", "\uE774"),
         }),
         new("TESTES", new SideItem[]

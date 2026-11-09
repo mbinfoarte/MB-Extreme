@@ -149,5 +149,29 @@ public sealed class WindowsUsage : IDisposable
         }
     }
 
-    public void Dispose() => _cpu?.Dispose();
+    private PerformanceCounter? _disk;
+    private bool _diskBroken;
+
+    /// <summary>Atividade do disco (0 a 100, "% Disk Time" de todos os discos) ou null sem o contador.</summary>
+    public double? Disk()
+    {
+        if (_diskBroken) return null;
+        try
+        {
+            if (_disk is null)
+            {
+                _disk = new PerformanceCounter("PhysicalDisk", "% Disk Time", "_Total", true);
+                _disk.NextValue();
+                return null;   // a primeira leitura é sempre zero
+            }
+            return Math.Clamp(_disk.NextValue(), 0, 100);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or PlatformNotSupportedException)
+        {
+            _diskBroken = true;
+            return null;
+        }
+    }
+
+    public void Dispose() { _cpu?.Dispose(); _disk?.Dispose(); }
 }

@@ -51,6 +51,32 @@ public sealed class AccessibilityPage : ToolPageBase
         Body.Children.Add(glass);
         Body.Children.Add(Muted("Se o PC for mais fraco ou a janela ficar lenta ao arrastar, desligue. Com \"Efeitos de transparência\" desligado no Windows, o fundo fica sólido.", 12));
 
+        Body.Children.Add(Heading("Bandeja e widget"));
+        var tray = new System.Windows.Controls.CheckBox
+        {
+            Content = "Ao clicar no X, esconder na bandeja (ao lado do relógio) em vez de fechar",
+            IsChecked = AppServices.Settings.MinimizeToTray, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 4),
+        };
+        tray.Click += (_, _) =>
+        {
+            AppServices.Settings.MinimizeToTray = tray.IsChecked == true;
+            AppServices.Settings.Save();
+            SetStatus(tray.IsChecked == true ? "O X vai esconder na bandeja. Use \"Sair\" no menu da bandeja para fechar de vez." : "O X fecha o programa.", "OkBrush");
+        };
+        Body.Children.Add(tray);
+        var widget = new System.Windows.Controls.CheckBox
+        {
+            Content = "Mostrar o widget flutuante (barrinha com RAM, CPU, disco e rede na área de trabalho)",
+            IsChecked = AppServices.Settings.WidgetEnabled, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 4),
+        };
+        widget.Click += (_, _) =>
+        {
+            MainWindow.Current?.SetWidget(widget.IsChecked == true);
+            SetStatus(widget.IsChecked == true ? "Widget ligado: arraste para onde quiser. Para esconder, clique no X do widget ou aqui." : "Widget escondido.", "OkBrush");
+        };
+        Body.Children.Add(widget);
+        Body.Children.Add(Muted("O widget fica sempre no topo e mostra o uso em tempo real. Clique no foguete e arraste para mover; o botão de abrir leva ao programa.", 12));
+
         Body.Children.Add(Heading("Pelo teclado"));
         Body.Children.Add(Row("Tab e Shift+Tab", "Andam entre os botões e caixas. O item com o foco ganha um contorno amarelo."));
         Body.Children.Add(Row("Espaço ou Enter", "Apertam o botão ou marcam a caixa com o foco."));

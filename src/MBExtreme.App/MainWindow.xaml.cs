@@ -69,6 +69,7 @@ public partial class MainWindow : Window
         _ = AppServices.Fans.StartIfConfiguredAsync();
         UpdateFooter();
         VersionText.Text = VersionLabel;
+        Loaded += (_, _) => SetupTrayAndWidget();
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -96,6 +97,65 @@ public partial class MainWindow : Window
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private TrayIcon? _tray;
+    private Widget.FloatingWidget? _widget;
+    private bool _reallyExit;
+
+    /// <summary>Liga a bandeja e o widget (chamado uma vez, ao abrir).</summary>
+    private void SetupTrayAndWidget()
+    {
+        _tray = new TrayIcon(this, ShowFromTray, ToggleWidget, () => AppServices.Settings.WidgetEnabled, ExitApp);
+        if (AppServices.Settings.WidgetEnabled) ShowWidget();
+        Closing += MainWindow_Closing;
+        Closed += (_, _) => { _tray?.Dispose(); _widget?.Close(); };
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        // X com "ir para a bandeja": esconde em vez de fechar (a não ser que seja "Sair" de verdade)
+        if (_reallyExit || !AppServices.Settings.MinimizeToTray) return;
+        e.Cancel = true;
+        Hide();
+    }
+
+    internal void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        Topmost = true; Topmost = false;
+    }
+
+    /// <summary>Liga/desliga o widget pela tela de Acessibilidade.</summary>
+    internal void SetWidget(bool on)
+    {
+        AppServices.Settings.WidgetEnabled = on;
+        AppServices.Settings.Save();
+        if (on) ShowWidget();
+        else { _widget?.Close(); _widget = null; }
+    }
+
+    private void ToggleWidget()
+    {
+        if (_widget is not null) { AppServices.Settings.WidgetEnabled = false; AppServices.Settings.Save(); _widget.Close(); _widget = null; }
+        else { AppServices.Settings.WidgetEnabled = true; AppServices.Settings.Save(); ShowWidget(); }
+    }
+
+    private void ShowWidget()
+    {
+        if (_widget is not null) { _widget.Activate(); return; }
+        _widget = new Widget.FloatingWidget(ShowFromTray);
+        _widget.Closed += (_, _) => _widget = null;
+        _widget.Show();
+    }
+
+    private void ExitApp()
+    {
+        _reallyExit = true;
+        Close();
+        Application.Current.Shutdown();
+    }
 
     /// <summary>Maximizada, a janela sem moldura ultrapassa a tela pela borda de redimensionamento: compensa com margem e troca o ícone.</summary>
     private void UpdateMaximizeState()
@@ -424,6 +484,7 @@ public partial class MainWindow : Window
         "startup" => new StartupPage(),
         "repair" => new RepairPage(),
         "diskmgr" => new DiskManagerPage(),
+        "wallpaper" => new WallpaperPage(),
         "license" => new LicensePage(),
         "support" => new SupportHubPage(),
         "support-anydesk" => new SupportPage(),

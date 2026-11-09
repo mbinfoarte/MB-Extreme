@@ -213,3 +213,21 @@ Testar num notebook com algum aparelho sem driver (ex.: logo após formatar): ab
 - **Aviso de versão beta (Painel):** um cartão amarelo logo abaixo da análise avisa que é uma avaliação gratuita e que os recursos Pro vão exigir assinatura, com "Ver planos" (abre Licença e conta) e "✕" para esconder. Some quando a pessoa assina o Pro e volta a aparecer quando sai uma versão nova.
 
 Testar: deixar o programa aberto, alternar para outra janela e voltar — ele checa atualização. No Painel, conferir o aviso de beta, clicar em Ver planos e no ✕ (some e não volta até a próxima versão).
+
+## Papel de parede
+
+Novo módulo em "Meu PC → Papel de parede":
+- **MB Extreme:** 6 modelos próprios (Clássico, Degradê, Grade, Raio, Minimalista, Faixa amarela), desenhados na resolução do monitor.
+- **Galeria online:** banco licenciado Pexels (precisa de uma chave de API grátis, colada na própria tela; mostra o crédito do autor).
+- **Do meu PC:** importar uma imagem.
+- **Onde aplicar:** todos os monitores ou um específico, cada um com a sua resolução.
+- **Ajuste:** Preencher, Ajustar, Esticar, Lado a lado, Centralizar e "Esticar nos monitores" (2+ telas).
+
+Testar: abrir o módulo, conferir se lê os monitores com a resolução certa, escolher um modelo MB e aplicar; trocar o ajuste; importar uma imagem do PC; (com chave) buscar no Pexels e aplicar.
+
+## Minimizar para a bandeja + widget flutuante
+
+- **Bandeja:** ao clicar no X, o programa some na bandeja (ao lado do relógio) e continua rodando. Clique no ícone abre; botão direito tem Abrir, Mostrar/ocultar o widget e Sair. Em Acessibilidade dá para desligar o "ir para a bandeja".
+- **Widget flutuante:** barrinha sempre no topo com RAM, CPU, Disco e Rede, atualizando a cada segundo; arrasta pelo foguete e guarda a posição; botões de abrir o app e esconder. Liga/desliga pelo menu da bandeja e em Acessibilidade.
+
+Testar: fechar no X e ver o ícone na bandeja; reabrir pelo ícone; Sair fecha de vez; ligar o widget, mover, conferir os números e esconder.

@@ -139,6 +139,22 @@ public sealed class AppSettings
     /// <summary>Compilação em que a pessoa fechou o aviso de versão beta (volta a aparecer quando sai uma versão nova).</summary>
     public string BetaNoticeHiddenBuild { get; set; } = "";
 
+    /// <summary>Chave da API do Pexels (grátis, em pexels.com/api) para a galeria online de papéis de parede. Vazio = galeria online desligada.</summary>
+    public string PexelsApiKey { get; set; } = "";
+
+    /// <summary>Último modo de ajuste do papel de parede (0 Preencher, 1 Ajustar, 2 Esticar, 3 Lado a lado, 4 Centralizar, 5 Esticar nos monitores).</summary>
+    public int WallpaperFit { get; set; }
+
+    /// <summary>Ao clicar no X, esconder na bandeja (ao lado do relógio) em vez de fechar o programa.</summary>
+    public bool MinimizeToTray { get; set; } = true;
+
+    /// <summary>Mostrar o widget flutuante (barrinha com RAM, CPU, disco e rede) na área de trabalho.</summary>
+    public bool WidgetEnabled { get; set; }
+
+    /// <summary>Posição guardada do widget flutuante (-1 = ainda não movido).</summary>
+    public double WidgetX { get; set; } = -1;
+    public double WidgetY { get; set; } = -1;
+
     /// <summary>Animações da interface (desligar deixa tudo instantâneo, para PCs fracos ou quem prefere).</summary>
     public bool Animations { get; set; } = true;
 

@@ -41,7 +41,6 @@ internal static class NavigationMap
         new("games", "Jogos", "Sua biblioteca, o Modo Jogo e o que limita o seu FPS.", "\uE7FC", new Tile[]
         {
             new("gamelibrary", "Biblioteca de jogos", "Seus jogos instalados, com Modo Jogo e prioridade por jogo.", "\uE7FC", ""),
-            new("gamefps", "Medir FPS de um jogo", "FPS, 1% pior, gráfico de tempo de quadro, engasgos e sensores enquanto você joga.", "\uE7FC", ""),
             new("gameboost", "Modo Jogo", "Prepara o PC quando um jogo abre.", "\uE7FC", ""),
             new("gameadvisor", "Assistente de jogo", "Configurações ideais para o seu hardware.", "\uE770", ""),
             new("bottleneck", "Monitor de gargalos", "O que limita o seu FPS: placa, processador, memória, disco ou calor.", "\uE9D9", ""),

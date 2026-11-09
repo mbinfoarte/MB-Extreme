@@ -41,6 +41,7 @@ internal static class NavigationMap
         new("games", "Jogos", "Sua biblioteca, o Modo Jogo e o que limita o seu FPS.", "\uE7FC", new Tile[]
         {
             new("gamelibrary", "Biblioteca de jogos", "Seus jogos instalados, com Modo Jogo e prioridade por jogo.", "\uE7FC", ""),
+            new("gamefps", "Medir FPS de um jogo", "FPS, 1% pior, gráfico de tempo de quadro, engasgos e sensores enquanto você joga.", "\uE7FC", ""),
             new("gameboost", "Modo Jogo", "Prepara o PC quando um jogo abre.", "\uE7FC", ""),
             new("gameadvisor", "Assistente de jogo", "Configurações ideais para o seu hardware.", "\uE770", ""),
             new("bottleneck", "Monitor de gargalos", "O que limita o seu FPS: placa, processador, memória, disco ou calor.", "\uE9D9", ""),
@@ -59,7 +60,7 @@ internal static class NavigationMap
             new("fps", "Painel de FPS sobre o jogo", "Overlay com FPS, temperatura e uso.", "\uE9D9", "Medir desempenho"),
             new("speedtest", "Teste de internet", "Download, upload, latência e variação com várias conexões, e o histórico.", "\uE774", "Rede"),
             new("netanalyzer", "Analisador de rede", "Ping, TCPing, MTR e jitter.", "\uE9D9", "Rede"),
-            new("periphtest", "Teste de periféricos", "Teclado, mouse (taxa e clique duplo) e controle (deriva, circularidade e vibração).", "\uE765", "Periféricos"),
+            new("periphtest", "Teste de periféricos", "Teclado, mouse (taxa e clique duplo), tela, som, microfone e webcam.", "\uE765", "Periféricos"),
             new("padcalib", "Calibrar controle", "Corrige o drift do DualSense e do DualShock 4 gravando a calibração no controle, com laudo para o cliente.", "\uE7FC", "Periféricos"),
             new("wifi", "Diagnóstico de Wi-Fi", "Sinal, banda e dicas.", "\uE774", "Rede"),
             new("sysinfo", "Informações do sistema", "Estilo CPU-Z, GPU-Z e AIDA.", "\uE770", "Informações e sensores"),
@@ -142,10 +143,8 @@ internal static class NavigationMap
         new("TESTES", new SideItem[]
         {
             new("bench", "Benchmark", "\uE9D9"),
-            new("gamefps", "Jogo (FPS)", "\uE7FC"),
             new("periphtest", "Periféricos", "\uE765"),
             new("padcalib", "Calibrar controle", "\uE7FC"),
-            new("stress", "Teste de estresse", "\uE7BA"),
         }),
         new("OTIMIZAR", new SideItem[]
         {

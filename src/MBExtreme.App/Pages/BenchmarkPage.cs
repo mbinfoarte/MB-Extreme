@@ -211,6 +211,9 @@ public sealed partial class BenchmarkPage : ToolPageBase
         var compare = ExtraButton("", "Antes e depois de um ajuste");
         compare.Click += (_, _) => MainWindow.Current?.Go("compare");
         extras.Children.Add(compare);
+        var stress = ExtraButton("", "Teste de estresse (estabilidade e calor)");
+        stress.Click += (_, _) => MainWindow.Current?.Go("stress");
+        extras.Children.Add(stress);
         _newPanel.Children.Add(extras);
         UpdateSummary();
     }

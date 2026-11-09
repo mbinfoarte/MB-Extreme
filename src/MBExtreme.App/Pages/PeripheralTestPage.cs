@@ -24,10 +24,10 @@ public sealed partial class PeripheralTestPage : ToolPageBase
     private readonly StackPanel _host = new();
 
     public PeripheralTestPage() : base("Teste de periféricos",
-        "Teste o teclado, o mouse, o controle, a tela, o som, o microfone e a webcam sem instalar nada. Clique na área do teste antes de começar, para o programa receber as teclas e os cliques.")
+        "Teste o teclado, o mouse, a tela, o som, o microfone e a webcam sem instalar nada. Clique na área do teste antes de começar, para o programa receber as teclas e os cliques. Para o controle, use \"Calibrar controle\".")
     {
         Focusable = true;
-        Body.Children.Add(Choice(new[] { "Teclado", "Mouse", "Controle", "Tela", "Alto-falantes", "Microfone", "Webcam" }, 0, i => { _tab = i; Show(); }));
+        Body.Children.Add(Choice(new[] { "Teclado", "Mouse", "Tela", "Alto-falantes", "Microfone", "Webcam" }, 0, i => { _tab = i; Show(); }));
         Body.Children.Add(_host);
         Loaded += (_, _) => { Active = true; Show(); };
         Unloaded += (_, _) => { Active = false; StopAll(); };
@@ -49,10 +49,9 @@ public sealed partial class PeripheralTestPage : ToolPageBase
         {
             case 0: BuildKeyboard(); break;
             case 1: BuildMouse(); break;
-            case 2: BuildPad(); break;
-            case 3: BuildScreen(); break;
-            case 4: BuildSpeakers(); break;
-            case 5: BuildMic(); break;
+            case 2: BuildScreen(); break;
+            case 3: BuildSpeakers(); break;
+            case 4: BuildMic(); break;
             default: BuildWebcam(); break;
         }
     }

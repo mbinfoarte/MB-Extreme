@@ -137,7 +137,7 @@ public sealed partial class InternetTestPage
             else await DnsApplier.ApplyAsync(provider);
             Say(provider is null ? "DNS voltou para o automático do provedor." : $"DNS trocado para {provider.Name}. Para desfazer, use Voltar ao automático.", "OkBrush");
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or System.ComponentModel.Win32Exception or IOException)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or System.ComponentModel.Win32Exception or System.IO.IOException)
         {
             Say("Não foi possível trocar o DNS: " + ex.Message, "BadBrush");
         }

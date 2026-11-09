@@ -568,7 +568,7 @@
                                     </LinearGradientBrush>
                                 </Rectangle.Fill>
                                 <Rectangle.RenderTransform>
-                                    <TranslateTransform x:Name="ShineMove" X="-90" />
+                                    <TranslateTransform X="-90" />
                                 </Rectangle.RenderTransform>
                             </Rectangle>
                         </Border>
@@ -577,7 +577,7 @@
                         <EventTrigger RoutedEvent="FrameworkElement.Loaded">
                             <BeginStoryboard>
                                 <Storyboard RepeatBehavior="Forever">
-                                    <DoubleAnimation Storyboard.TargetName="ShineMove" Storyboard.TargetProperty="X" From="-90" To="1600" Duration="0:0:2.2" />
+                                    <DoubleAnimation Storyboard.TargetName="Shine" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="-90" To="1600" Duration="0:0:2.2" />
                                 </Storyboard>
                             </BeginStoryboard>
                         </EventTrigger>

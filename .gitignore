@@ -1,0 +1,34 @@
+# Segredos
+.env
+.env.*
+*.pfx
+*.pem
+*.key
+
+# Build
+target/
+node_modules/
+dist/
+*.msi
+*.exe
+
+# IDE
+.vscode/
+.idea/
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+out/
+
+# Servidor de licenças: banco de dados e chave de assinatura (nunca vão para o repositório)
+src/MBExtreme.LicenseServer/data/
+src/MBExtreme.LicenseServer/bin/
+src/MBExtreme.LicenseServer/obj/
+**/signing-key.pem
+**/licenses.db*
+
+# gerado na compilação a partir do Blender Open Data
+src/MBExtreme.App/Assets/hardware-index.json

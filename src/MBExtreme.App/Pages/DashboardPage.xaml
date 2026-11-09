@@ -1,0 +1,221 @@
+<UserControl x:Class="MBExtreme.UI.Pages.DashboardPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:MBExtreme.UI.Controls">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28,18,28,28">
+
+            <!-- Topo: análise com nota de saúde -->
+            <ContentControl x:Name="HeroHost" />
+
+            <!-- Vídeo novo no canal -->
+            <ContentControl x:Name="VideoHost" Margin="0,10,0,0" />
+
+            <!-- Itens urgentes do momento (segurança, temperatura, memória) -->
+            <TextBlock x:Name="HealthText" Margin="2,10,0,0" FontSize="12" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+            <StackPanel x:Name="AttentionPanel" Margin="0,4,0,0" />
+
+            <!-- Resumo: memória, disco do Windows e o computador -->
+            <UniformGrid Columns="3" Margin="0,12,0,0">
+                <Border Style="{StaticResource Card}" Padding="14,12" Margin="0,0,6,0" Cursor="Hand" x:Name="RamSummary">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="44" Height="44">
+                            <ContentControl x:Name="RamRingHost" />
+                            <TextBlock x:Name="RamRingText" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Memória RAM" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock x:Name="RamSummaryText" FontSize="13" FontWeight="SemiBold" Text="—" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}" Padding="14,12" Margin="6,0,6,0" Cursor="Hand" x:Name="DiskSummary">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="44" Height="44">
+                            <ContentControl x:Name="DiskRingHost" />
+                            <TextBlock x:Name="DiskRingText" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Disco do Windows" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock x:Name="DiskSummaryText" FontSize="13" FontWeight="SemiBold" Text="—" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}" Padding="14,12" Margin="6,0,0,0" Cursor="Hand" x:Name="PcSummary">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource ToolIconBox}" Width="44" Height="44" CornerRadius="12">
+                            <TextBlock Text="&#xE7F8;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="#0B0B0B" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="PcWindowsText" FontSize="11" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="PcCpuText" FontSize="13" FontWeight="SemiBold" Text="—" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="PcUptimeText" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </UniformGrid>
+
+            <!-- Ferramentas -->
+            <TextBlock Text="Ferramentas" FontSize="15" FontWeight="SemiBold" Margin="2,20,0,10" />
+            <UniformGrid x:Name="ToolsGrid" Columns="3" />
+
+            <!-- Ao vivo -->
+            <TextBlock Text="Ao vivo" FontSize="15" FontWeight="SemiBold" Margin="2,16,0,0" />
+
+            <!-- Aviso: sensores da CPU -->
+            <Border x:Name="SensorHint" Style="{StaticResource Card}" Margin="0,18,0,0" Padding="18,14" Visibility="Collapsed">
+                <Grid>
+                    <TextBlock x:Name="SensorHintText" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,420,0"
+                               Foreground="{StaticResource WarnBrush}" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Copiar diagnóstico" Style="{StaticResource GhostButton}" Padding="14,8" Margin="0,0,8,0" Click="CopySensorDiagnosis_Click" />
+                        <Button Content="Ativar sensores da CPU" Style="{StaticResource PrimaryButton}" Padding="18,8" Click="InstallSensorDriver_Click" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Medidores -->
+            <UniformGrid Columns="3" Margin="0,20,0,0">
+                <Border x:Name="CpuCard" Cursor="Hand" Style="{StaticResource Card}" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="CPU" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="Temperatura · linha: uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <ctl:ArcGauge x:Name="CpuGauge" Height="150" Margin="0,8,0,0" Unit="°C" Maximum="110" WarnAt="75" BadAt="90" />
+                        <TextBlock x:Name="CpuDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <TextBlock x:Name="CpuFans" FontSize="12" TextAlignment="Center" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        <ctl:AreaChart x:Name="CpuUseChart" Height="46" Margin="0,8,0,0" Maximum="100" />
+                    </StackPanel>
+                </Border>
+                <Border x:Name="GpuCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="Placa de vídeo" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="Temperatura · linha: uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <ctl:ArcGauge x:Name="GpuGauge" Height="150" Margin="0,8,0,0" Unit="°C" Maximum="110" WarnAt="78" BadAt="88" />
+                        <TextBlock x:Name="GpuDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <TextBlock x:Name="GpuFans" FontSize="12" TextAlignment="Center" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        <ctl:AreaChart x:Name="GpuUseChart" Height="46" Margin="0,8,0,0" Maximum="100" />
+                    </StackPanel>
+                </Border>
+                <Border x:Name="RamCard" Cursor="Hand" Style="{StaticResource Card}" Margin="8,0,0,0">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="Memória" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button x:Name="RamAutoButton" Content="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="14" Padding="9,5"
+                                    HorizontalAlignment="Right" Style="{StaticResource GhostButton}" Click="RamAuto_Click" />
+                        </Grid>
+                        <TextBlock Text="Em uso" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <ctl:ArcGauge x:Name="RamGauge" Height="150" Margin="0,8,0,0" Unit="%" Maximum="100" WarnAt="70" BadAt="85" />
+                        <TextBlock x:Name="RamDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <ctl:AreaChart x:Name="RamChart" Height="46" Margin="0,8,0,0" Maximum="100" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Internet (com o ping) e energia -->
+            <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource Card}" Margin="0,0,8,0">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="Uso da internet" FontSize="15" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="━" Foreground="#FFC400" FontWeight="Bold" Margin="0,0,4,0" />
+                                <TextBlock Text="Download" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,14,0" />
+                                <TextBlock Text="┅" Foreground="#34D17A" FontWeight="Bold" Margin="0,0,4,0" />
+                                <TextBlock Text="Envio" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="190" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- ping: toque para abrir o analisador de rede -->
+                            <Border x:Name="NetCard" Cursor="Hand" Background="Transparent" ToolTip="Ping até 1.1.1.1. Clique para abrir o analisador de rede.">
+                                <StackPanel>
+                                    <TextBlock Text="Ping" FontSize="12" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center" />
+                                    <ctl:ArcGauge x:Name="PingGauge" Height="130" Unit="ms" Maximum="200" WarnAt="60" BadAt="120" />
+                                    <TextBlock x:Name="PingDetail" FontSize="12" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel Margin="0,0,36,0">
+                                        <TextBlock Text="Download" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                        <TextBlock x:Name="DownloadText" FontSize="24" FontWeight="SemiBold" Text="—" />
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Envio" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                        <TextBlock x:Name="UploadText" FontSize="24" FontWeight="SemiBold" Text="—" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border x:Name="NetChartHost" Height="110" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Grid>
+                        <UniformGrid Columns="2" Margin="0,10,0,0">
+                            <StackPanel Margin="0,0,8,0">
+                                <TextBlock Text="Latência e oscilação" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                <TextBlock x:Name="JitterStat" FontSize="13" FontWeight="SemiBold" Text="—" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Ping local (roteador)" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                <TextBlock x:Name="LocalPingStat" FontSize="13" FontWeight="SemiBold" Text="—" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </UniformGrid>
+                        <UniformGrid Columns="2" Margin="0,10,0,0">
+                            <StackPanel Margin="0,0,8,0">
+                                <TextBlock Text="DNS em uso" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                <TextBlock x:Name="DnsStat" FontSize="13" FontWeight="SemiBold" Text="—" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Rota até o destino" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                <TextBlock x:Name="RouteStat" FontSize="13" FontWeight="SemiBold" Text="Ainda não analisada" TextWrapping="Wrap" />
+                                <Button x:Name="RouteButton" Content="Analisar rota" Style="{StaticResource GhostButton}" Padding="12,5" Margin="0,6,0,0"
+                                        HorizontalAlignment="Left" Click="AnalyzeRoute_Click" />
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource Card}" Margin="8,0,0,0">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="Energia" FontSize="15" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="━" Foreground="#FFC400" FontWeight="Bold" Margin="0,0,4,0" />
+                                <TextBlock Text="Total" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,14,0" />
+                                <TextBlock Text="━" Foreground="#FF5A5F" FontWeight="Bold" Margin="0,0,4,0" />
+                                <TextBlock Text="CPU" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,14,0" />
+                                <TextBlock Text="┅" Foreground="#34D17A" FontWeight="Bold" Margin="0,0,4,0" />
+                                <TextBlock Text="GPU" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="Consumo agora" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0" />
+                        <TextBlock x:Name="PowerTotalText" FontSize="24" FontWeight="SemiBold" Text="—" />
+                        <TextBlock x:Name="PowerDetail" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}" />
+                        <Border x:Name="PowerChartHost" Height="150" Margin="0,10,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

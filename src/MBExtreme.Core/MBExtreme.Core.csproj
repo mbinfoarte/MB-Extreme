@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>MBExtreme.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Sensores de hardware (MPL 2.0). Veja THIRD-PARTY.md. -->
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.0" />
+    <!-- Consultas WMI (informações do sistema, dispositivos, drivers). MIT. -->
+    <PackageReference Include="System.Management" Version="10.0.2" />
+    <!-- Eventos de apresentação de quadros (ETW) para o monitor de FPS. MIT. -->
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.16" />
+    <!-- Direct3D 11 para o benchmark 3D da GPU. MIT. -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+    <!-- Captura de áudio (WASAPI) e mixagem para a gravação e a transmissão. MIT. -->
+    <PackageReference Include="NAudio.Core" Version="2.2.1" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MBExtreme.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- sombreadores das cenas 3D do benchmark (janela separada) -->
+    <EmbeddedResource Include="Benchmark\Shaders\*.hlsl" LogicalName="MBExtreme.Bench.%(Filename).hlsl" />
+  </ItemGroup>
+</Project>

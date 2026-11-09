@@ -246,9 +246,9 @@ public partial class MainWindow : Window
     {
         if (_updates is null) return;
         VersionText.Text = "Procurando atualização...";
-        string answer = await _updates.CheckNowAsync();
+        var result = await _updates.CheckNowAsync();
         VersionText.Text = VersionLabel;
-        MessageBox.Show(answer, MBExtreme.Core.AppInfo.ShortName, MessageBoxButton.OK, MessageBoxImage.Information);
+        _updates.ShowCheckResult(this, result);
     }
 
     private static string VersionLabel =>

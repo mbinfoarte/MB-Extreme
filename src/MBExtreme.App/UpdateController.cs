@@ -209,17 +209,94 @@ internal sealed class UpdateController
         Process.Start(new ProcessStartInfo(file, MBExtreme.Core.Setup.UpdateArgs.Build(folder)) { UseShellExecute = true });
     }
 
+    internal enum CheckOutcome { UpToDate, Available, Offline }
+
+    internal sealed record UpdateCheckResult(CheckOutcome Outcome, int NewBuild, string Notes);
+
     /// <summary>Verificação pedida pelo usuário (rodapé do menu): sempre responde, mesmo quando não há nada novo.</summary>
-    public async Task<string> CheckNowAsync()
+    public async Task<UpdateCheckResult> CheckNowAsync()
+    {
+        var manifest = await FindAsync();
+        if (manifest is null) return new UpdateCheckResult(CheckOutcome.Offline, 0, "");
+        var state = AppUpdates.Evaluate(AppUpdates.CurrentBuild(), manifest);
+        if (state == UpdateState.UpToDate) return new UpdateCheckResult(CheckOutcome.UpToDate, 0, "");
+        await CheckAsync();   // mostra o aviso no alto da tela
+        return new UpdateCheckResult(CheckOutcome.Available, manifest.Build, manifest.Notes);
+    }
+
+    /// <summary>Janela de resultado da verificação, no tema do programa (igual ao "O que há de novo"), no lugar da caixa cinza do Windows.</summary>
+    public void ShowCheckResult(Window owner, UpdateCheckResult result)
     {
         string current = $"Você está na versão {AppInfo.Version} ({AppInfo.DisplayVersion}), compilação {AppUpdates.CurrentBuild()}.";
-        var manifest = await FindAsync();
-        if (manifest is null)
-            return current + "\n\nNão foi possível ver se há versão nova agora (sem internet, ou as versões ainda não estão públicas no GitHub). Tente de novo mais tarde.";
-        var state = AppUpdates.Evaluate(AppUpdates.CurrentBuild(), manifest);
-        if (state == UpdateState.UpToDate) return current + "\n\nVocê já está com a versão mais nova.";
-        await CheckAsync();
-        return current + $"\n\nHá uma compilação nova ({manifest.Build}). " + (AppServices.Settings.AutoUpdate ? "Ela foi baixada; o aviso para reiniciar e atualizar apareceu no alto da tela." : "O aviso para instalar apareceu no alto da tela.");
+        var (glyph, title, message) = result.Outcome switch
+        {
+            CheckOutcome.Available => ("⬆", "Atualização disponível",
+                $"Há uma versão nova: compilação {result.NewBuild}." + (AppServices.Settings.AutoUpdate
+                    ? " Ela já está sendo baixada; o aviso para reiniciar e atualizar apareceu no alto da tela."
+                    : " O aviso para instalar apareceu no alto da tela.")),
+            CheckOutcome.Offline => ("⚠", "Não deu para verificar",
+                "Não foi possível ver se há versão nova agora (sem internet, ou as versões ainda não estão públicas no GitHub). Tente de novo mais tarde."),
+            _ => ("✓", "Tudo em dia", "Você já está com a versão mais nova."),
+        };
+        Brush accent = result.Outcome == CheckOutcome.Offline ? Res("WarnBrush") : Res("AccentBrush");
+
+        var head = new Border
+        {
+            Background = accent, Padding = new Thickness(22, 16, 22, 14),
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Children =
+                {
+                    new TextBlock { Text = glyph, FontSize = 26, Foreground = Brushes.Black, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) },
+                    new TextBlock { Text = title, FontSize = 20, FontWeight = FontWeights.Bold, Foreground = Brushes.Black, VerticalAlignment = VerticalAlignment.Center },
+                },
+            },
+        };
+
+        var body = new StackPanel { Margin = new Thickness(22, 18, 22, 8) };
+        body.Children.Add(new TextBlock { Text = message, FontSize = 14, TextWrapping = TextWrapping.Wrap, Foreground = Res("TextBrush") });
+        body.Children.Add(new TextBlock { Text = current, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Res("MutedBrush"), Margin = new Thickness(0, 12, 0, 0) });
+        if (result.Outcome == CheckOutcome.Available && !string.IsNullOrWhiteSpace(result.Notes))
+        {
+            body.Children.Add(new TextBlock { Text = "O que vem nela:", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Res("TextBrush"), Margin = new Thickness(0, 14, 0, 6) });
+            foreach (var line in result.Notes.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                         .Where(l => !l.TrimStart().StartsWith('#')).Select(l => l.TrimStart('-', '*', '•', ' ')).Where(l => l.Length > 0).Take(8))
+                body.Children.Add(new TextBlock { Text = "•  " + line, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Foreground = Res("TextBrush"), Margin = new Thickness(0, 0, 0, 5) });
+        }
+
+        var window = new Window
+        {
+            Title = "Atualização", Width = 520, SizeToContent = SizeToContent.Height, Owner = owner,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            Background = Res("SurfaceBrush"), ResizeMode = ResizeMode.NoResize,
+        };
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(22, 8, 22, 16) };
+        if (result.Outcome == CheckOutcome.Available)
+        {
+            var update = new Button { Content = "Atualizar agora", Style = (Style)Application.Current.FindResource("PrimaryButton"), Padding = new Thickness(20, 7, 20, 7) };
+            update.Click += async (_, _) => { window.Close(); await InstallAsync(_bannerProgress); };
+            buttons.Children.Add(update);
+            var later = new Button { Content = "Depois", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(18, 7, 18, 7), Margin = new Thickness(8, 0, 0, 0) };
+            later.Click += (_, _) => window.Close();
+            buttons.Children.Add(later);
+        }
+        else
+        {
+            var ok = new Button { Content = "OK", Style = (Style)Application.Current.FindResource("PrimaryButton"), Padding = new Thickness(26, 7, 26, 7) };
+            ok.Click += (_, _) => window.Close();
+            buttons.Children.Add(ok);
+        }
+
+        var root = new DockPanel();
+        DockPanel.SetDock(head, Dock.Top);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(head);
+        root.Children.Add(buttons);
+        root.Children.Add(body);
+        window.Content = root;
+        window.ShowDialog();
     }
 
     private async Task InstallAsync(ProgressBar progress)

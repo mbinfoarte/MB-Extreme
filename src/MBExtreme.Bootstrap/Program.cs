@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -17,6 +18,9 @@ namespace MBExtreme.Bootstrap
     internal static class Program
     {
         public const string Repository = "mbinfoarte/MB-Extreme-Download";
+
+        /// <summary>Reserva: enquanto as versões ainda saem no repositório principal.</summary>
+        public const string FallbackRepository = "mbinfoarte/MB-Extreme";
         public const string ReleasesPage = "https://github.com/" + Repository + "/releases";
 
         [STAThread]
@@ -164,14 +168,20 @@ namespace MBExtreme.Bootstrap
             {
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("MBExtreme-Instalar/1.0");
                 SetStatus("Procurando a versão mais nova...", "Conectando ao servidor de downloads.", 0);
-                var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/" + Program.Repository + "/releases?per_page=15");
-                request.Headers.Accept.ParseAdd("application/vnd.github+json");
-                var response = await http.SendAsync(request, token);
-                if (response.StatusCode == HttpStatusCode.NotFound)
+                // os dois repositórios (downloads e o principal): vale a maior compilação
+                var all = new List<object>();
+                foreach (string repository in new[] { Program.Repository, Program.FallbackRepository })
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/" + repository + "/releases?per_page=100");
+                    request.Headers.Accept.ParseAdd("application/vnd.github+json");
+                    var response = await http.SendAsync(request, token);
+                    if (!response.IsSuccessStatusCode) continue;
+                    var json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.DeserializeObject(await response.Content.ReadAsStringAsync());
+                    if (json is IEnumerable items) foreach (var item in items) all.Add(item);
+                }
+                if (all.Count == 0)
                     throw new InvalidDataException("O download ainda não está público. Baixe o instalador completo pelo site.");
-                response.EnsureSuccessStatusCode();
-                var json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.DeserializeObject(await response.Content.ReadAsStringAsync());
-                var choice = ReleasePicker.Pick(json as IEnumerable ?? new object[0]);
+                var choice = ReleasePicker.Pick(all);
                 if (choice == null) throw new InvalidDataException("Nenhuma versão disponível para baixar agora.");
 
                 string sha = choice.Sha256;

@@ -117,7 +117,7 @@ internal sealed class UpdateController
         string url = AppServices.License.Config.ServerUrl;
         if (url.Length > 0) best = await AppUpdates.CheckAsync(Http, url);
         bool beta = AppServices.Settings.BetaUpdates || AppInfo.Channel == "Beta";
-        var github = await GitHubReleases.CheckAsync(Http, AppInfo.UpdateRepository, beta);
+        var github = await GitHubReleases.CheckAnyAsync(Http, AppInfo.UpdateRepositories, beta);
         if (github is not null && (best is null || github.Build > best.Build))
             best = best is null ? github : github with { MinimumBuild = Math.Max(github.MinimumBuild, best.MinimumBuild) };
         return best;

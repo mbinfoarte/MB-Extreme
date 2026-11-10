@@ -89,7 +89,7 @@ public static class GitHubReleases
         if (!Regex.IsMatch(repository, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) return null;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{repository}/releases?per_page=15");
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{repository}/releases?per_page=100");   // 100: a lista vem pela data do commit e uma versão pode cair longe do topo
             request.Headers.UserAgent.ParseAdd("MBExtreme-Updater");
             request.Headers.Accept.ParseAdd("application/vnd.github+json");
             using var response = await http.SendAsync(request, stop);
@@ -106,6 +106,13 @@ public static class GitHubReleases
             return manifest;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { return null; }
+    }
+
+    /// <summary>Procura em vários repositórios (downloads e o principal) e fica com a maior compilação.</summary>
+    public static async Task<UpdateManifest?> CheckAnyAsync(HttpClient http, IEnumerable<string> repositories, bool includePrerelease, CancellationToken stop = default)
+    {
+        var found = await Task.WhenAll(repositories.Distinct(StringComparer.OrdinalIgnoreCase).Select(r => CheckAsync(http, r, includePrerelease, stop)));
+        return found.OfType<UpdateManifest>().OrderByDescending(m => m.Build).FirstOrDefault();
     }
 
     private static string Str(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";

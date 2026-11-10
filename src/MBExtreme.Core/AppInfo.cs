@@ -26,6 +26,12 @@ public static class AppInfo
     public const bool EnforceLicense = false;
 
     /// <summary>Repositório do GitHub com as Releases (atualização sem servidor; só funciona com o repositório público).</summary>
-    public const string UpdateRepository = "mbinfoarte/MB-Extreme-Download";   // repositório público só de downloads; o código-fonte fica privado em mbinfoarte/MB-Extreme
+    public const string UpdateRepository = "mbinfoarte/MB-Extreme-Download";
+
+    /// <summary>
+    /// Onde o programa procura versão nova: o repositório de downloads e, enquanto a separação não estiver completa (sem o segredo
+    /// RELEASES_TOKEN o CI publica no próprio repositório), o MB-Extreme. Vale a de maior compilação entre os dois.
+    /// </summary>
+    public static readonly string[] UpdateRepositories = { "mbinfoarte/MB-Extreme-Download", "mbinfoarte/MB-Extreme" };   // repositório público só de downloads; o código-fonte fica privado em mbinfoarte/MB-Extreme
     public const string DefaultPublicKey = "";
 }

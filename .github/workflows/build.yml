@@ -100,8 +100,11 @@ jobs:
           $lines = (git log -1 --pretty=%B) | Where-Object { $_ -notmatch '^(Co-Authored-By|Claude-Session):' }
           $notes = @("## Novidades", "") + $lines + @("", "---", "Compilação ${{ github.run_number }} (commit ${{ github.sha }}). Baixe MBExtreme-Beta-Setup.exe para instalar (pede permissão de administrador) ou o MBExtreme-Instalar.exe, que é pequeno e baixa a versão mais nova. MBExtreme-Beta-portatil-win-x64.zip é a versão sem instalação. Crie um ponto de restauração do Windows antes de aplicar ajustes.")
           Set-Content -Path notes.md -Value $notes -Encoding utf8
+          # no próprio repositório, a versão fica presa ao commit compilado. Sem isso o GitHub usa o "main" (antigo) e a versão
+          # vai parar no meio da lista, longe do topo que o programa lê (foi o que escondeu a beta-60 e a beta-61).
+          $target = if ($env:RELEASE_REPO -eq "${{ github.repository }}") { @("--target", "${{ github.sha }}") } else { @() }
           gh release create "beta-${{ github.run_number }}" setup/MBExtreme-Beta-Setup.exe setup/MBExtreme-Beta-Setup.exe.sha256 MBExtreme-Beta-portatil-win-x64.zip bootstrap/MBExtreme-Instalar.exe `
-            --repo $env:RELEASE_REPO `
+            --repo $env:RELEASE_REPO @target `
             --latest `
             --title "MB Extreme (Beta 01) - compilação ${{ github.run_number }}" `
             --notes-file notes.md

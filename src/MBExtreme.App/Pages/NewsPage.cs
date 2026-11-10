@@ -20,9 +20,10 @@ public sealed class NewsPage : ToolPageBase
     {
         SetStatus("Buscando as versões...");
         var releases = new List<(int Build, string Title, DateTimeOffset At, string Notes)>();
+        foreach (string repository in AppInfo.UpdateRepositories)
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{AppInfo.UpdateRepository}/releases?per_page=20");
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{repository}/releases?per_page=100");
             request.Headers.UserAgent.ParseAdd("MBExtreme");
             using var response = await AppServices.Web.SendAsync(request);
             if (response.IsSuccessStatusCode)
@@ -39,6 +40,7 @@ public sealed class NewsPage : ToolPageBase
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException) { }
 
+        releases = releases.GroupBy(r => r.Build).Select(g => g.First()).OrderByDescending(r => r.Build).Take(20).ToList();
         Body.Children.Clear();
         if (releases.Count == 0)
         {

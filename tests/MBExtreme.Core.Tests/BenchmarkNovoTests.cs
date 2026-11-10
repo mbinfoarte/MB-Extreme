@@ -24,8 +24,9 @@ public class BenchmarkNovoTests
         int precise = BenchmarkModes.EstimatedSeconds(full with { Mode = BenchmarkMode.Preciso });
         Assert.True(quick < normal && normal < precise);
         Assert.InRange(quick, 35, 110);
-        Assert.InRange(precise, 250, 720);
-        Assert.Equal(new[] { 1, 1, 3 }, all.Select(m => m.Passes));
+        Assert.InRange(normal, 5 * 60, 10 * 60);     // Padrão: 5 a 10 minutos (pedido: o PC precisa esquentar)
+        Assert.InRange(precise, 10 * 60, 15 * 60);   // Preciso: 10 a 15 minutos
+        Assert.Equal(new[] { 1, 2, 3 }, all.Select(m => m.Passes));
     }
 
     [Fact]

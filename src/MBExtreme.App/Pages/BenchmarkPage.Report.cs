@@ -144,6 +144,7 @@ public sealed partial class BenchmarkPage
         if (last.ResolutionLimit is { Count: > 0 } limit) _resultsPanel.Children.Add(ResolutionCard(limit));
         if (last.Monitoring is { Count: > 0 } tracks)
         {
+            _resultsPanel.Children.Add(ThermalCard(BenchmarkThermals.Analyze(tracks)));
             if (PowerCard(tracks) is { } power) _resultsPanel.Children.Add(power);
             _resultsPanel.Children.Add(MonitoringCard(tracks, last.Phases));
         }
@@ -404,6 +405,26 @@ public sealed partial class BenchmarkPage
     }
 
     /// <summary>Consumo medido pelos sensores durante o teste e a fonte recomendada.</summary>
+    /// <summary>Temperatura e calor: picos da CPU e da GPU e se o clock caiu do começo para o fim da carga (o calor segurando o desempenho).</summary>
+    private Border ThermalCard(ThermalReport r)
+    {
+        string brush = r.Level switch { ThermalLevel.Hot => "BadBrush", ThermalLevel.Warm => "WarnBrush", ThermalLevel.Ok => "OkBrush", _ => "MutedBrush" };
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock { Text = "Temperatura e calor", FontSize = 14, FontWeight = FontWeights.SemiBold });
+        stack.Children.Add(new TextBlock { Text = r.Title, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Brush(brush), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
+        var grid = new UniformGrid { Columns = 4, Margin = new Thickness(0, 8, 0, 0) };
+        if (r.CpuPeak is { } cpu) grid.Children.Add(Metric("Processador", $"{cpu:0}", "°C no pico", cpu >= BenchmarkThermals.CpuHot ? "no limite" : cpu >= BenchmarkThermals.CpuWarm ? "quente" : "bom"));
+        if (r.GpuPeak is { } gpu) grid.Children.Add(Metric("Placa de vídeo", $"{gpu:0}", "°C no pico", gpu >= BenchmarkThermals.GpuHot ? "no limite" : gpu >= BenchmarkThermals.GpuWarm ? "quente" : "bom"));
+        if (r.CpuClockDropPercent is { } cd) grid.Children.Add(Metric("Clock da CPU", $"-{cd:0}", "% do começo ao fim", cd >= BenchmarkThermals.DropAlert ? "perdeu velocidade" : "estável"));
+        if (r.GpuClockDropPercent is { } gd) grid.Children.Add(Metric("Clock da GPU", $"-{gd:0}", "% do começo ao fim", gd >= BenchmarkThermals.DropAlert ? "perdeu velocidade" : "estável"));
+        if (grid.Children.Count > 0) stack.Children.Add(grid);
+        foreach (string note in r.Notes)
+            stack.Children.Add(new TextBlock { Text = "•  " + note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+        if (r.Level != ThermalLevel.Unknown)
+            stack.Children.Add(Muted("Dica: os modos Padrão e Preciso seguram a carga por vários minutos justamente para mostrar se o calor derruba o desempenho.", 11));
+        return CardOf(stack);
+    }
+
     private Border? PowerCard(IReadOnlyList<SensorTrack> tracks)
     {
         var cpu = tracks.FirstOrDefault(t => t.Name == "Potência da CPU");

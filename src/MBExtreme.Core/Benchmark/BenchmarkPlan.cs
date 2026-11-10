@@ -19,9 +19,9 @@ public static class BenchmarkModes
 {
     public static readonly IReadOnlyList<BenchmarkProfile> All = new[]
     {
-        new BenchmarkProfile(BenchmarkMode.Rapido, "Rápido", "Uma conferida rápida. Carga leve e curta: bom para ver se algo mudou.", 1200, 128, 4, 2, true, 1),
-        new BenchmarkProfile(BenchmarkMode.Padrao, "Padrão", "O equilíbrio entre tempo e precisão. Recomendado para comparar antes e depois.", 2500, 512, 8, 4, false, 1),
-        new BenchmarkProfile(BenchmarkMode.Preciso, "Preciso", "Carga longa e pesada em tudo: 3 passadas e vale a mediana. Varia menos, mas o PC esquenta mais.", 5000, 2048, 10, 8, false, 3),
+        new BenchmarkProfile(BenchmarkMode.Rapido, "Rápido", "Uma conferida rápida (~1 min). Carga leve e curta: bom para ver se algo mudou.", 1200, 128, 4, 2, true, 1),
+        new BenchmarkProfile(BenchmarkMode.Padrao, "Padrão", "Cerca de 7 minutos de carga contínua, com 2 passadas: dá tempo de o PC esquentar e mostra se a temperatura derruba o desempenho. Recomendado para comparar antes e depois.", 6000, 1024, 20, 6, false, 2),
+        new BenchmarkProfile(BenchmarkMode.Preciso, "Preciso", "Cerca de 12 minutos de carga pesada em tudo, 3 passadas e vale a mediana: o teste de estabilidade e de calor. O PC esquenta bastante.", 9000, 4096, 26, 12, false, 3),
     };
 
     public static BenchmarkProfile Get(BenchmarkMode mode) => All.First(p => p.Mode == mode);

@@ -559,7 +559,7 @@
                             <Border.Effect>
                                 <DropShadowEffect Color="#FFB000" BlurRadius="10" ShadowDepth="0" Opacity="0.55" />
                             </Border.Effect>
-                            <Rectangle x:Name="Shine" Width="90" HorizontalAlignment="Left" RenderTransformOrigin="0,0">
+                            <Rectangle Width="90" HorizontalAlignment="Left" RenderTransformOrigin="0,0">
                                 <Rectangle.Fill>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                         <GradientStop Color="#00FFFFFF" Offset="0" />
@@ -570,18 +570,20 @@
                                 <Rectangle.RenderTransform>
                                     <TranslateTransform X="-90" />
                                 </Rectangle.RenderTransform>
+                                <!-- a animação fica no próprio retângulo: sem nome nenhum para procurar (procurar pelo nome dentro do
+                                     modelo da barra derrubava o programa: "não pode ser encontrado no escopo de nome") -->
+                                <Rectangle.Triggers>
+                                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="-90" To="1600" Duration="0:0:2.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Rectangle.Triggers>
                             </Rectangle>
                         </Border>
                     </Grid>
-                    <ControlTemplate.Triggers>
-                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                            <BeginStoryboard>
-                                <Storyboard RepeatBehavior="Forever">
-                                    <DoubleAnimation Storyboard.TargetName="Shine" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="-90" To="1600" Duration="0:0:2.2" />
-                                </Storyboard>
-                            </BeginStoryboard>
-                        </EventTrigger>
-                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

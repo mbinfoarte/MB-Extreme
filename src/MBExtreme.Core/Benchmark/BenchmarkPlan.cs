@@ -47,11 +47,15 @@ public static class BenchmarkModes
             BenchmarkService.StepDaily => 14.0 * p.Passes,
             GpuWindowBench.ResolutionLimit => resolutions * (Math.Max(3, p.GpuSecondsPerScene / 2) + 0.6),
             GpuWindowBench.Studio => (p.GpuSecondsPerScene + 1.5) * p.Passes,
-            Dx12RayBench.Step => (2 * p.GpuSecondsPerScene + 1.5) * p.Passes + 1.5,
+            Dx12RayBench.Step => 2 * p.GpuSecondsPerScene + 3.0,
+            FsrBench.Step => UpscaleModes.All.Count * (FsrSecondsPerMode(p) + 4.0),
             _ when BenchmarkService.GpuSteps.Contains(step) => (p.GpuSecondsPerScene + 0.7) * p.Passes + 0.5,
             _ => 1,
         };
     }
+
+    /// <summary>Segundos de cada modo do FSR: metade de uma cena 3D (no mínimo 5), para o benchmark não passar do tempo do modo.</summary>
+    public static int FsrSecondsPerMode(BenchmarkProfile p) => Math.Max(5, p.GpuSecondsPerScene / 2);
 
     /// <summary>Estimativa da duração total em segundos.</summary>
     public static int EstimatedSeconds(BenchmarkOptions options) =>

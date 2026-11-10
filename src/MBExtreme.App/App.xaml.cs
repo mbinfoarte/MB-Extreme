@@ -46,6 +46,16 @@ public partial class App : Application
             return;
         }
 
+        // Benchmark: o FSR roda num processo separado (código nativo da AMD). Sem janela do programa, sem trava de cópia única.
+        if (e.Args.Length > 0 && e.Args[0] == MBExtreme.Core.Benchmark.FsrBench.Argument)
+        {
+            int code;
+            try { code = MBExtreme.Core.Benchmark.FsrBench.ChildMain(e.Args); }
+            catch (Exception) { code = 3; }
+            Shutdown(code);
+            return;
+        }
+
         // uma janela só: duas cópias abertas poderiam rodar dois reparos ou duas atualizações ao mesmo tempo
         _instance = new System.Threading.Mutex(true, @"Local\MBExtreme-Instancia", out bool first);
         if (!first)

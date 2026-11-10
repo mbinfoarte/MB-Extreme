@@ -32,6 +32,7 @@ public sealed partial class BenchmarkPage
         [GpuWindowBench.Game] = ("", "Processador + placa de vídeo, como um jogo: 10 mil soldados animados com IA no processador, disparos de energia, explosões, fumaça e um lago com reflexo"),
         [GpuWindowBench.ResolutionLimit] = ("", "A simulação de jogo em cada resolução até a escolhida: mostra até onde passa de 60 FPS"),
         [Dx12RayBench.Step] = ("", "DirectX 12 com ray tracing por hardware: a mesma arena com RT desligado e ligado (sombras, reflexos e oclusão por raio) para mostrar quanto o RT custa"),
+        [FsrBench.Step] = ("", "AMD FSR na mesma arena com ray tracing: Qualidade, Desempenho e Desempenho com geração de quadros, comparados com a imagem nativa (na primeira vez baixa o FSR, 55 MB)"),
         ["1 núcleo"] = ("", "A cena desenhada por raios, bloco a bloco, com 1 linha de execução"),
         ["Todos os núcleos"] = ("", "A mesma cena com todas as linhas de execução"),
     };

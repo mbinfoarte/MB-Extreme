@@ -34,5 +34,6 @@
     <!-- sombreadores das cenas 3D do benchmark (janela separada) -->
     <EmbeddedResource Include="Benchmark\Shaders\*.hlsl" LogicalName="MBExtreme.Bench.%(Filename).hlsl" />
     <EmbeddedResource Include="Benchmark\Shaders\*.dxil" LogicalName="MBExtreme.Bench.%(Filename).dxil" />
+    <EmbeddedResource Include="Benchmark\Native\mbfsr.dll" LogicalName="MBExtreme.Bench.mbfsr.dll" />
   </ItemGroup>
 </Project>

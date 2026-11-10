@@ -20,7 +20,7 @@ RWTexture2D<float4> Output : register(u0);
 
 static const float3 KeyDir = float3(-0.5345, 0.5345, 0.6547); // já normalizado
 
-struct Hit { bool hit; float t; float3 p; float3 n; uint mat; uint inst; };
+struct Hit { bool hit; float t; float3 p; float3 n; uint mat; uint inst; float3 objP; };
 
 Hit Trace(float3 ro, float3 rd, float tmax)
 {
@@ -30,7 +30,7 @@ Hit Trace(float3 ro, float3 rd, float tmax)
     q.TraceRayInline(SceneBvh, RAY_FLAG_NONE, 0xFF, ray);
     while (q.Proceed()) { }
     Hit h;
-    h.hit = false; h.t = tmax; h.p = 0; h.n = float3(0, 1, 0); h.mat = 0; h.inst = 0;
+    h.hit = false; h.t = tmax; h.p = 0; h.n = float3(0, 1, 0); h.mat = 0; h.inst = 0; h.objP = 0;
     if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
     {
         uint id = q.CommittedInstanceID();
@@ -49,6 +49,7 @@ Hit Trace(float3 ro, float3 rd, float tmax)
         h.n = dot(n, rd) > 0.0 ? -n : n;
         h.mat = (id >> 8) & 0xFF;
         h.inst = q.CommittedInstanceIndex();
+        h.objP = mul(q.CommittedWorldToObject3x4(), float4(h.p, 1.0));
     }
     return h;
 }
@@ -133,13 +134,15 @@ float3 Lighting(Hit h, Material m, float3 rd, uint2 pixel, uint bounce)
     return m.albedo * (key * dif * shadow + amb * ao * 2.2) + m.emissive;
 }
 
-float3 Shade(float3 ro, float3 rd, uint2 pixel)
+float3 Shade(float3 ro, float3 rd, uint2 pixel, out Hit first)
 {
     float3 color = 0, through = 1;
+    first = (Hit)0;
     uint maxBounce = rtOn != 0 ? bounces : 0;
     for (uint b = 0; b <= maxBounce; b++)
     {
         Hit h = Trace(ro, rd, 600.0);
+        if (b == 0) first = h;
         if (!h.hit) { color += through * NightSky(rd); break; }
         Material m = GetMaterial(h);
         float fres = m.reflectivity + (1.0 - m.reflectivity) * pow(1.0 - saturate(dot(-rd, h.n)), 5.0) * (m.reflectivity > 0.2 ? 1.0 : 0.25);
@@ -163,16 +166,19 @@ float3 Shade(float3 ro, float3 rd, uint2 pixel)
     return color;
 }
 
-float3 ArenaEye() { float a = 0.6 + time * 0.12 + variation * 2.1; return float3(30.0 * cos(a), 7.5 + 2.0 * sin(time * 0.21), 30.0 * sin(a)); }
+float3 ArenaEye(float t) { float a = 0.6 + t * 0.12 + variation * 2.1; return float3(30.0 * cos(a), 7.5 + 2.0 * sin(t * 0.21), 30.0 * sin(a)); }
+static const float3 ArenaAt = float3(0, 2.0, 0);
+static const float ArenaZoom = 1.35;
 
 [RootSignature(RS)]
 [numthreads(8, 8, 1)]
 void CSRayTrace(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= (uint)res.x || id.y >= (uint)res.y) return;
-    float3 eye = ArenaEye();
-    float3 rd = CameraRay(float2(id.xy) + 0.5, eye, float3(0, 2.0, 0), 1.35);
-    float3 c = Shade(eye, rd, id.xy);
+    float3 eye = ArenaEye(time);
+    float3 rd = CameraRay(float2(id.xy) + 0.5, eye, ArenaAt, ArenaZoom);
+    Hit first;
+    float3 c = Shade(eye, rd, id.xy, first);
     c = c / (1.0 + c * 0.75);
     c = pow(saturate(c), 1.0 / 1.1);
     VSOut v;

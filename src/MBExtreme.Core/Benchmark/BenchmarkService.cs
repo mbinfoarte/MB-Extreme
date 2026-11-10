@@ -73,7 +73,9 @@ public sealed record BenchmarkResult(
     int Version = 0,
     double RtOnFps = 0,
     double RtOffFps = 0,
-    string? RtNote = null);
+    string? RtNote = null,
+    IReadOnlyList<UpscaleRun>? Upscaling = null,
+    string? UpscaleNote = null);
 
 /// <summary>Em que segundo do teste começou cada etapa (para marcar no gráfico de monitoramento).</summary>
 public sealed record PhaseMark(string Name, double StartSeconds);
@@ -106,7 +108,7 @@ public static class BenchmarkService
 
     /// <summary>Etapas da placa de vídeo, na ordem em que a janela 3D roda.</summary>
     public static readonly string[] GpuSteps =
-        { GpuWindowBench.Reflections, GpuWindowBench.Geometry, GpuWindowBench.Studio, GpuWindowBench.Game, GpuWindowBench.ResolutionLimit, Dx12RayBench.Step };
+        { GpuWindowBench.Reflections, GpuWindowBench.Geometry, GpuWindowBench.Studio, GpuWindowBench.Game, GpuWindowBench.ResolutionLimit, Dx12RayBench.Step, FsrBench.Step };
 
     public static string[] StepsFor(BenchmarkOptions options)
     {
@@ -279,6 +281,8 @@ public static class BenchmarkService
         IReadOnlyList<GpuSceneResult>? scenes = null;
         GpuWindowResult? window = null;
         RayTracingResult? rt = null;
+        IReadOnlyList<UpscaleRun>? upscale = null;
+        string? upscaleNote = null;
         if (options.Gpu3D)
         {
             Report(GpuWindowBench.Reflections, 0, "Abrindo a janela 3D");
@@ -319,15 +323,9 @@ public static class BenchmarkService
             try
             {
                 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("o ray tracing precisa do Windows (DirectX 12)");
-                var runs = new List<RayTracingResult>();
-                for (int p = 0; p < passes; p++)
-                {
-                    var r = Dx12RayBench.Run(options.GpuWidth, options.GpuHeight, profile.GpuSecondsPerScene, p, passes,
-                        e => Report(e.Step, e.Fraction, e.Fps > 0 ? $"{e.Step}: {e.Fps:0} FPS" : e.Step, e.Fps > 0 ? $"FPS atual: {e.Fps:0}" : null, e.Pass, e.Passes), token);
-                    runs.Add(r);
-                    if (r.Unsupported is not null) break;
-                }
-                rt = runs.Count == 1 ? runs[0] : runs.OrderBy(r => r.OnFps).ElementAt(runs.Count / 2);
+                // uma passada (desligado e ligado na mesma janela): é uma comparação, não precisa de mediana
+                rt = Dx12RayBench.Run(options.GpuWidth, options.GpuHeight, profile.GpuSecondsPerScene, 0, 1,
+                    e => Report(e.Step, e.Fraction, e.Fps > 0 ? $"{e.Step}: {e.Fps:0} FPS" : e.Step, e.Fps > 0 ? $"FPS atual: {e.Fps:0}" : null, e.Pass, e.Passes), token);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -341,6 +339,36 @@ public static class BenchmarkService
                     new GpuSceneResult("Ray tracing ligado (DX12)", rt.OnFps),
                     new GpuSceneResult("Ray tracing desligado (DX12)", rt.OffFps),
                 }).ToList();
+
+            // AMD FSR (upscaling e geração de quadros) na mesma arena com RT ligado: precisa do ray tracing funcionando
+            Report(FsrBench.Step, 0, "Preparando o AMD FSR");
+            if (rt.Unsupported is not null) upscaleNote = "precisa do ray tracing (DirectX 12)";
+            else
+            {
+                try
+                {
+                    if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("o FSR precisa do Windows (DirectX 12)");
+                    string folder = FsrAddon.Folder;
+                    if (!FsrAddon.IsReady(folder))
+                    {
+                        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
+                        folder = FsrAddon.EnsureAsync(http, f => Report(FsrBench.Step, f * 0.1, $"Baixando o AMD FSR: {f:P0} de {FsrAddon.ZipBytes / 1_000_000} MB (só na primeira vez)"), token)
+                            .GetAwaiter().GetResult();
+                    }
+                    upscale = FsrBench.Run(options.GpuWidth, options.GpuHeight, BenchmarkModes.FsrSecondsPerMode(profile), folder,
+                        e => Report(e.Step, 0.1 + e.Fraction * 0.9, e.Fps > 0 ? $"{e.Step}: {e.Fps:0} FPS" : e.Step, e.Fps > 0 ? $"FPS atual: {e.Fps:0}" : null, 1, 1), token);
+                    if (upscale.All(u => !u.Ok)) upscaleNote = upscale.FirstOrDefault()?.Error;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    upscaleNote = "não rodou: " + ex.Message;
+                }
+            }
+            var good = upscale?.Where(u => u.Ok).ToList() ?? new List<UpscaleRun>();
+            ReportResult(FsrBench.Step, good.Count == 0 ? "sem FSR · " + (upscaleNote ?? "não rodou")
+                : string.Join(" · ", good.Select(u => $"{u.Title.Replace("FSR ", "")} {u.DisplayedFps:0} FPS")));
+            if (good.Count > 0)
+                scenes = (scenes ?? Array.Empty<GpuSceneResult>()).Concat(good.Select(u => new GpuSceneResult(u.Title, u.DisplayedFps))).ToList();
         }
 
         progress.Report(new ProgressEvent(steps.Length > 0 ? steps[^1] : StepDisk, 100, "Concluído") { StepPercent = 100, Passes = passes });
@@ -357,9 +385,12 @@ public static class BenchmarkService
             GameFps: window?.GameFps ?? 0, ResolutionLimit: window?.Resolutions, Passes: passes,
             DiskRandReadMBps: disk?.RandReadMBps ?? 0, DiskRandQ8Iops: disk?.RandQ8Iops ?? 0, DiskRandWriteMBps: disk?.RandWriteMBps ?? 0, DiskAccessUs: disk?.AccessMicroseconds ?? 0,
             AiGenerateTps: ai?.GenerationTokensPerSec ?? 0, AiPromptTps: ai?.PromptTokensPerSec ?? 0, GameLow1Fps: window?.Game?.Low1Fps ?? 0,
-            GpuStats: window is null && rt?.On is null ? null : new[] { window?.Reflections, window?.Geometry, window?.Game, rt?.On, rt?.Off }.Where(x => x is not null).Select(x => x!).ToList(),
+            GpuStats: window is null && rt?.On is null ? null : new[] { window?.Reflections, window?.Geometry, window?.Game, rt?.On, rt?.Off }
+                .Concat(upscale?.Where(u => u.Ok).Select(u => new GpuSceneStat(u.Title, u.DisplayedFps, u.Low1Fps, u.Low01Fps, u.FrameMs)) ?? Array.Empty<GpuSceneStat>())
+                .Where(x => x is not null).Select(x => x!).ToList(),
             FocusLost: window?.FocusLost ?? false, Version: BenchmarkScoring.Version,
-            RtOnFps: rt?.OnFps ?? 0, RtOffFps: rt?.OffFps ?? 0, RtNote: rt?.Unsupported);
+            RtOnFps: rt?.OnFps ?? 0, RtOffFps: rt?.OffFps ?? 0, RtNote: rt?.Unsupported,
+            Upscaling: upscale?.Select(u => u with { FrameMs = Array.Empty<double>() }).ToList(), UpscaleNote: upscaleNote);
         var categories = BenchmarkScoring.For(result);
         return result with { Categories = categories, Score = BenchmarkScoring.Overall(categories) };
     }

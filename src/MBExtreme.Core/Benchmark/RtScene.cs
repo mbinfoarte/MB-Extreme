@@ -26,7 +26,10 @@ public static class RtScene
     public const int MatFloor = 0, MatChrome = 1, MatGold = 2, MatYellow = 3, MatBlue = 4, MatPillar = 5;
 
     /// <summary>Hash da fonte (Common + RayTracing) usada para gerar RayTracing.dxil. Atualizado por tools/shaders/build-raytracing.sh.</summary>
-    public const string RayTracingSourceSha256 = "92c89893092b3f42344c1b38343375ff0fb74f6d3403dfedf616100f188ba357";
+    public const string RayTracingSourceSha256 = "169943e1e027fa0c915d814782447af2d1f311f67bafec1c5bda618f15c63aeb";
+
+    /// <summary>Hash da fonte (Common + RayTracing + RayTracingFsr) usada para gerar RayTracingFsr.dxil e RayTracingCompose.dxil.</summary>
+    public const string FsrSourceSha256 = "2ccac7111acae2a1e8c8c78614aeedccaccf0adaa083bb7c4d643419cf11bef2";
 
     /// <summary>Malhas: vértices (posição xyzw e normal xyzw, 8 floats), índices locais e, por malha, (início dos índices, início dos vértices, nº de índices, nº de vértices).</summary>
     public sealed record Meshes(float[] Vertices, uint[] Indices, uint[] Info)

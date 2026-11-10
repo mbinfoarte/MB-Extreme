@@ -304,7 +304,9 @@ public sealed class StudioSession : IDisposable
                 _pipe = new AudioPipe();
                 _pipe.BeginWait();
                 _capture.Start();
-                effective = request with { Audio = new AudioSetup(_pipe.Path) };
+                // sobre o "effective" (e não o pedido original): sem isso o relé das câmeras e a imagem "No ar" se perdiam, e o FFmpeg
+                // tentava abrir a webcam que o relé já está usando ("Error opening input files: I/O error")
+                effective = effective with { Audio = new AudioSetup(_pipe.Path) };
             }
             catch (Exception ex) when (ex is InvalidOperationException or IOException or System.Runtime.InteropServices.COMException)
             {

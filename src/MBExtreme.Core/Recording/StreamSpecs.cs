@@ -19,7 +19,7 @@ public static class PlatformSpecs
         "H.264, taxa constante (CBR), AAC", "Até 1080p a 60 fps com 6 Mbps; acima disso quem assiste pode travar.");
 
     public static readonly PlatformSpec YouTube = new(StreamService.YouTube, "YouTube", 2160, 60, 51000, 2, 128, 384,
-        "H.264, taxa constante, AAC estéreo", "Aceita até 4K a 60 fps; a faixa recomendada sobe com a resolução.");
+        "AV1, H.265 ou H.264 (RTMP aprimorado), taxa constante, AAC estéreo", "Aceita até 4K a 60 fps; a faixa recomendada sobe com a resolução.");
 
     public static readonly PlatformSpec Facebook = new(StreamService.Facebook, "Facebook", 1080, 30, 6000, 2, 128, 256,
         "H.264, taxa constante, AAC estéreo", "Até 1080p; use 30 fps para a transmissão ficar estável.");

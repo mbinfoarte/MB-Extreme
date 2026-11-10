@@ -55,6 +55,9 @@ public sealed partial class StudioPage
 
         DockPanel.SetDock(_layoutButton, Dock.Left);
         bar.Children.Add(_layoutButton);
+        SetupProfilesButton();
+        DockPanel.SetDock(_profilesButton, Dock.Left);
+        bar.Children.Add(_profilesButton);
         bar.Children.Add(BuildUsageBar());
         return bar;
     }

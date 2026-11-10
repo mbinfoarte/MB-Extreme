@@ -35,7 +35,7 @@ internal sealed class CameraLiveFeed : IDisposable
         // primeiro descobre o melhor modo da câmera (só na primeira vez), depois abre o vídeo, tudo fora da tela
         _ = Task.Run(() =>
         {
-            if (!CameraSource.Modes.ContainsKey(source)) FfmpegRecorder.EnsureCameraMode(ffmpeg, source);
+            if (!CameraSource.Modes.ContainsKey(source)) FfmpegRecorder.EnsureCameraMode(ffmpeg, source, CameraSource.PreferredHeight);
             if (generation == _generation) _ui.BeginInvoke(new Action(() => { if (generation == _generation) Launch(ffmpeg, CameraSource.LiveArgs(source, chain), generation); }));
         });
     }

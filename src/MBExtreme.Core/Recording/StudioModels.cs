@@ -217,7 +217,10 @@ public sealed record StudioRequest
     /// <summary>Legendas automáticas queimadas no vídeo em tempo real (vertical ou não).</summary>
     public CaptionOverlay? Captions { get; init; }
 
-    public bool AnyOutput => RecordFile is not null || Stream is not null || ReplayFolder is not null;
+    /// <summary>Ensaio: monta tudo (cenas, câmeras, sobreposições, codificador) e mostra a imagem final, sem gravar nem transmitir.</summary>
+    public bool Rehearsal { get; init; }
+
+    public bool AnyOutput => RecordFile is not null || Stream is not null || ReplayFolder is not null || Rehearsal;
 
     /// <summary>
     /// Cenas montadas ao mesmo tempo (troca sem reiniciar). Cada cena aponta para uma captura de <see cref="SceneCaptures"/>,

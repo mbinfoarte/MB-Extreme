@@ -49,7 +49,8 @@ internal sealed record StudioConfig(
     EncoderQuality? VerticalEffort = null,
     int VerticalRecFps = 0,
     int QualityLevel = 0,
-    bool PostMp4 = false)
+    bool PostMp4 = false,
+    bool Rehearsal = false)
 {
     /// <summary>Várias cenas montadas juntas: trocar de cena não reinicia a captura.</summary>
     public bool LiveScenes => Scenes is { Count: > 1 } && Vertical is null && VerticalCopy is null;
@@ -193,7 +194,8 @@ internal sealed class StudioController
             Scenes = config.Scenes ?? Array.Empty<SceneLayout>(),
             ActiveScene = config.ActiveScene,
             Transition = config.Transition,
-            ProgramView = config.ProgramView,
+            ProgramView = config.ProgramView || config.Rehearsal,   // no ensaio a imagem final é o que importa
+            Rehearsal = config.Rehearsal,
             CameraPreviews = true,
         };
 
@@ -204,7 +206,8 @@ internal sealed class StudioController
             .Concat((vertical?.Panes ?? Array.Empty<VerticalPane>()).Concat(request.VerticalCopy?.Panes ?? Array.Empty<VerticalPane>())
                 .Where(p => p.Kind == PaneKind.Camera && p.Source is not null).Select(p => p.Source!))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        int cameraHeight = vertical is not null || request.VerticalCopy is not null ? 1080 : 720;
+        // a qualidade escolhida na aba Câmeras (máxima = nativa, até 4K); o vídeo vertical pede pelo menos Full HD (a câmera ocupa a largura toda)
+        int cameraHeight = vertical is not null || request.VerticalCopy is not null ? Math.Max(1080, CameraSource.PreferredHeight) : CameraSource.PreferredHeight;
         AppServices.Cameras.ReleaseAll(this);
         await Task.Run(async () =>
         {

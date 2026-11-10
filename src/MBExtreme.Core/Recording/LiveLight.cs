@@ -5,25 +5,19 @@ public sealed record LightSetup(int EncoderIndex, int Height, int Fps, int Quali
 
 public static class LiveLight
 {
-    /// <summary>Melhor codificador H.264 para transmitir: placa NVIDIA, depois AMD, depois Intel; o processador só se não houver nada melhor.</summary>
+    /// <summary>Melhor codificador H.264 para transmitir (aceito em todas as plataformas): placa NVIDIA, depois AMD, depois Intel; o processador por último.</summary>
     public static int BestEncoderIndex(IReadOnlyList<EncoderOption> encoders)
     {
-        int best = -1, bestScore = -1;
-        for (int i = 0; i < encoders.Count; i++)
-        {
-            var e = encoders[i];
-            int score = (e.Kind switch { EncoderKind.Nvenc => 40, EncoderKind.Amf => 30, EncoderKind.Qsv => 20, _ => 0 })
-                      + (e.Codec == VideoCodec.H264 ? 5 : 0);   // as plataformas de live aceitam H.264
-            if (score > bestScore) { best = i; bestScore = score; }
-        }
-        return best;
+        int h264 = EncoderChoice.BestStreamIndex(encoders, StreamService.Twitch);
+        return h264 >= 0 ? h264 : EncoderChoice.BestIndex(encoders);
     }
 
     /// <summary>Escolhe um conjunto que pesa pouco: 1080p só em PC forte, 30 quadros em PC fraco, esforço "rápido" do codificador.</summary>
     public static LightSetup Plan(IReadOnlyList<EncoderOption> encoders, int pcTier, StreamService service, int currentHeight, int currentFps)
     {
         var notes = new List<string>();
-        int index = BestEncoderIndex(encoders);
+        int index = EncoderChoice.BestStreamIndex(encoders, service);   // AV1 no YouTube (placas novas); H.264 nas outras
+        if (index < 0) index = BestEncoderIndex(encoders);
         if (index < 0) { notes.Add("Nenhum codificador foi detectado ainda: clique em \"Detectar codificadores da minha placa\"."); index = 0; }
         else if (encoders[index].Kind == EncoderKind.Software)
             notes.Add("Só há codificador por processador (x264): ele pesa muito no jogo. Atualize o driver da placa de vídeo e detecte de novo.");

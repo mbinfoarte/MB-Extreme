@@ -231,3 +231,12 @@ Testar: abrir o módulo, conferir se lê os monitores com a resolução certa, e
 - **Widget flutuante:** barrinha sempre no topo com RAM, CPU, Disco e Rede, atualizando a cada segundo; arrasta pelo foguete e guarda a posição; botões de abrir o app e esconder. Liga/desliga pelo menu da bandeja e em Acessibilidade.
 
 Testar: fechar no X e ver o ícone na bandeja; reabrir pelo ícone; Sair fecha de vez; ligar o widget, mover, conferir os números e esconder.
+
+## Estúdio: perfis, Ensaio, câmeras em 4K e AV1
+
+1. **Codificador**: numa RTX 40/50 (ou RX 7000+), abra o Estúdio pela primeira vez depois da atualização → em Vídeo, o escolhido deve ser **AV1 · NVIDIA NVENC** (ou AV1 · AMD AMF). Em placa sem AV1, fica H.265 ou H.264.
+2. **Live com AV1 escolhido**: Transmitir para a **Twitch** → a live sai em H.264 da mesma placa (sem erro). Para o **YouTube** → sai em AV1.
+3. **Perfis**: botão **Perfis** no topo → dê um nome → "Salvar a configuração atual". Mude várias coisas (resolução, câmera, cena) → Perfis → **Carregar** → tudo volta como estava. A chave de transmissão continua lembrada e não aparece no arquivo do perfil (%AppData%\MBExtreme\perfis-estudio).
+4. **Ensaio**: clique em **Ensaio** ao lado do Iniciar → o quadro "No ar" mostra a imagem final (cenas, câmera, sobreposições). Nada é gravado (pasta de vídeos sem arquivo novo) e nada vai para a plataforma. Troque de cena e use a Transição.
+5. **Do ensaio para o ar**: com Transmitir ligado, clique em **Entrar no ar** → confirma → a live começa com a mesma montagem.
+6. **Câmeras**: aba Câmeras → "Qualidade das câmeras: Máxima (nativa, até 4K)". Webcam 4K deve abrir em 3840×2160; celular por endereço (RTSP/HTTP) abre no tamanho real dele (8K vira 4K). Se o PC pesar, escolha Full HD.

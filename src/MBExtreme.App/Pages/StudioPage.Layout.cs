@@ -15,6 +15,7 @@ public sealed partial class StudioPage
 
     private readonly StackPanel _tabExtras = new(), _tabAccounts = new(), _tabPixCard = new();
     private readonly Button _bigStart = new() { Height = 42, FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8), HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly Button _rehearsalButton = new() { Content = "Ensaio", Height = 42, FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(8, 0, 0, 8), Padding = new Thickness(18, 0, 18, 0) };
     private Action<int>? _selectTab;
     private bool _startBusy, _accountsLoaded;
 
@@ -137,7 +138,28 @@ public sealed partial class StudioPage
             }
         };
         RefreshBigStart();
-        return _bigStart;
+
+        // Ensaio: ao lado do Iniciar, testa a live completa sem mandar nada
+        _rehearsalButton.Style = (Style)FindResource("GhostButton");
+        _rehearsalButton.ToolTip = "Ensaio: monta a live inteira (cenas, câmeras, sobreposições, transições e codificador) e mostra a imagem final, sem transmitir nem gravar.";
+        _rehearsalButton.Click += async (_, _) =>
+        {
+            if (_startBusy) return;
+            _startBusy = true;
+            try
+            {
+                if (_studio.IsRunning && _studio.Session.Request is { Rehearsal: true }) await GoLiveFromRehearsalAsync();
+                else await BeginRehearsalAsync();
+            }
+            finally { _startBusy = false; RefreshBigStart(); }
+        };
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(_bigStart);
+        Grid.SetColumn(_rehearsalButton, 1);
+        row.Children.Add(_rehearsalButton);
+        return row;
     }
 
     private void RefreshBigStart()
@@ -148,6 +170,18 @@ public sealed partial class StudioPage
         _bigStart.Foreground = running ? Brush("BadBrush") : Ink;
         _bigStart.BorderBrush = running ? Brush("BadBrush") : Yellow;
         _bigStart.ToolTip = running ? "Para a gravação e a transmissão e salva o arquivo." : "Começa o que estiver ligado logo abaixo: gravar, transmitir e replay.";
+        bool rehearsing = _studio.IsRunning && _studio.Session.Request is { Rehearsal: true };
+        if (rehearsing)
+        {
+            _bigStart.Content = "■  Parar o ensaio";
+            _bigStart.ToolTip = "Encerra o ensaio. Nada foi transmitido nem gravado.";
+        }
+        _rehearsalButton.IsEnabled = !running || rehearsing;
+        _rehearsalButton.Content = rehearsing ? "●  Entrar no ar" : "Ensaio";
+        _rehearsalButton.Style = (Style)FindResource(rehearsing ? "PrimaryButton" : "GhostButton");
+        _rehearsalButton.ToolTip = rehearsing
+            ? "Passa o que está no ensaio para o público: começa a gravar, transmitir e o replay que estiverem ligados (a captura reinicia por um instante)."
+            : "Ensaio: monta a live inteira (cenas, câmeras, sobreposições, transições e codificador) e mostra a imagem final, sem transmitir nem gravar.";
     }
 
     // ---------------------------------------------------------------- janelas pequenas, cartões e ajuda

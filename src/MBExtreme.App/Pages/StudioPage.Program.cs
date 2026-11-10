@@ -39,11 +39,13 @@ public sealed partial class StudioPage
         bool running = _studio.IsRunning;
         _programFrame.BorderBrush = running ? Frozen(Color.FromRgb(0xFF, 0x4D, 0x4D)) : Yellow;
         RefreshProgramTitle();
-        var frame = running && _s.StudioProgramView ? _studio.Session.ProgramFrame : null;
+        bool rehearsal = running && _studio.Session.Request is { Rehearsal: true };
+        bool show = _s.StudioProgramView || rehearsal;   // no ensaio a imagem final aparece sempre
+        var frame = running && show ? _studio.Session.ProgramFrame : null;
         if (frame is null)
         {
             _programImage.Source = null;
-            _programEmpty.Text = running ? (_s.StudioProgramView ? "Carregando a imagem..." : "Imagem \"No ar\" desligada (Programa › Avançado)") : "Fora do ar";
+            _programEmpty.Text = running ? (show ? "Carregando a imagem..." : "Imagem \"No ar\" desligada (Programa › Avançado)") : "Fora do ar";
             _programEmpty.Visibility = Visibility.Visible;
             return;
         }
@@ -57,7 +59,9 @@ public sealed partial class StudioPage
             // sem o modo estúdio, a prévia grande é o próprio vídeo que está saindo: nada de copiar a tela do jogo durante a gravação
             _preview.Source = image;
             _lastFrame = image;
-            _previewNote.Text = "Ao vivo: é exatamente o que está sendo gravado e transmitido.";
+            _previewNote.Text = rehearsal
+                ? "Ensaio: é exatamente assim que a live vai sair. Nada está sendo transmitido nem gravado."
+                : "Ao vivo: é exatamente o que está sendo gravado e transmitido.";
             _previewNote.Foreground = Brush("MutedBrush");
         }
     }

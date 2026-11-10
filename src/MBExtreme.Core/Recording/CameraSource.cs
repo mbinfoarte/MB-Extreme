@@ -28,6 +28,12 @@ public static class CameraSource
         return $"{uri.Scheme}://{uri.Host}{(uri.IsDefaultPort ? "" : ":" + uri.Port.ToString(CultureInfo.InvariantCulture))}{uri.AbsolutePath}";
     }
 
+    /// <summary>
+    /// Altura pedida às câmeras: 2160 = a maior que a câmera entrega (até 4K), 1080 = Full HD, 720 = leve.
+    /// Ao mudar, limpe <see cref="Modes"/> para a câmera ser reaberta no novo tamanho.
+    /// </summary>
+    public static int PreferredHeight { get; set; } = CameraRelayPlan.MaxHeight;
+
     /// <summary>Modo escolhido para cada câmera do Windows (pelo nome). Preenchido pelo programa depois de perguntar os modos à câmera.</summary>
     public static System.Collections.Concurrent.ConcurrentDictionary<string, CameraMode> Modes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -46,7 +52,7 @@ public static class CameraSource
         if (!IsStream(source))
         {
             // modo escolhido (tamanho, quadros e formato): sem ele, o Windows entrega o primeiro da lista, às vezes 1080p cru a 5 quadros por segundo
-            var dshow = new List<string> { "-f", "dshow", "-rtbufsize", "64M", "-thread_queue_size", "512" };
+            var dshow = new List<string> { "-f", "dshow", "-rtbufsize", "256M", "-thread_queue_size", "512" };   // 256M: folga para câmeras em 4K
             if (Modes.TryGetValue(source, out var mode)) dshow.AddRange(mode.InputArgs());
             dshow.AddRange(new[] { "-use_wallclock_as_timestamps", "1", "-i", "video=" + source });
             return dshow.ToArray();

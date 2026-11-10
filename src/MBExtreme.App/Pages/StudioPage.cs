@@ -207,6 +207,7 @@ public sealed partial class StudioPage : ToolPageBase
         };
         Loaded += async (_, _) =>
         {
+            ApplyCameraQuality(reopen: false);
             _timer.Start();
             _statsTimer.Start();
             _previewTimer.Start();
@@ -799,6 +800,16 @@ public sealed partial class StudioPage : ToolPageBase
         }
     }
 
+    /// <summary>Passa a altura escolhida para as câmeras; com <paramref name="reopen"/>, reabre as que estão abertas no novo tamanho (fora da gravação).</summary>
+    private void ApplyCameraQuality(bool reopen)
+    {
+        CameraSource.PreferredHeight = Math.Clamp(_s.StudioCameraMaxHeight, 480, CameraRelayPlan.MaxHeight);
+        if (!reopen) return;
+        CameraSource.Modes.Clear();   // o modo de cada câmera é escolhido de novo no próximo uso
+        if (_studio.IsRunning) return;  // no ar, vale na próxima vez que a câmera abrir
+        foreach (var cam in _relaySignatures.Keys.ToList()) RetryCamera(cam);
+    }
+
     private void RebuildCameras()
     {
         _tabCamera.Children.Clear();
@@ -817,6 +828,21 @@ public sealed partial class StudioPage : ToolPageBase
             "Os retângulos na pré-visualização mostram onde cada uma vai ficar (laranja = duas no mesmo canto). A câmera precisa estar livre: feche outros programas que a usam. " +
             "Câmeras virtuais (OBS, NVIDIA Broadcast, celular) aparecem na lista como qualquer outra. Dá para ligar e desligar com a transmissão no ar (a captura reinicia por alguns segundos)."));
         _tabCamera.Children.Add(head);
+
+        // qualidade: a maior resolução que cada câmera entrega (até 4K) ou menos, para PC mais fraco
+        int[] heights = { CameraRelayPlan.MaxHeight, 1080, 720 };
+        int qualityIndex = Math.Max(0, Array.IndexOf(heights, _s.StudioCameraMaxHeight));
+        var quality = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
+        quality.Children.Add(new TextBlock { Text = "Qualidade das câmeras: ", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 0, 6, 0) });
+        quality.Children.Add(Chips(new List<string> { "Máxima (nativa, até 4K)", "Full HD", "720p (leve)" }, qualityIndex, i =>
+        {
+            if (_s.StudioCameraMaxHeight == heights[i]) return;
+            _s.StudioCameraMaxHeight = heights[i];
+            _s.Save();
+            ApplyCameraQuality(reopen: true);
+            SetStatus(i == 0 ? "Câmeras na resolução máxima de cada aparelho (até 4K). Se o PC ficar pesado, use Full HD." : $"Câmeras em {(i == 1 ? "Full HD" : "720p")}.", "OkBrush");
+        }));
+        _tabCamera.Children.Add(quality);
 
         if (_s.StudioCameras.Count == 0)
             _tabCamera.Children.Add(Muted("Nenhuma câmera adicionada. Clique em \"Procurar câmeras\" e depois em \"+ Adicionar câmera\".", 12));
@@ -1914,7 +1940,16 @@ public sealed partial class StudioPage : ToolPageBase
         }
         _engineStatus.Text = "Pronto: motor de vídeo e codificadores da placa encontrados.";
         int saved = _encoders.ToList().FindIndex(e => e.FfmpegName == _s.StudioEncoderName);
-        _encoderIndex = saved >= 0 ? saved : Math.Max(0, LiveLight.BestEncoderIndex(_encoders));
+        int best = Math.Max(0, EncoderChoice.BestIndex(_encoders));
+        if (!_s.StudioEncoderBestChosen)
+        {
+            // uma vez só: passa para o melhor da placa (AV1 nas RTX 40/50 e RX 7000+); depois vale o que a pessoa escolher
+            saved = best;
+            _s.StudioEncoderName = _encoders[best].FfmpegName;
+            _s.StudioEncoderBestChosen = true;
+            _s.Save();
+        }
+        _encoderIndex = saved >= 0 ? saved : best;
         _qualityEncoder.Children.Add(Chips(_encoders.Select(e => e.Title).ToList(), _encoderIndex, i =>
         {
             _encoderIndex = i;
@@ -1980,6 +2015,7 @@ public sealed partial class StudioPage : ToolPageBase
     private async Task BeginAsync()
     {
         if (_studio.IsRunning || AppServices.Recorder.IsRecording) return;
+        _rehearsing = false;
         if (_ffmpegPath is null || _encoders.Count == 0)
         {
             SetStatus("O motor de vídeo ainda está sendo preparado ou a placa ainda está sendo testada. Aguarde alguns segundos.", "WarnBrush");
@@ -2059,7 +2095,7 @@ public sealed partial class StudioPage : ToolPageBase
     private (StudioConfig? Config, string? Error) BuildConfig(bool write)
     {
         if (_ffmpegPath is null || _encoders.Count == 0) return (null, "O motor de vídeo ainda está sendo preparado ou a placa ainda está sendo testada. Aguarde alguns segundos.");
-        if (!_outRecord && !_outStream && !_outReplay) return (null, "Marque pelo menos uma opção: gravar, transmitir ou replay.");
+        if (!_outRecord && !_outStream && !_outReplay && !_rehearsing) return (null, "Marque pelo menos uma opção: gravar, transmitir ou replay.");
 
         // ---- origem
         CaptureSource? source;
@@ -2099,10 +2135,12 @@ public sealed partial class StudioPage : ToolPageBase
         StreamTarget? target = null;
         if (_outStream)
         {
-            var h264 = encoder.Codec == VideoCodec.H264 ? encoder : _encoders.FirstOrDefault(e => e.Codec == VideoCodec.H264);
-            if (h264 is null) return (null, "A transmissão exige um codificador H.264, que não foi encontrado na sua placa.");
-            encoder = h264;
-            target = new StreamTarget((StreamService)Math.Clamp(_s.StudioStreamService, 0, 3), _customUrl.Text, _key.Password);
+            var service = (StreamService)Math.Clamp(_s.StudioStreamService, 0, 3);
+            // a live usa o melhor codec que a plataforma recebe (AV1 no YouTube; H.264 na Twitch, Facebook e outras), do mesmo fabricante da placa
+            var forStream = EncoderChoice.ForStream(_encoders, encoder, service);
+            if (forStream is null) return (null, $"A {PlatformSpecs.For(service).Name} só recebe vídeo em H.264, e a sua placa não tem esse codificador funcionando. Atualize o driver da placa de vídeo.");
+            encoder = forStream;
+            if (!_rehearsing) target = new StreamTarget(service, _customUrl.Text, _key.Password);   // no ensaio: o mesmo codec da live, sem enviar
         }
 
         // ---- câmeras
@@ -2155,7 +2193,7 @@ public sealed partial class StudioPage : ToolPageBase
         var verticalCopy = CurrentVerticalCopy();
         if (verticalCopy?.Validate() is { } copyProblem) return (null, copyProblem);
         StreamTarget? verticalTarget = null;
-        if (VerticalLiveWanted && !_s.StudioVerticalOn)
+        if (VerticalLiveWanted && !_s.StudioVerticalOn && !_rehearsing)
         {
             if (!_s.StudioVerticalCopy) return (null, "A live vertical sai junto com a horizontal: escolha \"Os dois\" na prévia (ou desligue a live vertical em Transmitir › Conexão).");
             if (VerticalLiveKey().Length == 0) return (null, "Falta a chave da live vertical (Transmitir › Conexão › Live vertical).");
@@ -2198,6 +2236,8 @@ public sealed partial class StudioPage : ToolPageBase
             verticalCopy is not null ? verticalTarget : null, (VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3),
             vEncoder, _s.StudioVRecMbps, _s.StudioVRecQuality, vEffort, _s.StudioVRecFps, mainQuality,
             _s.StudioVRecPostMp4 && (vertical is not null || verticalCopy is not null));
+        // ensaio: tudo igual à live, mas sem gravar, transmitir, replay nem a cópia vertical
+        if (_rehearsing) config = config with { Record = false, Stream = null, Replay = false, VerticalStream = null, VerticalCopy = null, PostMp4 = false, Rehearsal = true };
         return (config, null);
     }
 
@@ -2334,8 +2374,10 @@ public sealed partial class StudioPage : ToolPageBase
         else
         {
             SetStatus("Finalizando o arquivo...");
+            bool wasRehearsal = _rehearsing;
             string? file = await Task.Run(_studio.Stop);
-            SetStatus(file is null ? "Estúdio encerrado." : "Gravação salva em " + file, "OkBrush");
+            _rehearsing = false;
+            SetStatus(wasRehearsal ? "Ensaio encerrado. Nada foi transmitido nem gravado." : file is null ? "Estúdio encerrado." : "Gravação salva em " + file, "OkBrush");
         }
 
         RefreshState();

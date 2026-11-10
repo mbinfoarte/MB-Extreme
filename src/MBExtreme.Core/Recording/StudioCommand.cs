@@ -294,7 +294,8 @@ public static class StudioCommand
         {
             outputs.Add($"[f=segment:segment_time={SegmentSeconds}:segment_wrap={ReplaySegmentCount(r.ReplaySeconds)}:reset_timestamps=1:segment_format=matroska:onfail=ignore]{folder}/seg%03d.mkv");
         }
-        args.AddRange(new[] { "-f", "tee", string.Join("|", outputs) });
+        if (outputs.Count == 0 && r.Rehearsal) args.AddRange(new[] { "-f", "null", "-" });   // ensaio: codifica de verdade (mesmo peso da live), mas não guarda nem envia
+        else args.AddRange(new[] { "-f", "tee", string.Join("|", outputs) });
 
         // ---- cópia vertical: segunda saída com a mesma captura e o mesmo áudio: arquivo próprio e/ou a live vertical (Instagram, TikTok...)
         if (r.VerticalCopy is { } verticalCopy && (r.VerticalFile is not null || r.VerticalStream is not null))

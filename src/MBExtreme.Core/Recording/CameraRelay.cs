@@ -20,18 +20,20 @@ public sealed record RelayInput(string PipePath, int Width, int Height, int Fps)
 /// <summary>Contas do relé (separadas para testar sem câmera nem Windows).</summary>
 public static class CameraRelayPlan
 {
-    public const int MaxWidth = 1280;   // 720p: a câmera sai nítida na live mesmo em tela grande
+    /// <summary>Teto do relé: 4K (3840×2160). Acima disso (celular em 8K) a imagem é reduzida para 4K, o máximo que as lives e gravações usam.</summary>
+    public const int MaxWidth = 3840;
+    public const int MaxHeight = 2160;
     public const int Fps = 30;
 
-    /// <summary>Tamanho da imagem do relé: até 1280 de largura na proporção da câmera (medidas pares); sem o modo, 1280×720 com faixas.</summary>
+    /// <summary>Tamanho da imagem do relé: o tamanho nativo da câmera (até 4K), na proporção dela e em medidas pares; sem o modo, 1920×1080 com faixas.</summary>
     public static (int Width, int Height) Size(CameraMode? mode)
     {
-        if (mode is null || mode.Width < 16 || mode.Height < 16) return (MaxWidth, 720);
-        int w = Math.Min(MaxWidth, mode.Width);
-        w -= w % 2;
-        int h = (int)Math.Round(w * mode.Height / (double)mode.Width);
-        h -= h % 2;
-        return (w, Math.Max(2, h));
+        if (mode is null || mode.Width < 16 || mode.Height < 16) return (1920, 1080);
+        // 4K deitado ou em pé: o lado maior até 3840 e o menor até 2160
+        double scale = Math.Min(1.0, Math.Min(MaxWidth / (double)Math.Max(mode.Width, mode.Height), MaxHeight / (double)Math.Min(mode.Width, mode.Height)));
+        int w = (int)Math.Round(mode.Width * scale);
+        int h = (int)Math.Round(mode.Height * scale);
+        return (Math.Max(2, w - w % 2), Math.Max(2, h - h % 2));
     }
 
     public static int FrameBytes(int width, int height) => width * height * 3 / 2;
@@ -330,7 +332,9 @@ public sealed class CameraHub
 
     private static CameraRelay Create(string ffmpeg, string device, string? chain)
     {
-        if (!CameraSource.Modes.TryGetValue(device, out var mode)) mode = FfmpegRecorder.EnsureCameraMode(ffmpeg, device);   // demora ~1 s na primeira vez: chame fora da tela
+        CameraMode? mode;
+        if (CameraSource.IsStream(device)) mode = FfmpegRecorder.ProbeStreamMode(ffmpeg, device);   // celular/câmera IP: lê o tamanho real do vídeo (até 4K)
+        else if (!CameraSource.Modes.TryGetValue(device, out mode)) mode = FfmpegRecorder.EnsureCameraMode(ffmpeg, device, CameraSource.PreferredHeight);   // ~1 s na primeira vez: chame fora da tela
         var relay = new CameraRelay(device, chain, mode);
         relay.Start(ffmpeg);
         return relay;

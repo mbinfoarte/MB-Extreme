@@ -102,6 +102,9 @@ public sealed class AppSettings
     public bool StudioCameraFrame { get; set; } = true;
 
     /// <summary>Câmeras do estúdio (até três). Substitui as opções de uma câmera só, que ficam apenas para migrar.</summary>
+    /// <summary>Altura máxima pedida às câmeras: 2160 = a maior que cada uma entrega (até 4K), 1080 = Full HD, 720 = leve.</summary>
+    public int StudioCameraMaxHeight { get; set; } = 2160;
+
     public List<StudioCameraSetting> StudioCameras { get; set; } = new();
 
     // ---- cenas (cada cena guarda as suas fontes)
@@ -239,6 +242,9 @@ public sealed class AppSettings
 
     /// <summary>Codificador escolhido no estúdio (nome do FFmpeg, ex.: h264_nvenc); vazio = o melhor da placa.</summary>
     public string StudioEncoderName { get; set; } = "";
+
+    /// <summary>Já passou uma vez para o melhor codificador da placa (AV1 quando há); depois disso vale a escolha da pessoa.</summary>
+    public bool StudioEncoderBestChosen { get; set; }
 
     /// <summary>Codificadores que funcionaram no último teste (nomes do FFmpeg), para não testar de novo a cada abertura.</summary>
     public List<string> StudioEncoderCache { get; set; } = new();

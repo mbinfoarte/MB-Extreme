@@ -89,7 +89,7 @@ public sealed partial class StudioPage
             }
             if (relay.LatestFrame is not { } frame) continue;
             long sequence = relay.Sequence;
-            int step = relay.Width > 1280 ? 2 : 1;   // até 1280 px a câmera aparece inteira, sem cortar a resolução pela metade
+            int step = Math.Max(1, (relay.Width + 1279) / 1280);   // a prévia mostra até ~1280 px (4K vira 1280); a live recebe a imagem inteira
             var (w, h) = Yuv420Preview.OutputSize(relay.Width, relay.Height, step);
             if (!_camBitmaps.TryGetValue(cam, out var entry) || !ReferenceEquals(entry.Relay, relay) || entry.Bitmap.PixelWidth != w || entry.Bitmap.PixelHeight != h)
                 entry = (new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null), new byte[w * h * 4], -1, relay);

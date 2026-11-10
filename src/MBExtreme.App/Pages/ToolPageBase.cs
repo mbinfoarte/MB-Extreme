@@ -124,6 +124,9 @@ public abstract class ToolPageBase : UserControl
         return (all, none);
     }
 
+    /// <summary>Mensagem na barra de status da página, vinda de fora (ex.: "Perfil carregado" depois de remontar a página).</summary>
+    internal void ShowStatus(string text, string brush = "MutedBrush") => SetStatus(text, brush);
+
     protected void SetStatus(string text, string brush = "MutedBrush")
     {
         _status.Text = text;

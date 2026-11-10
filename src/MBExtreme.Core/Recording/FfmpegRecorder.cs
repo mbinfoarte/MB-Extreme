@@ -103,6 +103,40 @@ public sealed class FfmpegRecorder
         return best;
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, CameraMode> StreamModes = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Tamanho real do vídeo de um celular ou câmera IP (o FFmpeg abre o endereço e lê o cabeçalho, ~1 a 5 s), para o relé usar a resolução
+    /// nativa (até 4K) em vez de um tamanho fixo. Null se o endereço não respondeu: aí o relé usa 1920×1080.
+    /// </summary>
+    public static CameraMode? ProbeStreamMode(string ffmpeg, string url)
+    {
+        if (!CameraSource.IsValidStream(url)) return null;
+        if (StreamModes.TryGetValue(url, out var known)) return known;
+        try
+        {
+            var args = new List<string> { "-hide_banner" };
+            if (url.StartsWith("rtsp", StringComparison.OrdinalIgnoreCase)) args.AddRange(new[] { "-rtsp_transport", "tcp" });
+            args.AddRange(new[] { "-rw_timeout", "6000000", "-i", url });
+            var result = Shell.Run(ffmpeg, args.ToArray());
+            var mode = ParseStreamMode(result.Error + "\n" + result.Output);
+            if (mode is not null) StreamModes[url] = mode;
+            return mode;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException) { return null; }
+    }
+
+    /// <summary>Lê "Video: h264 ..., 3840x2160 ..., 30 fps" da saída do FFmpeg.</summary>
+    public static CameraMode? ParseStreamMode(string text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text, @"Video:[^\n]*?\b(\d{3,5})x(\d{3,5})\b(?:[^\n]*?\b([\d.]+) fps)?");
+        if (!m.Success) return null;
+        int w = int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        int h = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        double fps = m.Groups[3].Success && double.TryParse(m.Groups[3].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double f) ? f : 30;
+        return w >= 160 && h >= 120 ? new CameraMode(w, h, fps, null, null) : null;
+    }
+
     /// <summary>Nomes das câmeras (dispositivos de vídeo do DirectShow) que o FFmpeg enxerga.</summary>
     public static IReadOnlyList<string> ListCameras(string ffmpeg)
     {

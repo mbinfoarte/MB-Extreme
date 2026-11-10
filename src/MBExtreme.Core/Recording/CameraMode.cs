@@ -51,14 +51,15 @@ public static class CameraModes
     }
 
     /// <summary>
-    /// O melhor modo para a câmera no canto da live: pelo menos 24 quadros, altura perto de <paramref name="targetHeight"/> (sem passar de 1080),
+    /// O melhor modo da câmera: pelo menos 24 quadros, altura perto de <paramref name="targetHeight"/> (sem passar dele; até 4K),
     /// imagem crua quando ela aguenta esse tamanho (não precisa descomprimir) e MJPEG senão. H.264 e outros formatos ficam por último.
+    /// Com o alvo em 2160 (qualidade máxima), fica com o maior tamanho que a câmera entrega a pelo menos 24 quadros.
     /// </summary>
     public static CameraMode? Pick(IReadOnlyList<CameraMode> modes, int targetHeight = 720)
     {
-        targetHeight = Math.Clamp(targetHeight, 240, 1080);
+        targetHeight = Math.Clamp(targetHeight, 240, CameraRelayPlan.MaxHeight);
         return modes
-            .Where(m => m.Height <= 1080)
+            .Where(m => m.Height <= targetHeight)
             .OrderByDescending(m => m.MaxFps >= 23.9)                                // movimento suave primeiro
             .ThenBy(m => m.Height >= targetHeight ? m.Height - targetHeight : (targetHeight - m.Height) * 3)   // perto do alvo; menor que o alvo pesa mais
             .ThenBy(m => m.Codec is null ? 0 : m.IsMjpeg ? 1 : 2)                     // cru > MJPEG > outros

@@ -332,6 +332,20 @@ public partial class MainWindow : Window
         key == "home" ? "Painel" : key == "alltools" ? "Todas as ferramentas" : NavigationMap.Modules.FirstOrDefault(m => m.Key == key)?.Title ?? NavigationMap.TileOf(key)?.Title ?? "Voltar";
 
     /// <summary>Volta para a tela de onde o usuário veio (o Início, se ele chegou por lá; senão, o módulo da página).</summary>
+    /// <summary>Monta a página de novo (ex.: depois de carregar um perfil do Estúdio) e mostra uma mensagem nela.</summary>
+    internal void Reopen(string key, string? message = null)
+    {
+        _pages.Remove(key);
+        _inner.Remove(key);
+        foreach (var module in NavigationMap.Modules.Where(m => m.Tiles.Count == 1 && m.Tiles[0].Key == key)) _pages.Remove(module.Key);
+        bool backing = _backing;
+        _backing = true;   // não empilha a mesma página no histórico
+        try { ShowPage(_current ?? key); }
+        finally { _backing = backing; }
+        if (message is not null && _inner.TryGetValue(key, out var inner) && inner is MBExtreme.UI.Pages.ToolPageBase page)
+            page.Dispatcher.BeginInvoke(new Action(() => page.ShowStatus(message, "OkBrush")), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
     internal void GoBack()
     {
         string target = _history.Count > 0 ? _history.Pop() : (_current is null ? "home" : NavigationMap.ModuleOf(_current)?.Key ?? "home");

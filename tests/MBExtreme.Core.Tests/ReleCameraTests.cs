@@ -15,12 +15,39 @@ public class ReleCameraTests
     [Fact]
     public void Tamanho_do_rele_segue_a_proporcao_da_camera()
     {
-        Assert.Equal((1280, 720), CameraRelayPlan.Size(new CameraMode(1280, 720, 30, "mjpeg", null)));   // 720p inteiro
-        Assert.Equal((1280, 720), CameraRelayPlan.Size(new CameraMode(1920, 1080, 30, "mjpeg", null)));
+        Assert.Equal((1280, 720), CameraRelayPlan.Size(new CameraMode(1280, 720, 30, "mjpeg", null)));
+        Assert.Equal((1920, 1080), CameraRelayPlan.Size(new CameraMode(1920, 1080, 30, "mjpeg", null)));   // Full HD inteiro
+        Assert.Equal((3840, 2160), CameraRelayPlan.Size(new CameraMode(3840, 2160, 30, "mjpeg", null)));   // webcam 4K: nativa
+        Assert.Equal((3840, 2160), CameraRelayPlan.Size(new CameraMode(7680, 4320, 30, null, null)));      // celular 8K: vira 4K
+        Assert.Equal((2160, 3840), CameraRelayPlan.Size(new CameraMode(2160, 3840, 30, null, null)));      // celular em pé em 4K: inteiro
         Assert.Equal((640, 480), CameraRelayPlan.Size(new CameraMode(640, 480, 30, null, "yuyv422")));
-        Assert.Equal((1280, 960), CameraRelayPlan.Size(new CameraMode(1440, 1080, 30, "mjpeg", null)));
-        Assert.Equal((1280, 720), CameraRelayPlan.Size(null));   // sem saber o modo: 16:9 com faixas
+        Assert.Equal((1920, 1080), CameraRelayPlan.Size(null));   // sem saber o modo: Full HD com faixas
         Assert.Equal(960 * 540 * 3 / 2, CameraRelayPlan.FrameBytes(960, 540));
+    }
+
+    [Fact]
+    public void Qualidade_maxima_escolhe_o_maior_modo_fluido_da_camera()
+    {
+        var modes = new[]
+        {
+            new CameraMode(3840, 2160, 30, "mjpeg", null),
+            new CameraMode(3840, 2160, 5, null, "yuyv422"),     // 4K cru a 5 quadros: travado, fica de fora
+            new CameraMode(1920, 1080, 60, "mjpeg", null),
+            new CameraMode(1280, 720, 30, null, "nv12"),
+        };
+        var max = CameraModes.Pick(modes, CameraRelayPlan.MaxHeight)!;
+        Assert.Equal((3840, 2160, "mjpeg"), (max.Width, max.Height, max.Codec));
+        Assert.Equal(1080, CameraModes.Pick(modes, 1080)!.Height);
+        Assert.Equal(720, CameraModes.Pick(modes, 720)!.Height);
+    }
+
+    [Fact]
+    public void Le_o_tamanho_real_do_video_do_celular()
+    {
+        const string ffmpegOut = "Input #0, rtsp, from 'rtsp://192.168.0.5:8080/h264':\n  Stream #0:0: Video: h264 (High), yuv420p(progressive), 3840x2160, 30 fps, 30 tbr, 90k tbn";
+        var mode = FfmpegRecorder.ParseStreamMode(ffmpegOut)!;
+        Assert.Equal((3840, 2160, 30.0), (mode.Width, mode.Height, mode.MaxFps));
+        Assert.Null(FfmpegRecorder.ParseStreamMode("Connection refused"));
     }
 
     [Fact]

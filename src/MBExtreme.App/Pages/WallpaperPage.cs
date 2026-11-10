@@ -152,19 +152,44 @@ public sealed class WallpaperPage : ToolPageBase
     // ---------------------------------------------------------------- MB Extreme
     private void ShowMb()
     {
-        _grid.Children.Add(FullWidth(Muted("Modelos do MB Extreme, desenhados na resolução da sua tela (sem perder qualidade).", 11.5)));
-        double aspect = TargetAspect();
-        foreach (var model in MbWallpaperArt.All)
+        _grid.Children.Add(FullWidth(Muted("Wallpapers do MB Extreme em 4K (3840 × 2160): jogos, desempenho e futurista. A miniatura carrega agora; a imagem completa só baixa quando você aplica.", 11.5)));
+        _ = LoadGalleryAsync();
+    }
+
+    private async Task LoadGalleryAsync()
+    {
+        var loading = FullWidth(Muted("Carregando a galeria...", 12));
+        _grid.Children.Add(loading);
+        var items = await MbGallery.LoadAsync(Http, Folder);
+        if (_tab != "mb") return;   // trocou de aba enquanto carregava
+        _grid.Children.Remove(loading);
+        if (items.Count == 0)
         {
-            var m = model;
-            BitmapSource preview;
-            try { preview = MbWallpaperArt.Preview(model, aspect); }
-            catch (Exception ex) when (ex is InvalidOperationException) { continue; }
-            _grid.Children.Add(Thumb(preview, model.Name, () =>
+            _grid.Children.Add(FullWidth(Muted("Sem internet agora: a galeria não carregou. Enquanto isso, use uma imagem do seu PC (aba Do meu PC).", 12)));
+            return;
+        }
+        foreach (var item in items)
+        {
+            var it = item;
+            var thumb = new BitmapImage();
+            try
             {
-                _selectionName = "MB Extreme · " + m.Name;
-                _resolve = (w, h) => Task.FromResult<string?>(MbWallpaperArt.Save(m, w, h, Folder));
-                Select(preview, _selectionName);
+                thumb.BeginInit();
+                thumb.UriSource = new Uri(MbGallery.UrlOf(item.Thumb));
+                thumb.CacheOption = BitmapCacheOption.OnLoad;
+                thumb.DecodePixelWidth = 380;
+                thumb.EndInit();
+            }
+            catch (Exception ex) when (ex is UriFormatException or NotSupportedException) { continue; }
+            _grid.Children.Add(Thumb(thumb, $"{item.Title} · {item.Theme}", () =>
+            {
+                _selectionName = "MB Extreme · " + it.Title;
+                _resolve = async (_, _) =>
+                {
+                    SetStatus($"Baixando \"{it.Title}\" em 4K...");
+                    return await MbGallery.DownloadAsync(Http, it, Folder);
+                };
+                Select(thumb, _selectionName);
             }));
         }
     }
@@ -312,7 +337,7 @@ public sealed class WallpaperPage : ToolPageBase
                 ? (monitor is null ? "Papel de parede aplicado em todos os monitores." : "Papel de parede aplicado no monitor escolhido.")
                 : "O Windows não aceitou aplicar o papel de parede.", ok ? "OkBrush" : "BadBrush");
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         {
             SetStatus("Não foi possível aplicar: " + ex.Message, "BadBrush");
         }

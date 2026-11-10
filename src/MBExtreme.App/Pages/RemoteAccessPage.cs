@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Net.WebSockets;
 using System.Windows;
@@ -5,6 +6,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using MBExtreme.Core;
+using MBExtreme.Core.Info;
 using MBExtreme.Core.Remote;
 using MBExtreme.Core.Settings;
 using MBExtreme.UI.Remote;
@@ -13,8 +16,9 @@ using MouseAction = MBExtreme.Core.Remote.MouseAction;
 namespace MBExtreme.UI.Pages;
 
 /// <summary>
-/// Acesso remoto: o ID deste computador (para quem vai te atender) e o campo para digitar o ID de outro computador e conectar,
-/// com tela, mouse, teclado e som. O outro lado sempre precisa aceitar.
+/// Suporte, como o AnyDesk e o TeamViewer: à esquerda o ID deste computador (passe ao técnico e clique em Permitir acesso);
+/// à direita o campo para digitar o ID de outro computador e conectar, com tela, mouse, teclado e som. O outro lado sempre precisa aceitar.
+/// Embaixo, falar com o suporte da MB InfoArt e copiar o relatório do PC. Tudo numa tela só (antes: Suporte, Modo técnico e AnyDesk).
 /// </summary>
 public sealed class RemoteAccessPage : ToolPageBase
 {
@@ -39,17 +43,26 @@ public sealed class RemoteAccessPage : ToolPageBase
     private int _frameWidth = 16, _frameHeight = 9;
     private DateTime _lastMove = DateTime.MinValue;
 
-    public RemoteAccessPage() : base("Acesso remoto",
-        "Veja e controle outro computador (tela, mouse, teclado e som) ou deixe alguém ajudar você. Cada acesso só começa depois que a pessoa do outro lado aceita, e ela pode encerrar quando quiser.")
+    private readonly TextBox _problem = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 56, MaxHeight = 110, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 6, 0, 8) };
+
+    public RemoteAccessPage() : base("Suporte",
+        "Para receber ajuda, passe o seu ID ao técnico e clique em Permitir acesso. Para ajudar alguém, digite o ID do outro computador e clique em Conectar. Cada acesso só começa depois que o outro lado aceita, e dá para encerrar quando quiser.")
     {
-        _connect = AddButton("Conectar", async (_, _) => await ConnectAsync());
+        _connect = new Button { Content = "Conectar", Style = (Style)FindResource("PrimaryButton"), HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(26, 10, 26, 10), FontSize = 14 };
+        _connect.Click += async (_, _) => await ConnectAsync();
         _disconnect = AddButton("Desconectar", (_, _) => Disconnect("Desconectado."), false);
         _disconnect.IsEnabled = false;
+        _disconnect.Visibility = Visibility.Collapsed;
 
         var grid = new UniformGrid { Columns = 2, Margin = new Thickness(0, 6, 0, 0) };
         grid.Children.Add(BuildThisComputer());
         grid.Children.Add(BuildOtherComputer());
         Body.Children.Add(grid);
+
+        var help = new UniformGrid { Columns = 2, Margin = new Thickness(0, 4, 0, 0) };
+        help.Children.Add(BuildTalk());
+        help.Children.Add(BuildReport());
+        Body.Children.Add(help);
 
         _session.Children.Add(Heading("Sessão"));
         _session.Children.Add(CardOf(_sessionInfo));
@@ -92,8 +105,8 @@ public sealed class RemoteAccessPage : ToolPageBase
     private UIElement BuildThisComputer()
     {
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = "Este computador", FontSize = 18, FontWeight = FontWeights.SemiBold, Foreground = Brush("AccentBrush") });
-        panel.Children.Add(Muted("Seu endereço de acesso. Passe este número a quem vai te atender."));
+        panel.Children.Add(new TextBlock { Text = "Receber ajuda", FontSize = 18, FontWeight = FontWeights.SemiBold, Foreground = Brush("AccentBrush") });
+        panel.Children.Add(Muted("Este é o ID deste computador. Passe este número ao técnico e clique em Permitir acesso."));
         panel.Children.Add(_myId);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
@@ -105,19 +118,21 @@ public sealed class RemoteAccessPage : ToolPageBase
         panel.Children.Add(buttons);
         panel.Children.Add(_myState);
 
+        var options = new StackPanel();
         var auto = new CheckBox { Content = "Ficar disponível sempre que o MB Extreme estiver aberto", IsChecked = AppServices.Settings.RemoteAutoListen, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 10, 0, 0) };
         auto.Click += (_, _) => Save(s => s.RemoteAutoListen = auto.IsChecked == true);
-        panel.Children.Add(auto);
+        options.Children.Add(auto);
 
         var audio = new CheckBox { Content = "Compartilhar o som deste PC na sessão", IsChecked = AppServices.Settings.RemoteShareAudio, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 0) };
         audio.Click += (_, _) => Save(s => s.RemoteShareAudio = audio.IsChecked == true);
-        panel.Children.Add(audio);
+        options.Children.Add(audio);
 
         var password = new CheckBox { Content = "Exigir senha da sessão (mais seguro)", IsChecked = AppServices.Settings.RemoteRequirePassword, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 0) };
         password.Click += (_, _) => AppServices.RemoteSupport.RequirePassword = password.IsChecked == true;
-        panel.Children.Add(password);
+        options.Children.Add(password);
+        options.Children.Add(Muted("Sem senha, basta o ID e o seu aceite; os dois lados conferem um código de 6 dígitos que aparece durante a sessão (se forem diferentes, encerre). Com senha, a conexão só abre para quem a souber.", 11));
         panel.Children.Add(_myPassword);
-        panel.Children.Add(Muted("Sem senha, basta o ID e o seu aceite; os dois lados conferem um código de 6 dígitos que aparece durante a sessão (se forem diferentes, encerre). Com senha, a conexão só abre para quem a souber.", 11));
+        panel.Children.Add(new Expander { Header = "Opções de segurança", Content = options, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 10, 0, 0) });
 
         var card = CardOf(panel);
         card.Margin = new Thickness(0, 0, 8, 8);
@@ -166,19 +181,65 @@ public sealed class RemoteAccessPage : ToolPageBase
         RefreshMine();
     }
 
+    // ------------------------------------------------------------ falar com o suporte e relatório
+
+    private UIElement BuildTalk()
+    {
+        var c = AppServices.Channel;
+        var p = new StackPanel();
+        p.Children.Add(new TextBlock { Text = "Falar com o suporte", FontSize = 15, FontWeight = FontWeights.SemiBold });
+        p.Children.Add(Muted("Conte o que está acontecendo (o seu ID já vai junto na mensagem):", 12));
+        System.Windows.Automation.AutomationProperties.SetName(_problem, "Descreva o problema");
+        p.Children.Add(_problem);
+        string Message() => $"Olá! Preciso de ajuda com o meu PC (MB Extreme {AppInfo.Version})." + (_problem.Text.Trim().Length > 0 ? "\n\n" + _problem.Text.Trim() : "")
+                            + (AppServices.RemoteSupport.Id is { Length: 9 } id ? $"\n\nMeu ID de acesso: {RemoteIds.FormatId(id)}" : "");
+        var row = new WrapPanel();
+        if (c.WhatsAppLink() is not null) row.Children.Add(SmallButton("Chamar no WhatsApp", (_, _) => Launch(c.WhatsAppLink(Message())!), true));
+        if (c.SupportEmail.Contains('@'))
+            row.Children.Add(SmallButton("Mandar e-mail", (_, _) => Launch($"mailto:{c.SupportEmail}?subject={Uri.EscapeDataString("Suporte MB Extreme")}&body={Uri.EscapeDataString(Message())}")));
+        row.Children.Add(SmallButton("Copiar mensagem", (_, _) => { if (TryCopy(Message())) SetStatus("Mensagem copiada. Cole na conversa com o suporte.", "OkBrush"); }));
+        p.Children.Add(row);
+        if (c.SupportHours.Length > 0) p.Children.Add(Muted("Atendimento: " + c.SupportHours, 11.5));
+        var card = CardOf(p);
+        card.Margin = new Thickness(0, 0, 8, 8);
+        return card;
+    }
+
+    private UIElement BuildReport()
+    {
+        var p = new StackPanel();
+        p.Children.Add(new TextBlock { Text = "Relatório do PC", FontSize = 15, FontWeight = FontWeights.SemiBold });
+        p.Children.Add(Muted("Peças, Windows, drivers e a última análise do Painel, para o técnico já chegar sabendo. Sem senhas nem arquivos pessoais.", 12));
+        p.Children.Add(SmallButton("Copiar relatório", async (_, _) =>
+        {
+            SetStatus("Montando o relatório...");
+            string report = await Task.Run(() => SystemInfoService.ToText(SystemInfoService.Collect()));
+            if (TryCopy(report)) SetStatus("Relatório copiado. Cole na conversa com o suporte.", "OkBrush");
+        }, true));
+        var card = CardOf(p);
+        card.Margin = new Thickness(8, 0, 0, 8);
+        return card;
+    }
+
+    private static void Launch(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (System.ComponentModel.Win32Exception) { }
+    }
+
     // ------------------------------------------------------------ outro computador
 
     private UIElement BuildOtherComputer()
     {
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = "Outro computador", FontSize = 18, FontWeight = FontWeights.SemiBold, Foreground = Brush("WarnBrush") });
-        panel.Children.Add(Muted("Digite o ID do computador que você quer acessar."));
+        panel.Children.Add(new TextBlock { Text = "Ajudar outro computador", FontSize = 18, FontWeight = FontWeights.SemiBold, Foreground = Brush("WarnBrush") });
+        panel.Children.Add(Muted("Digite o ID que a pessoa passou para você (9 números)."));
+        System.Windows.Automation.AutomationProperties.SetName(_targetId, "ID do outro computador");
+        System.Windows.Automation.AutomationProperties.SetName(_targetPassword, "Senha da sessão");
         panel.Children.Add(_targetId);
         panel.Children.Add(Muted("Senha da sessão (só se a pessoa informou uma):"));
         panel.Children.Add(_targetPassword);
-        var go = new Button { Content = "Conectar", Style = (Style)FindResource("PrimaryButton"), HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(26, 9, 26, 9) };
-        go.Click += async (_, _) => await ConnectAsync();
-        panel.Children.Add(go);
+        panel.Children.Add(_connect);
         _targetId.KeyDown += async (_, e) => { if (e.Key == Key.Enter) await ConnectAsync(); };
 
         var card = CardOf(panel);
@@ -221,6 +282,7 @@ public sealed class RemoteAccessPage : ToolPageBase
 
         _connect.IsEnabled = false;
         _disconnect.IsEnabled = true;
+        _disconnect.Visibility = Visibility.Visible;
         _cts = new CancellationTokenSource();
         _currentTarget = id;
         _player = new RemoteAudioPlayer { Muted = _mute?.IsChecked == true };
@@ -301,6 +363,7 @@ public sealed class RemoteAccessPage : ToolPageBase
         _session.Visibility = Visibility.Collapsed;
         _connect.IsEnabled = true;
         _disconnect.IsEnabled = false;
+        _disconnect.Visibility = Visibility.Collapsed;
         if (message is not null) SetStatus(message);
     }
 

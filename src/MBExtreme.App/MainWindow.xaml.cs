@@ -55,6 +55,13 @@ public partial class MainWindow : Window
                     _ => null,
                 };
                 if (scale is double s) { SetScale(s); e.Handled = true; return; }
+                if (e.Key == System.Windows.Input.Key.F && !(e.OriginalSource is System.Windows.Controls.TextBox))
+                {
+                    NavSearch.Focus();   // Ctrl + F: busca de ferramentas no menu
+                    NavSearch.SelectAll();
+                    e.Handled = true;
+                    return;
+                }
             }
             if (Pages.PeripheralTestPage.Active) return;   // no teste de periféricos essas teclas estão sendo testadas
             if (e.SystemKey == System.Windows.Input.Key.Left && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Alt) { GoBack(); e.Handled = true; }
@@ -69,6 +76,7 @@ public partial class MainWindow : Window
         _ = AppServices.Fans.StartIfConfiguredAsync();
         UpdateFooter();
         VersionText.Text = VersionLabel;
+        VersionButton.ToolTip = VersionTip;
         Loaded += (_, _) => SetupTrayAndWidget();
     }
 
@@ -249,6 +257,56 @@ public partial class MainWindow : Window
         }
     }
 
+    // ---------------------------------------------------------------- busca no menu
+
+    private void NavSearch_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        string query = NavSearch.Text;
+        NavSearchHint.Visibility = query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var results = NavigationMap.Search(query);
+        bool searching = query.Trim().Length >= 2;
+        NavPanel.Visibility = searching ? Visibility.Collapsed : Visibility.Visible;
+        SearchResults.Visibility = searching ? Visibility.Visible : Visibility.Collapsed;
+        SearchResults.Children.Clear();
+        if (!searching) return;
+        if (results.Count == 0)
+        {
+            SearchResults.Children.Add(new TextBlock { Text = "Nada encontrado. Tente outra palavra (ex.: ventoinha, DNS, BIOS).", FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8, 4, 8, 4), Foreground = (Brush)FindResource("MutedBrush") });
+            return;
+        }
+        foreach (var (tile, module) in results)
+        {
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Text = tile.Title, FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock { Text = module.Title, FontSize = 10, Foreground = (Brush)FindResource("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
+            var row = new DockPanel();
+            var icon = new TextBlock { Text = tile.Icon, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 14, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+            DockPanel.SetDock(icon, Dock.Left);
+            row.Children.Add(icon);
+            row.Children.Add(text);
+            var button = new Button { Content = row, Style = (Style)FindResource("SideFooterButton"), HorizontalContentAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 2), Tag = tile.Key, ToolTip = tile.Description };
+            System.Windows.Automation.AutomationProperties.SetName(button, tile.Title);
+            button.Click += (_, _) => OpenSearchResult(tile.Key);
+            SearchResults.Children.Add(button);
+        }
+    }
+
+    private void NavSearch_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Escape) { NavSearch.Text = ""; e.Handled = true; }
+        else if (e.Key == System.Windows.Input.Key.Enter && SearchResults.Children.OfType<Button>().FirstOrDefault() is { Tag: string key })
+        {
+            OpenSearchResult(key);
+            e.Handled = true;
+        }
+    }
+
+    private void OpenSearchResult(string key)
+    {
+        NavSearch.Text = "";
+        Go(key);
+    }
+
     /// <summary>Abre a seção do menu que tem o item (quando a tela é aberta por outro caminho com a seção recolhida).</summary>
     private void RevealInMenu(string sideKey)
     {
@@ -305,14 +363,17 @@ public partial class MainWindow : Window
     internal async void CheckForUpdates()
     {
         if (_updates is null) return;
-        VersionText.Text = "Procurando atualização...";
+        VersionText.Text = "  Procurando...";
         var result = await _updates.CheckNowAsync();
         VersionText.Text = VersionLabel;
         _updates.ShowCheckResult(this, result);
     }
 
-    private static string VersionLabel =>
-        $"v{MBExtreme.Core.AppInfo.Version} · compilação {MBExtreme.Core.Update.AppUpdates.CurrentBuild()} · Verificar atualização";
+    /// <summary>Texto curto no rodapé; a versão completa fica na dica do botão e na tela Sobre.</summary>
+    private const string VersionLabel = "  Verificar atualização";
+
+    private static string VersionTip =>
+        $"Versão {MBExtreme.Core.AppInfo.Version} · compilação {MBExtreme.Core.Update.AppUpdates.CurrentBuild()}. Clique para procurar uma versão nova.";
 
     private IEnumerable<RadioButton> NavRadios() => NavPanel.Children.OfType<StackPanel>().SelectMany(p => p.Children.OfType<RadioButton>());
 
@@ -500,12 +561,10 @@ public partial class MainWindow : Window
         "diskmgr" => new DiskManagerPage(),
         "wallpaper" => new WallpaperPage(),
         "license" => new LicensePage(),
-        "support" => new SupportHubPage(),
-        "support-anydesk" => new SupportPage(),
+        "support" or "remote" or "remote-console" => new RemoteAccessPage(),   // Suporte: uma tela só, estilo AnyDesk
         "social" => new SocialPage(),
         "suggest" => new SuggestionsPage(),
         "news" => new NewsPage(),
-        "remote" or "remote-console" => new RemoteAccessPage(),
         "processes" => new ProcessesPage(),
         "largefiles" => new LargeFilesPage(),
         "duplicates" => new DuplicatesPage(),

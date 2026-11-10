@@ -149,6 +149,21 @@ public sealed class SocialPage : UserControl
             _root.Children.Add(Card(offers, new LinearGradientBrush(Color.FromRgb(0x24, 0x10, 0x14), Color.FromRgb(0x12, 0x12, 0x14), 0)));
         }
 
+        // links de afiliados por grupo (lojas, games, IA): vêm do canal.json online
+        if (c.Affiliates.Count > 0)
+        {
+            foreach (var (key, title, subtitle) in ChannelConfig.AffiliateGroups)
+            {
+                var items = c.AffiliatesIn(key);
+                if (items.Count == 0) continue;
+                _root.Children.Add(Title(title, subtitle));
+                var row = new UniformGrid { Columns = Math.Max(1, Math.Min(3, items.Count)) };
+                foreach (var a in items) row.Children.Add(AffiliateCard(a));
+                _root.Children.Add(row);
+            }
+            _root.Children.Add(new TextBlock { Text = "Comprando ou assinando pelos links do canal você apoia a MB InfoArt, sem pagar nada a mais.", FontSize = 11, Foreground = Res("MutedBrush"), Margin = new Thickness(2, 0, 0, 6), TextWrapping = TextWrapping.Wrap });
+        }
+
         // parceiros com cupom
         _root.Children.Add(Title("Parceiros em destaque", c.Partners.Count > 0 ? "Use o cupom do canal na hora de pagar." : "Em breve: parceiros com cupom de desconto do canal."));
         if (c.Partners.Count > 0)
@@ -206,6 +221,38 @@ public sealed class SocialPage : UserControl
         see.Click += (_, _) => Open(url);
         panel.Children.Add(see);
         return new Border { Background = Res("SurfaceBrush"), BorderBrush = Res("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 10, 10), Child = panel, ClipToBounds = true };
+    }
+
+    private UIElement AffiliateCard(AffiliateLink a)
+    {
+        var color = TryColor(a.Color);
+        var panel = new DockPanel();
+        var badge = new Border
+        {
+            Width = 44, Height = 44, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top,
+            Background = new SolidColorBrush(Color.FromArgb(0x33, color.R, color.G, color.B)),
+            Child = new TextBlock { Text = a.Name.Length > 0 ? a.Name[..1].ToUpperInvariant() : "?", FontSize = 20, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(color), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        };
+        DockPanel.SetDock(badge, Dock.Left);
+        panel.Children.Add(badge);
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Text = a.Name, FontSize = 14, FontWeight = FontWeights.SemiBold });
+        if (a.Description.Length > 0) text.Children.Add(new TextBlock { Text = a.Description, FontSize = 12, Foreground = Res("MutedBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+        var buttons = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+        var open = new Button { Content = "Abrir ↗", Style = (Style)Application.Current.FindResource("PrimaryButton"), Padding = new Thickness(14, 5, 14, 5), FontSize = 12.5, Margin = new Thickness(0, 0, 8, 0) };
+        string url = a.Url;
+        open.Click += (_, _) => Open(url);
+        System.Windows.Automation.AutomationProperties.SetName(open, "Abrir " + a.Name);
+        buttons.Children.Add(open);
+        if (a.Coupon.Length > 0)
+        {
+            var copy = new Button { Content = "Cupom " + a.Coupon, Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(12, 5, 12, 5), FontSize = 12.5, ToolTip = "Copiar o cupom" };
+            copy.Click += (_, _) => { try { Clipboard.SetText(a.Coupon); copy.Content = "Copiado ✔"; } catch (System.Runtime.InteropServices.COMException) { } };
+            buttons.Children.Add(copy);
+        }
+        text.Children.Add(buttons);
+        panel.Children.Add(text);
+        return new Border { Background = Res("SurfaceBrush"), BorderBrush = Res("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 10, 10), Child = panel };
     }
 
     private static Color TryColor(string hex)

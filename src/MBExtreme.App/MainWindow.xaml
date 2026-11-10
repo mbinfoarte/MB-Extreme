@@ -116,12 +116,25 @@
                         <TextBlock><Run FontFamily="Segoe MDL2 Assets" Text="&#xE8D2;" /><Run Text="  Tamanho da letra" /></TextBlock>
                     </Button>
                     <Button x:Name="VersionButton" Style="{StaticResource SideFooterButton}" Margin="0,2,0,0" Click="CheckUpdate_Click">
-                        <TextBlock x:Name="VersionText" Foreground="{StaticResource MutedBrush}" FontSize="10" />
+                        <TextBlock><Run FontFamily="Segoe MDL2 Assets" Text="&#xE895;" /><Run x:Name="VersionText" Text="  Verificar atualização" /></TextBlock>
                     </Button>
                 </StackPanel>
 
+                <!-- busca: acha qualquer ferramenta (no lugar da antiga "Todas as ferramentas") -->
+                <Grid DockPanel.Dock="Top" Margin="12,2,12,8">
+                    <TextBox x:Name="NavSearch" Padding="28,6,8,6" FontSize="12" TextChanged="NavSearch_TextChanged" PreviewKeyDown="NavSearch_KeyDown"
+                             AutomationProperties.Name="Buscar ferramenta" ToolTip="Buscar qualquer ferramenta (Ctrl + F)" />
+                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center"
+                               Foreground="{StaticResource MutedBrush}" IsHitTestVisible="False" />
+                    <TextBlock x:Name="NavSearchHint" Text="Buscar ferramenta..." FontSize="12" Margin="30,0,0,0" VerticalAlignment="Center"
+                               Foreground="{StaticResource MutedBrush}" IsHitTestVisible="False" />
+                </Grid>
+
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel x:Name="NavPanel" Margin="8,0,8,0" />
+                    <StackPanel>
+                        <StackPanel x:Name="SearchResults" Margin="8,0,8,0" Visibility="Collapsed" />
+                        <StackPanel x:Name="NavPanel" Margin="8,0,8,0" />
+                    </StackPanel>
                 </ScrollViewer>
             </DockPanel>
         </Border>

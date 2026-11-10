@@ -11,6 +11,12 @@ public sealed record SocialLink(string Name, string Url, string Description = ""
 public sealed record Partner(string Name, string Description, string Coupon, string Discount, string Url, string Color = "#FFC400");
 
 /// <summary>
+/// Link de afiliado de uma loja ou serviço (Mercado Livre, Amazon, KaBuM!, ExitLag, ferramentas de IA...).
+/// <paramref name="Category"/>: "lojas", "games" ou "ia" (outros valores entram em "Outros parceiros").
+/// </summary>
+public sealed record AffiliateLink(string Name, string Category, string Description, string Url, string Coupon = "", string Color = "#FFC400");
+
+/// <summary>
 /// Redes, ofertas, parceiros e suporte da MB InfoArt. Vem de um arquivo online (config/canal.json no GitHub) para trocar links, cupons e
 /// parceiros sem lançar versão nova; sem internet, usa a última cópia baixada; sem nada, os padrões abaixo (tudo com o nome "mbinfoarte").
 /// </summary>
@@ -26,6 +32,23 @@ public sealed record ChannelConfig
     public List<SocialLink> Links { get; init; } = new();
     public List<SocialLink> Offers { get; init; } = new();
     public List<Partner> Partners { get; init; } = new();
+    public List<AffiliateLink> Affiliates { get; init; } = new();
+
+    /// <summary>Grupos de afiliados na ordem da tela: lojas, games e IA; o que não tem grupo conhecido vai para "Outros parceiros".</summary>
+    public static readonly IReadOnlyList<(string Key, string Title, string Subtitle)> AffiliateGroups = new[]
+    {
+        ("lojas", "Lojas parceiras", "Peças, periféricos e eletrônicos com os links do canal."),
+        ("games", "Para jogar melhor", "Serviços que reduzem o ping e melhoram a conexão nos jogos."),
+        ("ia", "Ferramentas de inteligência artificial", "As IAs que a MB InfoArt usa e recomenda."),
+        ("", "Outros parceiros", ""),
+    };
+
+    /// <summary>Afiliados de um grupo (vazio = os que não são de nenhum grupo conhecido).</summary>
+    public IReadOnlyList<AffiliateLink> AffiliatesIn(string group)
+    {
+        var known = AffiliateGroups.Select(g => g.Key).Where(k => k.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Affiliates.Where(a => group.Length == 0 ? !known.Contains(a.Category) : string.Equals(a.Category, group, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
 
     [JsonIgnore] public string YouTube => $"https://www.youtube.com/@{Handle}";
     [JsonIgnore] public string Subscribe => YouTube + "?sub_confirmation=1";
@@ -57,6 +80,7 @@ public sealed record ChannelConfig
                 Links = config.Links.Where(l => IsHttps(l.Url)).ToList(),
                 Offers = config.Offers.Where(l => IsHttps(l.Url)).ToList(),
                 Partners = config.Partners.Where(p => IsHttps(p.Url)).ToList(),
+                Affiliates = config.Affiliates.Where(a => IsHttps(a.Url) && !string.IsNullOrWhiteSpace(a.Name)).ToList(),
             };
         }
         catch (JsonException) { return null; }

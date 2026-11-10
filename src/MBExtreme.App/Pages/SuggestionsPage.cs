@@ -9,8 +9,9 @@ using MBExtreme.Core.Social;
 namespace MBExtreme.UI.Pages;
 
 /// <summary>
-/// Sugestões em duas colunas: à esquerda o formulário (tipo, mensagem com contador, nome, e-mail e o que mandar junto); à direita "Como funciona"
-/// e "O que é enviado". Vai para o servidor; sem servidor, abre o WhatsApp ou o e-mail com o texto pronto.
+/// Sugestões, no padrão da tela de Conta: quatro cartões grandes para escolher o assunto, o formulário num cartão (mensagem com contador,
+/// contato e o que mandar junto) e, ao lado, um cartão só com "Como funciona", "O que é enviado" e outros canais. Depois de enviar,
+/// o formulário dá lugar a uma confirmação. Vai para o servidor; sem servidor, abre o WhatsApp ou o e-mail com o texto pronto.
 /// </summary>
 public sealed class SuggestionsPage : UserControl
 {
@@ -23,7 +24,17 @@ public sealed class SuggestionsPage : UserControl
     private readonly CheckBox _version = new() { IsChecked = true };
     private readonly CheckBox _report = new() { IsChecked = false };
     private readonly TextBlock _status = new() { FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-    private readonly WrapPanel _kinds = new();
+    private readonly System.Windows.Controls.Primitives.UniformGrid _kinds = new() { Columns = 4, Margin = new Thickness(0, 0, 0, 16) };
+    private readonly ContentControl _formHost = new();
+    private StackPanel _form = new();
+
+    private static readonly Dictionary<string, (string Icon, string Detail)> KindInfo = new()
+    {
+        ["Sugestão de função"] = ("\uE82F", "Uma ideia para o programa"),
+        ["Encontrei um problema"] = ("\uEBE8", "Algo não funcionou direito"),
+        ["Elogio"] = ("\uEB51", "Conte o que você gostou"),
+        ["Outro"] = ("\uE8BD", "Qualquer outro assunto"),
+    };
     private readonly Button _send;
     private static readonly string Windows = MBExtreme.Core.Windows.SystemSummary.WindowsName();
 
@@ -43,6 +54,9 @@ public sealed class SuggestionsPage : UserControl
         titles.Children.Add(new TextBlock { Text = "Sua mensagem vai direto para a equipe da MB InfoArt. Lemos todas.", Foreground = Res("MutedBrush") });
         head.Children.Add(titles);
         root.Children.Add(head);
+        root.Children.Add(Label("Sobre o que é?"));
+        BuildKinds();
+        root.Children.Add(_kinds);
 
         var columns = new Grid();
         columns.ColumnDefinitions.Add(new ColumnDefinition());
@@ -50,11 +64,9 @@ public sealed class SuggestionsPage : UserControl
 
         // ---- formulário
         var form = new StackPanel();
-        form.Children.Add(Label("Sobre o que é?"));
-        BuildKinds();
-        form.Children.Add(_kinds);
+        _form = form;
 
-        var msgHead = new Grid { Margin = new Thickness(0, 14, 0, 6) };
+        var msgHead = new Grid { Margin = new Thickness(0, 0, 0, 6) };
         msgHead.Children.Add(Label("Mensagem *"));
         _counter.Foreground = Res("MutedBrush");
         msgHead.Children.Add(_counter);
@@ -99,7 +111,8 @@ public sealed class SuggestionsPage : UserControl
         footer.Children.Add(_send);
         form.Children.Add(new Border { BorderBrush = Res("BorderBrush"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 16, 0, 0) });
         form.Children.Add(footer);
-        columns.Children.Add(Card(form, new Thickness(0, 0, 16, 0)));
+        _formHost.Content = form;
+        columns.Children.Add(Card(_formHost, new Thickness(0, 0, 16, 0)));
 
         // ---- ao lado: como funciona e o que é enviado
         var side = new StackPanel();
@@ -121,13 +134,26 @@ public sealed class SuggestionsPage : UserControl
             row.Children.Add(t);
             how.Children.Add(row);
         }
-        side.Children.Add(Card(how, new Thickness(0, 0, 0, 14)));
-        var what = new StackPanel();
-        what.Children.Add(new TextBlock { Text = "🔒 O que é enviado", FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+        var what = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        what.Children.Add(new Border { BorderBrush = Res("BorderBrush"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 0, 0, 14) });
+        what.Children.Add(new TextBlock { Text = "O que é enviado", FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
         foreach (var line in new[] { "O assunto e a sua mensagem", "Nome e contato, se você preencher", "Versão do MB Extreme e do Windows, se a chave estiver ligada", "O relatório do PC, só se você marcar" })
             what.Children.Add(new TextBlock { Text = "•  " + line, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 3) });
         what.Children.Add(new TextBlock { Text = "Nada de arquivos, senhas ou fotos.", FontSize = 11.5, Foreground = Res("MutedBrush"), Margin = new Thickness(0, 8, 0, 0) });
-        side.Children.Add(Card(what, new Thickness(0)));
+        how.Children.Add(what);
+
+        // outros canais
+        var c = AppServices.Channel;
+        var channels = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
+        channels.Children.Add(new Border { BorderBrush = Res("BorderBrush"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 0, 0, 14) });
+        channels.Children.Add(new TextBlock { Text = "Prefere falar direto?", FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+        var chanButtons = new WrapPanel();
+        if (c.WhatsAppLink() is { } whats) chanButtons.Children.Add(SideButton("WhatsApp", () => Launch(whats)));
+        chanButtons.Children.Add(SideButton("Suporte", () => MainWindow.Current?.Go("support")));
+        chanButtons.Children.Add(SideButton("Nossas redes", () => MainWindow.Current?.Go("social")));
+        channels.Children.Add(chanButtons);
+        how.Children.Add(channels);
+        side.Children.Add(Card(how, new Thickness(0)));
         Grid.SetColumn(side, 1);
         columns.Children.Add(side);
         root.Children.Add(columns);
@@ -139,17 +165,54 @@ public sealed class SuggestionsPage : UserControl
     private void BuildKinds()
     {
         _kinds.Children.Clear();
-        var icons = new Dictionary<string, string> { ["Sugestão de função"] = "", ["Encontrei um problema"] = "", ["Elogio"] = "", ["Outro"] = "" };
         foreach (var kind in Suggestion.Kinds)
         {
             string k = kind;
-            var content = new StackPanel { Orientation = Orientation.Horizontal };
-            content.Children.Add(new TextBlock { Text = icons[k], FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
-            content.Children.Add(new TextBlock { Text = k, VerticalAlignment = VerticalAlignment.Center });
-            var b = new Button { Content = content, Style = (Style)Application.Current.FindResource(k == _kind ? "PrimaryButton" : "GhostButton"), Padding = new Thickness(14, 7, 14, 7), FontSize = 13, Margin = new Thickness(0, 0, 8, 8) };
+            bool selected = k == _kind;
+            var (icon, detail) = KindInfo.TryGetValue(k, out var info) ? info : ("\uE8BD", "");
+            var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
+            content.Children.Add(new TextBlock { Text = icon, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 20, Foreground = selected ? Brushes.Black : Res("AccentBrush"), Margin = new Thickness(0, 0, 0, 10) });
+            content.Children.Add(new TextBlock { Text = k, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            content.Children.Add(new TextBlock { Text = detail, FontSize = 12, Opacity = 0.75, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+            var b = new Button
+            {
+                Content = content, Style = (Style)Application.Current.FindResource(selected ? "PrimaryButton" : "GhostButton"),
+                Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 0, 10, 0), HorizontalContentAlignment = HorizontalAlignment.Left, VerticalContentAlignment = VerticalAlignment.Top,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(b, k + (selected ? " (escolhido)" : ""));
             b.Click += (_, _) => { _kind = k; BuildKinds(); UpdateCounter(); };
             _kinds.Children.Add(b);
         }
+    }
+
+    private static Button SideButton(string text, Action click)
+    {
+        var b = new Button { Content = text, Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(0, 0, 8, 8), FontSize = 12.5 };
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    private static void Launch(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (System.ComponentModel.Win32Exception) { }
+    }
+
+    /// <summary>Depois de enviar: confirmação no lugar do formulário, com "Enviar outra".</summary>
+    private void ShowThanks()
+    {
+        var p = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 30, 0, 30) };
+        p.Children.Add(new Border
+        {
+            Width = 64, Height = 64, CornerRadius = new CornerRadius(32), Background = Res("AccentBrush"), HorizontalAlignment = HorizontalAlignment.Center,
+            Child = new TextBlock { Text = "\uE73E", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 28, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        });
+        p.Children.Add(new TextBlock { Text = "Recebemos a sua mensagem!", FontSize = 20, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 16, 0, 4) });
+        p.Children.Add(new TextBlock { Text = "Obrigado por ajudar a melhorar o MB Extreme. Se você deixou contato, a resposta chega por lá.", FontSize = 13, Foreground = Res("MutedBrush"), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, MaxWidth = 420 });
+        var again = new Button { Content = "Enviar outra", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(20, 8, 20, 8), Margin = new Thickness(0, 18, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        again.Click += (_, _) => { _formHost.Content = _form; _status.Text = "🔒 Enviado com conexão segura."; _status.Foreground = Res("MutedBrush"); };
+        p.Children.Add(again);
+        _formHost.Content = p;
     }
 
     private void UpdateCounter()
@@ -205,8 +268,8 @@ public sealed class SuggestionsPage : UserControl
             string server = AppServices.License.Config.ServerUrl;
             if (server.Length > 0 && await s.SendAsync(AppServices.Web, server))
             {
-                Status("✔ Obrigado! Sua mensagem chegou na MB InfoArt.", "OkBrush");
                 _text.Text = "";
+                ShowThanks();
                 return;
             }
             // sem servidor: abre o WhatsApp (ou o e-mail) com o texto pronto

@@ -103,14 +103,11 @@ internal static class NavigationMap
         }),
         new("sup", "Suporte", "Ajuda do suporte da MB InfoArt por acesso remoto.", "\uE8F2", new Tile[]
         {
-            new("remote", "Acesso remoto", "Seu ID, conexão com outro PC (tela, mouse, teclado e som).", "\uE8AF", ""),
             new("a11y", "Acessibilidade e tamanho", "Interface maior ou menor, teclado e Narrador.", "\uE776", ""),
             new("social", "Nossas redes", "Canal, redes sociais, ofertas e parceiros com cupom.", "\uE716", ""),
             new("suggest", "Sugestões", "Mande uma ideia, avise de um problema ou elogie.", "\uE8BD", ""),
-            new("news", "O que há de novo", "As novidades de cada versão do MB Extreme.", "\uE789", ""),
-            new("support-anydesk", "AnyDesk", "Suporte pelo AnyDesk (alternativa ao acesso remoto do MB Extreme).", "\uE8AF", ""),
             new("about", "Sobre", "Versão, novidades, como o programa protege o seu PC e créditos.", "\uE946", ""),
-            new("support", "Pedir suporte", "Descreva o problema e envie o relatório do PC; AnyDesk como alternativa.", "\uE8F2", ""),
+            new("support", "Suporte e acesso remoto", "Passe o seu ID ao técnico ou digite o ID de outro PC para ajudar (tela, mouse, teclado e som), fale com o suporte e envie o relatório.", "\uE8F2", ""),
         }),
         new("lic", "Licença", "Plano, ativação e conta.", "\uE8D7", new Tile[]
         {
@@ -174,17 +171,50 @@ internal static class NavigationMap
         {
             new("social", "Nossas redes", "\uE716"),
             new("suggest", "Sugestões", "\uE8BD"),
-            new("news", "O que há de novo", "\uE789"),
             new("support", "Suporte", "\uE8F2"),
-            new("alltools", "Todas as ferramentas", "\uE8A9"),
             new("about", "Sobre", "\uE946"),
         }),
     };
 
     /// <summary>Tela de atalho do menu lateral que representa a página (a própria ou nenhuma).</summary>
     public static string? SideKeyOf(string pageKey) =>
-        Sidebar.SelectMany(s => s.Items).Any(i => i.Key == pageKey) ? pageKey
-        : Modules.Any(m => m.Key == pageKey) ? "alltools" : null;
+        Sidebar.SelectMany(s => s.Items).Any(i => i.Key == pageKey) ? pageKey : null;
+
+    /// <summary>
+    /// Busca do menu: acha qualquer ferramenta pelo nome, pela descrição ou pelo grupo, sem ligar para acentos e maiúsculas.
+    /// Nome que começa com o texto vem primeiro, depois nome que contém, depois descrição/grupo. Substitui a antiga "Todas as ferramentas".
+    /// </summary>
+    public static IReadOnlyList<(Tile Tile, Module Module)> Search(string? query, int max = 12)
+    {
+        string q = Fold(query);
+        if (q.Length < 2) return Array.Empty<(Tile, Module)>();
+        var words = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return Modules
+            .SelectMany(m => m.Tiles.Select(t => (Tile: t, Module: m)))
+            .Select(x =>
+            {
+                string title = Fold(x.Tile.Title), rest = Fold(x.Tile.Description + " " + x.Tile.Section + " " + x.Module.Title);
+                if (!words.All(w => title.Contains(w, StringComparison.Ordinal) || rest.Contains(w, StringComparison.Ordinal))) return (x, Score: -1);
+                int score = title.StartsWith(q, StringComparison.Ordinal) ? 0 : title.Contains(q, StringComparison.Ordinal) ? 1 : words.All(w => title.Contains(w, StringComparison.Ordinal)) ? 2 : 3;
+                return (x, Score: score);
+            })
+            .Where(r => r.Score >= 0)
+            .OrderBy(r => r.Score).ThenBy(r => r.x.Tile.Title, StringComparer.CurrentCulture)
+            .Select(r => r.x)
+            .GroupBy(x => x.Tile.Key).Select(g => g.First())
+            .Take(max)
+            .ToList();
+    }
+
+    private static string Fold(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var normalized = text.Trim().ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(normalized.Length);
+        foreach (char c in normalized)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark) sb.Append(c);
+        return sb.ToString();
+    }
 
     public static Module? ModuleOf(string pageKey) =>
         Modules.FirstOrDefault(m => m.Key == pageKey || m.Tiles.Any(t => t.Key == pageKey));

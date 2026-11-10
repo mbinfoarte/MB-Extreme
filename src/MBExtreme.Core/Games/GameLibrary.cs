@@ -185,6 +185,23 @@ public sealed class GameSettings
 
     /// <summary>A otimização de rede criou uma política de QoS para este jogo (removida ao desfazer).</summary>
     public bool QosApplied { get; set; }
+
+    /// <summary>Tipo de janela escolhido (passado ao abrir pelo MB Extreme).</summary>
+    public GameWindowMode WindowMode { get; set; }
+
+    /// <summary>Opções de inicialização extras escritas pelo usuário (já limpas).</summary>
+    public string? ExtraArgs { get; set; }
+
+    /// <summary>"Desativar otimizações de tela cheia" do Windows ligado pelo MB Extreme; o valor de antes fica em <see cref="FsoBackup"/>.</summary>
+    public bool FsoDisabled { get; set; }
+    public string? FsoBackup { get; set; }
+
+    /// <summary>Cópia do GameUserSettings.ini (Unreal) antes de mudarmos o modo de tela; e qual arquivo foi mudado.</summary>
+    public string? UnrealIni { get; set; }
+    public string? UnrealIniBackup { get; set; }
+
+    /// <summary>Último perfil pronto de driver aplicado (competitive, balanced, quality ou nip).</summary>
+    public string? DriverPresetKey { get; set; }
 }
 
 public sealed class ManualGame

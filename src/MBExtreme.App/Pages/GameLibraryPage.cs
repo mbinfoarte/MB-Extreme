@@ -17,7 +17,7 @@ namespace MBExtreme.UI.Pages;
 /// Biblioteca de jogos em grade de capas (Steam, Epic, GOG e os que você adicionar). Ao escolher um jogo: abrir com o Modo Jogo,
 /// otimizar por tipo de jogo e marca da placa de vídeo, prioridade de CPU e requisitos informados pela loja.
 /// </summary>
-public sealed class GameLibraryPage : ToolPageBase
+public sealed partial class GameLibraryPage : ToolPageBase
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     private static readonly SemaphoreSlim CoverGate = new(3, 3);
@@ -136,6 +136,7 @@ public sealed class GameLibraryPage : ToolPageBase
                 : n.Contains("AMD", StringComparison.OrdinalIgnoreCase) || n.Contains("Radeon", StringComparison.OrdinalIgnoreCase) ? GpuMaker.Amd
                 : n.Contains("Intel", StringComparison.OrdinalIgnoreCase) || n.Contains("Arc", StringComparison.OrdinalIgnoreCase) ? GpuMaker.Intel : GpuMaker.Unknown;
             _tierText.Text = $"Seu PC: {advice.Tier} · {(gpu?.Name ?? "placa de vídeo não identificada")}. {advice.Headline}";
+            _nvidiaName = hw.Gpus.Select(g => g.Name).FirstOrDefault(name => name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) || name.Contains("GeForce", StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex) when (ex is InvalidOperationException or AggregateException or System.Security.SecurityException or UnauthorizedAccessException or IOException or System.Management.ManagementException)
         {
@@ -284,6 +285,7 @@ public sealed class GameLibraryPage : ToolPageBase
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;   // capa trocada no mesmo arquivo aparece na hora
             bitmap.DecodePixelWidth = 300;
             bitmap.UriSource = new Uri(file);
             bitmap.EndInit();
@@ -382,9 +384,9 @@ public sealed class GameLibraryPage : ToolPageBase
         _sideTop.Children.Add(BuildHeader(v));
         _sideTop.Children.Add(BuildActions(v));
 
-        _tab = Math.Clamp(_tab, 0, 1);
-        _sideTop.Children.Add(Chips(new[] { "Resumo", "Otimização" }, _tab, i => { _tab = i; Paint(); }));
-        _detail.Children.Add(_tab == 0 ? SummaryPanel(v) : OptimizePanel(v));
+        _tab = Math.Clamp(_tab, 0, 2);
+        _sideTop.Children.Add(Chips(new[] { "Resumo", "Otimização", "Configurações" }, _tab, i => { _tab = i; Paint(); }));
+        _detail.Children.Add(_tab == 0 ? SummaryPanel(v) : _tab == 1 ? OptimizePanel(v) : ConfigPanel(v));
         if (_inline >= 0)
         {
             // detalhes abrem aqui mesmo, logo abaixo, sem trocar a tela
@@ -476,10 +478,27 @@ public sealed class GameLibraryPage : ToolPageBase
             RenderGrid();
             return;
         }
-        if (picker.Chosen is not { } chosen) return;
-        SetStatus("Baixando a capa...");
-        string? file = await CoverSearch.SaveCustomAsync(Http, chosen, folder, game.Id);
-        if (file is null) { SetStatus("Não foi possível baixar essa capa. Tente outra.", "WarnBrush"); return; }
+        string? file;
+        if (picker.ChosenFile is { } local)
+        {
+            var saved = WebCoverSearch.SaveFromFile(local, folder, game.Id);
+            if (saved.File is null) { SetStatus("Não deu para usar essa imagem: " + saved.Error, "WarnBrush"); return; }
+            file = saved.File;
+        }
+        else if (picker.ChosenUrl is { } url)
+        {
+            SetStatus("Baixando a imagem...");
+            var saved = await WebCoverSearch.SaveFromUrlAsync(Http, url, folder, game.Id);
+            if (saved.File is null) { SetStatus("Não deu para usar esse link: " + saved.Error, "WarnBrush"); return; }
+            file = saved.File;
+        }
+        else
+        {
+            if (picker.Chosen is not { } chosen) return;
+            SetStatus("Baixando a capa...");
+            file = await CoverSearch.SaveCustomAsync(Http, chosen, folder, game.Id);
+            if (file is null) { SetStatus("Não foi possível baixar essa capa. Tente outra.", "WarnBrush"); return; }
+        }
         _coverImages.Remove(game.Id);
         SetStatus($"Capa de {game.Name} atualizada.", "OkBrush");
         RenderGrid();
@@ -1002,6 +1021,7 @@ public sealed class GameLibraryPage : ToolPageBase
 
         try
         {
+            if (LaunchWithOptions(game)) { if (measure) _ = RenderDetailAsync(game); return; }
             Process.Start(new ProcessStartInfo(game.LaunchTarget) { UseShellExecute = true, WorkingDirectory = game.Launcher == GameLauncher.Manual ? game.InstallPath : "" });
             SetStatus(game.ExeName is null
                 ? $"Abrindo {game.Name}..."

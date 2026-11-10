@@ -5,8 +5,11 @@ using System.Text.Json;
 namespace MBExtreme.Core.Games;
 
 /// <summary>Uma capa encontrada na internet para o usuário escolher.</summary>
-public sealed record CoverCandidate(string AppId, string Name, string ImageUrl, string? DownloadUrl = null)
+public sealed record CoverCandidate(string AppId, string Name, string ImageUrl, string? DownloadUrl = null, int Width = 0, int Height = 0)
 {
+    /// <summary>Resultado da busca na internet (baixado com as travas de <see cref="WebCoverSearch"/>).</summary>
+    public bool IsWeb => AppId == WebCoverSearch.WebAppId;
+
     /// <summary>Só endereços https do próprio SteamGridDB são baixados (a lista vem da internet, então não se confia no que ela traz).</summary>
     public static bool IsAllowedDownload(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps
@@ -64,6 +67,8 @@ public static class CoverSearch
     /// <summary>Baixa a capa escolhida (se a vertical não existir, usa a imagem larga) e guarda como a capa do jogo.</summary>
     public static async Task<string?> SaveCustomAsync(HttpClient http, CoverCandidate candidate, string folder, string gameId, CancellationToken stop = default)
     {
+        if (candidate.IsWeb)
+            return candidate.DownloadUrl is { } link ? (await WebCoverSearch.SaveFromUrlAsync(http, link, folder, gameId, stop)).File : null;
         bool grid = candidate.DownloadUrl is not null;
         if (grid ? !CoverCandidate.IsAllowedDownload(candidate.DownloadUrl) : !candidate.AppId.All(char.IsDigit) || candidate.AppId.Length is 0 or > 12) return null;
         try

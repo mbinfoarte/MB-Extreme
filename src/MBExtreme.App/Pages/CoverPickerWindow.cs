@@ -20,15 +20,24 @@ internal sealed class CoverPickerWindow : Window
     /// <summary>O usuário pediu para voltar à capa automática.</summary>
     public bool RemoveCustom { get; private set; }
 
+    /// <summary>Link de imagem colado pelo usuário.</summary>
+    public string? ChosenUrl { get; private set; }
+
+    /// <summary>Imagem escolhida do próprio PC.</summary>
+    public string? ChosenFile { get; private set; }
+
+    private readonly string _gameName;
+
     private readonly MBExtreme.Core.Settings.AppSettings _settings;
 
     public CoverPickerWindow(HttpClient http, string gameName, MBExtreme.Core.Settings.AppSettings settings, bool hasCustom)
     {
         _http = http;
         _settings = settings;
+        _gameName = gameName;
         Title = "Buscar capa";
-        Width = 640;
-        Height = 640;
+        Width = 700;
+        Height = 720;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = (Brush)Application.Current.FindResource("BgBrush");
         Foreground = (Brush)Application.Current.FindResource("TextBrush");
@@ -59,6 +68,40 @@ internal sealed class CoverPickerWindow : Window
         keyRow.Children.Add(key);
         info.Children.Add(keyRow);
         info.Children.Add(new TextBlock { Text = "Para pegar a chave: entre em steamgriddb.com, abra seu perfil, Preferências, API.", FontSize = 11, Foreground = _status.Foreground, Margin = new Thickness(0, 3, 0, 0) });
+
+        // outras formas: link de qualquer site, arquivo do PC ou procurar no Google Imagens
+        var linkRow = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+        var useLink = new Button { Content = "Usar link", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(8, 0, 0, 0) };
+        DockPanel.SetDock(useLink, Dock.Right);
+        var link = new TextBox { Padding = new Thickness(6, 3, 6, 3), ToolTip = "No navegador: clique com o botão direito na imagem e escolha \"Copiar endereço da imagem\"" };
+        useLink.Click += (_, _) =>
+        {
+            string url = link.Text.Trim();
+            if (!WebCoverSearch.IsSafeUrl(url)) { _status.Text = "O link precisa começar com https:// e ser de um site da internet (copie o endereço da imagem, não da página)."; return; }
+            ChosenUrl = url;
+            DialogResult = true;
+        };
+        linkRow.Children.Add(useLink);
+        linkRow.Children.Add(new TextBlock { Text = "Link da imagem:", Foreground = _status.Foreground, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        linkRow.Children.Add(link);
+        info.Children.Add(linkRow);
+        var more = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var google = new Button { Content = "Procurar no Google Imagens", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(0, 0, 8, 0) };
+        google.Click += (_, _) =>
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(WebCoverSearch.GoogleImagesUrl(_query.Text.Length > 0 ? _query.Text : _gameName)) { UseShellExecute = true }); }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { _status.Text = "Não deu para abrir o navegador: " + ex.Message; }
+            _status.Text = "No Google, clique com o botão direito na imagem, \"Copiar endereço da imagem\" e cole no campo acima.";
+        };
+        var file = new Button { Content = "Escolher imagem do PC...", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(12, 4, 12, 4) };
+        file.Click += (_, _) =>
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Imagens (*.jpg;*.jpeg;*.png;*.webp)|*.jpg;*.jpeg;*.png;*.webp", Title = "Escolher capa" };
+            if (dialog.ShowDialog(this) == true) { ChosenFile = dialog.FileName; DialogResult = true; }
+        };
+        more.Children.Add(google);
+        more.Children.Add(file);
+        info.Children.Add(more);
         if (hasCustom)
         {
             var auto = new Button { Content = "Voltar à capa automática", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(12, 4, 12, 4), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) };
@@ -83,13 +126,15 @@ internal sealed class CoverPickerWindow : Window
         _results.Children.Clear();
         _status.Text = "Procurando...";
         string name = _query.Text.Trim();
-        var steam = await CoverSearch.SearchAsync(_http, name);
-        var grid = await SteamGridDb.SearchAsync(_http, _settings.SteamGridDbKey, name);
-        if (steam.Count == 0 && grid.Count == 0)
+        var steamTask = CoverSearch.SearchAsync(_http, name);
+        var gridTask = SteamGridDb.SearchAsync(_http, _settings.SteamGridDbKey, name);
+        var webTask = WebCoverSearch.SearchAsync(_http, name);
+        var steam = await steamTask;
+        var grid = await gridTask;
+        var web = await webTask;
+        if (steam.Count == 0 && grid.Count == 0 && web.Count == 0)
         {
-            _status.Text = string.IsNullOrWhiteSpace(_settings.SteamGridDbKey)
-                ? "Nada encontrado na Steam. Para jogos de outras lojas, coloque a chave gratuita do SteamGridDB acima. Também ajuda tentar só a primeira palavra do nome."
-                : "Nada encontrado (ou sem internet). Tente só a primeira palavra do nome.";
+            _status.Text = "Nada encontrado (ou sem internet). Tente só a primeira palavra do nome, cole o link de uma imagem ou escolha um arquivo do PC.";
             return;
         }
         _status.Text = "";
@@ -97,11 +142,13 @@ internal sealed class CoverPickerWindow : Window
         foreach (var candidate in steam) AddCandidate(candidate);
         if (grid.Count > 0) AddHeading("SteamGridDB (todas as lojas)");
         foreach (var candidate in grid) AddCandidate(candidate);
+        if (web.Count > 0) AddHeading("Internet (imagens de qualquer site)");
+        foreach (var candidate in web) AddCandidate(candidate);
     }
 
     private void AddHeading(string text)
     {
-        var heading = new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 6), Width = 560 };
+        var heading = new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 6), Width = 620 };
         _results.Children.Add(heading);
     }
 

@@ -56,3 +56,17 @@ Ficou de fora de propósito:
 - **Resizable BAR**: precisa de vários campos, um deles de 64 bits, que a nossa interface (só números de 32 bits) ainda não grava. Também depende da BIOS.
 - **Exportar/importar `.nip`**: não implementado; use o próprio Profile Inspector para isso.
 - **Detecção do perfil pré-existente**: o programa grava no perfil que o driver já tem para o jogo (ou cria um); ainda não mostra "este jogo já tem perfil da NVIDIA".
+
+## Configurações por jogo (aba "Configurações" da Biblioteca)
+
+- **DLSS pelo driver**: identificadores e valores do cabeçalho oficial `NvApiDriverSettings.h` do NVAPI R620
+  (github.com/NVIDIA/nvapi): `NGX_DLSS_SR_OVERRIDE` (0x10E41E01), `NGX_DLSS_SR_OVERRIDE_RENDER_PRESET_SELECTION` (0x10E41DF3,
+  A=1 … Z=26, mais recente = 0x00FFFFFF), `NGX_DLSS_SR_MODE` (0x10AFB768), `NGX_DLSS_FG_OVERRIDE` (0x10E41E03),
+  `NGX_DLSS_FG_OVERRIDE_RENDER_PRESET_SELECTION` (0x10E41DF1), `NGX_DLSSG_MULTI_FRAME_COUNT` (0x104D6667, quadros gerados: 4x = 3),
+  `NGX_DLSS_RR_OVERRIDE` (0x10E41E02) e `NGX_DLSS_RR_OVERRIDE_RENDER_PRESET_SELECTION` (0x10E41DF7).
+- **Perfis prontos** (Competitivo, Equilíbrio, Qualidade visual) e limite de FPS: `PREFERRED_PSTATE`, `PRERENDERLIMIT`, `VSYNCMODE`,
+  `QUALITY_ENHANCEMENTS`, `OGL_THREAD_CONTROL`, `ANISO_MODE_SELECTOR`/`ANISO_MODE_LEVEL` e `FRL_FPS`, do mesmo cabeçalho.
+- **Importar .nip**: formato XML do NVIDIA Profile Inspector (`ArrayOfProfile/Profile/Settings/ProfileSetting`, `SettingID` e
+  `SettingValue` em decimal). Só valores DWORD entram; DTD e entidades externas são recusadas.
+- Tudo vai para o perfil do próprio jogo (nunca o global), com o valor anterior guardado: "Voltar ao DLSS do jogo" e
+  "Desfazer tudo do driver neste jogo" devolvem o que existia.

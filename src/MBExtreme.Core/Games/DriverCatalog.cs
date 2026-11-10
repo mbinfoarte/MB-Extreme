@@ -55,6 +55,6 @@ public static class DriverCatalog
     {
         DriverSettingIds.PowerMode => "Modo de gerenciamento de energia",
         DriverSettingIds.PreRenderLimit => "Quadros pré-renderizados",
-        _ => All.SelectMany(p => p.Settings).Concat(Generic).FirstOrDefault(s => s.Id == id)?.Title ?? $"Configuração 0x{id:X8}",
+        _ => All.SelectMany(p => p.Settings).Concat(Generic).FirstOrDefault(s => s.Id == id)?.Title ?? DriverPresets.NameOf(id),
     };
 }

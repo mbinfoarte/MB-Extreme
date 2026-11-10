@@ -197,6 +197,50 @@ public sealed class GameDriverService
         return new DriverApplyResult(applied, failed);
     }
 
+    /// <summary>
+    /// Volta só estas configurações ao que eram antes do MB Extreme (o valor guardado, ou remove do perfil do jogo se não havia nada).
+    /// Usado quando o usuário escolhe "Padrão do jogo" numa opção (ex.: DLSS).
+    /// </summary>
+    public DriverApplyResult Reset(string gameId, string exeName, IReadOnlyList<uint> ids)
+    {
+        var reverted = new List<string>();
+        var failed = new List<string>();
+        if (ids.Count == 0) return new DriverApplyResult(reverted, failed);
+        if (!_driver.Available) return new DriverApplyResult(reverted, new[] { "driver NVIDIA indisponível" });
+        lock (_lock)
+        {
+            var all = Load();
+            all.TryGetValue(gameId, out var saved);
+            foreach (var id in ids.Distinct())
+            {
+                string? error;
+                if (saved is not null && saved.Driver.TryGetValue(id, out var old))
+                {
+                    error = old is { } v ? _driver.Write(exeName, id, v) : _driver.Remove(exeName, id);
+                    if (error is null) saved.Driver.Remove(id);
+                }
+                else
+                {
+                    // nunca mexemos nela: só remove se estiver no perfil do jogo
+                    if (_driver.Read(exeName, id) is not { Specific: true }) continue;
+                    error = _driver.Remove(exeName, id);
+                }
+                if (error is null) reverted.Add(DriverCatalog.TitleOf(id)); else failed.Add(error);
+            }
+            if (saved is not null)
+            {
+                if (saved.Driver.Count == 0 && saved.Gpu is null) all.Remove(gameId); else all[gameId] = saved;
+                Save(all);
+            }
+        }
+        return new DriverApplyResult(reverted, failed);
+    }
+
+    /// <summary>Valor atual no perfil do próprio jogo (null = o jogo não tem essa configuração).</summary>
+    public uint? ReadSpecific(string exeName, uint id) => _driver.Available && _driver.Read(exeName, id) is { Specific: true } v ? v.Value : null;
+
+    public bool DriverAvailable => _driver.Available;
+
     public DriverApplyResult Undo(string gameId)
     {
         var reverted = new List<string>();

@@ -660,7 +660,7 @@ public static class GpuWindowBench
 
     // ------------------------------------------------------------------ janela Win32 simples (sem WPF)
 
-    private static class Win32
+    internal static class Win32
     {
         private delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 

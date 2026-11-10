@@ -29,8 +29,9 @@ public sealed partial class BenchmarkPage
         [GpuWindowBench.Reflections] = ("", "Raymarching com reflexos, sombras suaves e oclusão, na janela 3D separada"),
         [GpuWindowBench.Geometry] = ("", "2.500 objetos deformados (5,8 milhões de triângulos por quadro) com 3 luzes que se movem"),
         [GpuWindowBench.Studio] = ("", "Render em blocos: a imagem de estúdio vai sendo completada quadrado por quadrado (path tracing, a luz rebate até 5 vezes)"),
-        [GpuWindowBench.Game] = ("", "Processador + placa de vídeo, como um jogo: 10 mil unidades com IA calculada no processador, terreno e explosões com milhares de partículas"),
+        [GpuWindowBench.Game] = ("", "Processador + placa de vídeo, como um jogo: 10 mil soldados animados com IA no processador, disparos de energia, explosões, fumaça e um lago com reflexo"),
         [GpuWindowBench.ResolutionLimit] = ("", "A simulação de jogo em cada resolução até a escolhida: mostra até onde passa de 60 FPS"),
+        [Dx12RayBench.Step] = ("", "DirectX 12 com ray tracing por hardware: a mesma arena com RT desligado e ligado (sombras, reflexos e oclusão por raio) para mostrar quanto o RT custa"),
         ["1 núcleo"] = ("", "A cena desenhada por raios, bloco a bloco, com 1 linha de execução"),
         ["Todos os núcleos"] = ("", "A mesma cena com todas as linhas de execução"),
     };

@@ -70,7 +70,10 @@ public sealed record BenchmarkResult(
     IReadOnlyList<GpuSceneStat>? GpuStats = null,
     bool FocusLost = false,
     IReadOnlyList<CategoryScore>? Categories = null,
-    int Version = 0);
+    int Version = 0,
+    double RtOnFps = 0,
+    double RtOffFps = 0,
+    string? RtNote = null);
 
 /// <summary>Em que segundo do teste começou cada etapa (para marcar no gráfico de monitoramento).</summary>
 public sealed record PhaseMark(string Name, double StartSeconds);
@@ -103,7 +106,7 @@ public static class BenchmarkService
 
     /// <summary>Etapas da placa de vídeo, na ordem em que a janela 3D roda.</summary>
     public static readonly string[] GpuSteps =
-        { GpuWindowBench.Reflections, GpuWindowBench.Geometry, GpuWindowBench.Studio, GpuWindowBench.Game, GpuWindowBench.ResolutionLimit };
+        { GpuWindowBench.Reflections, GpuWindowBench.Geometry, GpuWindowBench.Studio, GpuWindowBench.Game, GpuWindowBench.ResolutionLimit, Dx12RayBench.Step };
 
     public static string[] StepsFor(BenchmarkOptions options)
     {
@@ -275,6 +278,7 @@ public static class BenchmarkService
         int gpuScore = 0;
         IReadOnlyList<GpuSceneResult>? scenes = null;
         GpuWindowResult? window = null;
+        RayTracingResult? rt = null;
         if (options.Gpu3D)
         {
             Report(GpuWindowBench.Reflections, 0, "Abrindo a janela 3D");
@@ -309,6 +313,34 @@ public static class BenchmarkService
                 // Sem Direct3D 11 (máquina virtual, driver antigo, placa reiniciada): o resto do resultado continua valendo.
                 gpuName = "GPU 3D indisponível: " + ex.Message;
             }
+
+            // ray tracing em DirectX 12 (janela própria): placas sem DXR 1.1 ficam com o aviso e o resto continua valendo
+            Report(Dx12RayBench.Step, 0, "Abrindo o DirectX 12");
+            try
+            {
+                if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("o ray tracing precisa do Windows (DirectX 12)");
+                var runs = new List<RayTracingResult>();
+                for (int p = 0; p < passes; p++)
+                {
+                    var r = Dx12RayBench.Run(options.GpuWidth, options.GpuHeight, profile.GpuSecondsPerScene, p, passes,
+                        e => Report(e.Step, e.Fraction, e.Fps > 0 ? $"{e.Step}: {e.Fps:0} FPS" : e.Step, e.Fps > 0 ? $"FPS atual: {e.Fps:0}" : null, e.Pass, e.Passes), token);
+                    runs.Add(r);
+                    if (r.Unsupported is not null) break;
+                }
+                rt = runs.Count == 1 ? runs[0] : runs.OrderBy(r => r.OnFps).ElementAt(runs.Count / 2);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                rt = new RayTracingResult(gpuName ?? "", null, null, "não rodou: " + ex.Message);
+            }
+            ReportResult(Dx12RayBench.Step, rt.Unsupported is { } why ? "sem ray tracing · " + why
+                : $"ligado {rt.OnFps:0.0} FPS · desligado {rt.OffFps:0.0} FPS · custo {rt.CostPercent:0}%");
+            if (rt.Unsupported is null)
+                scenes = (scenes ?? Array.Empty<GpuSceneResult>()).Concat(new[]
+                {
+                    new GpuSceneResult("Ray tracing ligado (DX12)", rt.OnFps),
+                    new GpuSceneResult("Ray tracing desligado (DX12)", rt.OffFps),
+                }).ToList();
         }
 
         progress.Report(new ProgressEvent(steps.Length > 0 ? steps[^1] : StepDisk, 100, "Concluído") { StepPercent = 100, Passes = passes });
@@ -325,8 +357,9 @@ public static class BenchmarkService
             GameFps: window?.GameFps ?? 0, ResolutionLimit: window?.Resolutions, Passes: passes,
             DiskRandReadMBps: disk?.RandReadMBps ?? 0, DiskRandQ8Iops: disk?.RandQ8Iops ?? 0, DiskRandWriteMBps: disk?.RandWriteMBps ?? 0, DiskAccessUs: disk?.AccessMicroseconds ?? 0,
             AiGenerateTps: ai?.GenerationTokensPerSec ?? 0, AiPromptTps: ai?.PromptTokensPerSec ?? 0, GameLow1Fps: window?.Game?.Low1Fps ?? 0,
-            GpuStats: window is null ? null : new[] { window.Reflections, window.Geometry, window.Game }.Where(x => x is not null).Select(x => x!).ToList(),
-            FocusLost: window?.FocusLost ?? false, Version: BenchmarkScoring.Version);
+            GpuStats: window is null && rt?.On is null ? null : new[] { window?.Reflections, window?.Geometry, window?.Game, rt?.On, rt?.Off }.Where(x => x is not null).Select(x => x!).ToList(),
+            FocusLost: window?.FocusLost ?? false, Version: BenchmarkScoring.Version,
+            RtOnFps: rt?.OnFps ?? 0, RtOffFps: rt?.OffFps ?? 0, RtNote: rt?.Unsupported);
         var categories = BenchmarkScoring.For(result);
         return result with { Categories = categories, Score = BenchmarkScoring.Overall(categories) };
     }

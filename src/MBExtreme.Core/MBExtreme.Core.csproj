@@ -19,6 +19,7 @@
     <!-- Direct3D 11 para o benchmark 3D da GPU. MIT. -->
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+    <PackageReference Include="Vortice.Direct3D12" Version="3.8.3" />
     <!-- Captura de áudio (WASAPI) e mixagem para a gravação e a transmissão. MIT. -->
     <PackageReference Include="NAudio.Core" Version="2.2.1" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
@@ -32,5 +33,6 @@
   <ItemGroup>
     <!-- sombreadores das cenas 3D do benchmark (janela separada) -->
     <EmbeddedResource Include="Benchmark\Shaders\*.hlsl" LogicalName="MBExtreme.Bench.%(Filename).hlsl" />
+    <EmbeddedResource Include="Benchmark\Shaders\*.dxil" LogicalName="MBExtreme.Bench.%(Filename).dxil" />
   </ItemGroup>
 </Project>

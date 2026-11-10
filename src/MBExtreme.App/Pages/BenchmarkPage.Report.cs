@@ -341,7 +341,7 @@ public sealed partial class BenchmarkPage
             var prior = before?.FirstOrDefault(x => x.Scene == s.Scene);
             var inner = new StackPanel();
             inner.Children.Add(new TextBlock { Text = s.Scene, FontSize = 12.5, FontWeight = FontWeights.SemiBold });
-            inner.Children.Add(new TextBlock { Text = s.Scene.Contains("jogo") ? "Processador + placa de vídeo, como um jogo" : s.Scene.Contains("Geometria") ? "Geometria e vértices" : "Pixel shader pesado (raymarching)", FontSize = 10.5, Foreground = Brush("MutedBrush") });
+            inner.Children.Add(new TextBlock { Text = s.Scene == Dx12RayBench.OnTitle ? "DirectX 12 · sombras, reflexos e oclusão por raio" : s.Scene == Dx12RayBench.OffTitle ? "DirectX 12 · a mesma cena sem efeitos de raio" : s.Scene.Contains("jogo") ? "Processador + placa de vídeo, como um jogo" : s.Scene.Contains("Geometria") ? "Geometria e vértices" : "Pixel shader pesado (raymarching)", FontSize = 10.5, Foreground = Brush("MutedBrush") });
             inner.Children.Add(new TextBlock { Inlines = { new System.Windows.Documents.Run($"{s.AvgFps:0.0}") { FontSize = 22, FontWeight = FontWeights.SemiBold }, new System.Windows.Documents.Run(" FPS") { FontSize = 11, Foreground = new SolidColorBrush(Yellow) } }, Margin = new Thickness(0, 4, 0, 0) });
             inner.Children.Add(new TextBlock { Text = $"1% low {s.Low1Fps:0.0} · 0,1% low {s.Low01Fps:0.0}", FontSize = 11, Foreground = Brush("MutedBrush") });
             if (prior is not null) { var b = Badge(BenchmarkScoring.Delta(prior.AvgFps, s.AvgFps)); b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 4, 0, 0); inner.Children.Add(b); }
@@ -352,6 +352,10 @@ public sealed partial class BenchmarkPage
         }
         stack.Children.Add(grid);
         if (r.StudioMsps > 0) stack.Children.Add(Muted($"Cena 3 · Estúdio (render em blocos): {r.StudioMsps:N0} milhões de amostras por segundo.", 11.5));
+        if (r.RtOnFps > 0 && r.RtOffFps > 0)
+            stack.Children.Add(Muted($"Ray tracing (DirectX 12): ligar sombras, reflexos e oclusão por raio custa {Math.Clamp((1 - r.RtOnFps / r.RtOffFps) * 100, 0, 100):0}% do FPS ({r.RtOffFps:0.0} → {r.RtOnFps:0.0} FPS).", 11.5));
+        else if (r.RtNote is { Length: > 0 } note)
+            stack.Children.Add(Muted("Ray tracing (DirectX 12): " + note + ".", 11.5));
         stack.Children.Add(chartHost);
         if (stats.Count > 0 && cards.Count > 0) ShowChart(stats[0], cards[0]);
         return CardOf(stack);
@@ -513,6 +517,13 @@ public sealed partial class BenchmarkPage
             gpuRows.Add(($"{scene} · 0,1% low", a.Low01Fps, b?.Low01Fps ?? 0, "N1", "FPS", true));
         }
         gpuRows.Add(("Cena 3 · Estúdio (render em blocos)", r.StudioMsps, p?.StudioMsps ?? 0, "N0", "M amostras/s", true));
+        foreach (var scene in new[] { Dx12RayBench.OnTitle, Dx12RayBench.OffTitle })
+        {
+            var a = S(r.GpuStats, scene); var b = S(p?.GpuStats, scene);
+            if (a is null) continue;
+            gpuRows.Add(($"{scene} (DX12) · FPS médio", a.AvgFps, b?.AvgFps ?? 0, "N1", "FPS", true));
+            gpuRows.Add(($"{scene} (DX12) · 1% low", a.Low1Fps, b?.Low1Fps ?? 0, "N1", "FPS", true));
+        }
         Section("gpu", "Placa de vídeo (3D)", gpuRows);
         var game = S(r.GpuStats, GpuWindowBench.Game); var gameBefore = S(p?.GpuStats, GpuWindowBench.Game);
         var gameRows = new List<(string, double, double, string, string, bool)>();

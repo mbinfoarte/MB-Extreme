@@ -183,7 +183,7 @@ public class BenchmarkNovoTests
         Assert.Equal(new[]
         {
             "Processador · 1 núcleo", "Processador · todos os núcleos", "Memória RAM", "Armazenamento", "Inteligência artificial",
-            "Uso do dia a dia (pesado)", "Cena 1 · Reflexos", "Cena 2 · Geometria", "Cena 3 · Estúdio (path tracing)", "Simulação de jogo", "Limite por resolução",
+            "Uso do dia a dia (pesado)", "Cena 1 · Reflexos", "Cena 2 · Geometria", "Cena 3 · Estúdio (path tracing)", "Simulação de jogo", "Limite por resolução", "Ray tracing (DirectX 12)",
         }, steps);
         Assert.DoesNotContain(BenchmarkService.StepAi, BenchmarkService.StepsFor(new BenchmarkOptions(Cpu: false)));
         Assert.DoesNotContain(BenchmarkService.StepDaily, BenchmarkService.StepsFor(new BenchmarkOptions(Daily: false)));

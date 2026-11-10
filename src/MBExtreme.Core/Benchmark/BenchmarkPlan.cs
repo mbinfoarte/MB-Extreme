@@ -47,6 +47,7 @@ public static class BenchmarkModes
             BenchmarkService.StepDaily => 14.0 * p.Passes,
             GpuWindowBench.ResolutionLimit => resolutions * (Math.Max(3, p.GpuSecondsPerScene / 2) + 0.6),
             GpuWindowBench.Studio => (p.GpuSecondsPerScene + 1.5) * p.Passes,
+            Dx12RayBench.Step => (2 * p.GpuSecondsPerScene + 1.5) * p.Passes + 1.5,
             _ when BenchmarkService.GpuSteps.Contains(step) => (p.GpuSecondsPerScene + 0.7) * p.Passes + 0.5,
             _ => 1,
         };

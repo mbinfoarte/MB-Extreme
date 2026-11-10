@@ -496,20 +496,35 @@ public static class GpuWindowBench
             Begin(true, new Color4(0, 0, 0, 1));
             FullScreen(Shader<ID3D11PixelShader>("Game", "PSSky", "ps_5_0"));
             _ctx.OMSetDepthStencilState(_depthOn);
+            // as explosões iluminam o terreno, os soldados e o lago
+            _ctx.VSSetShaderResource(0, _unitView!);
+            _ctx.VSSetShaderResource(1, _sparkView!);
+            _ctx.PSSetShaderResource(1, _sparkView!);
             var ps = Shader<ID3D11PixelShader>("Game", "PSGame", "ps_5_0");
             _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSTerrain", "vs_5_0"));
             _ctx.PSSetShader(ps);
             _ctx.Draw((TerrainSize - 1) * (TerrainSize - 1) * 6, 0);
-            _ctx.VSSetShaderResource(0, _unitView!);
-            _ctx.VSSetShaderResource(1, _sparkView!);
+            // soldados em 3D: 6 partes com 36 vértices cada
             _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSUnits", "vs_5_0"));
-            _ctx.DrawInstanced(36, UnitsPerArmy * 2, 0, 0);
-            // explosões: partículas somadas, lendo a profundidade sem gravar
+            _ctx.DrawInstanced(216, UnitsPerArmy * 2, 0, 0);
+            // lago com reflexo do terreno e do céu
+            _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSWater", "vs_5_0"));
+            _ctx.PSSetShader(Shader<ID3D11PixelShader>("Game", "PSWater", "ps_5_0"));
+            _ctx.Draw(6, 0);
+            // fumaça: mistura comum, lendo a profundidade sem gravar
             _ctx.OMSetDepthStencilState(_depthRead);
+            _ctx.OMSetBlendState(_alpha);
+            _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSSmoke", "vs_5_0"));
+            _ctx.PSSetShader(Shader<ID3D11PixelShader>("Game", "PSSmoke", "ps_5_0"));
+            _ctx.DrawInstanced(6, ArmySim.MaxSparks * 14, 0, 0);
+            // fogo, faíscas e disparos de energia: luz somada
             _ctx.OMSetBlendState(_additive);
             _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSSparks", "vs_5_0"));
             _ctx.PSSetShader(Shader<ID3D11PixelShader>("Game", "PSSparks", "ps_5_0"));
-            _ctx.DrawInstanced(6, ArmySim.MaxSparks * 24, 0, 0);
+            _ctx.DrawInstanced(6, ArmySim.MaxSparks * 26, 0, 0);
+            _ctx.VSSetShader(Shader<ID3D11VertexShader>("Game", "VSBeams", "vs_5_0"));
+            _ctx.PSSetShader(Shader<ID3D11PixelShader>("Game", "PSBeams", "ps_5_0"));
+            _ctx.DrawInstanced(6, 1200, 0, 0);
             _ctx.OMSetBlendState(_opaque);
         }
 

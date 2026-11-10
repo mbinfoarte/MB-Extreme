@@ -25,6 +25,28 @@ public sealed class GameBoostPage : ToolPageBase
         Body.Children.Add(OptionBox("Ativar sozinho quando um jogo da lista abrir", AppServices.Boost.Settings.BoostAuto, v => AppServices.Boost.SetAuto(v)));
         Body.Children.Add(OptionBox("Trocar para o plano de energia de alto desempenho", AppServices.Boost.Settings.BoostSwitchPlan, v => Save(s => s.BoostSwitchPlan = v)));
         Body.Children.Add(OptionBox("Liberar memória RAM ao ativar", AppServices.Boost.Settings.BoostCleanMemory, v => Save(s => s.BoostCleanMemory = v)));
+        Body.Children.Add(OptionBox("Modo inteligente: fechar ajudantes de fundo (atualizadores, widgets, sincronização) e deixar os outros programas em segundo plano",
+            AppServices.Boost.Settings.BoostSmart, v => Save(s => s.BoostSmart = v)));
+        Body.Children.Add(OptionBox("Pausar a indexação da pesquisa e os downloads do Windows Update enquanto joga (precisa de administrador)",
+            AppServices.Boost.Settings.BoostPauseServices, v => Save(s => s.BoostPauseServices = v)));
+        Body.Children.Add(Muted("Nunca são tocados: Windows, antivírus, antitrapaça, lojas de jogos (Steam, Epic, Battle.net...), Discord, Spotify, OBS, drivers e áudio. " +
+            "Ao fechar o jogo, a prioridade volta, as tarefas do Windows religam e o OneDrive/Google Drive/Dropbox reabrem.", 11));
+        var neverRow = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var neverSave = SmallButton("Salvar", (_, _) => { });
+        DockPanel.SetDock(neverSave, Dock.Right);
+        var neverBox = new TextBox { Text = string.Join(", ", AppServices.Boost.Settings.BoostNeverClose), Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(6, 3, 6, 3), ToolTip = "Nomes dos programas sem .exe, separados por vírgula (ex.: chrome, Telegram)" };
+        neverSave.Click += (_, _) =>
+        {
+            var list = neverBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(n => n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? n[..^4] : n).Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            Save(s => s.BoostNeverClose = list);
+            neverBox.Text = string.Join(", ", list);
+            SetStatus(list.Count == 0 ? "Lista \"nunca mexer\" vazia." : $"O Modo Jogo nunca vai mexer em: {string.Join(", ", list)}.", "OkBrush");
+        };
+        neverRow.Children.Add(neverSave);
+        neverRow.Children.Add(new TextBlock { Text = "Nunca mexer em:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), FontSize = 12 });
+        neverRow.Children.Add(neverBox);
+        Body.Children.Add(neverRow);
 
         Body.Children.Add(Heading("Seus jogos"));
         Body.Children.Add(_games);
@@ -163,7 +185,9 @@ public sealed class GameBoostPage : ToolPageBase
                 (r.PowerPlan is { } p ? $"Plano de energia: {p}. " : "") +
                 (r.Closed.Count > 0 ? $"Fechou: {string.Join(", ", r.Closed)}. " : "") +
                 (r.PriorityRaised ? "Prioridade do jogo aumentada. " : "") +
-                (r.MemoryFreedBytes > 0 ? $"RAM liberada: {r.MemoryFreedBytes / 1024.0 / 1024:0} MB." : "")));
+                (r.MemoryFreedBytes > 0 ? $"RAM liberada: {r.MemoryFreedBytes / 1024.0 / 1024:0} MB. " : "") +
+                (r.Lowered > 0 ? $"{r.Lowered} programa(s) em segundo plano. " : "") +
+                (r.ServicesPaused is { Count: > 0 } sp ? $"Pausado: {string.Join(", ", sp)}." : "")));
         }
         else
         {

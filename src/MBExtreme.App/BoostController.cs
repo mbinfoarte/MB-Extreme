@@ -54,7 +54,10 @@ internal sealed class BoostController
 
     private async Task StartAsync(string game, int? pid)
     {
-        var options = new BoostOptions(Settings.BoostCloseApps.ToList(), Settings.BoostSwitchPlan, Settings.BoostCleanMemory, Settings.MemoryAllowlist.ToList());
+        // os outros processos dos seus jogos (launcher, ajudantes) também ficam de fora
+        var keep = Settings.BoostNeverClose.Concat(Settings.GameProcesses).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var options = new BoostOptions(Settings.BoostCloseApps.ToList(), Settings.BoostSwitchPlan, Settings.BoostCleanMemory, Settings.MemoryAllowlist.ToList(),
+            Settings.BoostSmart, Settings.BoostPauseServices, keep);
         try
         {
             // powercfg, pedidos para fechar programas e limpeza de RAM levam alguns segundos: fora da thread da interface.

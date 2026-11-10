@@ -76,6 +76,30 @@ public sealed class AccessibilityPage : ToolPageBase
         };
         Body.Children.Add(widget);
         Body.Children.Add(Muted("O widget fica sempre no topo e mostra o uso em tempo real. Clique no foguete e arraste para mover; o botão de abrir leva ao programa.", 12));
+        Body.Children.Add(Muted("Um clique no ícone do MB Extreme ao lado do relógio abre o Painel MB (temperaturas, RAM, ping e Modo jogo); dois cliques abrem o programa.", 12));
+        var shell = new System.Windows.Controls.CheckBox
+        {
+            Content = "Mostrar \"MB Extreme\" no botão direito do Windows (área de trabalho, pastas e programas)",
+            IsChecked = AppServices.Settings.ShellMenuEnabled, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 8, 0, 4),
+        };
+        shell.Click += (_, _) =>
+        {
+            bool on = shell.IsChecked == true;
+            try
+            {
+                if (on && Environment.ProcessPath is { } exe) MBExtreme.Core.Windows.ShellActions.Install(exe);
+                else MBExtreme.Core.Windows.ShellActions.Uninstall();
+                AppServices.Settings.ShellMenuEnabled = on;
+                AppServices.Settings.Save();
+                SetStatus(on ? "Pronto: clique com o botão direito na área de trabalho (no Windows 11, em \"Mostrar mais opções\")." : "Itens do MB Extreme removidos do botão direito.", "OkBrush");
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or System.IO.IOException)
+            {
+                shell.IsChecked = !on;
+                SetStatus("Não foi possível mudar: " + ex.Message, "BadBrush");
+            }
+        };
+        Body.Children.Add(shell);
 
         Body.Children.Add(Heading("Pelo teclado"));
         Body.Children.Add(Row("Tab e Shift+Tab", "Andam entre os botões e caixas. O item com o foco ganha um contorno amarelo."));

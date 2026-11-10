@@ -56,10 +56,14 @@ public partial class App : Application
             return;
         }
 
+        // ação vinda do botão direito do Windows (MBExtreme.exe --acao chave [caminho])
+        var action = MBExtreme.Core.Windows.ShellActions.Parse(e.Args);
+
         // uma janela só: duas cópias abertas poderiam rodar dois reparos ou duas atualizações ao mesmo tempo
         _instance = new System.Threading.Mutex(true, @"Local\MBExtreme-Instancia", out bool first);
         if (!first)
         {
+            if (action is { } a) QueueAction(a.Action.Key, a.Path);
             SingleInstance.SignalFirst();
             // a outra cópia pode estar fechando (atualização, reinício): espera um pouco antes de desistir
             try { first = _instance.WaitOne(TimeSpan.FromSeconds(3)); }
@@ -70,6 +74,7 @@ public partial class App : Application
                 return;
             }
         }
+        PendingAction = action;
         SingleInstance.ListenForOthers(() => Dispatcher.BeginInvoke(new Action(() => (MainWindow as MainWindow)?.ActivateFromOther())));
 
         Accessibility.Install();
@@ -79,6 +84,39 @@ public partial class App : Application
     }
 
     private System.Threading.Mutex? _instance;
+
+    /// <summary>Ação pedida ao abrir o programa (feita quando a janela principal estiver pronta).</summary>
+    internal static (MBExtreme.Core.Windows.ShellAction Action, string? Path)? PendingAction { get; set; }
+
+    private static string QueueFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MBExtreme", "acao-pendente.txt");
+
+    /// <summary>A segunda cópia deixa a ação num arquivo para a primeira pegar (junto com o aviso para aparecer).</summary>
+    private static void QueueAction(string key, string? path)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(QueueFile)!);
+            File.WriteAllText(QueueFile, key + "\n" + (path ?? ""));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Pega a ação deixada por outra cópia (só se for recente: menos de 1 minuto).</summary>
+    internal static (MBExtreme.Core.Windows.ShellAction Action, string? Path)? TakeQueuedAction()
+    {
+        try
+        {
+            var info = new FileInfo(QueueFile);
+            if (!info.Exists) return null;
+            bool fresh = DateTime.UtcNow - info.LastWriteTimeUtc < TimeSpan.FromMinutes(1);
+            var lines = File.ReadAllText(QueueFile).Split('\n');
+            File.Delete(QueueFile);
+            if (!fresh || MBExtreme.Core.Windows.ShellActions.Find(lines[0].Trim()) is not { } found) return null;
+            string? path = lines.Length > 1 && lines[1].Trim().Length > 0 ? lines[1].Trim() : null;
+            return (found, path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
 
     private static void RunUninstall()
     {
@@ -103,6 +141,8 @@ public partial class App : Application
         try
         {
             InstallInfo.RemoveIntegration();
+            try { MBExtreme.Core.Windows.ShellActions.Uninstall(); }   // itens do botão direito do Windows
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException) { }
 
             // O programa em execução não consegue apagar a própria pasta: um comando separado apaga depois que ele fechar.
             var cleanup = new ProcessStartInfo("cmd.exe")

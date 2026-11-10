@@ -38,12 +38,12 @@ internal sealed class TrayIcon : IDisposable
     private readonly HwndSource? _source;
     private NotifyIconData _data;
     private bool _added;
-    private readonly Action _onOpen, _onToggleWidget, _onExit;
+    private readonly Action _onOpen, _onToggleWidget, _onExit, _onPanel;
     private readonly Func<bool> _widgetOn;
 
-    public TrayIcon(Window owner, Action onOpen, Action onToggleWidget, Func<bool> widgetOn, Action onExit)
+    public TrayIcon(Window owner, Action onOpen, Action onToggleWidget, Func<bool> widgetOn, Action onExit, Action onPanel)
     {
-        _onOpen = onOpen; _onToggleWidget = onToggleWidget; _widgetOn = widgetOn; _onExit = onExit;
+        _onOpen = onOpen; _onToggleWidget = onToggleWidget; _widgetOn = widgetOn; _onExit = onExit; _onPanel = onPanel;
         _hwnd = new WindowInteropHelper(owner).EnsureHandle();
         _source = HwndSource.FromHwnd(_hwnd);
         _source?.AddHook(WndProc);
@@ -76,7 +76,8 @@ internal sealed class TrayIcon : IDisposable
     {
         if (msg != WmTray) return IntPtr.Zero;
         int mouse = lParam.ToInt32();
-        if (mouse is WmLButtonUp or WmLButtonDblClk) { _onOpen(); handled = true; }
+        if (mouse == WmLButtonUp) { _onPanel(); handled = true; }          // um clique: painel MB
+        else if (mouse == WmLButtonDblClk) { _onOpen(); handled = true; }  // dois cliques: o programa
         else if (mouse is WmRButtonUp or WmContextMenu) { ShowMenu(); handled = true; }
         return IntPtr.Zero;
     }
@@ -86,6 +87,7 @@ internal sealed class TrayIcon : IDisposable
         SetForegroundWindow(_hwnd);   // sem isto o menu não fecha ao clicar fora
         var menu = new ContextMenu();
         menu.Items.Add(Item("Abrir o MB Extreme", _onOpen, bold: true));
+        menu.Items.Add(Item("Painel MB (temperaturas e Modo jogo)", _onPanel));
         menu.Items.Add(Item(_widgetOn() ? "Ocultar o widget" : "Mostrar o widget", _onToggleWidget));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Sair", _onExit));

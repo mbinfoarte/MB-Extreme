@@ -21,6 +21,18 @@ public sealed class AppSettings
 
     public bool BoostCleanMemory { get; set; }
 
+    /// <summary>Modo Jogo 2.0: fecha ajudantes de fundo seguros e deixa o resto em segundo plano (prioridade baixa) enquanto joga.</summary>
+    public bool BoostSmart { get; set; } = true;
+
+    /// <summary>Pausa a indexação da pesquisa e a otimização de entrega do Windows durante o jogo.</summary>
+    public bool BoostPauseServices { get; set; } = true;
+
+    /// <summary>Itens "MB Extreme" no botão direito do Windows (área de trabalho, pastas e programas).</summary>
+    public bool ShellMenuEnabled { get; set; }
+
+    /// <summary>Programas (sem .exe) que o Modo Jogo nunca fecha nem coloca em segundo plano.</summary>
+    public List<string> BoostNeverClose { get; set; } = new();
+
     // ---- Licenciamento (ver docs/LICENCIAMENTO.md)
     /// <summary>Quando verdadeiro, as páginas do plano Pro exigem licença válida. Desligado no beta aberto.</summary>
     public bool LicenseEnforce { get; set; }

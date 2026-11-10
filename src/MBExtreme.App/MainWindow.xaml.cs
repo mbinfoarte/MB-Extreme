@@ -91,8 +91,41 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Alguém abriu o programa de novo: traz esta janela para frente em vez de abrir outra.</summary>
+    private Widget.TrayPanel? _panel;
+
+    /// <summary>Abre (ou fecha) o painel MB ao lado do relógio.</summary>
+    internal void ShowTrayPanel()
+    {
+        if (_panel is not null) { _panel.Close(); return; }
+        _panel = new Widget.TrayPanel((key, auto) => { ShowFromTray(); Go(key, auto); }, ShowFromTray);
+        _panel.Closed += (_, _) => _panel = null;
+        _panel.Show();
+        _panel.Activate();
+    }
+
+    /// <summary>Executa uma ação pedida de fora (botão direito do Windows).</summary>
+    internal async void RunAction(MBExtreme.Core.Windows.ShellAction action, string? path)
+    {
+        if (action.Key == "modojogo")
+        {
+            if (AppServices.Boost.IsActive) await AppServices.Boost.DeactivateAsync();
+            else await AppServices.Boost.ActivateNowAsync();
+            ShowTrayPanel();
+            return;
+        }
+        ShowFromTray();
+        Go(action.Page, action.AutoStart);
+        if (path is not null) SetStatusText($"{action.Title}: {path}");
+    }
+
+    private void SetStatusText(string text)
+    {
+        if (_inner.Values.OfType<Pages.ToolPageBase>().FirstOrDefault(p => p.IsVisible) is { } page) page.ShowStatus(text);
+    }
+
     internal void ActivateFromOther()
     {
+        if (App.TakeQueuedAction() is { } queued) { RunAction(queued.Action, queued.Path); return; }
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Show();
         Activate();
@@ -113,8 +146,15 @@ public partial class MainWindow : Window
     /// <summary>Liga a bandeja e o widget (chamado uma vez, ao abrir).</summary>
     private void SetupTrayAndWidget()
     {
-        _tray = new TrayIcon(this, ShowFromTray, ToggleWidget, () => AppServices.Settings.WidgetEnabled, ExitApp);
+        _tray = new TrayIcon(this, ShowFromTray, ToggleWidget, () => AppServices.Settings.WidgetEnabled, ExitApp, ShowTrayPanel);
         if (AppServices.Settings.WidgetEnabled) ShowWidget();
+        // botão direito do Windows ligado: regrava (o caminho do programa pode ter mudado numa atualização)
+        if (AppServices.Settings.ShellMenuEnabled && Environment.ProcessPath is { } exe)
+        {
+            try { MBExtreme.Core.Windows.ShellActions.Install(exe); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or System.IO.IOException) { }
+        }
+        if (App.PendingAction is { } pending) { App.PendingAction = null; RunAction(pending.Action, pending.Path); }
         Closing += MainWindow_Closing;
         Closed += (_, _) => { _tray?.Dispose(); _widget?.Close(); };
     }
@@ -153,7 +193,7 @@ public partial class MainWindow : Window
     private void ShowWidget()
     {
         if (_widget is not null) { _widget.Activate(); return; }
-        _widget = new Widget.FloatingWidget(ShowFromTray);
+        _widget = new Widget.FloatingWidget(ShowFromTray, ShowTrayPanel);
         _widget.Closed += (_, _) => _widget = null;
         _widget.Show();
     }

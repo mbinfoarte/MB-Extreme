@@ -12,9 +12,16 @@ public sealed record BoostOptions(
     IReadOnlyList<string> CloseApps,
     bool SwitchPowerPlan,
     bool CleanMemory,
-    IReadOnlyList<string> MemoryAllowlist);
+    IReadOnlyList<string> MemoryAllowlist,
+    bool Smart = false,
+    bool PauseServices = false,
+    IReadOnlyList<string>? NeverClose = null);
 
-public sealed record BoostReport(IReadOnlyList<string> Closed, string? PowerPlan, bool PriorityRaised, long MemoryFreedBytes);
+public sealed record BoostReport(IReadOnlyList<string> Closed, string? PowerPlan, bool PriorityRaised, long MemoryFreedBytes,
+    int Lowered = 0, IReadOnlyList<string>? ServicesPaused = null)
+{
+    public string Summary => GameModeRules.Summary(Closed.Count, Lowered, ServicesPaused?.Count ?? 0, MemoryFreedBytes);
+}
 
 /// <summary>
 /// Modo Jogo do MB Extreme: quando um jogo abre, troca para o plano de energia de alto desempenho, pede para fechar programas pesados
@@ -39,6 +46,10 @@ public sealed class GameBoostService
 
     private string? _previousPlan;
     private int? _boostedPid;
+    // Modo Jogo 2.0: o que mudamos, para devolver ao sair do jogo
+    private readonly List<(int Pid, DateTime Start, ProcessPriorityClass Priority)> _lowered = new();
+    private readonly List<string> _stoppedServices = new();
+    private readonly List<(string Path, string Args)> _reopen = new();
 
     public bool IsActive { get; private set; }
     public string? ActiveGame { get; private set; }
@@ -87,6 +98,16 @@ public sealed class GameBoostService
             }
         }
 
+        int lowered = 0;
+        var paused = new List<string>();
+        if (options.Smart)
+        {
+            var keep = new HashSet<string>(options.NeverClose ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase) { gameName };
+            closed.AddRange(CloseBackground(keep, gameProcessId));
+            lowered = LowerBackground(keep, gameProcessId);
+        }
+        if (options.PauseServices) paused.AddRange(PauseServices());
+
         bool raised = false;
         if (gameProcessId is { } pid) raised = BoostProcess(pid);
         _boostedPid = raised ? gameProcessId : null;
@@ -100,7 +121,7 @@ public sealed class GameBoostService
 
         IsActive = true;
         ActiveGame = gameName;
-        return new BoostReport(closed.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), planName, raised, freed);
+        return new BoostReport(closed.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), planName, raised, freed, lowered, paused);
     }
 
     public void Deactivate()
@@ -123,8 +144,110 @@ public sealed class GameBoostService
         }
 
         _boostedPid = null;
+        RestoreBackground();
         IsActive = false;
         ActiveGame = null;
+    }
+
+    // ------------------------------------------------------------ Modo Jogo 2.0
+
+    /// <summary>Fecha os ajudantes de fundo da lista segura (atualizadores, widgets, sincronização) e guarda quais reabrir depois.</summary>
+    private List<string> CloseBackground(IReadOnlySet<string> keep, int? gamePid)
+    {
+        var closed = new List<string>();
+        foreach (string name in GameModeRules.AutoClose)
+        {
+            if (!GameModeRules.CanAutoClose(name, keep)) continue;
+            foreach (var process in SafeProcesses(name))
+            {
+                try
+                {
+                    if (process.Id == Environment.ProcessId || process.Id == gamePid || process.SessionId != Process.GetCurrentProcess().SessionId) continue;
+                    string? path = null;
+                    try { path = process.MainModule?.FileName; } catch (Exception ex) when (ex is Win32Exception or InvalidOperationException) { }
+                    bool done;
+                    if (name.Equals("OneDrive", StringComparison.OrdinalIgnoreCase) && path is not null)
+                        done = Shell.Run(path, "/shutdown").ExitCode == 0 || process.WaitForExit(4000);
+                    else
+                    {
+                        done = process.CloseMainWindow() && process.WaitForExit(3000);
+                        if (!done) { process.Kill(); done = process.WaitForExit(3000); }
+                    }
+                    if (!done) continue;
+                    closed.Add(name);
+                    if (path is not null && GameModeRules.ReopenAfter.Contains(name, StringComparer.OrdinalIgnoreCase) && _reopen.All(r => r.Path != path))
+                        _reopen.Add((path, name.Equals("OneDrive", StringComparison.OrdinalIgnoreCase) ? "/background" : ""));
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException) { }
+                finally { process.Dispose(); }
+            }
+        }
+        return closed;
+    }
+
+    /// <summary>Abaixa a prioridade e liga o modo de eficiência nos programas de fundo do usuário (sem fechar nada). Guarda o valor de antes.</summary>
+    private int LowerBackground(IReadOnlySet<string> keep, int? gamePid)
+    {
+        int mySession = Process.GetCurrentProcess().SessionId;
+        int count = 0;
+        foreach (var process in Process.GetProcesses())
+        {
+            try
+            {
+                bool gameOrSelf = process.Id == Environment.ProcessId || process.Id == gamePid;
+                if (!GameModeRules.CanDeprioritize(process.ProcessName, process.SessionId, mySession, gameOrSelf, keep)) continue;
+                var before = process.PriorityClass;
+                if (before is not (ProcessPriorityClass.Normal or ProcessPriorityClass.AboveNormal)) continue;
+                var start = process.StartTime;
+                process.PriorityClass = ProcessPriorityClass.BelowNormal;
+                var eco = new ProcessPowerThrottlingState { Version = 1, ControlMask = 1, StateMask = 1 };
+                SetProcessInformation(process.Handle, 4, ref eco, Marshal.SizeOf<ProcessPowerThrottlingState>());
+                _lowered.Add((process.Id, start, before));
+                count++;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException) { /* protegido ou já fechou */ }
+            finally { process.Dispose(); }
+        }
+        return count;
+    }
+
+    /// <summary>Para as tarefas pesadas do Windows que estiverem rodando (precisa de administrador; sem ele, não faz nada).</summary>
+    private List<string> PauseServices()
+    {
+        var paused = new List<string>();
+        foreach (var (service, title) in GameModeRules.PausableServices)
+        {
+            var query = Shell.Run("sc.exe", "query", service);
+            if (query.ExitCode != 0 || !query.Output.Contains("RUNNING", StringComparison.OrdinalIgnoreCase)) continue;
+            if (Shell.Run("sc.exe", "stop", service).ExitCode == 0) { _stoppedServices.Add(service); paused.Add(title); }
+        }
+        return paused;
+    }
+
+    /// <summary>Devolve tudo: prioridades, modo de eficiência, tarefas do Windows e programas de sincronização.</summary>
+    private void RestoreBackground()
+    {
+        foreach (var (pid, start, priority) in _lowered)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(pid);
+                if (process.StartTime != start) continue;   // o número foi reaproveitado por outro programa
+                process.PriorityClass = priority;
+                var normal = new ProcessPowerThrottlingState { Version = 1, ControlMask = 0, StateMask = 0 };
+                SetProcessInformation(process.Handle, 4, ref normal, Marshal.SizeOf<ProcessPowerThrottlingState>());
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception) { }
+        }
+        _lowered.Clear();
+        foreach (var service in _stoppedServices) Shell.Run("sc.exe", "start", service);
+        _stoppedServices.Clear();
+        foreach (var (path, args) in _reopen)
+        {
+            try { if (File.Exists(path)) Process.Start(new ProcessStartInfo(path, args) { UseShellExecute = true }); }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException) { }
+        }
+        _reopen.Clear();
     }
 
     /// <summary>Plano "Desempenho Máximo" se existir (criado pelo ajuste de energia); senão o "Alto desempenho" padrão do Windows.</summary>

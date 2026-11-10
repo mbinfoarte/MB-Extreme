@@ -19,12 +19,14 @@ public sealed class FloatingWidget : Window
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly TextBlock _ram = Value(), _cpu = Value(), _disk = Value(), _netText = Value();
     private readonly Action _openApp;
+    private readonly Action? _openPanel;
 
     private static TextBlock Value() => new() { FontSize = 15, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) };
 
-    public FloatingWidget(Action openApp)
+    public FloatingWidget(Action openApp, Action? openPanel = null)
     {
         _openApp = openApp;
+        _openPanel = openPanel;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true;
@@ -66,6 +68,7 @@ public sealed class FloatingWidget : Window
         row.Children.Add(Metric("REDE", _netText));
 
         // botões: abrir o app e esconder o widget
+        if (_openPanel is not null) row.Children.Add(IconButton("\uE7FC", "Painel MB: Modo jogo, temperaturas e atalhos", () => _openPanel()));
         row.Children.Add(IconButton("", "Abrir o MB Extreme", () => _openApp()));
         row.Children.Add(IconButton("", "Esconder o widget", HideWidget));
 

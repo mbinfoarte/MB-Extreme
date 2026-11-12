@@ -14,6 +14,14 @@ public sealed record DeviceCode(
     [property: JsonPropertyName("intervalSeconds")] int IntervalSeconds,
     [property: JsonPropertyName("expiresInSeconds")] int ExpiresInSeconds);
 
+/// <summary>Dados do PC mostrados na lista "Seus computadores" do site. Nada de identificador de hardware (MAC, serial).</summary>
+public sealed record DeviceInfo(
+    [property: JsonPropertyName("os")] string Os,
+    [property: JsonPropertyName("cpu")] string Cpu,
+    [property: JsonPropertyName("gpu")] string Gpu,
+    [property: JsonPropertyName("ramGb")] int RamGb,
+    [property: JsonPropertyName("appVersion")] string AppVersion);
+
 public enum PollState { Pending, SlowDown, Denied, Expired, Approved }
 
 public sealed record PollResult(PollState State, string? License, string? Message);
@@ -34,9 +42,9 @@ public sealed class LicenseClient
         _baseUrl = baseUrl.TrimEnd('/');
     }
 
-    public async Task<DeviceCode> StartDeviceLoginAsync(string deviceId, string deviceName, CancellationToken token)
+    public async Task<DeviceCode> StartDeviceLoginAsync(string deviceId, string deviceName, CancellationToken token, DeviceInfo? info = null)
     {
-        var response = await PostAsync("/v1/device/code", new { deviceId, deviceName }, token);
+        var response = await PostAsync("/v1/device/code", new { deviceId, deviceName, info }, token);
         if (!response.IsSuccessStatusCode) throw new LicenseNetworkException($"O servidor recusou o pedido de login ({(int)response.StatusCode}).");
         return await response.Content.ReadFromJsonAsync<DeviceCode>(cancellationToken: token)
                ?? throw new LicenseNetworkException("Resposta inválida do servidor.");
@@ -70,9 +78,9 @@ public sealed class LicenseClient
         };
     }
 
-    public async Task<RefreshResult> RefreshAsync(string currentLicense, string deviceId, CancellationToken token)
+    public async Task<RefreshResult> RefreshAsync(string currentLicense, string deviceId, CancellationToken token, DeviceInfo? info = null)
     {
-        var response = await PostAsync("/v1/license/refresh", new { license = currentLicense, deviceId }, token);
+        var response = await PostAsync("/v1/license/refresh", new { license = currentLicense, deviceId, info }, token);
         string? license = null, message = null;
         try
         {

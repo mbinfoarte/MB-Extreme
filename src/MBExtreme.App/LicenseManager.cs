@@ -50,7 +50,15 @@ internal sealed class LicenseManager
     public bool HasProFeatures => !Config.Enforce || LicenseExpiry.IsPro(Status) || Trial.Active;
 
     /// <summary>Texto curto para o menu lateral.</summary>
-    public string Summary => Status.IsValid ? (Status.Plan == "pro" ? "Plano Pro" : "Plano gratuito") : Config.Enforce ? "Sem licença" : "Beta aberto";
+    public string Summary => Status.IsValid
+        ? (FeaturePolicy.Rank(Status.Plan) > 0 ? (Status.Payload?.Status == "trialing" ? "teste grátis do plano " : "Plano ") + FeaturePolicy.Title(Status.Plan) : "Plano gratuito")
+        : Config.Enforce ? "Sem licença" : "Beta aberto";
+
+    private DeviceInfo? _deviceInfo;
+
+    /// <summary>Resumo do PC para a lista "Seus computadores" do site (sem MAC nem serial).</summary>
+    public DeviceInfo Device => _deviceInfo ??= DeviceFacts.Collect($"{MBExtreme.Core.AppInfo.Version} ({MBExtreme.Core.Update.AppUpdates.CurrentBuild()})");
+
 
     public void Start()
     {
@@ -141,7 +149,7 @@ internal sealed class LicenseManager
                 onCode(code);
                 try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(code.VerificationUri) { UseShellExecute = true }); }
                 catch (System.ComponentModel.Win32Exception) { /* o usuário também vê o endereço na tela */ }
-            }, token);
+            }, token, info: Device);
 
             if (result.State != PollState.Approved || result.License is null) return (false, result.Message ?? "O login não foi concluído.");
 
@@ -170,7 +178,7 @@ internal sealed class LicenseManager
         if (client is null || _tokens.Count == 0) return (false, "Nada para renovar.");
         try
         {
-            var result = await client.RefreshAsync(_tokens[0], _deviceId, CancellationToken.None);
+            var result = await client.RefreshAsync(_tokens[0], _deviceId, CancellationToken.None, Device);
             switch (result.State)
             {
                 case RefreshState.Renewed when result.License is not null:

@@ -16,16 +16,17 @@ public static class LicenseProfile
 
         switch (status.State)
         {
-            case LicenseState.Valid when status.Plan == "pro":
+            case LicenseState.Valid when FeaturePolicy.Rank(status.Plan) > 0:
             {
                 int days = status.DaysLeft(now) ?? 0;
-                string text = days switch { 0 => "Pro · vence hoje", 1 => "Pro · 1 dia restante", _ => $"Pro · {days} dias restantes" };
+                string plan = (status.Payload?.Status == "trialing" ? "Teste " : "") + FeaturePolicy.Title(status.Plan);
+                string text = days switch { 0 => $"{plan} · vence hoje", 1 => $"{plan} · 1 dia restante", _ => $"{plan} · {days} dias restantes" };
                 return days <= RenewWarningDays
                     ? new ProfileInfo(name, initials, text, "Renovar assinatura", true, ProfileLevel.Warn)
                     : new ProfileInfo(name, initials, text, "", false, ProfileLevel.Ok);
             }
             case LicenseState.Valid:
-                return new ProfileInfo(name, initials, "Plano gratuito", "Ativar o Pro", true, ProfileLevel.Neutral);
+                return new ProfileInfo(name, initials, "Plano gratuito", "Ver planos", true, ProfileLevel.Neutral);
             case LicenseState.Expired:
                 return new ProfileInfo(name, initials, "Licença vencida", "Renovar", true, ProfileLevel.Bad);
             case LicenseState.WrongDevice:
@@ -35,7 +36,7 @@ public static class LicenseProfile
             case LicenseState.Invalid:
                 return new ProfileInfo(name, initials, "Licença inválida", "Ver licença", true, ProfileLevel.Bad);
             default:
-                return new ProfileInfo(name, initials, config.Configured ? "Plano gratuito" : "Beta aberto", "Ativar o Pro", true, ProfileLevel.Neutral);
+                return new ProfileInfo(name, initials, config.Configured ? "Plano gratuito" : "Beta aberto", config.Configured ? "Entrar" : "Ver planos", true, ProfileLevel.Neutral);
         }
     }
 

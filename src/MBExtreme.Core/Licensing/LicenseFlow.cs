@@ -5,12 +5,12 @@ public static class LicenseFlow
 {
     public static async Task<PollResult> LoginAsync(
         LicenseClient client, string deviceId, string deviceName, Action<DeviceCode> onCode,
-        CancellationToken token, Func<TimeSpan, CancellationToken, Task>? delay = null, Func<DateTimeOffset>? clock = null)
+        CancellationToken token, Func<TimeSpan, CancellationToken, Task>? delay = null, Func<DateTimeOffset>? clock = null, DeviceInfo? info = null)
     {
         delay ??= (span, ct) => Task.Delay(span, ct);
         clock ??= () => DateTimeOffset.UtcNow;
 
-        var code = await client.StartDeviceLoginAsync(deviceId, deviceName, token);
+        var code = await client.StartDeviceLoginAsync(deviceId, deviceName, token, info);
         onCode(code);
 
         var deadline = clock() + TimeSpan.FromSeconds(Math.Max(30, code.ExpiresInSeconds));

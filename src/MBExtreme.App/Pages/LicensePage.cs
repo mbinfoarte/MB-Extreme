@@ -42,7 +42,8 @@ public sealed class LicensePage : ToolPageBase
         grid.Children.Add(_computer);
         Body.Children.Add(grid);
 
-        Body.Children.Add(BuildAdvanced());
+        // Endereço do servidor e chave pública já vêm no programa; o painel de testes só aparece com MBX_LICENSE_DEV=1.
+        if (Environment.GetEnvironmentVariable("MBX_LICENSE_DEV") == "1") Body.Children.Add(BuildAdvanced());
 
         Loaded += (_, _) => { _license.Changed += OnChanged; Render(); };
         Unloaded += (_, _) => _license.Changed -= OnChanged;
@@ -55,6 +56,7 @@ public sealed class LicensePage : ToolPageBase
 
     private void Render()
     {
+        AccountPhoto.Sync(_license.Status.Payload?.Picture, () => { Render(); MainWindow.Current?.UpdateFooter(); });
         _profile.Content = BuildProfile();
         _plan.Content = BuildPlan();
         _computer.Content = BuildComputer();
@@ -73,7 +75,7 @@ public sealed class LicensePage : ToolPageBase
         // foto com o botão de câmera (trocar) e um menu para remover
         var photoHost = new Grid { Width = 84, Height = 84, Margin = new Thickness(0, 0, 22, 0), VerticalAlignment = VerticalAlignment.Center };
         var ring = new System.Windows.Shapes.Ellipse { Stroke = Brush("AccentBrush"), StrokeThickness = 2 };
-        if (ProfileStore.Load() is { } photo) ring.Fill = new ImageBrush(photo) { Stretch = Stretch.UniformToFill };
+        if (AccountPhoto.Current() is { } photo) ring.Fill = new ImageBrush(photo) { Stretch = Stretch.UniformToFill };
         else ring.Fill = Brush("SurfaceBrush");
         photoHost.Children.Add(ring);
         if (ring.Fill is not ImageBrush)
@@ -90,6 +92,7 @@ public sealed class LicensePage : ToolPageBase
         var menu = new ContextMenu();
         var remove = new MenuItem { Header = "Remover foto" };
         remove.Click += (_, _) => { ProfileStore.Remove(); MainWindow.Current?.UpdateFooter(); Render(); };
+        remove.ToolTip = "Remove a foto escolhida no programa (a da conta do site continua).";
         menu.Items.Add(remove);
         camera.ContextMenu = menu;
         photoHost.Children.Add(camera);
@@ -105,7 +108,7 @@ public sealed class LicensePage : ToolPageBase
         }
         else
         {
-            if (config.Configured) actions.Children.Add(ActionButton("Criar conta grátis", () => OpenSite("/register"), false));
+            if (config.Configured) actions.Children.Add(ActionButton("Criar conta grátis", () => OpenSite("/cadastro"), false));
             var login = ActionButton("Entrar e ativar este PC", async () => await LoginAsync(), true);
             login.IsEnabled = config.Configured && _loginCts is null;
             if (!config.Configured) login.ToolTip = "Disponível quando o licenciamento for ligado (no beta tudo já está liberado).";
@@ -119,7 +122,7 @@ public sealed class LicensePage : ToolPageBase
         var nameRow = new StackPanel { Orientation = Orientation.Horizontal };
         nameRow.Children.Add(new TextBlock { Text = info.Name, FontSize = 20, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center });
         bool pro = LicenseExpiry.IsPro(status);
-        nameRow.Children.Add(Pill(pro ? "PRO" : config.Configured ? "GRÁTIS" : "BETA ABERTO", pro));
+        nameRow.Children.Add(Pill(pro ? FeaturePolicy.Title(status.Plan).ToUpperInvariant() : config.Configured ? "GRÁTIS" : "BETA ABERTO", pro));
         text.Children.Add(nameRow);
         string under = SignedIn ? $"{status.Payload!.Email} · conta conectada" : "Conta não conectada · a foto e o nome ficam só neste computador";
         text.Children.Add(new TextBlock { Text = under, FontSize = 13, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
@@ -185,7 +188,8 @@ public sealed class LicensePage : ToolPageBase
         var panel = new StackPanel();
         var head = new DockPanel();
         bool pro = LicenseExpiry.IsPro(status);
-        var link = pro ? ActionButton("Gerenciar assinatura", OpenAccount, false) : ActionButton("Ver planos e preços", () => OpenSite("/planos"), false);
+        bool trial = status.Payload?.Status == "trialing";
+        var link = pro && !trial ? ActionButton("Gerenciar assinatura", OpenAccount, false) : ActionButton(trial ? "Assinar um plano" : "Ver planos e preços", () => OpenSite("/precos?produto=mb-extreme"), false);
         link.Margin = new Thickness(12, 0, 0, 0);
         link.VerticalAlignment = VerticalAlignment.Top;
         link.IsEnabled = config.Configured;
@@ -194,6 +198,7 @@ public sealed class LicensePage : ToolPageBase
 
         (string title, string detail, string brush) = (status.State, config.Configured) switch
         {
+            (LicenseState.Valid, _) when pro && trial => ($"Teste grátis · Plano {FeaturePolicy.Title(status.Plan)}", status.Payload!.PeriodEnd is { } tEnd ? $"Termina em {tEnd.LocalDateTime:dd/MM/yyyy HH:mm}. Depois, assine um plano para continuar com os recursos pagos." : "Teste grátis ativo.", "TextBrush"),
             (LicenseState.Valid, _) when pro => ($"Plano {FeaturePolicy.Title(status.Plan)}", status.Payload!.PeriodEnd is { } end ? $"Renova em {end.LocalDateTime:dd/MM/yyyy}. Sem internet, a licença continua valendo até {status.Payload.ExpiresAt.LocalDateTime:dd/MM/yyyy}." : "A licença se renova sozinha quando há internet.", "TextBrush"),
             (LicenseState.Valid, _) => ("Grátis", "Os recursos gratuitos estão liberados. Os planos Essencial, Gamer, Creator e Técnico liberam o resto.", "TextBrush"),
             (LicenseState.Expired, _) => ("Licença vencida", status.Message, "WarnBrush"),
@@ -220,7 +225,8 @@ public sealed class LicensePage : ToolPageBase
             labels.Children.Add(right);
             labels.Children.Add(new TextBlock { Text = "Tempo de plano", FontSize = 12, Foreground = Brush("MutedBrush") });
             bar.Children.Add(labels);
-            var progress = new ProgressBar { Maximum = 365, Value = Math.Clamp(days, 0, 365), Height = 8, Margin = new Thickness(0, 8, 0, 0) };
+            int max = trial ? MBExtreme.Core.AppInfo.TrialDays : days > 31 ? 365 : 31;
+            var progress = new ProgressBar { Maximum = max, Value = Math.Clamp(days, 0, max), Height = 8, Margin = new Thickness(0, 8, 0, 0) };
             progress.Style = (Style)FindResource("GradientProgress");
             bar.Children.Add(progress);
             panel.Children.Add(bar);
@@ -234,7 +240,7 @@ public sealed class LicensePage : ToolPageBase
         {
             columns.Children.Add(FeatureBox("Grátis para sempre", new[] { "Painel e diagnóstico", "Limpeza e otimizações seguras", "Drivers e programas", "Suporte e acesso remoto" }, false));
         }
-        var proBox = FeatureBox(pro ? "Incluído no seu plano" : "Plano Pro", new[] { "Estúdio: live e gravação completas", "Perfis de jogo e modo Extremo", "Benchmark e testes avançados", "Atualizações prioritárias" }, true);
+        var proBox = FeatureBox(pro ? $"Incluído no plano {FeaturePolicy.Title(status.Plan)}" : "Planos pagos", PlanFeatures(pro ? status.Plan : null), true);
         if (pro) Grid.SetColumnSpan(proBox, 2); else Grid.SetColumn(proBox, 1);
         columns.Children.Add(proBox);
         panel.Children.Add(columns);
@@ -242,6 +248,25 @@ public sealed class LicensePage : ToolPageBase
         var card = CardOf(panel);
         card.Padding = new Thickness(24, 20, 24, 20);
         return card;
+    }
+
+    /// <summary>O que cada plano libera (cada um inclui o anterior).</summary>
+    private static IEnumerable<string> PlanFeatures(string? plan)
+    {
+        int rank = FeaturePolicy.Rank(plan);
+        if (rank == 0)
+        {
+            yield return "Essencial (R$ 24,90/mês): otimização completa, drivers e limpeza avançada";
+            yield return "Gamer (R$ 39,90/mês): jogos, Modo Jogo 2.0, DLSS/FSR e benchmark 3D";
+            yield return "Creator (R$ 69,90/mês): estúdio de live e gravação";
+            yield return "Técnico (R$ 99,90/mês): pós-formatação, backup e 5 PCs";
+            yield break;
+        }
+        yield return "Otimização completa, drivers, limpeza avançada e rede";
+        if (rank >= 2) yield return "Jogos: Modo Jogo 2.0, biblioteca com DLSS/FSR, benchmark 3D e FPS";
+        if (rank >= 3) yield return "Estúdio: live, gravação e cortes verticais";
+        if (rank >= 4) yield return "Técnico: pós-formatação, backup para formatar e até 5 PCs";
+        yield return "Atualizações automáticas";
     }
 
     private Border FeatureBox(string title, IEnumerable<string> items, bool highlight)
@@ -279,8 +304,15 @@ public sealed class LicensePage : ToolPageBase
             _ => config.Configured ? "Não ativado" : "Liberado (beta)",
         };
         string situationBrush = status.State == LicenseState.Valid || !config.Configured ? "OkBrush" : status.State is LicenseState.Expired or LicenseState.ClockTampered ? "WarnBrush" : config.Configured && status.Payload is null ? "MutedBrush" : "BadBrush";
+        var device = _license.Device;
         top.Children.Add(Fact("Nome", Environment.MachineName));
         top.Children.Add(Fact("Situação", situation, situationBrush));
+        if (device.Os.Length > 0) top.Children.Add(Fact("Windows", device.Os));
+        if (device.Cpu.Length > 0) top.Children.Add(Fact("Processador", device.Cpu));
+        if (device.Gpu.Length > 0) top.Children.Add(Fact("Placa de vídeo", device.Gpu));
+        if (device.RamGb > 0) top.Children.Add(Fact("Memória", $"{device.RamGb} GB"));
+        if ((_mac ??= DeviceFacts.PrimaryMac()) is { Length: > 0 } mac) top.Children.Add(Fact("Endereço MAC", mac));
+        top.Children.Add(Fact("ID do PC na conta", DeviceFacts.ShortId(_license.DeviceId)));
         if (status.Payload is { } payload) top.Children.Add(Fact("PCs na conta", $"até {payload.MaxDevices}"));
         top.Children.Add(Fact("Versão", $"{MBExtreme.Core.AppInfo.Version} · compilação {MBExtreme.Core.Update.AppUpdates.CurrentBuild()}"));
         long ticks = AppServices.Settings.LicenseLastSeenUtcTicks;
@@ -308,6 +340,8 @@ public sealed class LicensePage : ToolPageBase
         card.VerticalAlignment = VerticalAlignment.Stretch;
         return card;
     }
+
+    private string? _mac;
 
     private DockPanel Fact(string label, string value, string brush = "TextBrush")
     {
@@ -403,14 +437,10 @@ public sealed class LicensePage : ToolPageBase
         SetStatus(await _license.SignOutAsync(), "OkBrush");
     }
 
-    private void OpenAccount() => OpenSite("/account");
+    private void OpenAccount() => OpenSite("/painel");
 
-    private void OpenSite(string path)
-    {
-        var config = _license.Config;
-        if (!config.Configured) { SetStatus("O servidor de licenças ainda não está configurado (beta aberto).", "WarnBrush"); return; }
-        Open(config.ServerUrl.TrimEnd('/') + path);
-    }
+    /// <summary>Abre uma página do site principal (MB Hub). O servidor de licenças é outro endereço e não tem páginas.</summary>
+    private void OpenSite(string path) => Open(MBExtreme.Core.AppInfo.SiteUrl + path);
 }
 
 /// <summary>Mostrada no lugar de uma página do plano Pro quando a licença não vale.</summary>

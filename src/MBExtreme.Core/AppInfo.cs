@@ -34,5 +34,8 @@ public static class AppInfo
     /// RELEASES_TOKEN o CI publica no próprio repositório), o MB-Extreme. Vale a de maior compilação entre os dois.
     /// </summary>
     public static readonly string[] UpdateRepositories = { "mbinfoarte/MB-Extreme-Download", "mbinfoarte/MB-Extreme" };   // repositório público só de downloads; o código-fonte fica privado em mbinfoarte/MB-Extreme
+    /// <summary>Site principal (MB Hub): cadastro, painel, planos e ativação do PC.</summary>
+    public const string SiteUrl = "https://www.mbinfoarte.com.br";
+
     public const string DefaultPublicKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER0fp7Wn1uvIzT/ZbZ2WVsMujzLnONCNxTB+2agpogzmlbBQTNoNm21t1f0EtZoHG2ncxg7i4T51O4Iotb2X04w==";
 }

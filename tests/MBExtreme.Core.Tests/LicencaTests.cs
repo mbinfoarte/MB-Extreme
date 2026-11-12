@@ -330,7 +330,8 @@ public class PerfilDoClienteTests
     {
         var free = LicenseProfile.Describe(Status("free", 0), Configured, Now, "pc");
         Assert.Equal("Plano gratuito", free.PlanText);
-        Assert.Equal("Ativar o Pro", free.ActionText);
+        Assert.Equal("Ver planos", free.ActionText);
+        Assert.Equal("Entrar", LicenseProfile.Describe(new LicenseStatus(LicenseState.None, null, "", null), Configured, Now, "pc").ActionText);
 
         var none = LicenseProfile.Describe(new LicenseStatus(LicenseState.None, null, "", null), Configured, Now, "mbinfoarte");
         Assert.Equal("mbinfoarte", none.Name);
@@ -366,5 +367,36 @@ public class PerfilDoClienteTests
         Assert.Equal(2, s.DaysLeft(Now));
         Assert.Equal(0, s.DaysLeft(Now.AddDays(10)));
         Assert.Null(new LicenseStatus(LicenseState.None, null, "", null).DaysLeft(Now));
+    }
+}
+
+public class DadosDoComputadorTests
+{
+    [Fact]
+    public void Mac_formatado_e_placas_virtuais_ignoradas()
+    {
+        Assert.Equal("00-1A-2B-3C-4D-5E", DeviceFacts.FormatMac(new byte[] { 0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E }));
+        Assert.Equal("", DeviceFacts.FormatMac(new byte[6]));
+        Assert.Equal("", DeviceFacts.FormatMac(null));
+        Assert.True(DeviceFacts.IsVirtual("Hyper-V Virtual Ethernet Adapter"));
+        Assert.True(DeviceFacts.IsVirtual("TAP-Windows Adapter V9"));
+        Assert.False(DeviceFacts.IsVirtual("Realtek PCIe GbE Family Controller"));
+    }
+
+    [Fact]
+    public void Placa_dedicada_ganha_da_integrada()
+    {
+        Assert.Equal("NVIDIA GeForce RTX 4070", DeviceFacts.PickGpu(new[] { "Intel(R) UHD Graphics 770", "NVIDIA GeForce RTX 4070" }));
+        Assert.Equal("AMD Radeon RX 7800 XT", DeviceFacts.PickGpu(new[] { "AMD Radeon(TM) Graphics", "AMD Radeon RX 7800 XT" }));
+        Assert.Equal("", DeviceFacts.PickGpu(Array.Empty<string>()));
+        Assert.Equal("A1B2-C3D4", DeviceFacts.ShortId("a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"));
+    }
+
+    [Fact]
+    public void Foto_da_conta_vem_assinada_na_licenca()
+    {
+        using var key = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var token = LicenseToken.Sign(new LicensePayload { Subject = "u", Picture = "https://lh3.googleusercontent.com/a/x=s96-c", Device = "d" }, key);
+        Assert.Equal("https://lh3.googleusercontent.com/a/x=s96-c", LicenseToken.Verify(token, LicenseToken.ExportPublicKey(key))!.Picture);
     }
 }

@@ -18,6 +18,9 @@ public sealed record LicensePayload
     /// <summary>Nome do cliente, como cadastrado no site (pode ser vazio).</summary>
     [JsonPropertyName("name")] public string Name { get; init; } = "";
 
+    /// <summary>Foto da conta no site (https; normalmente a do Google). Vazio quando a conta não tem foto.</summary>
+    [JsonPropertyName("pic")] public string Picture { get; init; } = "";
+
     /// <summary>Fim do período pago (ou do teste). É o que o cliente vê como "dias restantes"; difere do vencimento da licença, que se renova sozinho.</summary>
     [JsonPropertyName("pe")] public DateTimeOffset? PeriodEnd { get; init; }
 

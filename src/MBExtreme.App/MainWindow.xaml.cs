@@ -482,7 +482,7 @@ public partial class MainWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(FreeBadge, BadgeText.Text.Trim());
         ActivateButton.Visibility = info.ShowAction ? Visibility.Visible : Visibility.Collapsed;
 
-        var photo = ProfileStore.Load();
+        var photo = AccountPhoto.Current();
         if (photo is not null)
         {
             AvatarBorder.Background = new ImageBrush(photo) { Stretch = Stretch.UniformToFill };

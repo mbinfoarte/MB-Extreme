@@ -18,6 +18,8 @@ public static class LicenseProfile
         {
             case LicenseState.Valid when FeaturePolicy.Rank(status.Plan) > 0:
             {
+                if (status.NoEndDate)
+                    return new ProfileInfo(name, initials, $"Plano {FeaturePolicy.Title(status.Plan)} · sem vencimento", "", false, ProfileLevel.Ok);
                 int days = status.DaysLeft(now) ?? 0;
                 string plan = (status.Payload?.Status == "trialing" ? "Teste " : "") + FeaturePolicy.Title(status.Plan);
                 string text = days switch { 0 => $"{plan} · vence hoje", 1 => $"{plan} · 1 dia restante", _ => $"{plan} · {days} dias restantes" };

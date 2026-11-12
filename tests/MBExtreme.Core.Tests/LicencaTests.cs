@@ -400,3 +400,24 @@ public class DadosDoComputadorTests
         Assert.Equal("https://lh3.googleusercontent.com/a/x=s96-c", LicenseToken.Verify(token, LicenseToken.ExportPublicKey(key))!.Picture);
     }
 }
+
+public class PlanoSemVencimentoTests
+{
+    [Fact]
+    public void Plano_sem_data_de_fim_nao_conta_dias_nem_pede_renovacao()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 12, 0, 0, TimeSpan.Zero);
+        var payload = new LicensePayload { Plan = "tecnico", Status = "active", Name = "MB", PeriodEnd = null, ExpiresAt = now.AddDays(7), Device = "d" };
+        var status = new LicenseStatus(LicenseState.Valid, payload, "", TimeSpan.FromDays(7));
+        Assert.True(status.NoEndDate);
+        Assert.Null(status.DaysLeft(now));
+        var info = LicenseProfile.Describe(status, new LicenseConfig(true, "https://s", "k"), now, "pc");
+        Assert.Equal("Plano Técnico · sem vencimento", info.PlanText);
+        Assert.False(info.ShowAction);
+
+        // com data de fim (assinatura ou teste) a contagem continua
+        var paid = new LicenseStatus(LicenseState.Valid, payload with { PeriodEnd = now.AddDays(20) }, "", TimeSpan.FromDays(7));
+        Assert.False(paid.NoEndDate);
+        Assert.Equal(20, paid.DaysLeft(now));
+    }
+}

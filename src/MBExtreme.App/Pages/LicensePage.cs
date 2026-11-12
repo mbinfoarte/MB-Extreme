@@ -208,7 +208,7 @@ public sealed class LicensePage : ToolPageBase
         var head = new DockPanel();
         bool pro = LicenseExpiry.IsPro(status);
         bool trial = status.Payload?.Status == "trialing";
-        var link = pro && !trial ? ActionButton("Gerenciar assinatura", OpenAccount, false) : ActionButton(trial ? "Assinar um plano" : "Ver planos e preços", () => OpenSite("/precos?produto=mb-extreme"), false);
+        var link = pro && !trial ? ActionButton(status.NoEndDate ? "Minha conta no site" : "Gerenciar assinatura", OpenAccount, false) : ActionButton(trial ? "Assinar um plano" : "Ver planos e preços", () => OpenSite("/precos?produto=mb-extreme"), false);
         link.Margin = new Thickness(12, 0, 0, 0);
         link.VerticalAlignment = VerticalAlignment.Top;
         link.IsEnabled = config.Configured;
@@ -218,7 +218,7 @@ public sealed class LicensePage : ToolPageBase
         (string title, string detail, string brush) = (status.State, config.Configured) switch
         {
             (LicenseState.Valid, _) when pro && trial => ($"Teste grátis · Plano {FeaturePolicy.Title(status.Plan)}", status.Payload!.PeriodEnd is { } tEnd ? $"Termina em {tEnd.LocalDateTime:dd/MM/yyyy HH:mm}. Depois, assine um plano para continuar com os recursos pagos." : "Teste grátis ativo.", "TextBrush"),
-            (LicenseState.Valid, _) when pro => ($"Plano {FeaturePolicy.Title(status.Plan)}", status.Payload!.PeriodEnd is { } end ? $"Renova em {end.LocalDateTime:dd/MM/yyyy}. Sem internet, a licença continua valendo até {status.Payload.ExpiresAt.LocalDateTime:dd/MM/yyyy}." : "A licença se renova sozinha quando há internet.", "TextBrush"),
+            (LicenseState.Valid, _) when pro => ($"Plano {FeaturePolicy.Title(status.Plan)}", status.Payload!.PeriodEnd is { } end ? $"Renova em {end.LocalDateTime:dd/MM/yyyy}. Sem internet, a licença continua valendo até {status.Payload.ExpiresAt.LocalDateTime:dd/MM/yyyy}." : "Sem vencimento. A licença se renova sozinha quando há internet.", "TextBrush"),
             (LicenseState.Valid, _) => ("Grátis", "Os recursos gratuitos estão liberados. Os planos Essencial, Gamer, Creator e Técnico liberam o resto.", "TextBrush"),
             (LicenseState.Expired, _) => ("Licença vencida", status.Message, "WarnBrush"),
             (LicenseState.ClockTampered, _) => ("Relógio incorreto", status.Message, "WarnBrush"),

@@ -40,11 +40,22 @@ internal sealed class LicenseManager
     public bool IsAllowed(string pageKey) => FeaturePolicy.IsAllowed(pageKey, Status, Config.Enforce, Trial.Active);
 
     /// <summary>Teste grátis do Pro deste PC (7 dias desde o primeiro uso).</summary>
-    public TrialState Trial => _trial ??= TrialClock.Current(AppServices.Settings, MBExtreme.Core.AppInfo.TrialDays);
+    /// <summary>
+    /// Teste grátis local (sem conta). Com o servidor configurado ele não existe: o teste de 3 dias só começa ao entrar com a conta
+    /// do site (um por conta e um por PC, controlado pelo servidor).
+    /// </summary>
+    public TrialState Trial => _trial ??= LocalTrial();
+
+    private TrialState LocalTrial() => Config.Configured
+        ? new TrialState(DateTime.UtcNow, MBExtreme.Core.AppInfo.TrialDays, 0)
+        : TrialClock.Current(AppServices.Settings, MBExtreme.Core.AppInfo.TrialDays);
+
+    /// <summary>Este PC já entrou com uma conta alguma vez (já recebeu licença do servidor)?</summary>
+    public bool EverSignedIn => AppServices.Settings.LicenseLastSeenUtcTicks > 0;
     private TrialState? _trial;
 
     /// <summary>Recalcula os dias do teste (o relógio anda).</summary>
-    public void RefreshTrial() => _trial = TrialClock.Current(AppServices.Settings, MBExtreme.Core.AppInfo.TrialDays);
+    public void RefreshTrial() => _trial = LocalTrial();
 
     /// <summary>Pro de verdade (assinatura) ou durante o teste grátis.</summary>
     public bool HasProFeatures => !Config.Enforce || LicenseExpiry.IsPro(Status) || Trial.Active;

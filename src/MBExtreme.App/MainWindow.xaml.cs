@@ -498,7 +498,12 @@ public partial class MainWindow : Window
 
     private void Profile_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => Go("license");
 
-    private void Activate_Click(object sender, RoutedEventArgs e) => Go("license");
+    private void Activate_Click(object sender, RoutedEventArgs e)
+    {
+        // sem conta: já abre o login (teste grátis); com conta: a tela de licença (planos)
+        if (AppServices.License.Status.Payload is null && AppServices.License.Config.Configured) Pages.LicensePage.LoginOnOpen = true;
+        Go("license");
+    }
 
     private void ShowPage(string key)
     {

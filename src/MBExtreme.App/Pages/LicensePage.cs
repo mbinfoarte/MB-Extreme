@@ -45,9 +45,28 @@ public sealed class LicensePage : ToolPageBase
         // Endereço do servidor e chave pública já vêm no programa; o painel de testes só aparece com MBX_LICENSE_DEV=1.
         if (Environment.GetEnvironmentVariable("MBX_LICENSE_DEV") == "1") Body.Children.Add(BuildAdvanced());
 
-        Loaded += (_, _) => { _license.Changed += OnChanged; Render(); };
+        Loaded += (_, _) =>
+        {
+            _license.Changed += OnChanged;
+            Render();
+            if (LoginOnOpen && !SignedIn && _license.Config.Configured && _loginCts is null) { LoginOnOpen = false; _ = LoginAsync(); }
+        };
         Unloaded += (_, _) => _license.Changed -= OnChanged;
         Render();
+    }
+
+    /// <summary>Abrir esta tela já começando o login (botões "Ativar teste grátis" do menu, do Painel e das telas bloqueadas).</summary>
+    public static bool LoginOnOpen { get; set; }
+
+    /// <summary>Vai para Conta e licença e já abre o navegador para entrar (sem conta) ou mostra os planos (com conta).</summary>
+    public static void StartTrialOrPlans()
+    {
+        var license = AppServices.License;
+        if (license.Status.Payload is null && license.Config.Configured) LoginOnOpen = true;
+        else if (license.Status.Payload is not null)
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(MBExtreme.Core.AppInfo.SiteUrl + "/precos?produto=mb-extreme") { UseShellExecute = true }); }
+            catch (System.ComponentModel.Win32Exception) { }
+        MainWindow.Current?.Go("license");
     }
 
     private void OnChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(new Action(Render));
@@ -109,7 +128,7 @@ public sealed class LicensePage : ToolPageBase
         else
         {
             if (config.Configured) actions.Children.Add(ActionButton("Criar conta grátis", () => OpenSite("/cadastro"), false));
-            var login = ActionButton("Entrar e ativar este PC", async () => await LoginAsync(), true);
+            var login = ActionButton("Entrar e ativar teste grátis", async () => await LoginAsync(), true);
             login.IsEnabled = config.Configured && _loginCts is null;
             if (!config.Configured) login.ToolTip = "Disponível quando o licenciamento for ligado (no beta tudo já está liberado).";
             actions.Children.Add(login);
@@ -206,7 +225,9 @@ public sealed class LicensePage : ToolPageBase
             (LicenseState.WrongDevice, _) => ("Licença de outro computador", status.Message, "BadBrush"),
             (LicenseState.Invalid, _) => ("Licença inválida", status.Message, "BadBrush"),
             (_, false) => ("Beta aberto · tudo liberado", "Durante o beta todos os recursos funcionam sem licença. Quando o beta acabar, os recursos Pro pedem o plano.", "TextBrush"),
-            _ => ("Sem licença", config.Enforce ? "Entre com a conta do site para liberar os recursos do plano Pro." : "Entre com a conta do site para ativar este PC. Enquanto isso, tudo está liberado (beta aberto).", "WarnBrush"),
+            _ => ("Grátis · teste de 3 dias disponível",
+                  "Crie sua conta grátis em mbinfoarte.com.br e clique em \"Entrar e ativar teste grátis\": o plano Gamer fica liberado por 3 dias neste PC, sem cartão.",
+                  "AccentBrush"),
         };
         var titles = new StackPanel();
         titles.Children.Add(Label("SEU PLANO"));
@@ -238,7 +259,7 @@ public sealed class LicensePage : ToolPageBase
         columns.ColumnDefinitions.Add(new ColumnDefinition());
         if (!pro)
         {
-            columns.Children.Add(FeatureBox("Grátis para sempre", new[] { "Painel e diagnóstico", "Limpeza e otimizações seguras", "Drivers e programas", "Suporte e acesso remoto" }, false));
+            columns.Children.Add(FeatureBox("Grátis para sempre", new[] { "Painel e diagnóstico", "Limpeza e otimizações seguras", "Programas, discos e reparo do Windows", "Suporte e acesso remoto" }, false));
         }
         var proBox = FeatureBox(pro ? $"Incluído no plano {FeaturePolicy.Title(status.Plan)}" : "Planos pagos", PlanFeatures(pro ? status.Plan : null), true);
         if (pro) Grid.SetColumnSpan(proBox, 2); else Grid.SetColumn(proBox, 1);
@@ -446,18 +467,48 @@ public sealed class LicensePage : ToolPageBase
 /// <summary>Mostrada no lugar de uma página do plano Pro quando a licença não vale.</summary>
 public sealed class UpgradePage : ToolPageBase
 {
-    public UpgradePage(string title, string key) : base(title,
-        $"Este recurso faz parte do plano {FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer)}. Assine no site e clique em Atualizar em Conta e licença.")
+    public UpgradePage(string title, string key) : base(title, Subtitle(key))
     {
-        AddButton("Ver planos", (_, _) => OpenPlans());
-        AddButton("Ver licença", (_, _) => MainWindow.Current?.Go("license"));
+        var license = AppServices.License;
+        bool signedIn = license.Status.Payload is not null;
+        string plan = FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer);
+
+        var box = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+        box.Children.Add(new TextBlock { Text = "🔒", FontSize = 34, Margin = new Thickness(0, 0, 0, 6) });
+        box.Children.Add(new TextBlock
+        {
+            Text = signedIn ? $"Disponível no plano {plan}" : "Ative seu teste grátis de 3 dias",
+            FontSize = 20, FontWeight = FontWeights.Bold, Foreground = (Brush)Application.Current.FindResource("AccentBrush"),
+        });
+        box.Children.Add(new TextBlock
+        {
+            Text = signedIn
+                ? $"Assine o plano {plan} (ou um maior) no site e depois clique em Atualizar em Conta e licença: o recurso libera na hora."
+                : "1. Crie sua conta grátis em mbinfoarte.com.br\n2. Clique em \"Entrar e ativar teste grátis\" e aprove no navegador\n3. Pronto: o plano Gamer fica liberado por 3 dias neste PC, sem cartão.",
+            FontSize = 14, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 14),
+        });
+        Body.Children.Add(box);
+        if (signedIn)
+        {
+            AddButton("Ver planos e preços", (_, _) => OpenSite("/precos?produto=mb-extreme"));
+            AddButton("Conta e licença", (_, _) => MainWindow.Current?.Go("license"));
+        }
+        else
+        {
+            AddButton("Entrar e ativar teste grátis", (_, _) => LicensePage.StartTrialOrPlans());
+            AddButton("Criar conta grátis", (_, _) => OpenSite("/cadastro"));
+            AddButton("Ver planos", (_, _) => OpenSite("/precos?produto=mb-extreme"));
+        }
         Body.Children.Add(Muted("Planos: Essencial (otimização), Gamer (jogos e benchmark), Creator (estúdio de live) e Técnico (assistências, 5 PCs). " +
                                 "Os recursos gratuitos continuam disponíveis no menu."));
     }
 
-    private static void OpenPlans()
+    private static string Subtitle(string key) =>
+        $"Este recurso faz parte do plano {FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer)}.";
+
+    private static void OpenSite(string path)
     {
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://www.mbinfoarte.com.br/precos?produto=mb-extreme") { UseShellExecute = true }); }
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(MBExtreme.Core.AppInfo.SiteUrl + path) { UseShellExecute = true }); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 }

@@ -7,7 +7,7 @@ using MBExtreme.Core.Licensing;
 namespace MBExtreme.UI;
 
 /// <summary>
-/// "Seu teste do Pro acabou": aparece uma vez quando os 7 dias terminam (com a licença aplicada e sem assinatura).
+/// "Seu teste grátis acabou": aparece uma vez quando os 7 dias terminam (com a licença aplicada e sem assinatura).
 /// Duas escolhas: Assinar o Pro (abre os planos) ou Continuar no Grátis (os ajustes Pro voltam ao original pela Central Desfazer).
 /// </summary>
 internal static class TrialEnd
@@ -16,7 +16,9 @@ internal static class TrialEnd
     {
         var license = AppServices.License;
         license.RefreshTrial();
-        if (!license.Config.Enforce || LicenseExpiry.IsPro(license.Status) || license.Trial.Active || AppServices.Settings.TrialEndShown) return;
+        // só para quem entrou com a conta e já não tem teste nem plano (quem nunca entrou vê o convite ao teste grátis)
+        if (!license.Config.Enforce || !license.EverSignedIn || license.Status.Payload is null || LicenseExpiry.IsPro(license.Status)
+            || license.Trial.Active || AppServices.Settings.TrialEndShown) return;
         AppServices.Settings.TrialEndShown = true;
         AppServices.Settings.Save();
 
@@ -36,15 +38,13 @@ internal static class TrialEnd
             Title = "MB Extreme", Width = 600, SizeToContent = SizeToContent.Height, Owner = owner, WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize, Background = (Brush)Application.Current.FindResource("SurfaceBrush"), Content = root,
         };
-        choices.Children.Add(Choice("⭐ Assinar o Pro", "Tudo liberado: otimizações de desempenho e jogos, benchmark, Modo Jogo, gravação e live, e mais.", true, () =>
+        choices.Children.Add(Choice("⭐ Assinar um plano", "Essencial, Gamer, Creator ou Técnico, a partir de R$ 24,90/mês. Depois de pagar, clique em Atualizar em Conta e licença.", true, () =>
         {
             window.Close();
-            string server = license.Config.ServerUrl;
-            if (server.StartsWith("https://", StringComparison.Ordinal))
-                try { Process.Start(new ProcessStartInfo(server + "/planos") { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { }
+            try { Process.Start(new ProcessStartInfo(MBExtreme.Core.AppInfo.SiteUrl + "/precos?produto=mb-extreme") { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { }
             MainWindow.Current?.Go("license");
         }));
-        var free = Choice("Continuar no Grátis", "Painel, limpeza, programas, discos, rede, periféricos, suporte e mais. Os ajustes do Pro voltam ao original.", false, () =>
+        var free = Choice("Continuar no Grátis", "Painel, limpeza, programas, discos, rede, periféricos, suporte e mais. Os ajustes dos recursos pagos voltam ao original.", false, () =>
         {
             window.Close();
             _ = AppServices.ProLock.CheckAsync();   // desfaz os ajustes Pro (Central Desfazer)

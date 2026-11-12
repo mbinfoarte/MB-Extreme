@@ -36,7 +36,7 @@ public static class LicenseProfile
             case LicenseState.Invalid:
                 return new ProfileInfo(name, initials, "Licença inválida", "Ver licença", true, ProfileLevel.Bad);
             default:
-                return new ProfileInfo(name, initials, config.Configured ? "Plano gratuito" : "Beta aberto", config.Configured ? "Entrar" : "Ver planos", true, ProfileLevel.Neutral);
+                return new ProfileInfo(name, initials, config.Configured ? "Plano gratuito" : "Beta aberto", config.Configured ? "Ativar teste grátis" : "Ver planos", true, ProfileLevel.Neutral);
         }
     }
 

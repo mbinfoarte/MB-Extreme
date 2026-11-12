@@ -72,7 +72,7 @@ public static class LicenseExpiry
     public static bool IsPro(LicenseStatus status) => status.IsValid && FeaturePolicy.Rank(status.Plan) > 0;
 
     public static bool ShouldRevert(bool enforce, bool configured, LicenseStatus status, bool trialActive = false) =>
-        enforce && !trialActive && !IsPro(status) && (configured || AppInfo.EnforceLicense);
+        enforce && !trialActive && !IsPro(status) && configured;   // sem servidor configurado nunca desfaz
 }
 
 /// <summary>Configuração do licenciamento. O endereço do servidor e a chave pública vêm das configurações do usuário (ou de variáveis de ambiente, para testes) até serem fixados na versão de venda.</summary>

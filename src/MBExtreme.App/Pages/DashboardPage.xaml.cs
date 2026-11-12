@@ -65,14 +65,25 @@ public partial class DashboardPage : UserControl
         grid.Children.Add(star);
 
         var text = new StackPanel { Margin = new Thickness(14, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock { Text = "VERSÃO BETA DE AVALIAÇÃO", FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) });
-        text.Children.Add(new TextBlock { Text = "Você está testando o MB Extreme de graça. Em breve os recursos Pro vão precisar de assinatura — aproveite enquanto está tudo liberado e conheça os planos.", FontSize = 13, TextWrapping = TextWrapping.Wrap });
+        bool signedIn = license.Status.Payload is not null;
+        text.Children.Add(new TextBlock
+        {
+            Text = signedIn ? "ESCOLHA SEU PLANO" : "TESTE GRÁTIS DE 3 DIAS",
+            FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)),
+        });
+        text.Children.Add(new TextBlock
+        {
+            Text = signedIn
+                ? "Seu teste grátis terminou. Assine o Essencial, Gamer, Creator ou Técnico para liberar de novo otimizações, jogos, benchmark e estúdio."
+                : "Crie sua conta grátis em mbinfoarte.com.br e entre por aqui: o plano Gamer (otimizações, jogos, benchmark 3D e Modo Jogo) fica liberado por 3 dias, sem cartão.",
+            FontSize = 13, TextWrapping = TextWrapping.Wrap,
+        });
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var plans = new Button { Content = "Ver planos", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(16, 6, 16, 6), FontSize = 13 };
-        plans.Click += (_, _) => MainWindow.Current?.Go("license");
+        var plans = new Button { Content = signedIn ? "Ver planos" : "Ativar teste grátis", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(16, 6, 16, 6), FontSize = 13 };
+        plans.Click += (_, _) => LicensePage.StartTrialOrPlans();
         var close = new Button { Content = "✕", Style = (Style)FindResource("SideFooterButton"), Margin = new Thickness(8, 0, 0, 0), ToolTip = "Esconder até a próxima versão" };
         close.Click += (_, _) =>
         {

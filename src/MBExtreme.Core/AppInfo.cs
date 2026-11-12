@@ -24,7 +24,7 @@ public static class AppInfo
     /// Liga a separação Grátis × Pro para todo mundo (na versão de venda, true). Enquanto for false, só quem ligar "Aplicar licença"
     /// nas configurações vê os limites — o beta continua aberto.
     /// </summary>
-    public const bool EnforceLicense = false;
+    public const bool EnforceLicense = true;
 
     /// <summary>Repositório do GitHub com as Releases (atualização sem servidor; só funciona com o repositório público).</summary>
     public const string UpdateRepository = "mbinfoarte/MB-Extreme-Download";

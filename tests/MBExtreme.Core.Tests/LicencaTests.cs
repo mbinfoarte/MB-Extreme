@@ -331,7 +331,7 @@ public class PerfilDoClienteTests
         var free = LicenseProfile.Describe(Status("free", 0), Configured, Now, "pc");
         Assert.Equal("Plano gratuito", free.PlanText);
         Assert.Equal("Ver planos", free.ActionText);
-        Assert.Equal("Entrar", LicenseProfile.Describe(new LicenseStatus(LicenseState.None, null, "", null), Configured, Now, "pc").ActionText);
+        Assert.Equal("Ativar teste grátis", LicenseProfile.Describe(new LicenseStatus(LicenseState.None, null, "", null), Configured, Now, "pc").ActionText);
 
         var none = LicenseProfile.Describe(new LicenseStatus(LicenseState.None, null, "", null), Configured, Now, "mbinfoarte");
         Assert.Equal("mbinfoarte", none.Name);

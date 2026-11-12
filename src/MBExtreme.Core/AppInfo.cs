@@ -12,9 +12,10 @@ public static class AppInfo
     /// <summary>
     /// Endereço do servidor (https://...) e chave pública de licença que o programa usa quando o usuário não configurou nada.
     /// Preencha antes de gerar a versão de venda: assim o cliente só abre o programa e o acesso remoto já funciona.
-    /// A chave pública sai de https://SEU-DOMINIO/v1/public-key (não é segredo).
+    /// Servidor: Cloud Function "licenseApi" do site (projeto Firebase people-api-493900). A chave pública não é segredo;
+    /// a privada fica só no Firebase (segredo MBX_LICENSE_KEY), gerada por scripts/gerar-chaves.mjs do repositório do site.
     /// </summary>
-    public const string DefaultServerUrl = "";
+    public const string DefaultServerUrl = "https://southamerica-east1-people-api-493900.cloudfunctions.net/licenseApi";
 
     /// <summary>Dias de teste grátis do Pro em cada PC (sem pedir conta).</summary>
     public const int TrialDays = 7;
@@ -33,5 +34,5 @@ public static class AppInfo
     /// RELEASES_TOKEN o CI publica no próprio repositório), o MB-Extreme. Vale a de maior compilação entre os dois.
     /// </summary>
     public static readonly string[] UpdateRepositories = { "mbinfoarte/MB-Extreme-Download", "mbinfoarte/MB-Extreme" };   // repositório público só de downloads; o código-fonte fica privado em mbinfoarte/MB-Extreme
-    public const string DefaultPublicKey = "";
+    public const string DefaultPublicKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER0fp7Wn1uvIzT/ZbZ2WVsMujzLnONCNxTB+2agpogzmlbBQTNoNm21t1f0EtZoHG2ncxg7i4T51O4Iotb2X04w==";
 }

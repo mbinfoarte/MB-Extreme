@@ -204,7 +204,14 @@ public class LicencaTests
         Assert.True(cfg.Configured);
         Assert.Equal("http://s", cfg.ServerUrl);
         Assert.True(cfg.Enforce);
-        Assert.False(LicenseConfig.From(new MBExtreme.Core.Settings.AppSettings()).Configured);
+        // Sem nada configurado, vale o servidor oficial embutido no programa (Cloud Function do site).
+        var padrao = LicenseConfig.From(new MBExtreme.Core.Settings.AppSettings());
+        Assert.Equal(AppInfo.DefaultServerUrl.Length > 0 && AppInfo.DefaultPublicKey.Length > 0, padrao.Configured);
+        if (padrao.Configured)
+        {
+            Assert.StartsWith("https://", padrao.ServerUrl);
+            Assert.Null(LicenseToken.Verify("mbx1.e30.AAAA", AppInfo.DefaultPublicKey)); // chave embutida é uma P-256 válida
+        }
     }
 }
 

@@ -194,8 +194,8 @@ public sealed class LicensePage : ToolPageBase
 
         (string title, string detail, string brush) = (status.State, config.Configured) switch
         {
-            (LicenseState.Valid, _) when pro => ("Pro", status.Payload!.PeriodEnd is { } end ? $"Renova em {end.LocalDateTime:dd/MM/yyyy}. Sem internet, a licença continua valendo até {status.Payload.ExpiresAt.LocalDateTime:dd/MM/yyyy}." : "A licença se renova sozinha quando há internet.", "TextBrush"),
-            (LicenseState.Valid, _) => ("Grátis", "Os recursos gratuitos estão liberados. O Pro libera o Estúdio completo, perfis de jogo e mais.", "TextBrush"),
+            (LicenseState.Valid, _) when pro => ($"Plano {FeaturePolicy.Title(status.Plan)}", status.Payload!.PeriodEnd is { } end ? $"Renova em {end.LocalDateTime:dd/MM/yyyy}. Sem internet, a licença continua valendo até {status.Payload.ExpiresAt.LocalDateTime:dd/MM/yyyy}." : "A licença se renova sozinha quando há internet.", "TextBrush"),
+            (LicenseState.Valid, _) => ("Grátis", "Os recursos gratuitos estão liberados. Os planos Essencial, Gamer, Creator e Técnico liberam o resto.", "TextBrush"),
             (LicenseState.Expired, _) => ("Licença vencida", status.Message, "WarnBrush"),
             (LicenseState.ClockTampered, _) => ("Relógio incorreto", status.Message, "WarnBrush"),
             (LicenseState.WrongDevice, _) => ("Licença de outro computador", status.Message, "BadBrush"),
@@ -417,10 +417,17 @@ public sealed class LicensePage : ToolPageBase
 public sealed class UpgradePage : ToolPageBase
 {
     public UpgradePage(string title, string key) : base(title,
-        "Este recurso faz parte do plano Pro. Entre com a conta do site para ativá-lo neste computador.")
+        $"Este recurso faz parte do plano {FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer)}. Assine no site e clique em Atualizar em Conta e licença.")
     {
+        AddButton("Ver planos", (_, _) => OpenPlans());
         AddButton("Ver licença", (_, _) => MainWindow.Current?.Go("license"));
-        Body.Children.Add(Muted("Os recursos gratuitos continuam disponíveis no menu."));
-        _ = key;
+        Body.Children.Add(Muted("Planos: Essencial (otimização), Gamer (jogos e benchmark), Creator (estúdio de live) e Técnico (assistências, 5 PCs). " +
+                                "Os recursos gratuitos continuam disponíveis no menu."));
+    }
+
+    private static void OpenPlans()
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://www.mbinfoarte.com.br/precos?produto=mb-extreme") { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 }

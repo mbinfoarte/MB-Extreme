@@ -124,6 +124,17 @@ public class LicencaTests
         Assert.True(FeaturePolicy.IsAllowed("cleanup", none, enforce: true));
         Assert.True(FeaturePolicy.RequiresPro("bench"));
         Assert.False(FeaturePolicy.RequiresPro("home"));
+        // cada plano inclui o anterior; "pro" (licenças antigas) vale como o maior
+        Assert.True(FeaturePolicy.PlanAllows("essencial", "drivers"));
+        Assert.False(FeaturePolicy.PlanAllows("essencial", "bench"));
+        Assert.True(FeaturePolicy.PlanAllows("gamer", "bench"));
+        Assert.False(FeaturePolicy.PlanAllows("gamer", "studio"));
+        Assert.True(FeaturePolicy.PlanAllows("creator", "studio"));
+        Assert.False(FeaturePolicy.PlanAllows("creator", "postinstall"));
+        Assert.True(FeaturePolicy.PlanAllows("tecnico", "postinstall"));
+        Assert.True(FeaturePolicy.PlanAllows("pro", "postinstall"));
+        Assert.False(FeaturePolicy.PlanAllows("free", "drivers"));
+        Assert.True(FeaturePolicy.PlanAllows("free", "home"));
     }
 
     [Fact]

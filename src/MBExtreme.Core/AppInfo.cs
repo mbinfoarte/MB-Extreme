@@ -18,7 +18,7 @@ public static class AppInfo
     public const string DefaultServerUrl = "https://southamerica-east1-people-api-493900.cloudfunctions.net/licenseApi";
 
     /// <summary>Dias de teste grátis do Pro em cada PC (sem pedir conta).</summary>
-    public const int TrialDays = 7;
+    public const int TrialDays = 3;
 
     /// <summary>
     /// Liga a separação Grátis × Pro para todo mundo (na versão de venda, true). Enquanto for false, só quem ligar "Aplicar licença"

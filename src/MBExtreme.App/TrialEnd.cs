@@ -25,7 +25,7 @@ internal static class TrialEnd
         root.Children.Add(new TextBlock { Text = "Seu teste do Pro acabou", FontSize = 22, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 6), Foreground = Brushes.White });
         root.Children.Add(new TextBlock
         {
-            Text = $"Você usou os {MBExtreme.Core.AppInfo.TrialDays} dias do MB Extreme Pro. Escolha como quer continuar:", TextWrapping = TextWrapping.Wrap,
+            Text = $"Você usou os {MBExtreme.Core.AppInfo.TrialDays} dias grátis do MB Extreme. Escolha como quer continuar:", TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Center, Foreground = new SolidColorBrush(Color.FromRgb(0xB4, 0xB4, 0xBC)), Margin = new Thickness(0, 0, 0, 16),
         });
         var choices = new Grid();

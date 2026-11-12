@@ -55,7 +55,7 @@ public static class LicenseVerifier
 
         var remaining = payload.ExpiresAt - now;
         return remaining > TimeSpan.Zero
-            ? new LicenseStatus(LicenseState.Valid, payload, $"Plano {payload.Plan} ativo.", remaining)
+            ? new LicenseStatus(LicenseState.Valid, payload, $"Plano {FeaturePolicy.Title(payload.Plan)} ativo.", remaining)
             : new LicenseStatus(LicenseState.Expired, payload, "A licença venceu. Conecte-se à internet para renová-la.", remaining);
     }
 }

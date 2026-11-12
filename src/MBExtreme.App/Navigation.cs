@@ -111,7 +111,7 @@ internal static class NavigationMap
         }),
         new("lic", "Licença", "Plano, ativação e conta.", "\uE8D7", new Tile[]
         {
-            new("license", "Licença e conta", "Entre com a conta do site para ativar o plano Pro.", "\uE8D7", ""),
+            new("license", "Licença e conta", "Entre com a conta do site para ativar o seu plano.", "\uE8D7", ""),
         }),
     };
 

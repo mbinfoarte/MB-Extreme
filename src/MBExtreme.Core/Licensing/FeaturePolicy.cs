@@ -1,25 +1,58 @@
 namespace MBExtreme.Core.Licensing;
 
-/// <summary>Quais páginas do app exigem o plano pago. Enquanto <see cref="LicenseConfig.Enforce"/> for falso, nada é bloqueado (beta aberto).</summary>
+/// <summary>
+/// Quais páginas do app exigem plano pago, e qual. Planos, do menor para o maior: Grátis, Essencial, Gamer, Creator e Técnico
+/// (cada um inclui o anterior). Enquanto <see cref="LicenseConfig.Enforce"/> for falso, nada é bloqueado (beta aberto).
+/// </summary>
 public static class FeaturePolicy
 {
-    /// <summary>Páginas (chaves da navegação) do plano Pro. Tudo que não está aqui é gratuito.</summary>
-    public static IReadOnlySet<string> ProPages { get; } = new HashSet<string>(StringComparer.Ordinal)
+    public const string Essencial = "essencial", Gamer = "gamer", Creator = "creator", Tecnico = "tecnico";
+
+    /// <summary>Ordem dos planos. "pro" é o nome antigo (licenças emitidas antes dos planos) e vale como o maior.</summary>
+    public static int Rank(string? plan) => plan switch
     {
-        "record", "shorts", "gamefps", "bench", "compare", "stress", "latency", "gameboost", "gameadvisor", "fps",
-        "hardware", "bios", "recipe", "netanalyzer", "wifi", "drivers",
-        "tweaks-perf", "tweaks-game", "net-tweaks", "duplicates", "largefiles", "shredder",
-        "gamelibrary", "profiles",
+        Essencial => 1, Gamer => 2, Creator => 3, Tecnico => 4, "pro" => 4, _ => 0,
     };
 
-    public static bool RequiresPro(string pageKey) => ProPages.Contains(pageKey);
+    public static string Title(string? plan) => plan switch
+    {
+        Essencial => "Essencial", Gamer => "Gamer", Creator => "Creator", Tecnico => "Técnico", "pro" => "Pro", _ => "Grátis",
+    };
 
-    /// <summary>A página pode abrir? Sem aplicação de licença ou com licença válida de plano pago, sim.</summary>
+    /// <summary>Plano mínimo de cada página paga. Tudo que não está aqui é gratuito.</summary>
+    public static IReadOnlyDictionary<string, string> PagePlans { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        // Essencial: otimização e manutenção
+        ["hardware"] = Essencial, ["bios"] = Essencial, ["recipe"] = Essencial, ["netanalyzer"] = Essencial, ["wifi"] = Essencial,
+        ["drivers"] = Essencial, ["tweaks-perf"] = Essencial, ["net-tweaks"] = Essencial, ["duplicates"] = Essencial,
+        ["largefiles"] = Essencial, ["shredder"] = Essencial,
+        // Gamer: jogos, desempenho e benchmark
+        ["gamefps"] = Gamer, ["bench"] = Gamer, ["compare"] = Gamer, ["stress"] = Gamer, ["latency"] = Gamer, ["gameboost"] = Gamer,
+        ["gameadvisor"] = Gamer, ["fps"] = Gamer, ["tweaks-game"] = Gamer, ["gamelibrary"] = Gamer, ["profiles"] = Gamer,
+        ["padcalib"] = Gamer, ["wallpaper"] = Gamer,
+        // Creator: estúdio de live e gravação
+        ["studio"] = Creator, ["record"] = Creator, ["shorts"] = Creator,
+        // Técnico: ferramentas de assistência
+        ["postinstall"] = Tecnico, ["formatbackup"] = Tecnico,
+    };
+
+    /// <summary>Páginas pagas (qualquer plano).</summary>
+    public static IReadOnlyCollection<string> ProPages => (IReadOnlyCollection<string>)PagePlans.Keys;
+
+    public static bool RequiresPro(string pageKey) => PagePlans.ContainsKey(pageKey);
+
+    /// <summary>Plano mínimo da página, ou null se for gratuita.</summary>
+    public static string? RequiredPlan(string pageKey) => PagePlans.TryGetValue(pageKey, out var plan) ? plan : null;
+
+    /// <summary>O plano dá acesso à página?</summary>
+    public static bool PlanAllows(string? plan, string pageKey) => RequiredPlan(pageKey) is not { } need || Rank(plan) >= Rank(need);
+
+    /// <summary>A página pode abrir? Sem aplicação de licença, no teste grátis ou com o plano certo, sim.</summary>
     public static bool IsAllowed(string pageKey, LicenseStatus status, bool enforce, bool trialActive = false)
     {
-        if (!enforce || !RequiresPro(pageKey) || trialActive) return true;   // no teste grátis, tudo do Pro fica liberado
+        if (!enforce || !RequiresPro(pageKey) || trialActive) return true;   // no teste grátis, tudo fica liberado
         if (!status.IsValid || status.Payload is null) return false;
-        return status.Plan is "pro" || status.Payload.Features.Contains(pageKey);
+        return PlanAllows(status.Plan, pageKey) || status.Payload.Features.Contains(pageKey);
     }
 }
 
@@ -35,7 +68,8 @@ public static class LicenseExpiry
         Tweaks.TweakCategory.Performance, Tweaks.TweakCategory.Gaming, Tweaks.TweakCategory.Network,
     };
 
-    public static bool IsPro(LicenseStatus status) => status.IsValid && status.Plan == "pro";
+    /// <summary>Tem algum plano pago (Essencial ou acima)?</summary>
+    public static bool IsPro(LicenseStatus status) => status.IsValid && FeaturePolicy.Rank(status.Plan) > 0;
 
     public static bool ShouldRevert(bool enforce, bool configured, LicenseStatus status, bool trialActive = false) =>
         enforce && !trialActive && !IsPro(status) && (configured || AppInfo.EnforceLicense);

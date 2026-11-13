@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using MBExtreme.Core.Memory;
@@ -52,7 +53,7 @@ public partial class DashboardPage : UserControl
         bool isPro = MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status);
         if (isPro || AppServices.Settings.BetaNoticeHiddenBuild == MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString())
         {
-            BetaHost.Content = null;
+            BetaHost.Content = null; UpdateNotices();
             return;
         }
 
@@ -89,7 +90,7 @@ public partial class DashboardPage : UserControl
         {
             AppServices.Settings.BetaNoticeHiddenBuild = MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString();
             AppServices.Settings.Save();
-            BetaHost.Content = null;
+            BetaHost.Content = null; UpdateNotices();
         };
         buttons.Children.Add(plans);
         buttons.Children.Add(close);
@@ -101,33 +102,24 @@ public partial class DashboardPage : UserControl
             Background = (Brush)FindResource("Surface2Brush"), BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)), BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Child = grid,
         };
+        UpdateNotices();
     }
 
     public DashboardPage()
     {
         InitializeComponent();
-        HeroHost.Content = new AnalyzerHero();
-        RamRingHost.Content = _ramRing;
-        DiskRingHost.Content = _diskRing;
-        RamSummary.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("memory");
-        DiskSummary.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("diskmap");
-        PcSummary.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("sysinfo");
-        foreach (var (key, title, description, icon) in Tools)
-            ToolsGrid.Children.Add(ToolCard.Build(title, description, icon, () => MainWindow.Current?.Go(key)));
-        _ = LoadPcSummaryAsync();
+        var hero = new AnalyzerHero();
+        HeroHost.Content = hero;
         ShowBetaNotice();
         ShowVideo(AppServices.Videos.Latest);
         AppServices.Videos.Found += v => Dispatcher.BeginInvoke(new Action(() => ShowVideo(v)));
-        // entrada: ferramentas em cascata na primeira vez que o Painel aparece
-        bool entered = false;
-        Loaded += (_, _) =>
+        // a análise completa começa sozinha na primeira vez que o Painel aparece (uma vez por abertura do programa)
+        Loaded += async (_, _) =>
         {
-            if (entered) return;
-            entered = true;
-            Motion.Cascade(ToolsGrid, 25);
-            Motion.Enter(RamSummary, TimeSpan.FromMilliseconds(60));
-            Motion.Enter(DiskSummary, TimeSpan.FromMilliseconds(110));
-            Motion.Enter(PcSummary, TimeSpan.FromMilliseconds(160));
+            if (_autoAnalyzed) return;
+            _autoAnalyzed = true;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await hero.AnalyzeAsync();
         };
         CpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("cpu-detail");
         GpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("gpu-detail");
@@ -149,61 +141,24 @@ public partial class DashboardPage : UserControl
         Unloaded += (_, _) => _timer.Stop();
     }
 
-    private readonly RingGauge _ramRing = new() { Width = 44, Height = 44, Thickness = 5 };
-    private readonly RingGauge _diskRing = new() { Width = 44, Height = 44, Thickness = 5 };
+    private static bool _autoAnalyzed;
 
-    /// <summary>Atalhos do Painel (os mais usados).</summary>
-    private static readonly (string Key, string Title, string Description, string Icon)[] Tools =
+    /// <summary>Avisos lado a lado; com um só, ele ocupa a largura toda.</summary>
+    private void UpdateNotices()
     {
-        ("postinstall", "Pós-formatação", "Programas e Windows prontos depois de formatar", "\uE896"),
-        ("bench", "Benchmark", "Teste e compare o desempenho", "\uE9D9"),
-        ("sysinfo", "Meu PC", "Tudo sobre o seu computador", "\uE7F8"),
-        ("cleanup", "Limpeza", "Libere espaço no disco", "\uE74D"),
-        ("uninstaller", "Desinstalador", "Remova vários programas de uma vez", "\uE8BB"),
-        ("drivers", "Drivers", "Aparelhos sem driver e placa de vídeo", "\uE964"),
-        ("storage", "Saúde dos discos", "Saúde, TRIM e otimização", "\uEDA2"),
-        ("speedtest", "Rede", "Teste de velocidade, ping e variação", "\uE774"),
-        ("tweaks-all", "Otimizações", "Windows mais rápido e com menos propaganda", "\uE945"),
-        ("win11", "Windows 11", "Requisitos e o que falta para atualizar", "\uE770"),
-        ("diskmap", "Mapa do disco", "O que está enchendo o disco", "\uE8B7"),
-        ("support", "Suporte MB InfoArt", "Ajuda por acesso remoto", "\uE8F2"),
-    };
-
-    /// <summary>Cartões de resumo: disco do Windows (espaço) e o computador (Windows, processador, tempo ligado).</summary>
-    private async Task LoadPcSummaryAsync()
-    {
-        try
-        {
-            var (windows, cpu) = await Task.Run(() => (SystemSummary.WindowsName(), SystemSummary.ProcessorName()));
-            PcWindowsText.Text = windows;
-            PcCpuText.Text = cpu;
-        }
-        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
-        {
-            PcCpuText.Text = Environment.MachineName;
-        }
-        UpdateDiskSummary();
-    }
-
-    private void UpdateDiskSummary()
-    {
-        try
-        {
-            var drive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\");
-            if (!drive.IsReady || drive.TotalSize <= 0) return;
-            double usedPercent = 100.0 * (drive.TotalSize - drive.AvailableFreeSpace) / drive.TotalSize;
-            _diskRing.AnimateTo(usedPercent);
-            _diskRing.Fill = (Brush)FindResource(usedPercent >= 90 ? "BadBrush" : usedPercent >= 80 ? "WarnBrush" : "OkBrush");
-            DiskRingText.Text = $"{usedPercent:0}%";
-            DiskSummaryText.Text = $"{drive.AvailableFreeSpace / BytesPerGb:0.0} GB livres de {drive.TotalSize / BytesPerGb:0.0} GB";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
+        BetaHost.Visibility = BetaHost.Content is null ? Visibility.Collapsed : Visibility.Visible;
+        VideoHost.Visibility = VideoHost.Content is null ? Visibility.Collapsed : Visibility.Visible;
+        int visible = (BetaHost.Content is null ? 0 : 1) + (VideoHost.Content is null ? 0 : 1);
+        NoticeGrid.Columns = Math.Max(1, visible);
+        NoticeGrid.Visibility = visible == 0 ? Visibility.Collapsed : Visibility.Visible;
+        BetaHost.Margin = new Thickness(0, 0, visible == 2 ? 5 : 0, 0);
+        VideoHost.Margin = new Thickness(visible == 2 ? 5 : 0, 0, 0, 0);
     }
 
     /// <summary>Faixa "Vídeo novo no canal" (some quando a pessoa fecha aquele vídeo).</summary>
     private void ShowVideo(MBExtreme.Core.Social.YouTubeVideo? video)
     {
-        if (video is null || !AppServices.Settings.NotifyNewVideos || AppServices.Settings.DismissedVideoId == video.Id) { VideoHost.Content = null; return; }
+        if (video is null || !AppServices.Settings.NotifyNewVideos || AppServices.Settings.DismissedVideoId == video.Id) { VideoHost.Content = null; UpdateNotices(); return; }
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -227,6 +182,7 @@ public partial class DashboardPage : UserControl
             AppServices.Settings.DismissedVideoId = video.Id;
             AppServices.Settings.Save();
             VideoHost.Content = null;
+            UpdateNotices();
         };
         buttons.Children.Add(watch);
         buttons.Children.Add(close);
@@ -234,6 +190,7 @@ public partial class DashboardPage : UserControl
         grid.Children.Add(buttons);
         var card = new Border { Style = (Style)FindResource("Card"), Padding = new Thickness(12, 10, 12, 10), Child = grid };
         VideoHost.Content = card;
+        UpdateNotices();
         Motion.Enter(card, fromY: 8);
     }
 
@@ -286,16 +243,6 @@ public partial class DashboardPage : UserControl
         double used = 100 - memory.FreePercent;
         RamGauge.Value = memory.TotalBytes > 0 ? used : null;
         RamDetail.Text = $"{memory.UsedBytes / BytesPerGb:0.0} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";
-        if (memory.TotalBytes > 0)
-        {
-            _ramRing.AnimateTo(used);
-            _ramRing.Fill = (Brush)FindResource(used >= 85 ? "BadBrush" : used >= 70 ? "WarnBrush" : "OkBrush");
-            RamRingText.Text = $"{used:0}%";
-            RamSummaryText.Text = $"{memory.UsedBytes / BytesPerGb:0.#} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";
-        }
-        var up = TimeSpan.FromMilliseconds(Environment.TickCount64);
-        PcUptimeText.Text = $"Ligado há {(int)up.TotalHours} h {up.Minutes} min";
-        if (_tick % 30 == 0) UpdateDiskSummary();
         _memoryUsed = used;
         if (memory.TotalBytes > 0)
         {
@@ -369,39 +316,36 @@ public partial class DashboardPage : UserControl
         header.Children.Add(repair);
         AttentionPanel.Children.Add(header);
 
+        var cards = new UniformGrid { Columns = items.Count == 1 ? 1 : 2 };
         foreach (var item in items)
         {
             var current = item;
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition());
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var text = new StackPanel();
-            text.Children.Add(new TextBlock { Text = item.Title, FontWeight = FontWeights.SemiBold, FontSize = 14 });
-            text.Children.Add(new TextBlock { Text = item.Detail, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("MutedBrush") });
-            grid.Children.Add(text);
+            text.Children.Add(new TextBlock { Text = item.Title, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock { Text = item.Detail, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("MutedBrush"), Margin = new Thickness(0, 2, 0, 0) });
 
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
             if (item.FixKind.Length > 0)
             {
-                var fix = new Button { Content = item.FixText, Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+                var fix = new Button { Content = item.FixText, Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 0, 8, 0), FontSize = 12.5 };
                 fix.Click += async (_, _) => await FixAsync(current);
                 buttons.Children.Add(fix);
             }
-            var details = new Button { Content = item.ActionText, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(14, 6, 14, 6) };
+            var details = new Button { Content = item.ActionText, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(12, 5, 12, 5), FontSize = 12.5 };
             details.Click += (_, _) => MainWindow.Current?.Go(current.TargetPage);
             buttons.Children.Add(details);
-            Grid.SetColumn(buttons, 1);
-            grid.Children.Add(buttons);
+            text.Children.Add(buttons);
 
-            AttentionPanel.Children.Add(new Border
+            cards.Children.Add(new Border
             {
                 Style = (Style)FindResource("Card"),
-                Padding = new Thickness(18, 12, 18, 12),
-                Margin = new Thickness(0, 0, 0, 8),
+                Padding = new Thickness(14, 10, 14, 10),
+                Margin = new Thickness(0, 0, 8, 8),
                 BorderBrush = (Brush)FindResource(item.Urgent ? "BadBrush" : "WarnBrush"),
-                Child = grid,
+                Child = text,
             });
         }
+        AttentionPanel.Children.Add(cards);
     }
 
     private async Task FixAsync(AttentionItem item)

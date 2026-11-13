@@ -66,6 +66,9 @@ internal static class AppServices
 
     public static MemoryAutoCleaner AutoMemory { get; } = new();
 
+    /// <summary>MB Control: o controle escolhido, lido o tempo todo enquanto alguma tela do MB Control está aberta.</summary>
+    public static PadService Pads { get; } = new();
+
     public static LicenseManager License { get; } = new();
 
     public static StudioController Studio { get; } = new();

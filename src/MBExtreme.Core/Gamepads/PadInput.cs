@@ -31,6 +31,52 @@ public sealed record PadState(
 
 public static class PadInput
 {
+    /// <summary>
+    /// Lê qualquer relatório de entrada do controle PlayStation, pelo cabo ou pelo Bluetooth:
+    /// 0x01 completo (USB), 0x31 (DualSense no Bluetooth), 0x11 (DualShock 4 no Bluetooth) e 0x01 curto
+    /// (Bluetooth antes de o programa pedir o relatório completo: só analógicos, botões e gatilhos).
+    /// </summary>
+    public static PadState? ParseAny(PadModel model, byte[] r)
+    {
+        if (r.Length == 0) return null;
+        bool ds4 = model == PadModel.DualShock4;
+        if (r[0] == 0x31 && !ds4 && r.Length >= 64) return Parse(model, Shift(r, 2));
+        if (r[0] == 0x11 && ds4 && r.Length >= 34) return Parse(model, Shift(r, 3));
+        if (r[0] == 0x01 && r.Length >= 10 && r.Length < 32) return Basic(r);
+        return Parse(model, r);
+    }
+
+    /// <summary>O relatório do Bluetooth com o cabeçalho tirado, no formato do USB (0x01 no byte 0).</summary>
+    private static byte[] Shift(byte[] r, int skip)
+    {
+        var usb = new byte[r.Length - skip + 1];
+        usb[0] = 0x01;
+        Array.Copy(r, skip, usb, 1, r.Length - skip);
+        return usb;
+    }
+
+    /// <summary>Relatório curto do Bluetooth: analógicos 1-4, botões 5-7, gatilhos 8-9 (sem sensores nem bateria).</summary>
+    private static PadState Basic(byte[] r)
+    {
+        var b = Dpad(r[5] & 0x0F);
+        if ((r[5] & 0x10) != 0) b |= PadButtons.Square;
+        if ((r[5] & 0x20) != 0) b |= PadButtons.Cross;
+        if ((r[5] & 0x40) != 0) b |= PadButtons.Circle;
+        if ((r[5] & 0x80) != 0) b |= PadButtons.Triangle;
+        byte b1 = r[6], b2 = r[7];
+        if ((b1 & 0x01) != 0) b |= PadButtons.L1;
+        if ((b1 & 0x02) != 0) b |= PadButtons.R1;
+        if ((b1 & 0x04) != 0) b |= PadButtons.L2;
+        if ((b1 & 0x08) != 0) b |= PadButtons.R2;
+        if ((b1 & 0x10) != 0) b |= PadButtons.Create;
+        if ((b1 & 0x20) != 0) b |= PadButtons.Options;
+        if ((b1 & 0x40) != 0) b |= PadButtons.L3;
+        if ((b1 & 0x80) != 0) b |= PadButtons.R3;
+        if ((b2 & 0x01) != 0) b |= PadButtons.PS;
+        if ((b2 & 0x02) != 0) b |= PadButtons.Touchpad;
+        return new PadState(Axis(r[1]), Axis(r[2]), Axis(r[3]), Axis(r[4]), r[8] / 255.0, r[9] / 255.0, b, 0, 0, 0, 0, 0, 0, -1, false, false);
+    }
+
     /// <summary>Analógico de 0..255 para -1..1 (o centro 127,5 vira 0).</summary>
     public static double Axis(byte raw) => Math.Round((raw - 127.5) / 128.0, 4);
 

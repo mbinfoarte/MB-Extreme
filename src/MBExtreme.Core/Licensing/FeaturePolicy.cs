@@ -29,7 +29,7 @@ public static class FeaturePolicy
         // Gamer: jogos, desempenho e benchmark
         ["gamefps"] = Gamer, ["bench"] = Gamer, ["compare"] = Gamer, ["stress"] = Gamer, ["latency"] = Gamer, ["gameboost"] = Gamer,
         ["gameadvisor"] = Gamer, ["fps"] = Gamer, ["tweaks-game"] = Gamer, ["gamelibrary"] = Gamer, ["profiles"] = Gamer,
-        ["padcalib"] = Gamer, ["pad-info"] = Gamer, ["pad-profiles"] = Gamer, ["wallpaper"] = Gamer,
+        ["padcalib"] = Gamer, ["pad-info"] = Gamer, ["pad-profiles"] = Gamer, ["mbc-emu"] = Gamer, ["mbc-kbm"] = Gamer, ["mbc-light"] = Gamer, ["wallpaper"] = Gamer,
         // Creator: estúdio de live e gravação
         ["studio"] = Creator, ["record"] = Creator, ["shorts"] = Creator,
         // Técnico: ferramentas de assistência

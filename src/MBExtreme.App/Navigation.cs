@@ -127,6 +127,15 @@ internal static class NavigationMap
             new("postinstall", "Pós-formatação", "\uE896"),
             new("programs", "Programas", "\uE71D"),
         }),
+        new("MB CONTROL", new SideItem[]
+        {
+            new("mbc-overview", "Meu controle", "\uE7FC"),
+            new("padcalib", "Calibrador", "\uE9D9"),
+            new("mbc-emu", "Emulação de controle", "\uE8AB"),
+            new("mbc-kbm", "Teclado e mouse", "\uE765"),
+            new("mbc-light", "Luz, gatilhos e vibração", "\uE781"),
+            new("pad-profiles", "Perfis por jogo", "\uE8F1"),
+        }),
         new("MEU PC", new SideItem[]
         {
             new("hub-hardware", "Hardware", "\uE7F8"),
@@ -136,7 +145,6 @@ internal static class NavigationMap
         new("TESTES", new SideItem[]
         {
             new("bench", "Benchmark", "\uE9D9"),
-            new("hub-pad", "Calibrar controle", "\uE7FC"),
             new("periphtest", "Periféricos", "\uE765"),
         }),
         new("OTIMIZAR", new SideItem[]
@@ -184,7 +192,6 @@ internal static class NavigationMap
         ["hub-startup"] = new[] { ("Programas", "startup"), ("Serviços", "services") },
         ["hub-clean"] = new[] { ("Limpeza", "cleanup"), ("Memória", "memory"), ("Arquivos duplicados", "duplicates") },
         ["hub-fps"] = new[] { ("Gargalos", "bottleneck"), ("Medidor de FPS", "gamefps") },
-        ["hub-pad"] = new[] { ("Calibrar", "padcalib"), ("Informações e latência", "pad-info"), ("Drivers e firmware", "pad-drivers"), ("Perfis por jogo", "pad-profiles") },
     };
 
     /// <summary>Tela de abas que contém a ferramenta (ou null).</summary>

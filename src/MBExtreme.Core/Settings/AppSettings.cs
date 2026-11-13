@@ -14,6 +14,9 @@ public sealed class AppSettings
     /// <summary>Perfis do controle salvos pela pessoa (por tipo de jogo).</summary>
     public List<MBExtreme.Core.Gamepads.PadProfile> PadProfiles { get; set; } = new();
 
+    /// <summary>Nomes que a pessoa deu aos controles (chave: endereço Bluetooth ou número de série).</summary>
+    public Dictionary<string, string> PadNames { get; set; } = new();
+
     /// <summary>Nome do perfil do controle em uso.</summary>
     public string PadActiveProfile { get; set; } = "";
 

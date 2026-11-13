@@ -204,3 +204,25 @@ public class MbControlEmulacaoTests
         Assert.Null(PadMapper.InstanceId("x"));
     }
 }
+
+public class ModoJogoTurboTests
+{
+    [Fact]
+    public void Turbo_so_fecha_janelas_que_podem()
+    {
+        Assert.True(MBExtreme.Core.Games.GameModeRules.CanCloseWindow("chrome", 1, 1, false, true));
+        Assert.False(MBExtreme.Core.Games.GameModeRules.CanCloseWindow("chrome", 1, 1, false, false));        // sem janela
+        Assert.False(MBExtreme.Core.Games.GameModeRules.CanCloseWindow("Discord", 1, 1, false, true));        // protegido
+        Assert.False(MBExtreme.Core.Games.GameModeRules.CanCloseWindow("game", 1, 1, true, true));            // o jogo
+        Assert.False(MBExtreme.Core.Games.GameModeRules.CanCloseWindow("svc", 0, 0, false, true));            // sessão 0
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "chrome" };
+        Assert.False(MBExtreme.Core.Games.GameModeRules.CanCloseWindow("chrome", 1, 1, false, true, keep));    // nunca fechar
+    }
+
+    [Fact]
+    public void Lista_automatica_nao_tem_protegidos()
+    {
+        Assert.All(MBExtreme.Core.Games.GameModeRules.AutoClose, n => Assert.DoesNotContain(n, MBExtreme.Core.Games.GameModeRules.NeverTouch));
+        Assert.Contains("Copilot", MBExtreme.Core.Games.GameModeRules.AutoClose);
+    }
+}

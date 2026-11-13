@@ -15,7 +15,8 @@ public sealed record BoostOptions(
     IReadOnlyList<string> MemoryAllowlist,
     bool Smart = false,
     bool PauseServices = false,
-    IReadOnlyList<string>? NeverClose = null);
+    IReadOnlyList<string>? NeverClose = null,
+    bool CloseOpenWindows = false);
 
 public sealed record BoostReport(IReadOnlyList<string> Closed, string? PowerPlan, bool PriorityRaised, long MemoryFreedBytes,
     int Lowered = 0, IReadOnlyList<string>? ServicesPaused = null)
@@ -104,6 +105,7 @@ public sealed class GameBoostService
         {
             var keep = new HashSet<string>(options.NeverClose ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase) { gameName };
             closed.AddRange(CloseBackground(keep, gameProcessId));
+            if (options.CloseOpenWindows) closed.AddRange(CloseWindows(keep, gameProcessId));
             lowered = LowerBackground(keep, gameProcessId);
         }
         if (options.PauseServices) paused.AddRange(PauseServices());
@@ -181,6 +183,45 @@ public sealed class GameBoostService
                 catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException) { }
                 finally { process.Dispose(); }
             }
+        }
+        return closed;
+    }
+
+    /// <summary>
+    /// Modo Turbo: pede para fechar as outras janelas abertas (navegador, editores, chats que não são de voz...), como se clicasse no X.
+    /// Nada é forçado: quem tiver trabalho sem salvar pergunta e continua aberto.
+    /// </summary>
+    private static List<string> CloseWindows(IReadOnlySet<string> keep, int? gamePid)
+    {
+        int mySession = Process.GetCurrentProcess().SessionId;
+        var asked = new List<(Process P, string Name)>();
+        foreach (var process in Process.GetProcesses())
+        {
+            bool take = false;
+            try
+            {
+                bool gameOrSelf = process.Id == Environment.ProcessId || process.Id == gamePid;
+                if (GameModeRules.CanCloseWindow(process.ProcessName, process.SessionId, mySession, gameOrSelf, process.MainWindowHandle != IntPtr.Zero, keep)
+                    && process.CloseMainWindow())
+                {
+                    asked.Add((process, process.ProcessName));
+                    take = true;
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException) { }
+            finally { if (!take) process.Dispose(); }
+        }
+        var closed = new List<string>();
+        var until = DateTime.UtcNow.AddSeconds(4);
+        foreach (var (p, name) in asked)
+        {
+            try
+            {
+                int left = Math.Max(0, (int)(until - DateTime.UtcNow).TotalMilliseconds);
+                if (p.WaitForExit(left)) closed.Add(name);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception) { }
+            finally { p.Dispose(); }
         }
         return closed;
     }

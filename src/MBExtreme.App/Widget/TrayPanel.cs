@@ -30,7 +30,7 @@ public sealed class TrayPanel : Window
     private static TextBlock Big() => new() { Text = "…", FontSize = 17, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center };
 
     /// <param name="go">Abre uma página do programa (chave, iniciar sozinho).</param>
-    public TrayPanel(Action<string, bool> go, Action openApp)
+    public TrayPanel(Action<string, bool> go, Action openApp, Rect? anchor = null)
     {
         _go = go;
         _openApp = openApp;
@@ -50,8 +50,17 @@ public sealed class TrayPanel : Window
         Loaded += (_, _) =>
         {
             var area = SystemParameters.WorkArea;
-            Left = area.Right - ActualWidth - 12;
-            Top = area.Bottom - ActualHeight - 12;
+            if (anchor is { } a)
+            {
+                // colado à barra flutuante: abre para cima se houver espaço, senão para baixo
+                Left = Math.Clamp(a.Left, area.Left + 8, area.Right - ActualWidth - 8);
+                Top = a.Top - ActualHeight - 8 >= area.Top ? a.Top - ActualHeight - 8 : Math.Min(a.Bottom + 8, area.Bottom - ActualHeight - 8);
+            }
+            else
+            {
+                Left = area.Right - ActualWidth - 12;
+                Top = area.Bottom - ActualHeight - 12;
+            }
             _ = RefreshAsync();
             _timer.Start();
         };
@@ -151,6 +160,22 @@ public sealed class TrayPanel : Window
             if (AppServices.Boost.IsActive) await AppServices.Boost.DeactivateAsync();
             else await AppServices.Boost.ActivateNowAsync();
             _status.Text = AppServices.Boost.IsActive ? AppServices.Boost.LastReport?.Summary ?? "Modo jogo ligado." : "Modo jogo desligado: tudo voltou ao normal.";
+        }));
+        bool turbo = AppServices.Boost.Settings.BoostCloseWindows;
+        _toggles.Children.Add(Toggle("\uE945", turbo ? "Turbo: ligado" : "Modo turbo", turbo, async () =>
+        {
+            // turbo = Modo jogo que também pede para fechar as outras janelas abertas (como o X, sem forçar)
+            AppServices.Boost.Settings.BoostCloseWindows = !AppServices.Boost.Settings.BoostCloseWindows;
+            AppServices.Boost.Settings.Save();
+            if (AppServices.Boost.Settings.BoostCloseWindows)
+            {
+                if (AppServices.Boost.IsActive) await AppServices.Boost.DeactivateAsync();
+                await AppServices.Boost.ActivateNowAsync();
+            }
+            _status.Text = AppServices.Boost.Settings.BoostCloseWindows
+                ? AppServices.Boost.LastReport?.Summary ?? "Modo turbo ligado: o Modo jogo também fecha as outras janelas."
+                : "Modo turbo desligado: o Modo jogo só fecha os ajudantes de fundo.";
+            BuildToggles();
         }));
         _toggles.Children.Add(Toggle("", "Otimizar", false, () => { Close(); _go("tweaks-all", false); return Task.CompletedTask; }));
         _toggles.Children.Add(Toggle("", "Gravar tela", false, () => { Close(); _go("record", false); return Task.CompletedTask; }));

@@ -14,7 +14,13 @@ public static class GameModeRules
         // widgets e celular
         "Widgets", "WidgetService", "PhoneExperienceHost", "YourPhone",
         // sincronização na nuvem (reabrem ao sair do jogo)
-        "OneDrive", "GoogleDriveFS", "Dropbox",
+        "OneDrive", "GoogleDriveFS", "Dropbox", "iCloudDrive", "iCloudServices", "iCloudPhotos",
+        // Adobe e Creative Cloud em segundo plano
+        "Creative Cloud", "CCLibrary", "CoreSync", "AdobeNotificationClient", "AdobeIPCBroker", "AdobeUpdateService",
+        // relatórios de erro e atualizadores extras
+        "GoogleCrashHandler", "GoogleCrashHandler64", "OneDriveStandaloneUpdater", "OfficeC2RClient", "SoftwareUpdate",
+        // assistentes e apps da loja que ficam abertos sem uso
+        "Copilot", "Microsoft.Photos", "PhotosApp", "Cortana", "SkypeApp", "Skype", "ms-teams", "msteams", "Teams",
     };
 
     /// <summary>Programas que reabrimos ao sair do jogo (eram usados antes e só foram pausados).</summary>
@@ -59,6 +65,13 @@ public static class GameModeRules
     /// <summary>Pode abaixar a prioridade deste processo? Só da sessão do usuário, nunca protegidos, nunca o jogo, nunca o próprio programa.</summary>
     public static bool CanDeprioritize(string name, int sessionId, int mySession, bool isGameOrSelf, IReadOnlySet<string>? alsoKeep = null) =>
         !isGameOrSelf && sessionId == mySession && sessionId != 0 && name.Length > 0 && !NeverTouch.Contains(name) && !(alsoKeep?.Contains(name) ?? false);
+
+    /// <summary>
+    /// Modo Turbo: pode pedir para fechar esta janela aberta? Só programas com janela, da sessão do usuário, que não sejam protegidos,
+    /// o jogo, o próprio MB ou da lista "nunca fechar". O pedido é o mesmo do X: o programa pode perguntar se quer salvar.
+    /// </summary>
+    public static bool CanCloseWindow(string name, int sessionId, int mySession, bool isGameOrSelf, bool hasWindow, IReadOnlySet<string>? keep = null) =>
+        hasWindow && CanDeprioritize(name, sessionId, mySession, isGameOrSelf, keep);
 
     /// <summary>Pode fechar este processo da lista automática? Respeita o "nunca fechar" do usuário.</summary>
     public static bool CanAutoClose(string name, IReadOnlySet<string>? keep = null) =>

@@ -57,7 +57,7 @@ internal sealed class BoostController
         // os outros processos dos seus jogos (launcher, ajudantes) também ficam de fora
         var keep = Settings.BoostNeverClose.Concat(Settings.GameProcesses).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var options = new BoostOptions(Settings.BoostCloseApps.ToList(), Settings.BoostSwitchPlan, Settings.BoostCleanMemory, Settings.MemoryAllowlist.ToList(),
-            Settings.BoostSmart, Settings.BoostPauseServices, keep);
+            Settings.BoostSmart || Settings.BoostCloseWindows, Settings.BoostPauseServices, keep, Settings.BoostCloseWindows);
         try
         {
             // powercfg, pedidos para fechar programas e limpeza de RAM levam alguns segundos: fora da thread da interface.

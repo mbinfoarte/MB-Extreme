@@ -27,6 +27,8 @@ public sealed class GameBoostPage : ToolPageBase
         Body.Children.Add(OptionBox("Liberar memória RAM ao ativar", AppServices.Boost.Settings.BoostCleanMemory, v => Save(s => s.BoostCleanMemory = v)));
         Body.Children.Add(OptionBox("Modo inteligente: fechar ajudantes de fundo (atualizadores, widgets, sincronização) e deixar os outros programas em segundo plano",
             AppServices.Boost.Settings.BoostSmart, v => Save(s => s.BoostSmart = v)));
+        Body.Children.Add(OptionBox("Modo Turbo: pedir para fechar também as outras janelas abertas (navegador, editores...). É como clicar no X: quem tiver algo sem salvar pergunta antes",
+            AppServices.Boost.Settings.BoostCloseWindows, v => Save(s => s.BoostCloseWindows = v)));
         Body.Children.Add(OptionBox("Pausar a indexação da pesquisa e os downloads do Windows Update enquanto joga (precisa de administrador)",
             AppServices.Boost.Settings.BoostPauseServices, v => Save(s => s.BoostPauseServices = v)));
         Body.Children.Add(Muted("Nunca são tocados: Windows, antivírus, antitrapaça, lojas de jogos (Steam, Epic, Battle.net...), Discord, Spotify, OBS, drivers e áudio. " +

@@ -78,6 +78,13 @@ public partial class MainWindow : Window
         VersionText.Text = VersionLabel;
         VersionButton.ToolTip = VersionTip;
         Loaded += (_, _) => SetupTrayAndWidget();
+        if (App.StartInTray)
+        {
+            // aberto pelo Windows ao entrar: só a bandeja (e a barra flutuante, se ligada)
+            ShowInTaskbar = false;
+            WindowState = WindowState.Minimized;
+            Loaded += (_, _) => { Hide(); ShowInTaskbar = true; WindowState = WindowState.Normal; };
+        }
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -94,10 +101,13 @@ public partial class MainWindow : Window
     private Widget.TrayPanel? _panel;
 
     /// <summary>Abre (ou fecha) o painel MB ao lado do relógio.</summary>
-    internal void ShowTrayPanel()
+    internal void ShowTrayPanel() => ShowTrayPanel(null);
+
+    /// <summary>Abre o Painel MB; com <paramref name="anchor"/> (a barra flutuante), aparece colado a ela.</summary>
+    internal void ShowTrayPanel(Rect? anchor)
     {
         if (_panel is not null) { _panel.Close(); return; }
-        _panel = new Widget.TrayPanel((key, auto) => { ShowFromTray(); Go(key, auto); }, ShowFromTray);
+        _panel = new Widget.TrayPanel((key, auto) => { ShowFromTray(); Go(key, auto); }, ShowFromTray, anchor);
         _panel.Closed += (_, _) => _panel = null;
         _panel.Show();
         _panel.Activate();

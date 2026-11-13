@@ -19,11 +19,11 @@ public sealed class FloatingWidget : Window
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly TextBlock _ram = Value(), _cpu = Value(), _disk = Value(), _netText = Value();
     private readonly Action _openApp;
-    private readonly Action? _openPanel;
+    private readonly Action<Rect?>? _openPanel;
 
     private static TextBlock Value() => new() { FontSize = 15, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) };
 
-    public FloatingWidget(Action openApp, Action? openPanel = null)
+    public FloatingWidget(Action openApp, Action<Rect?>? openPanel = null)
     {
         _openApp = openApp;
         _openPanel = openPanel;
@@ -68,8 +68,12 @@ public sealed class FloatingWidget : Window
         row.Children.Add(Metric("REDE", _netText));
 
         // botões: abrir o app e esconder o widget
-        if (_openPanel is not null) row.Children.Add(IconButton("\uE7FC", "Painel MB: Modo jogo, temperaturas e atalhos", () => _openPanel()));
-        row.Children.Add(IconButton("", "Abrir o MB Extreme", () => _openApp()));
+        // a seta abre o Painel MB colado à barra (Modo jogo, otimizar, limpeza...); de lá, "Abrir o MB Extreme" abre o programa
+        row.Children.Add(IconButton("\uE740", "Abrir o Painel MB: Modo jogo, otimizar e atalhos", () =>
+        {
+            if (_openPanel is null) { _openApp(); return; }
+            _openPanel(new Rect(Left, Top, ActualWidth, ActualHeight));
+        }));
         row.Children.Add(IconButton("", "Esconder o widget", HideWidget));
 
         return new Border

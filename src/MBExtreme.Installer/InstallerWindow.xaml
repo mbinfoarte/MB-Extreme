@@ -113,6 +113,11 @@
                             <CheckBox x:Name="StartMenuBox" Content="Atalho no menu Iniciar" IsChecked="True" Foreground="{StaticResource TextBrush}" />
                             <CheckBox x:Name="DesktopBox" Content="Atalho na área de trabalho" IsChecked="True" Margin="24,0,0,0" Foreground="{StaticResource TextBrush}" />
                         </StackPanel>
+                        <TextBlock Text="Widgets" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,16,0,0" />
+                        <CheckBox x:Name="TrayBox" IsChecked="True" Margin="0,6,0,0" Foreground="{StaticResource TextBrush}"
+                                  Content="Painel MB na bandeja (ao lado do relógio): Modo jogo, temperaturas e atalhos, abrindo com o Windows" />
+                        <CheckBox x:Name="WidgetBox" IsChecked="True" Margin="0,6,0,0" Foreground="{StaticResource TextBrush}"
+                                  Content="Barra flutuante na área de trabalho: RAM, CPU, disco e rede (a seta abre o Painel MB)" />
                         <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" FontSize="11" Foreground="#7A7A7A"
                                    Text="Pede permissão de administrador. Nada é alterado no Windows até você aplicar ajustes dentro do programa." />
                     </StackPanel>

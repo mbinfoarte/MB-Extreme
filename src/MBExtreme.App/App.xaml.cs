@@ -75,6 +75,8 @@ public partial class App : Application
             }
         }
         PendingAction = action;
+        StartInTray = e.Args.Any(a => a.Equals(MBExtreme.Core.Setup.StartupTask.TrayArgument, StringComparison.OrdinalIgnoreCase));
+        ApplyFirstRunOptions();
         SingleInstance.ListenForOthers(() => Dispatcher.BeginInvoke(new Action(() => (MainWindow as MainWindow)?.ActivateFromOther())));
 
         Accessibility.Install();
@@ -84,6 +86,28 @@ public partial class App : Application
     }
 
     private System.Threading.Mutex? _instance;
+
+    /// <summary>Aberto pelo Windows ao entrar (--tray): fica só na bandeja, sem mostrar a janela.</summary>
+    internal static bool StartInTray { get; private set; }
+
+    /// <summary>Escolhas do instalador (barra flutuante, bandeja com o Windows), aplicadas uma vez.</summary>
+    private static void ApplyFirstRunOptions()
+    {
+        string file = Path.Combine(AppContext.BaseDirectory, MBExtreme.Core.Setup.FirstRunOptions.FileName);
+        try
+        {
+            if (!File.Exists(file)) return;
+            if (MBExtreme.Core.Setup.FirstRunOptions.Parse(File.ReadAllText(file)) is { } o)
+            {
+                AppServices.Settings.WidgetEnabled = o.Widget;
+                AppServices.Settings.StartWithWindows = o.TrayAtStartup;
+                if (o.TrayAtStartup) AppServices.Settings.MinimizeToTray = true;
+                AppServices.Settings.Save();
+            }
+            File.Delete(file);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
 
     /// <summary>Ação pedida ao abrir o programa (feita quando a janela principal estiver pronta).</summary>
     internal static (MBExtreme.Core.Windows.ShellAction Action, string? Path)? PendingAction { get; set; }
@@ -130,6 +154,7 @@ public partial class App : Application
             "Os backups dos valores originais ficam em %AppData%\\MBExtreme.",
             "Desinstalar MB Extreme (Beta 01)", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
+        MBExtreme.Core.Setup.StartupTask.Disable();
 
         if (!InstallInfo.IsSafeInstallDirectory(directory))
         {

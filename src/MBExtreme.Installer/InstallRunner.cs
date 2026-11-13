@@ -6,7 +6,7 @@ using MBExtreme.Core.Setup;
 
 namespace MBExtreme.Installer;
 
-internal sealed record InstallOptions(string Directory, bool DesktopShortcut, bool StartMenuShortcut);
+internal sealed record InstallOptions(string Directory, bool DesktopShortcut, bool StartMenuShortcut, bool Widget = false, bool TrayAtStartup = false);
 
 /// <summary>Copia o aplicativo (pacote embutido) para a pasta escolhida e integra ao Windows.</summary>
 internal static class InstallRunner
@@ -54,6 +54,13 @@ internal static class InstallRunner
         progress.Report((94, "Criando atalhos"));
         if (options.StartMenuShortcut) InstallInfo.CreateShortcut(InstallInfo.StartMenuShortcut, exe, root);
         if (options.DesktopShortcut) InstallInfo.CreateShortcut(InstallInfo.DesktopShortcut, exe, root);
+
+        progress.Report((97, "Aplicando as suas escolhas"));
+        // barra flutuante e Painel MB na bandeja: o programa aplica na primeira abertura
+        try { File.WriteAllText(Path.Combine(root, FirstRunOptions.FileName), new FirstRunOptions(options.Widget, options.TrayAtStartup).ToJson()); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        if (options.TrayAtStartup) StartupTask.Enable(exe);
+        else StartupTask.Disable();
 
         progress.Report((100, "Instalação concluída"));
     }

@@ -48,6 +48,9 @@ public sealed class AppSettings
     /// <summary>Programas (sem .exe) que o Modo Jogo nunca fecha nem coloca em segundo plano.</summary>
     public List<string> BoostNeverClose { get; set; } = new();
 
+    /// <summary>Modo Turbo: no Modo Jogo, pedir para fechar as outras janelas abertas (como o X; nada é forçado).</summary>
+    public bool BoostCloseWindows { get; set; }
+
     // ---- Licenciamento (ver docs/LICENCIAMENTO.md)
     /// <summary>Quando verdadeiro, as páginas do plano Pro exigem licença válida. Desligado no beta aberto.</summary>
     public bool LicenseEnforce { get; set; }
@@ -180,6 +183,9 @@ public sealed class AppSettings
 
     /// <summary>Mostrar o widget flutuante (barrinha com RAM, CPU, disco e rede) na área de trabalho.</summary>
     public bool WidgetEnabled { get; set; }
+
+    /// <summary>Abrir o MB Extreme com o Windows, direto na bandeja.</summary>
+    public bool StartWithWindows { get; set; }
 
     /// <summary>Posição guardada do widget flutuante (-1 = ainda não movido).</summary>
     public double WidgetX { get; set; } = -1;

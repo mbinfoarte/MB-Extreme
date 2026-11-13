@@ -75,7 +75,23 @@ public sealed class AccessibilityPage : ToolPageBase
             SetStatus(widget.IsChecked == true ? "Widget ligado: arraste para onde quiser. Para esconder, clique no X do widget ou aqui." : "Widget escondido.", "OkBrush");
         };
         Body.Children.Add(widget);
-        Body.Children.Add(Muted("O widget fica sempre no topo e mostra o uso em tempo real. Clique no foguete e arraste para mover; o botão de abrir leva ao programa.", 12));
+        var startup = new System.Windows.Controls.CheckBox
+        {
+            Content = "Abrir com o Windows, direto na bandeja (Painel MB e Modo jogo à mão)",
+            IsChecked = AppServices.Settings.StartWithWindows, Foreground = Brush("TextBrush"), Margin = new Thickness(0, 4, 0, 4),
+        };
+        startup.Click += (_, _) =>
+        {
+            bool on = startup.IsChecked == true;
+            bool ok = on ? Environment.ProcessPath is { } exe && MBExtreme.Core.Setup.StartupTask.Enable(exe) : MBExtreme.Core.Setup.StartupTask.Disable() || !MBExtreme.Core.Setup.StartupTask.IsEnabled();
+            if (!ok) { startup.IsChecked = !on; SetStatus("O Windows não deixou mudar a inicialização automática.", "BadBrush"); return; }
+            AppServices.Settings.StartWithWindows = on;
+            if (on) AppServices.Settings.MinimizeToTray = true;
+            AppServices.Settings.Save();
+            SetStatus(on ? "Pronto: o MB Extreme abre com o Windows, só na bandeja." : "O MB Extreme não abre mais sozinho com o Windows.", "OkBrush");
+        };
+        Body.Children.Add(startup);
+        Body.Children.Add(Muted("O widget fica sempre no topo e mostra o uso em tempo real. Clique no foguete e arraste para mover; a seta abre o Painel MB (Modo jogo, otimizar e atalhos) colado à barra.", 12));
         Body.Children.Add(Muted("Um clique no ícone do MB Extreme ao lado do relógio abre o Painel MB (temperaturas, RAM, ping e Modo jogo); dois cliques abrem o programa.", 12));
         var shell = new System.Windows.Controls.CheckBox
         {

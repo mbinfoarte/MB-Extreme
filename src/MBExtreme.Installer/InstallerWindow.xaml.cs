@@ -167,7 +167,7 @@ public partial class InstallerWindow : Window
         PrimaryButton.IsEnabled = false;
         StatusText.Text = "Preparando a instalação";
 
-        var options = new InstallOptions(_directory, DesktopBox.IsChecked == true, StartMenuBox.IsChecked == true);
+        var options = new InstallOptions(_directory, DesktopBox.IsChecked == true, StartMenuBox.IsChecked == true, WidgetBox.IsChecked == true, TrayBox.IsChecked == true);
         var progress = new Progress<(double Percent, string Message)>(p =>
         {
             Bar.Value = p.Percent;

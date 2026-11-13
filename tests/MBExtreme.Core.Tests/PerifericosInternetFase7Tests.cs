@@ -95,7 +95,8 @@ public class PerifericosInternetFase7Tests
         var down = await test.DownloadAsync(3, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(800), new SyncProgress(readings.Add), CancellationToken.None);
         Assert.True(down > 0);
         Assert.NotEmpty(readings);
-        var up = await test.UploadAsync(2, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(500), null, CancellationToken.None);
+        // o envio só conta bytes quando um POST inteiro termina; com a máquina de CI ocupada (testes em paralelo), janela curta pode ficar vazia
+        var up = await test.UploadAsync(2, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(2000), null, CancellationToken.None);
         Assert.True(up > 0);
     }
 

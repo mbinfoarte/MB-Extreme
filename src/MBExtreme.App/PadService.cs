@@ -31,6 +31,12 @@ internal sealed class PadService
     public DateTime LastChange { get; private set; } = DateTime.Now;
     public string Status { get; private set; } = "Procurando controles...";
 
+    /// <summary>Cada leitura nova do controle (na linha de leitura): a emulação usa para mandar ao controle virtual.</summary>
+    public event Action<PadState>? StateRead;
+
+    /// <summary>Slot XInput do controle virtual criado pelo MB (não aparece na lista para não ler a si mesmo).</summary>
+    public int? IgnoreXInputSlot { get; set; }
+
     /// <summary>Algo mudou (lista, controle escolhido ou informações). Chamado fora da linha da tela.</summary>
     public event Action? Changed;
 
@@ -86,6 +92,14 @@ internal sealed class PadService
     public void OutputChanged()
     {
         if (!AppServices.Settings.PadLight.Enabled) _resetLight = true;
+        _outputDirty = true;
+    }
+
+    /// <summary>Vibração pedida pelo jogo (controle virtual): fica ligada até mudar; 0 e 0 desliga.</summary>
+    public void SetRumble(byte strong, byte weak)
+    {
+        if (strong == 0 && weak == 0) { if (_rumble.Until != default) _rumble = (0, 0, DateTime.Now); }
+        else _rumble = (strong, weak, DateTime.Now.AddSeconds(30));
         _outputDirty = true;
     }
 
@@ -151,7 +165,7 @@ internal sealed class PadService
         }
         catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or DllNotFoundException) { }
         for (uint i = 0; i < 4; i++)
-            if (XInput.TryState(i, out _)) list.Add(new PadDevice("xinput" + i, $"Controle Xbox {i + 1}", PadConnection.Unknown, null, null, i));
+            if (AppServices.Pads.IgnoreXInputSlot != (int)i && XInput.TryState(i, out _)) list.Add(new PadDevice("xinput" + i, $"Controle Xbox {i + 1}", PadConnection.Unknown, null, null, i));
         return list;
     }
 
@@ -202,6 +216,7 @@ internal sealed class PadService
         }
         if (!Same(s, State)) LastChange = DateTime.Now;
         State = s;
+        StateRead?.Invoke(s);
     }
 
     private static bool Same(PadState a, PadState b) =>

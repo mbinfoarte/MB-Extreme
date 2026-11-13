@@ -138,3 +138,69 @@ public class MbControlHallTests
         Assert.Contains("Aprovado", html);
     }
 }
+
+public class MbControlEmulacaoTests
+{
+    private static PadState S(PadButtons b = PadButtons.None, double lx = 0, double ly = 0, double l2 = 0) =>
+        PadState.Empty with { Buttons = b, LX = lx, LY = ly, L2 = l2 };
+
+    [Fact]
+    public void Remapeia_e_desliga_botoes()
+    {
+        var e = new EmulationSettings();
+        e.Remap["Cross"] = "Circle";
+        e.Remap["Square"] = "None";
+        var m = PadMapper.Map(S(PadButtons.Cross | PadButtons.Square | PadButtons.L1), e);
+        Assert.Equal(PadButtons.Circle | PadButtons.L1, m.Buttons);
+    }
+
+    [Fact]
+    public void Layout_nintendo_troca_botoes()
+    {
+        var e = new EmulationSettings { NintendoLayout = true };
+        Assert.Equal(PadButtons.Circle, PadMapper.Map(S(PadButtons.Cross), e).Buttons);
+        Assert.Equal(PadButtons.Square, PadMapper.Map(S(PadButtons.Triangle), e).Buttons);
+    }
+
+    [Fact]
+    public void Zona_morta_gatilho_e_troca_de_analogicos()
+    {
+        var e = new EmulationSettings { TriggerDeadzone = 10, SwapSticks = true };
+        e.Left.Deadzone = 10;
+        var m = PadMapper.Map(S(lx: 0.05, l2: 0.05), e);
+        Assert.Equal(0, m.L2);
+        Assert.Equal(0, m.RX);           // o esquerdo (dentro da zona morta) foi para o direito
+        Assert.Equal(1, PadMapper.Trigger(1, 10), 3);
+        e.Left.InvertY = true;
+        e.SwapSticks = false;
+        Assert.True(PadMapper.Map(S(ly: 0.8), e).LY < 0);
+    }
+
+    [Fact]
+    public void Eixos_do_xbox_e_do_ps4()
+    {
+        Assert.Equal(32767, PadMapper.XboxAxis(1));
+        Assert.Equal(-32768, PadMapper.XboxAxis(-1));
+        Assert.Equal(32767, PadMapper.XboxAxis(-1, invert: true));
+        Assert.Equal(128, PadMapper.Ds4Axis(0));
+        Assert.Equal(255, PadMapper.Ds4Axis(1));
+        Assert.Equal(255, PadMapper.TriggerByte(1));
+    }
+
+    [Fact]
+    public void Giroscopio_so_mirando()
+    {
+        var e = new EmulationSettings { GyroAim = true, GyroOnlyWhenAiming = true, GyroSensitivity = 100 };
+        var spin = PadState.Empty with { GyroYaw = -100 };
+        Assert.Equal(0, PadMapper.Map(spin, e).RX);
+        Assert.True(PadMapper.Map(spin with { L2 = 1 }, e).RX > 0);
+    }
+
+    [Fact]
+    public void Instancia_para_o_hidhide()
+    {
+        Assert.Equal(@"HID\VID_054C&PID_0CE6&MI_03\8&1A2B&0&0000",
+            PadMapper.InstanceId(@"\\?\hid#vid_054c&pid_0ce6&mi_03#8&1a2b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}"));
+        Assert.Null(PadMapper.InstanceId("x"));
+    }
+}

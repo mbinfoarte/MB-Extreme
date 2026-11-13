@@ -20,6 +20,9 @@ public sealed class AppSettings
     /// <summary>Luz, gatilhos adaptáveis e luzes do jogador que o MB Control aplica ao controle.</summary>
     public MBExtreme.Core.Gamepads.PadLightSettings PadLight { get; set; } = new();
 
+    /// <summary>Emulação de controle (controle virtual Xbox 360 / PS4).</summary>
+    public MBExtreme.Core.Gamepads.EmulationSettings Emulation { get; set; } = new();
+
     /// <summary>Nome do perfil do controle em uso.</summary>
     public string PadActiveProfile { get; set; } = "";
 

@@ -69,6 +69,9 @@ internal static class AppServices
     /// <summary>MB Control: o controle escolhido, lido o tempo todo enquanto alguma tela do MB Control está aberta.</summary>
     public static PadService Pads { get; } = new();
 
+    /// <summary>MB Control: controle virtual (Xbox 360 / PS4) para os jogos.</summary>
+    public static EmulationService Emulation { get; } = new();
+
     public static LicenseManager License { get; } = new();
 
     public static StudioController Studio { get; } = new();
@@ -110,6 +113,7 @@ internal static class AppServices
     {
         License.Shutdown();
         AutoMemory.Shutdown();
+        Emulation.Stop();
         Studio.Shutdown();
         Hotkeys.Shutdown();
         Fans.Shutdown();

@@ -89,3 +89,25 @@ Arquivos enviados pelo cliente; analisados sem executar nada.
 7. **Extras** — giroscópio para emuladores (DSU), telemetria de corrida, Audio Haptics, perfis da comunidade pelo site.
 
 Teste: cada etapa compila e passa nos testes automáticos aqui; o funcionamento com controle de verdade é conferido pelo cliente no Windows.
+
+## DSX 3.1.2 com controle conectado (imagens do cliente) → Etapa 1
+- Faixa fixa no topo: controle ativo (nome, perfil, MAC, ícone USB/Bluetooth, bateria %, botão desligar controle no Bluetooth).
+- Início: cartão do controle (foto, MAC), dispositivo virtual em 4 botões, ações rápidas (trocar perfil, opções do virtual, predefinições).
+- "Meu controle": renomear o controle; selos (bateria, carregando, ligação, tipo); "Informações do aparelho" com botão Copiar:
+  nome, tipo, ligação (USB/BLUETOOTH), VID:PID, MAC, data e versão do firmware, versão e variação do hardware, tipo de bateria,
+  estado de carga, bateria %, taxa de atualização (Hz) medida, tempo conectado, tempo parado, trava dos gatilhos L2/R2 (Edge),
+  estado dos módulos de analógico (Edge), perfil interno ativo (Edge).
+  "Recursos suportados" com ✓: gatilhos adaptáveis, barra de luz, luzes do jogador, luz do mudo, brilho, touchpad, movimento,
+  vibração clássica (USB e Bluetooth), vibração háptica (só USB).
+- Perfis: importar (arrastar arquivos), pasta dos perfis, criar, buscar; cartões com aplicar, editar, renomear, apagar, mais (duplicar/exportar).
+- Editar perfil: ver entrada FÍSICA ou VIRTUAL no desenho; desenho com botões de trás e FN do Edge; Ações (botão, teclado, atalhos, macros),
+  Zonas mortas, Movimento, Analógicos, Touchpad, aparência do controle na tela + **fundo verde para streamers** (ligar ao Estúdio de live).
+  Atalhos por botão: trocar predefinição de gatilhos, LED, vibração, zonas mortas, touchpad, analógicos, movimento, dispositivo virtual,
+  ações do Windows, mídia, notificações, trocar perfil — no modo Segurar, Alternar ou Trocar. Notificações na tela.
+
+### USB × Bluetooth (o que muda para nós)
+- Leitura: no Bluetooth o DualSense manda o relatório completo só depois de pedido (relatório de calibração) e cada pacote de saída
+  (LED, gatilhos, vibração) leva verificação CRC32; no USB não. O MB precisa tratar os dois caminhos.
+- Vibração háptica (por áudio) só funciona no USB; vibração clássica funciona nos dois.
+- Taxa: USB ~1000 Hz (DualSense), Bluetooth ~250–800 Hz conforme o PC/adaptador; medimos e mostramos nos dois.
+- Desligar o controle pelo PC: só no Bluetooth.

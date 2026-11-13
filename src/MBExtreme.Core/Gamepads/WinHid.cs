@@ -39,6 +39,7 @@ public static class WinHid
     [DllImport("hid.dll", SetLastError = true)] private static extern bool HidD_GetFeature(SafeFileHandle device, byte[] buffer, int length);
     [DllImport("hid.dll", SetLastError = true)] private static extern bool HidD_SetFeature(SafeFileHandle device, byte[] buffer, int length);
     [DllImport("hid.dll", SetLastError = true)] private static extern bool HidD_SetNumInputBuffers(SafeFileHandle device, int count);
+    [DllImport("hid.dll", SetLastError = true)] private static extern bool HidD_GetProductString(SafeFileHandle device, byte[] buffer, int length);
     [DllImport("setupapi.dll", SetLastError = true)] private static extern IntPtr SetupDiGetClassDevs(ref Guid classGuid, IntPtr enumerator, IntPtr parent, int flags);
     [DllImport("setupapi.dll", SetLastError = true)] private static extern bool SetupDiEnumDeviceInterfaces(IntPtr set, IntPtr info, ref Guid guid, int index, ref SP_DEVICE_INTERFACE_DATA data);
     [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr set, ref SP_DEVICE_INTERFACE_DATA data, IntPtr detail, int size, out int required, IntPtr info);
@@ -109,6 +110,65 @@ public static class WinHid
             }
         }
         return list;
+    }
+
+    /// <summary>Todos os controles de jogo HID ligados (qualquer marca): gamepads e joysticks.</summary>
+    public static IReadOnlyList<GameController> FindGameControllers()
+    {
+        var list = new List<GameController>();
+        foreach (string path in DevicePaths())
+        {
+            using var h = Open(path, false, false);
+            if (h.IsInvalid) continue;
+            var attr = new HIDD_ATTRIBUTES { Size = Marshal.SizeOf<HIDD_ATTRIBUTES>() };
+            if (!HidD_GetAttributes(h, ref attr)) continue;
+            if (!HidD_GetPreparsedData(h, out IntPtr pre)) continue;
+            int inputLength;
+            try
+            {
+                var caps = new HIDP_CAPS { Reserved = new ushort[17] };
+                HidP_GetCaps(pre, ref caps);
+                if (caps.UsagePage != 0x01 || caps.Usage is not (0x04 or 0x05)) continue;
+                inputLength = caps.InputReportByteLength;
+            }
+            finally
+            {
+                HidD_FreePreparsedData(pre);
+            }
+            var buffer = new byte[256];
+            string name = HidD_GetProductString(h, buffer, buffer.Length) ? System.Text.Encoding.Unicode.GetString(buffer).TrimEnd('\0').Trim() : "";
+            if (name.Length == 0) name = PadIds.Identify(attr.VendorID, attr.ProductID) is { } model ? PadIds.Name(model) : "Controle de jogo";
+            list.Add(new GameController(name, ControllerCatalog.Brand(attr.VendorID), attr.VendorID, attr.ProductID, ControllerCatalog.ConnectionOf(path), path, inputLength));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Lê os pacotes que o controle manda durante <paramref name="durationMs"/> e devolve o horário de cada um (ms).
+    /// Muitos controles só mandam pacote quando algo muda: mexa o analógico durante a medição.
+    /// </summary>
+    public static IReadOnlyList<double> CaptureReports(string path, int inputLength, int durationMs, CancellationToken token = default)
+    {
+        var times = new List<double>();
+        using var h = Open(path, true, true);
+        if (h.IsInvalid)
+            throw new IOException("Não foi possível ler o controle (outro programa pode estar usando-o com exclusividade).", new Win32Exception(Marshal.GetLastWin32Error()));
+        HidD_SetNumInputBuffers(h, 2);
+        using var stream = new FileStream(h, FileAccess.Read, 0, true);
+        var buffer = new byte[Math.Max(64, inputLength)];
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        while (watch.ElapsedMilliseconds < durationMs && !token.IsCancellationRequested)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            cts.CancelAfter(300);
+            try
+            {
+                int n = stream.ReadAsync(buffer, 0, buffer.Length, cts.Token).GetAwaiter().GetResult();
+                if (n > 0) times.Add(watch.Elapsed.TotalMilliseconds);
+            }
+            catch (OperationCanceledException) { }
+        }
+        return times;
     }
 
     /// <summary>Abre o controle para ler e mandar comandos.</summary>

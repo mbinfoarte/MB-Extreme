@@ -131,12 +131,12 @@ internal static class NavigationMap
         {
             new("hub-hardware", "Hardware", "\uE7F8"),
             new("wallpaper", "Papel de parede", "\uE771"),
-            new("hub-windows", "Windows", "\uE770"),
+            new("win11", "Windows", "\uE770"),
         }),
         new("TESTES", new SideItem[]
         {
             new("bench", "Benchmark", "\uE9D9"),
-            new("padcalib", "Calibrar controle", "\uE7FC"),
+            new("hub-pad", "Calibrar controle", "\uE7FC"),
             new("periphtest", "Periféricos", "\uE765"),
         }),
         new("OTIMIZAR", new SideItem[]
@@ -179,12 +179,12 @@ internal static class NavigationMap
     public static IReadOnlyDictionary<string, (string Title, string Key)[]> Hubs { get; } = new Dictionary<string, (string, string)[]>
     {
         ["programs"] = new[] { ("Instalar", "programs-install"), ("Atualizar", "programs-installed"), ("Desinstalador", "uninstaller"), ("Aplicativos do Windows", "debloat") },
-        ["hub-hardware"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware"), ("Temperaturas e ventoinhas", "fans") },
-        ["hub-windows"] = new[] { ("Windows 11", "win11"), ("Acessibilidade e escala", "a11y") },
-        ["hub-disks"] = new[] { ("Saúde dos discos", "storage"), ("Mapa do disco", "diskmap"), ("Desfragmentar e TRIM", "tweaks-storage"), ("Partições", "diskmgr"), ("Dispositivos", "devices") },
+        ["hub-hardware"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware") },
+        ["hub-disks"] = new[] { ("Saúde, desfragmentar e TRIM", "storage"), ("Mapa do disco", "diskmap") },
         ["hub-startup"] = new[] { ("Programas", "startup"), ("Serviços", "services") },
-        ["hub-clean"] = new[] { ("Limpeza", "cleanup"), ("Memória", "memory"), ("Arquivos duplicados", "duplicates"), ("Arquivos grandes", "largefiles"), ("Limpeza semanal", "weekly") },
-        ["hub-fps"] = new[] { ("Gargalos", "bottleneck"), ("Medidor de FPS", "gamefps"), ("Latência", "latency") },
+        ["hub-clean"] = new[] { ("Limpeza", "cleanup"), ("Memória", "memory"), ("Arquivos duplicados", "duplicates") },
+        ["hub-fps"] = new[] { ("Gargalos", "bottleneck"), ("Medidor de FPS", "gamefps") },
+        ["hub-pad"] = new[] { ("Calibrar", "padcalib"), ("Informações e latência", "pad-info"), ("Drivers e firmware", "pad-drivers"), ("Perfis por jogo", "pad-profiles") },
     };
 
     /// <summary>Tela de abas que contém a ferramenta (ou null).</summary>

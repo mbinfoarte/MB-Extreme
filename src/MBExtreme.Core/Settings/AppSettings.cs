@@ -11,6 +11,12 @@ public sealed class AppSettings
     /// <summary>Programas (sem .exe) que contam como jogo no Modo Jogo.</summary>
     public List<string> GameProcesses { get; set; } = new();
 
+    /// <summary>Perfis do controle salvos pela pessoa (por tipo de jogo).</summary>
+    public List<MBExtreme.Core.Gamepads.PadProfile> PadProfiles { get; set; } = new();
+
+    /// <summary>Nome do perfil do controle em uso.</summary>
+    public string PadActiveProfile { get; set; } = "";
+
     /// <summary>Programas (sem .exe) que o Modo Jogo pede para fechar quando um jogo abre.</summary>
     public List<string> BoostCloseApps { get; set; } = new();
 

@@ -13,6 +13,7 @@ public sealed class StoragePage : ToolPageBase
         "Espaço usado, saúde dos discos e otimização com a ferramenta do Windows (TRIM em SSD, desfragmentação em HD). Temperatura e desgaste dependem do que o disco informa.")
     {
         AddButton("Atualizar", async (_, _) => await RunOnce(LoadAsync), false);
+        AddButton("Ajustes de TRIM e hibernação", (_, _) => MainWindow.Current?.Go("tweaks-storage"), false);
         Loaded += async (_, _) => await RunOnce(LoadAsync);
     }
 

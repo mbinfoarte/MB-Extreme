@@ -103,3 +103,38 @@ public class MbControlDriversTests
         Assert.Equal("opcional", vigem.Single(c => c.Id == "fakerinput").Need);
     }
 }
+
+public class MbControlHallTests
+{
+    private static double[] Edge(double r) => Enumerable.Repeat(r, CircularityMap.Size).ToArray();
+
+    [Fact]
+    public void Hall_aprovado_e_reprovado()
+    {
+        var good = StickModules.Evaluate(StickModule.HallEffect, new StickMeasure(0.01, 0.005, 4), Edge(0.99));
+        Assert.All(good, c => Assert.True(c.Ok, c.Item));
+        var bad = StickModules.Evaluate(StickModule.HallEffect, new StickMeasure(0.04, 0.02, 12), Edge(0.85));
+        Assert.Equal(3, bad.Count(c => !c.Ok));
+        var over = StickModules.Evaluate(StickModule.Tmr, new StickMeasure(0.01, 0, 3), Edge(1.3));
+        Assert.False(over.Single(c => c.Item.StartsWith("Sem passar")).Ok);
+    }
+
+    [Fact]
+    public void Original_tem_limites_mais_folgados()
+    {
+        var m = new StickMeasure(0.024, 0.01, 9.5);
+        Assert.All(StickModules.Evaluate(StickModule.Original, m, Edge(0.94)), c => Assert.True(c.Ok, c.Item));
+        Assert.Contains(StickModules.Evaluate(StickModule.Tmr, m, Edge(0.94)), c => !c.Ok);
+        Assert.True(StickModules.LooksInverted(0.8));
+    }
+
+    [Fact]
+    public void Laudo_mostra_modulo_e_conferencia()
+    {
+        var r = new PadRepair(DateTime.Now, "DualSense", "S1", null, null, "Cliente", null, null, null, null, null, true, null,
+            StickModules.Name(StickModule.HallEffect), new[] { new StickCheck("Centro", true, "0,5%") });
+        string html = PadRepairLog.ReportHtml(r);
+        Assert.Contains("Hall Effect", html);
+        Assert.Contains("Aprovado", html);
+    }
+}

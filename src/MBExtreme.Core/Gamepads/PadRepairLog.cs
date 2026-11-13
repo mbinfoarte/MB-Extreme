@@ -24,7 +24,9 @@ public sealed record PadRepair(
     StickMeasure? LeftAfter,
     StickMeasure? RightAfter,
     bool Saved,
-    string? Notes = null);
+    string? Notes = null,
+    string? Module = null,
+    IReadOnlyList<StickCheck>? Checks = null);
 
 /// <summary>Histórico de atendimentos e cópias de segurança da calibração, em %AppData%\MBExtreme\controles.</summary>
 public sealed class PadRepairLog
@@ -115,6 +117,7 @@ public sealed class PadRepairLog
         sb.Append($"<b>Cliente:</b> {E(r.Client)}{(string.IsNullOrWhiteSpace(r.Contact) ? "" : $" · {E(r.Contact)}")}<br>");
         sb.Append($"<b>Controle:</b> {E(r.Model)} · <b>Série:</b> {E(r.Serial)} · <b>Placa:</b> {E(r.Board)} · <b>Cor:</b> {E(r.Color)}");
         sb.Append("</div>");
+        if (!string.IsNullOrWhiteSpace(r.Module)) sb.Append($"<div class=\"box\"><b>Analógico instalado:</b> {E(r.Module)}</div>");
         sb.Append("<table><tr><th>Analógico</th><th>Drift antes</th><th>Drift depois</th><th>Circularidade antes</th><th>Circularidade depois</th></tr>");
         sb.Append(Row("Esquerdo", r.LeftBefore, r.LeftAfter));
         sb.Append(Row("Direito", r.RightBefore, r.RightAfter));
@@ -122,6 +125,12 @@ public sealed class PadRepairLog
         sb.Append(r.Saved ? "<p class=\"ok\">Calibração gravada na memória do controle (permanente).</p>" : "<p class=\"muted\">A calibração não foi gravada de forma permanente.</p>");
         sb.Append("<p class=\"muted\">Drift: quanto o analógico sai do centro estando solto (até 2,5% é normal; nos jogos, abaixo de 10% costuma não aparecer). ");
         sb.Append("Circularidade: o quanto a borda do movimento se afasta de um círculo perfeito (quanto menor, melhor).</p>");
+        if (r.Checks is { Count: > 0 })
+        {
+            sb.Append("<table><tr><th>Conferência</th><th>Resultado</th><th>Detalhe</th></tr>");
+            foreach (var c in r.Checks) sb.Append($"<tr><td>{E(c.Item)}</td><td>{(c.Ok ? "<span class=\"ok\">Aprovado</span>" : "Revisar")}</td><td>{E(c.Detail)}</td></tr>");
+            sb.Append("</table>");
+        }
         if (!string.IsNullOrWhiteSpace(r.Notes)) sb.Append($"<div class=\"box\"><b>Observações:</b> {E(r.Notes)}</div>");
         sb.Append("</body></html>");
         return sb.ToString();

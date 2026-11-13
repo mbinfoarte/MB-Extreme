@@ -65,6 +65,8 @@ public sealed class PadCalibrationPage : ToolPageBase
     private readonly ProgressBar _r2 = new() { Height = 6, Maximum = 1, Width = 120 };
     private readonly TextBlock _imu = new() { FontSize = 11.5, FontFamily = new FontFamily("Consolas"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 0) };
     private readonly StackPanel _steps = new();
+    private StickModule _module = StickModule.Original;
+    private List<StickCheck> _checks = new();
     private readonly TextBlock _instructionTitle = new() { FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center };
     private readonly TextBlock _instruction = new() { FontSize = 13, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 8, 0, 0) };
     private readonly StackPanel _compare = new() { Margin = new Thickness(0, 12, 0, 0) };
@@ -528,7 +530,9 @@ public sealed class PadCalibrationPage : ToolPageBase
 
             // 4. alcance
             GoStep(3);
-            _instruction.Text = "Gire os dois analógicos até a borda, em círculos completos, devagar, umas 3 voltas cada. Clique em Próximo quando os dois desenhos fecharem.";
+            _instruction.Text = _module == StickModule.Original
+                ? "Gire os dois analógicos até a borda, em círculos completos, devagar, umas 3 voltas cada. Clique em Próximo quando os dois desenhos fecharem."
+                : "Analógico magnético: gire bem devagar, encostando na borda o tempo todo, umas 4 voltas em cada sentido. Assim o controle aprende o alcance total do sensor. Clique em Próximo quando os dois desenhos fecharem.";
             await Task.Run(pad.RangeBegin);
             lock (_gate) { _mapL.Clear(); _mapR.Clear(); _collectMap = true; }
             _statusLine.Text = "Calibrando o alcance: gire os analógicos";
@@ -627,7 +631,19 @@ public sealed class PadCalibrationPage : ToolPageBase
         Cell(2, 0, "Direito"); Cell(2, 1, D(_rb), _rb.DriftPeak > 0.025 ? "WarnBrush" : "MutedBrush"); Cell(2, 2, D(_ra), _ra.DriftPeak > 0.025 ? "WarnBrush" : "OkBrush");
         var card = new Border { Child = grid, Background = Brush("Surface2Brush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8) };
         _compare.Children.Add(card);
-        if (_la.DriftPeak > 0.07 || _ra.DriftPeak > 0.07)
+        _checks = new List<StickCheck>();
+        IReadOnlyList<double> edgeL, edgeR;
+        lock (_gate) { edgeL = _mapL.Values.ToArray(); edgeR = _mapR.Values.ToArray(); }
+        foreach (var c in StickModules.Evaluate(_module, _la, edgeL)) _checks.Add(c with { Item = "Esquerdo · " + c.Item });
+        foreach (var c in StickModules.Evaluate(_module, _ra, edgeR)) _checks.Add(c with { Item = "Direito · " + c.Item });
+        var list = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        list.Children.Add(new TextBlock { Text = "Conferência · " + StickModules.Name(_module), FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        foreach (var c in _checks)
+            list.Children.Add(new TextBlock { Text = (c.Ok ? "✓ " : "✗ ") + c.Item + " — " + c.Detail, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Foreground = Brush(c.Ok ? "OkBrush" : "WarnBrush") });
+        if (_checks.Any(c => !c.Ok) && _module != StickModule.Original)
+            list.Children.Add(Muted("Algum item não passou: confira se o módulo está bem encaixado e se o ímã não está invertido, e refaça a calibração do alcance.", 11));
+        _compare.Children.Add(list);
+        if (_module == StickModule.Original && (_la.DriftPeak > 0.07 || _ra.DriftPeak > 0.07))
             _compare.Children.Add(Muted("O drift continuou alto depois da calibração: o potenciômetro (módulo do analógico) pode estar gasto e precisar de troca.", 11.5));
     }
 
@@ -671,7 +687,8 @@ public sealed class PadCalibrationPage : ToolPageBase
 
     private PadRepair CurrentRepair() => new(DateTime.Now, PadIds.Name(_info?.Model ?? PadModel.DualSense), _info?.Serial, _info?.Board, _info?.Color,
         string.IsNullOrWhiteSpace(_client.Text) ? null : _client.Text.Trim(), string.IsNullOrWhiteSpace(_contact.Text) ? null : _contact.Text.Trim(),
-        _lb, _rb, _la, _ra, _saved, string.IsNullOrWhiteSpace(_notes.Text) ? null : _notes.Text.Trim());
+        _lb, _rb, _la, _ra, _saved, string.IsNullOrWhiteSpace(_notes.Text) ? null : _notes.Text.Trim(),
+        StickModules.Name(_module), _checks.Count > 0 ? _checks : null);
 
     private Border ClientCard()
     {
@@ -699,6 +716,21 @@ public sealed class PadCalibrationPage : ToolPageBase
         };
         grid.Children.Add(report);
         var stack = new StackPanel();
+        var modules = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        modules.Children.Add(new TextBlock { Text = "Analógico instalado:", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        foreach (var m in Enum.GetValues<StickModule>())
+        {
+            var chip = new ToggleButton { Style = (Style)FindResource("ChipToggle"), IsChecked = m == _module, Content = new TextBlock { Text = StickModules.Name(m), FontWeight = FontWeights.SemiBold }, Margin = new Thickness(0, 0, 6, 0) };
+            var value = m;
+            chip.Click += (_, _) =>
+            {
+                _module = value;
+                foreach (var c in modules.Children.OfType<ToggleButton>()) c.IsChecked = ReferenceEquals(c, chip);
+                ShowComparison();
+            };
+            modules.Children.Add(chip);
+        }
+        stack.Children.Add(modules);
         stack.Children.Add(new TextBlock { Text = "ATENDIMENTO", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 0, 0, 6) });
         stack.Children.Add(grid);
         stack.Children.Add(Muted("O laudo mostra o drift e a circularidade antes e depois, e se a calibração foi gravada. Fica em Documentos\\MB Extreme\\Controles.", 11));

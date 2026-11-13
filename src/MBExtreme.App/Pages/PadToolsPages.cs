@@ -34,6 +34,32 @@ internal static class PadUi
         Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0), FontSize = 12.5,
     };
 
+    /// <summary>Barra deslizante do MB Control: nome à esquerda, valor em destaque à direita e a barra minimalista embaixo.</summary>
+    public static Border SliderRow(string label, double min, double max, double value, Func<double, string> format, Action<double> changed, double width = double.NaN)
+    {
+        var valueText = new TextBlock { Text = format(value), FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) };
+        var pill = new Border { Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x24, 0x10)), CornerRadius = new CornerRadius(999), Padding = new Thickness(9, 2, 9, 2), Child = valueText };
+        var slider = new Slider
+        {
+            Minimum = min, Maximum = max, Value = value, IsSnapToTickEnabled = true, TickFrequency = 1,
+            Style = (Style)Application.Current.FindResource("MbSlider"), Margin = new Thickness(0, 6, 0, 0),
+        };
+        System.Windows.Automation.AutomationProperties.SetName(slider, label);
+        slider.ValueChanged += (_, _) => { valueText.Text = format(slider.Value); changed(slider.Value); };
+        var head = new DockPanel();
+        DockPanel.SetDock(pill, Dock.Right);
+        head.Children.Add(pill);
+        head.Children.Add(new TextBlock { Text = label, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center });
+        var st = new StackPanel();
+        st.Children.Add(head);
+        st.Children.Add(slider);
+        return new Border
+        {
+            Background = Res("Surface2Brush"), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 9, 12, 9), Margin = new Thickness(0, 0, 8, 8),
+            Width = width, Child = st,
+        };
+    }
+
     public static TextBlock Muted(string text, double size = 12) => new() { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap, Foreground = Res("MutedBrush") };
 
     public static void Open(string url)
@@ -304,7 +330,7 @@ internal sealed class PadProfilesPage : UserControl
     private readonly Ellipse _raw = new() { Width = 10, Height = 10 };
     private readonly Ellipse _out = new() { Width = 14, Height = 14 };
     private readonly Ellipse _dead = new();
-    private readonly System.Windows.Threading.DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private readonly System.Windows.Threading.DispatcherTimer _timer = new(System.Windows.Threading.DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
     private PadProfile _current = PadProfiles.Defaults[0].Clone();
 
     public PadProfilesPage()
@@ -397,18 +423,8 @@ internal sealed class PadProfilesPage : UserControl
         _notes.Text = _current.Notes;
     }
 
-    private static UIElement Slider(string title, int min, int max, int value, Action<int> set, string unit)
-    {
-        var label = new TextBlock { FontSize = 12.5 };
-        var slider = new Slider { Minimum = min, Maximum = max, Value = value, IsSnapToTickEnabled = true, TickFrequency = 1, Margin = new Thickness(0, 2, 0, 8) };
-        void Show() => label.Text = $"{title}: {(int)slider.Value}{unit}";
-        slider.ValueChanged += (_, _) => { set((int)slider.Value); Show(); };
-        Show();
-        var stack = new StackPanel();
-        stack.Children.Add(label);
-        stack.Children.Add(slider);
-        return stack;
-    }
+    private static UIElement Slider(string title, int min, int max, int value, Action<int> set, string unit) =>
+        PadUi.SliderRow(title, min, max, value, v => $"{v:0}{unit}", v => set((int)v));
 
     private void Tick()
     {

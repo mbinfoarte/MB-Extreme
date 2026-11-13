@@ -124,20 +124,8 @@ internal sealed class MbEmulationPage : MbControlPageBase
         return c;
     }
 
-    private UIElement Slider(string label, int min, int max, Func<int> get, Action<int> set, string unit = "%")
-    {
-        var value = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = PadUi.Res("WarnBrush") };
-        var sl = new Slider { Minimum = min, Maximum = max, Value = get(), IsSnapToTickEnabled = true, TickFrequency = 1, Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
-        value.Text = $"{get()}{unit}";
-        sl.ValueChanged += (_, _) => { set((int)sl.Value); value.Text = $"{(int)sl.Value}{unit}"; Save(); };
-        var head = new StackPanel { Orientation = Orientation.Horizontal };
-        head.Children.Add(new TextBlock { Text = label + "  ", FontSize = 12.5 });
-        head.Children.Add(value);
-        var st = new StackPanel { Margin = new Thickness(0, 0, 24, 8) };
-        st.Children.Add(head);
-        st.Children.Add(sl);
-        return st;
-    }
+    private UIElement Slider(string label, int min, int max, Func<int> get, Action<int> set, string unit = "%") =>
+        PadUi.SliderRow(label, min, max, get(), v => $"{v:0}{unit}", v => { set((int)v); Save(); }, 300);
 
     private UIElement Engine()
     {

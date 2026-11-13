@@ -9,22 +9,53 @@ using MBExtreme.UI.Controls;
 
 namespace MBExtreme.UI.Pages;
 
-/// <summary>Faixa fixa no alto das telas do MB Control: controle ativo, ligação, bateria e taxa medida.</summary>
+/// <summary>
+/// Faixa fixa no alto das telas do MB Control, no estilo da seleção do menu lateral: o controle ativo e, com ícones,
+/// a ligação (USB ou Bluetooth), a bateria e a latência medida.
+/// </summary>
 internal sealed class PadStatusStrip : UserControl
 {
+    private const string Icons = "Segoe MDL2 Assets";
+    private static readonly Brush Yellow = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
     private readonly TextBlock _name = new() { FontSize = 15, FontWeight = FontWeights.Bold };
     private readonly TextBlock _sub = new() { FontSize = 12 };
-    private readonly WrapPanel _chips = new() { VerticalAlignment = VerticalAlignment.Center };
-    private readonly Ellipse _ring = new() { Width = 40, Height = 40, StrokeThickness = 3 };
+    private readonly Border _ring = new() { Width = 46, Height = 46, CornerRadius = new CornerRadius(23), BorderThickness = new Thickness(2.5) };
+    private readonly TextBlock _ringIcon = new() { Text = "\uE7FC", FontFamily = new FontFamily(Icons), FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+    private readonly (TextBlock Icon, TextBlock Value, TextBlock Caption, Border Box) _conn = Stat(), _battery = Stat(), _latency = Stat();
+    private readonly StackPanel _stats = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button _off = PadUi.Button("Desligar");
+
+    private static (TextBlock, TextBlock, TextBlock, Border) Stat()
+    {
+        var icon = new TextBlock { FontFamily = new FontFamily(Icons), FontSize = 18, Foreground = Yellow, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        var value = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.Bold };
+        var caption = new TextBlock { FontSize = 11, Foreground = PadUi.Res("MutedBrush") };
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(value);
+        text.Children.Add(caption);
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(icon);
+        row.Children.Add(text);
+        var box = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x55, 0x00, 0x00, 0x00)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 7, 14, 7), Margin = new Thickness(0, 0, 8, 0), Child = row,
+        };
+        return (icon, value, caption, box);
+    }
 
     public PadStatusStrip()
     {
         _sub.Foreground = PadUi.Res("MutedBrush");
+        _ring.Child = _ringIcon;
         _off.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x8E));
         _off.VerticalAlignment = VerticalAlignment.Center;
         _off.ToolTip = "Desliga o controle (só no Bluetooth). Para religar, aperte o botão PS.";
         _off.Click += (_, _) => TurnOff();
+        _stats.Children.Add(_conn.Box);
+        _stats.Children.Add(_battery.Box);
+        _stats.Children.Add(_latency.Box);
+
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -36,46 +67,69 @@ internal sealed class PadStatusStrip : UserControl
         text.Children.Add(_sub);
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
-        Grid.SetColumn(_chips, 2);
-        grid.Children.Add(_chips);
+        Grid.SetColumn(_stats, 2);
+        grid.Children.Add(_stats);
         Grid.SetColumn(_off, 3);
         grid.Children.Add(_off);
+
+        // mesmo estilo da seleção do menu lateral: vidro escuro com brilho amarelo à esquerda
+        var glass = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        glass.GradientStops.Add(new GradientStop(Color.FromArgb(0x3A, 0xFF, 0xC4, 0x00), 0));
+        glass.GradientStops.Add(new GradientStop(Color.FromArgb(0x10, 0xFF, 0xC4, 0x00), 0.35));
+        glass.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, 0xFF, 0xC4, 0x00), 1));
+        var inner = new Border { Background = glass, CornerRadius = new CornerRadius(16), Padding = new Thickness(14, 10, 14, 10), Child = grid };
         Content = new Border
         {
-            Style = (Style)Application.Current.FindResource("Card"), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 0, 14), Child = grid,
+            Background = PadUi.Res("SurfaceBrush"), BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xC4, 0x00)), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16), Margin = new Thickness(0, 0, 0, 16), Child = inner,
         };
     }
+
+    private static string BatteryGlyph(int level) => level >= 95 ? "\uE83F" : ((char)(0xE850 + Math.Clamp(level / 10, 0, 9))).ToString();
 
     public void Refresh()
     {
         var pads = AppServices.Pads;
         var d = pads.Current;
-        _chips.Children.Clear();
         if (d is null)
         {
-            _ring.Stroke = PadUi.Res("MutedBrush");
+            _ring.BorderBrush = PadUi.Res("MutedBrush");
+            _ringIcon.Foreground = PadUi.Res("MutedBrush");
             _name.Text = "Nenhum controle conectado";
             _sub.Text = pads.Status.Length > 0 ? pads.Status : "Ligue pelo cabo USB ou pareie pelo Bluetooth do Windows.";
+            _stats.Visibility = Visibility.Collapsed;
             _off.Visibility = Visibility.Collapsed;
             return;
         }
         var s = pads.State;
-        _ring.Stroke = PadUi.Res("OkBrush");
+        _stats.Visibility = Visibility.Visible;
+        _ring.BorderBrush = PadUi.Res("OkBrush");
+        _ringIcon.Foreground = Yellow;
         _name.Text = pads.DisplayName(d);
         string profile = AppServices.Settings.PadActiveProfile.Length > 0 ? AppServices.Settings.PadActiveProfile : "Padrão";
-        _sub.Text = $"Perfil: {profile}" + (pads.Info?.BluetoothAddress is { } mac ? " · " + mac : "");
-        _chips.Children.Add(Chip(d.Connection switch { PadConnection.Bluetooth => "Bluetooth", PadConnection.Usb => "Cabo USB", _ => "XInput" }, "#10233A", "#6CB6FF"));
-        if (s.Battery >= 0) _chips.Children.Add(Chip(s.Charging ? $"Bateria {s.Battery}% · carregando" : $"Bateria {s.Battery}%", "#0F2A1F", s.Battery <= 20 ? "#FF5A5F" : "#3DDC97"));
+        _sub.Text = $"Perfil: {profile}" + (pads.Info?.BluetoothAddress is { } mac ? " · " + mac : "") + (AppServices.Emulation.Running ? " · emulação ligada" : "");
+
+        (_conn.Icon.Text, _conn.Value.Text, _conn.Caption.Text) = d.Connection switch
+        {
+            PadConnection.Bluetooth => ("\uE702", "Bluetooth", "Sem fio · conectado"),
+            PadConnection.Usb => ("\uE88E", "Cabo USB", "Com fio · conectado"),
+            _ => ("\uE7FC", "XInput", "Controle Xbox"),
+        };
+        if (s.Battery >= 0)
+        {
+            _battery.Box.Visibility = Visibility.Visible;
+            _battery.Icon.Text = BatteryGlyph(s.Battery);
+            _battery.Icon.Foreground = s.Battery <= 20 && !s.Charging ? PadUi.Res("BadBrush") : PadUi.Res("OkBrush");
+            _battery.Value.Text = $"{s.Battery}%";
+            _battery.Caption.Text = s.Charging ? "Carregando" : s.Cable ? "No cabo" : "Bateria";
+        }
+        else _battery.Box.Visibility = Visibility.Collapsed;
         double hz = pads.RateHz;
-        _chips.Children.Add(Chip(hz > 0 ? $"{hz:0} Hz · {1000 / hz:0.0} ms" : "Parado", "#2A2410", "#FFC400"));
+        _latency.Icon.Text = "\uEC4A";
+        _latency.Value.Text = hz > 0 ? $"{1000 / hz:0.0} ms" : "—";
+        _latency.Caption.Text = hz > 0 ? $"Latência · {hz:0} Hz" : "Latência · mexa o controle";
         _off.Visibility = d.Connection == PadConnection.Bluetooth ? Visibility.Visible : Visibility.Collapsed;
     }
-
-    private static Border Chip(string text, string bg, string fg) => new()
-    {
-        Background = (Brush)new BrushConverter().ConvertFromString(bg)!, CornerRadius = new CornerRadius(999), Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 2, 8, 2),
-        Child = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = (Brush)new BrushConverter().ConvertFromString(fg)! },
-    };
 
     private static void TurnOff()
     {
@@ -90,7 +144,7 @@ internal abstract class MbControlPageBase : UserControl
 {
     protected readonly PadStatusStrip Strip = new();
     protected readonly StackPanel Body = new();
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    private readonly DispatcherTimer _timer = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
     private int _tick;
 
     protected MbControlPageBase(string title, string subtitle)
@@ -104,7 +158,8 @@ internal abstract class MbControlPageBase : UserControl
         _timer.Tick += (_, _) =>
         {
             Live(AppServices.Pads.State);
-            if (_tick++ % 15 == 0) { Strip.Refresh(); Slow(); }
+            if (_tick % 15 == 0) Strip.Refresh();
+            if (_tick++ % 30 == 0) Slow();
         };
         Loaded += (_, _) => { AppServices.Pads.Attach(); _timer.Start(); Strip.Refresh(); Slow(); };
         Unloaded += (_, _) => { _timer.Stop(); AppServices.Pads.Detach(); };
@@ -193,7 +248,10 @@ internal sealed class MbOverviewPage : MbControlPageBase
 
     protected override void Live(PadState s)
     {
-        _pad.Xbox = AppServices.Pads.Current?.XInputSlot is not null;
+        var cur = AppServices.Pads.Current;
+        _pad.Look = cur?.XInputSlot is not null ? PadLook.Xbox : cur?.Sony == PadModel.DualShock4 ? PadLook.DualShock4 : PadLook.DualSense;
+        var light = AppServices.Settings.PadLight;
+        _pad.LightColor = light.Enabled ? Color.FromRgb(light.R, light.G, light.B) : Color.FromRgb(0x2D, 0x6C, 0xFF);
         _pad.Show(s);
         _left.Text = $"X {s.LX:0.00} · Y {-s.LY:0.00}";
         _right.Text = $"X {s.RX:0.00} · Y {-s.RY:0.00}";

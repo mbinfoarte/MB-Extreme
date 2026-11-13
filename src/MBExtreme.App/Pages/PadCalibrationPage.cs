@@ -70,7 +70,7 @@ public sealed class PadCalibrationPage : ToolPageBase
     private readonly TextBlock _instructionTitle = new() { FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center };
     private readonly TextBlock _instruction = new() { FontSize = 13, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 8, 0, 0) };
     private readonly StackPanel _compare = new() { Margin = new Thickness(0, 12, 0, 0) };
-    private readonly DispatcherTimer _ui = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    private readonly DispatcherTimer _ui = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
     private int _step = -1;
 
     private static readonly (string Title, string Detail)[] StepTexts =

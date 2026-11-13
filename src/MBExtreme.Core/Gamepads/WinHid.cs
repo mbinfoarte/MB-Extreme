@@ -208,7 +208,7 @@ public static class WinHid
             if (_handle.IsInvalid)
                 throw new IOException("Não foi possível abrir o controle (outro programa como Steam, DS4Windows ou HidHide pode estar usando-o com exclusividade).",
                     new Win32Exception(Marshal.GetLastWin32Error()));
-            HidD_SetNumInputBuffers(_handle, 64);
+            HidD_SetNumInputBuffers(_handle, 3);   // fila curta: sempre o estado mais novo (fila longa = atraso visível)
             InputLength = pad.InputLength;
             _featureLength = Math.Max(64, (int)pad.FeatureLength);
             _input = new FileStream(_handle, FileAccess.Read, 0, true);

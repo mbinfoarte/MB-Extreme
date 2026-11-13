@@ -20,11 +20,10 @@ internal sealed class MbLightPage : MbControlPageBase
 
     private readonly PadLightSettings _s = AppServices.Settings.PadLight;
     private readonly DispatcherTimer _save = new() { Interval = TimeSpan.FromMilliseconds(600) };
-    private readonly Rectangle _preview = new() { Height = 26, RadiusX = 13, RadiusY = 13, Margin = new Thickness(0, 4, 0, 10) };
+    private readonly Rectangle _preview = new() { Height = 10, RadiusX = 5, RadiusY = 5, Margin = new Thickness(0, 2, 0, 14) };
     private readonly TextBox _hex = new() { Width = 90, FontSize = 13, Margin = new Thickness(8, 0, 0, 0), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly TextBlock _ds4Note = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
-    private Slider? _rS, _gS, _bS;
-    private bool _syncing;
+    private readonly MBExtreme.UI.Controls.ColorPicker _picker = new();
     private DateTime _t0 = DateTime.Now;
 
     public MbLightPage() : base("Luz, gatilhos e vibração", "Escolha a cor e o efeito da barra de luz, as luzes do jogador, a luz do mudo e a resistência dos gatilhos adaptáveis. Vale pelo cabo USB e pelo Bluetooth.")
@@ -61,21 +60,23 @@ internal sealed class MbLightPage : MbControlPageBase
 
     private static UIElement Labeled(string label, Slider slider, Func<double, string> format)
     {
-        var value = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = PadUi.Res("WarnBrush") };
-        value.Text = format(slider.Value);
-        slider.ValueChanged += (_, _) => value.Text = format(slider.Value);
+        var valueText = new TextBlock { Text = format(slider.Value), FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) };
+        slider.ValueChanged += (_, _) => valueText.Text = format(slider.Value);
+        var pill = new Border { Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x24, 0x10)), CornerRadius = new CornerRadius(999), Padding = new Thickness(9, 2, 9, 2), Child = valueText };
         var head = new DockPanel();
-        DockPanel.SetDock(value, Dock.Right);
-        head.Children.Add(value);
-        head.Children.Add(new TextBlock { Text = label, FontSize = 12.5 });
-        var st = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        DockPanel.SetDock(pill, Dock.Right);
+        head.Children.Add(pill);
+        head.Children.Add(new TextBlock { Text = label, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center });
+        slider.Margin = new Thickness(0, 6, 0, 0);
+        System.Windows.Automation.AutomationProperties.SetName(slider, label);
+        var st = new StackPanel();
         st.Children.Add(head);
         st.Children.Add(slider);
-        return st;
+        return new Border { Background = PadUi.Res("Surface2Brush"), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 9, 12, 9), Margin = new Thickness(0, 0, 0, 8), Child = st };
     }
 
     private static Slider NewSlider(double min, double max, double value) =>
-        new() { Minimum = min, Maximum = max, Value = value, IsSnapToTickEnabled = true, TickFrequency = 1 };
+        new() { Minimum = min, Maximum = max, Value = value, IsSnapToTickEnabled = true, TickFrequency = 1, Style = (Style)Application.Current.FindResource("MbSlider") };
 
     private WrapPanel Chips<T>(IEnumerable<(T Value, string Label)> options, Func<T> get, Action<T> set) where T : struct
     {
@@ -117,20 +118,19 @@ internal sealed class MbLightPage : MbControlPageBase
         var speed = NewSlider(1, 100, _s.Speed);
         speed.ValueChanged += (_, _) => { _s.Speed = (int)speed.Value; Changed(); };
         left.Children.Add(Labeled("Velocidade do efeito", speed, v => $"{v:0}"));
-        _rS = NewSlider(0, 255, _s.R); _gS = NewSlider(0, 255, _s.G); _bS = NewSlider(0, 255, _s.B);
-        foreach (var sl in new[] { _rS, _gS, _bS }) sl.ValueChanged += (_, _) => { if (_syncing) return; _s.R = (byte)_rS.Value; _s.G = (byte)_gS.Value; _s.B = (byte)_bS.Value; ShowColor(); Changed(); };
-        left.Children.Add(Labeled("Vermelho", _rS, v => $"{v:0}"));
-        left.Children.Add(Labeled("Verde", _gS, v => $"{v:0}"));
-        left.Children.Add(Labeled("Azul", _bS, v => $"{v:0}"));
         cols.Children.Add(left);
 
         var right = new StackPanel();
+        _picker.SetColor(Color.FromRgb(_s.R, _s.G, _s.B));
+        _picker.ColorChanged += c => { _s.R = c.R; _s.G = c.G; _s.B = c.B; ShowColor(); Changed(); };
+        right.Children.Add(_picker);
+        right.Children.Add(new Border { Height = 12 });
         right.Children.Add(new TextBlock { Text = "Cores prontas", FontSize = 12.5, Margin = new Thickness(0, 0, 0, 6) });
         var swatches = new WrapPanel();
         foreach (string hex in Palette)
         {
             var color = (Color)ColorConverter.ConvertFromString(hex);
-            var b = new Button { Width = 30, Height = 30, Margin = new Thickness(0, 0, 8, 8), Background = new SolidColorBrush(color), BorderBrush = PadUi.Res("BorderBrush"), ToolTip = hex, Cursor = System.Windows.Input.Cursors.Hand };
+            var b = new Button { Width = 26, Height = 26, Margin = new Thickness(0, 0, 8, 8), Background = new SolidColorBrush(color), ToolTip = hex, Cursor = System.Windows.Input.Cursors.Hand, Template = RoundSwatch() };
             System.Windows.Automation.AutomationProperties.SetName(b, "Cor " + hex);
             b.Click += (_, _) => SetColor(color);
             swatches.Children.Add(b);
@@ -154,6 +154,17 @@ internal sealed class MbLightPage : MbControlPageBase
         return st;
     }
 
+    private static ControlTemplate RoundSwatch()
+    {
+        var t = new ControlTemplate(typeof(Button));
+        var e = new FrameworkElementFactory(typeof(Ellipse));
+        e.SetValue(Shape.FillProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        e.SetValue(Shape.StrokeProperty, new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)));
+        e.SetValue(Shape.StrokeThicknessProperty, 1.5);
+        t.VisualTree = e;
+        return t;
+    }
+
     private void ApplyHex()
     {
         try { SetColor((Color)ColorConverter.ConvertFromString(_hex.Text.Trim().StartsWith('#') ? _hex.Text.Trim() : "#" + _hex.Text.Trim())); }
@@ -163,9 +174,7 @@ internal sealed class MbLightPage : MbControlPageBase
     private void SetColor(Color c)
     {
         _s.R = c.R; _s.G = c.G; _s.B = c.B;
-        _syncing = true;
-        if (_rS is not null) { _rS.Value = c.R; _gS!.Value = c.G; _bS!.Value = c.B; }
-        _syncing = false;
+        _picker.SetColor(c);
         ShowColor();
         Changed();
     }

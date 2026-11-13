@@ -235,9 +235,20 @@ public partial class MainWindow : Window
         if (sideKey is not null) RevealInMenu(sideKey);
         _suppressNav = false;
 
-        ShowPage(key);
+        // ferramenta que fica numa tela de abas: abre a tela e escolhe a aba
+        UserControl? inner = null;
+        if (NavigationMap.HubOf(key) is { } hub && !NavigationMap.Hubs.ContainsKey(key))
+        {
+            ShowPage(hub);
+            if (_inner.TryGetValue(hub, out var hubPage) && hubPage is TabsPage tabs) inner = tabs.Select(key);
+        }
+        else
+        {
+            ShowPage(key);
+            _inner.TryGetValue(key, out inner);
+        }
 
-        if (autoStart && _inner.TryGetValue(key, out var inner))
+        if (autoStart && inner is not null)
         {
             if (inner is CleanupPage cleanup) cleanup.StartScan();
             else if (inner is DiagnosticPage diagnose) _ = deep ? diagnose.StartDeepAsync() : diagnose.StartAsync();
@@ -430,7 +441,8 @@ public partial class MainWindow : Window
 
     /// <summary>Nome de uma tela para o botão Voltar.</summary>
     internal static string LabelOf(string key) =>
-        key == "home" ? "Painel" : key == "alltools" ? "Todas as ferramentas" : NavigationMap.Modules.FirstOrDefault(m => m.Key == key)?.Title ?? NavigationMap.TileOf(key)?.Title ?? "Voltar";
+        key == "home" ? "Painel" : key == "alltools" ? "Todas as ferramentas" : NavigationMap.Modules.FirstOrDefault(m => m.Key == key)?.Title ?? NavigationMap.TileOf(key)?.Title
+            ?? NavigationMap.Sidebar.SelectMany(s => s.Items).FirstOrDefault(i => i.Key == key)?.Title ?? "Voltar";
 
     /// <summary>Volta para a tela de onde o usuário veio (o Início, se ele chegou por lá; senão, o módulo da página).</summary>
     /// <summary>Monta a página de novo (ex.: depois de carregar um perfil do Estúdio) e mostra uma mensagem nela.</summary>
@@ -561,7 +573,11 @@ public partial class MainWindow : Window
         return tile is null || owner is null ? inner : new SubPageHost(owner, tile, inner, k => Go(k));
     }
 
-    private static UserControl CreateInner(string key, Tile? tile) => key switch
+    /// <summary>Tela de abas (Limpeza, Dispositivos e discos...): cada aba é a ferramenta de sempre.</summary>
+    private static TabsPage CreateHub(string key) => new(key == "hub-clean" ? TurboStrip.Build() : null,
+        NavigationMap.Hubs[key].Select(t => (t.Title, t.Key, (Func<UserControl>)(() => CreateInner(t.Key, NavigationMap.TileOf(t.Key))))).ToArray());
+
+    private static UserControl CreateInner(string key, Tile? tile) => NavigationMap.Hubs.ContainsKey(key) ? CreateHub(key) : key switch
     {
         "cleanup" => new CleanupPage(),
         "memory" => new MemoryPage(),
@@ -581,10 +597,10 @@ public partial class MainWindow : Window
         "gamesettings" => new GameSettingsPage(),
         "software" => new SoftwareHubPage(),
         "drivers" => new DriversPage(),
-        "programs" => new TabsPage(("Instalar programas", "programs", () => new InstallAppsPage()),
-                                   ("Atualizar e instalados", "programs-installed", () => new ProgramsPage())),
-        "uninstaller" => new TabsPage(("Programas instalados", "programs-installed", () => new ProgramsPage(startWithInventory: true)),
-                                      ("Aplicativos do Windows (bloatware)", "debloat", () => new DebloatPage())),
+        "programs-install" => new InstallAppsPage(),
+        "programs-installed" => new ProgramsPage(),
+        "uninstaller" => new ProgramsPage(startWithInventory: true),
+        "services" => new ServicesPage(),
         "win11" => new Win11Page(),
         "diskmap" => new DiskMapPage(),
         "restorepoints" => new RestorePointsPage(),

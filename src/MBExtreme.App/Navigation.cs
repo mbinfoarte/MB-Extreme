@@ -129,56 +129,72 @@ internal static class NavigationMap
         }),
         new("MEU PC", new SideItem[]
         {
-            new("sysinfo", "Meu PC", "\uE7F8"),
-            new("storage", "Saúde dos discos", "\uEDA2"),
-            new("win11", "Windows 11", "\uE770"),
-            new("drivers", "Drivers", "\uE964"),
+            new("hub-hardware", "Hardware", "\uE7F8"),
             new("wallpaper", "Papel de parede", "\uE771"),
-            new("speedtest", "Rede", "\uE774"),
+            new("hub-windows", "Windows", "\uE770"),
         }),
         new("TESTES", new SideItem[]
         {
             new("bench", "Benchmark", "\uE9D9"),
-            new("periphtest", "Periféricos", "\uE765"),
             new("padcalib", "Calibrar controle", "\uE7FC"),
+            new("periphtest", "Periféricos", "\uE765"),
         }),
         new("OTIMIZAR", new SideItem[]
         {
-            new("cleanup", "Limpeza", "\uE74D"),
-            new("diskmap", "Mapa do disco", "\uE8B7"),
-            new("duplicates", "Arquivos duplicados", "\uE8C8"),
+            new("hub-disks", "Dispositivos e discos", "\uEDA2"),
+            new("drivers", "Drivers", "\uE964"),
+            new("hub-startup", "Inicialização", "\uE7E8"),
+            new("hub-clean", "Limpeza", "\uE74D"),
             new("tweaks-all", "Otimizações", "\uE945"),
-            new("uninstaller", "Desinstalador", "\uE8BB"),
-            new("startup", "Inicialização", "\uE7E8"),
-            new("memory", "Memória", "\uE950"),
+            new("speedtest", "Rede", "\uE774"),
+            new("repair", "Reparo do Windows", "\uE90F"),
         }),
         new("JOGOS E ESTÚDIO", new SideItem[]
         {
             new("gamelibrary", "Biblioteca de jogos", "\uE7FC"),
-            new("bottleneck", "Gargalos", "\uE9D9"),
+            new("hub-fps", "Gargalos e FPS", "\uE9D9"),
             new("record", "Gravação e live", "\uE714"),
             new("shorts", "Vídeos curtos", "\uE8B2"),
         }),
         new("SEGURANÇA", new SideItem[]
         {
-            new("repair", "Reparar o Windows", "\uE90F"),
-            new("restorepoints", "Pontos de restauração", "\uE81C"),
-            new("undo", "Central Desfazer", "\uE7A7"),
             new("formatbackup", "Backup para formatar", "\uE74E"),
+            new("undo", "Central Desfazer", "\uE7A7"),
+            new("restorepoints", "Pontos de restauração", "\uE81C"),
             new("security", "Proteção do Windows", "\uE72E"),
         }),
         new("MB INFOARTE", new SideItem[]
         {
             new("social", "Nossas redes", "\uE716"),
+            new("about", "Sobre", "\uE946"),
             new("suggest", "Sugestões", "\uE8BD"),
             new("support", "Suporte", "\uE8F2"),
-            new("about", "Sobre", "\uE946"),
         }),
     };
 
+    /// <summary>
+    /// Telas que juntam várias ferramentas em abas (chave da tela → abas em ordem). Abrir uma ferramenta que está numa delas
+    /// (pelo Painel, pela busca, por um atalho) abre a tela com a aba certa e destaca o item no menu.
+    /// </summary>
+    public static IReadOnlyDictionary<string, (string Title, string Key)[]> Hubs { get; } = new Dictionary<string, (string, string)[]>
+    {
+        ["programs"] = new[] { ("Instalar", "programs-install"), ("Atualizar", "programs-installed"), ("Desinstalador", "uninstaller"), ("Aplicativos do Windows", "debloat") },
+        ["hub-hardware"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware"), ("Temperaturas e ventoinhas", "fans") },
+        ["hub-windows"] = new[] { ("Windows 11", "win11"), ("Acessibilidade e escala", "a11y") },
+        ["hub-disks"] = new[] { ("Saúde dos discos", "storage"), ("Mapa do disco", "diskmap"), ("Desfragmentar e TRIM", "tweaks-storage"), ("Partições", "diskmgr"), ("Dispositivos", "devices") },
+        ["hub-startup"] = new[] { ("Programas", "startup"), ("Serviços", "services") },
+        ["hub-clean"] = new[] { ("Limpeza", "cleanup"), ("Memória", "memory"), ("Arquivos duplicados", "duplicates"), ("Arquivos grandes", "largefiles"), ("Limpeza semanal", "weekly") },
+        ["hub-fps"] = new[] { ("Gargalos", "bottleneck"), ("Medidor de FPS", "gamefps"), ("Latência", "latency") },
+    };
+
+    /// <summary>Tela de abas que contém a ferramenta (ou null).</summary>
+    public static string? HubOf(string pageKey) =>
+        Hubs.FirstOrDefault(h => h.Value.Any(t => t.Key == pageKey)).Key;
+
     /// <summary>Tela de atalho do menu lateral que representa a página (a própria ou nenhuma).</summary>
     public static string? SideKeyOf(string pageKey) =>
-        Sidebar.SelectMany(s => s.Items).Any(i => i.Key == pageKey) ? pageKey : null;
+        Sidebar.SelectMany(s => s.Items).Any(i => i.Key == pageKey) ? pageKey
+        : HubOf(pageKey) is { } hub && Sidebar.SelectMany(s => s.Items).Any(i => i.Key == hub) ? hub : null;
 
     /// <summary>
     /// Busca do menu: acha qualquer ferramenta pelo nome, pela descrição ou pelo grupo, sem ligar para acentos e maiúsculas.

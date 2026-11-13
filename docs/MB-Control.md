@@ -64,3 +64,28 @@ Arquivos enviados pelo cliente; analisados sem executar nada.
 - Fase 2 pode ter dois motores: ViGEmBus (Xbox 360/DS4, simples) e, se a licença do VIIPER permitir, VIIPER+USBIP (DualSense virtual de verdade).
 - Teclado e mouse → controle e controle → teclado/mouse: SendInput primeiro; FakerInput opcional para jogos que ignoram SendInput.
 - Giroscópio: suavização One Euro (algoritmo público) e DSU para emuladores.
+
+## DS4Windows Nexus — telas de instalação e uso (imagens do cliente)
+- Assistente em 3 passos: (1) boas-vindas; (2) "Verificar o PC": runtime, saída virtual VIIPER (do autor Alia5, baixado da última
+  versão estável no GitHub com verificação) + usbip-win2 0.9.8.1, HidHide (evitar comando duplicado, opcional), FakerInput
+  (teclado/mouse, opcional), opções de reparo, "continuar em modo limitado"; (3) "Conectar e testar": USB (cabo de dados; micro-USB
+  no DS4, USB-C no DualSense), Bluetooth (PS+Share no DS4, PS+Create no DualSense até piscar), abrir Bluetooth do Windows, teste final.
+- Menu: Seus controles · Visão geral · Controles · Audio Haptics (som do jogo vira vibração háptica) · Trigger Lab (laboratório de
+  gatilhos) · Perfis · Perfis automáticos · Slots de saída · Configurações · Log · link para testador de controle; busca de
+  configurações (Ctrl+K); "Solucionar conexão".
+- Saída virtual suportada: Xbox 360, DualShock 4, DualSense e DualSense Edge (via VIIPER/USB-IP).
+
+## Plano de construção (ordem)
+1. **Base do MB Control (sem driver)** — renomear o módulo para MB Control; camada única de leitura (HID Sony, XInput,
+   Windows.Gaming.Input); lista de controles com bateria e ligação; desenho do controle ao vivo; ajuda de conexão USB/Bluetooth.
+2. **Calibrador profissional** — teste de botões, drift, zona morta, circularidade; modo Hall Effect/TMR; gravação permanente na
+   memória; backup; relatório para o cliente.
+3. **Luz, gatilhos e vibração** — predefinições de LED e modos; luzes do jogador e do mudo; Laboratório de gatilhos; teste de vibração.
+4. **Assistente de drivers (3 passos, visual nosso)** — verifica e instala ViGEmBus / VIIPER+usbip-win2, HidHide, FakerInput; estado
+   e reparo; modo limitado.
+5. **Motor de emulação** — controle virtual Xbox 360/DS4 (ViGEmBus) e DualSense (VIIPER, se a licença permitir); HidHide automático;
+   mapeamento, zonas mortas, curvas, giroscópio, touchpad; slots de saída; repasse de vibração/gatilhos/LED; perfis automáticos.
+6. **Teclado e mouse → controle** — com aviso sobre jogos online com mira assistida.
+7. **Extras** — giroscópio para emuladores (DSU), telemetria de corrida, Audio Haptics, perfis da comunidade pelo site.
+
+Teste: cada etapa compila e passa nos testes automáticos aqui; o funcionamento com controle de verdade é conferido pelo cliente no Windows.

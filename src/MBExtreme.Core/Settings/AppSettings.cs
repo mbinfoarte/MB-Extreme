@@ -17,6 +17,9 @@ public sealed class AppSettings
     /// <summary>Nomes que a pessoa deu aos controles (chave: endereço Bluetooth ou número de série).</summary>
     public Dictionary<string, string> PadNames { get; set; } = new();
 
+    /// <summary>Luz, gatilhos adaptáveis e luzes do jogador que o MB Control aplica ao controle.</summary>
+    public MBExtreme.Core.Gamepads.PadLightSettings PadLight { get; set; } = new();
+
     /// <summary>Nome do perfil do controle em uso.</summary>
     public string PadActiveProfile { get; set; } = "";
 

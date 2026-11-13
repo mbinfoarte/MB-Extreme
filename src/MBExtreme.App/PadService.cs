@@ -77,6 +77,64 @@ internal sealed class PadService
         _reopen = true;
     }
 
+    private volatile bool _outputDirty = true;
+    private volatile bool _resetLight;
+    private (byte Strong, byte Weak, DateTime Until) _rumble;
+    private byte _sequence;
+
+    /// <summary>A luz/gatilhos mudaram: manda de novo para o controle.</summary>
+    public void OutputChanged()
+    {
+        if (!AppServices.Settings.PadLight.Enabled) _resetLight = true;
+        _outputDirty = true;
+    }
+
+    /// <summary>Testa a vibração por <paramref name="ms"/> milissegundos (0-255 em cada motor).</summary>
+    public void Rumble(byte strong, byte weak, int ms)
+    {
+        _rumble = (strong, weak, DateTime.Now.AddMilliseconds(ms));
+        _outputDirty = true;
+    }
+
+    private DateTime _lastSend;
+
+    private void SendOutput(PadDevice d, FileStream? writer, int length)
+    {
+        if (writer is null || d.Sony is not { } model) return;
+        var light = AppServices.Settings.PadLight;
+        var now = DateTime.Now;
+        bool rumbling = now < _rumble.Until;
+        bool rumbleEnded = !rumbling && _rumble.Until != default;
+        bool animated = light.Enabled && light.Mode != LightMode.Static;
+        if (!_outputDirty && !rumbling && !rumbleEnded && !_resetLight && !(animated && (now - _lastSend).TotalMilliseconds >= 33)) return;
+        if (!light.Enabled && !rumbling && !rumbleEnded && !_resetLight) { _outputDirty = false; return; }
+        if ((now - _lastSend).TotalMilliseconds < 15) return;
+
+        PadOutputFrame frame;
+        if (light.Enabled)
+        {
+            var (r, g, b) = PadOutput.LightColor(light, _clock.Elapsed.TotalMilliseconds, State.Battery);
+            frame = new PadOutputFrame(r, g, b, PadOutput.PlayerMask(light.PlayerLeds), light.PlayerBrightness, light.Mute, light.Left, light.Right,
+                rumbling ? _rumble.Strong : (byte)0, rumbling ? _rumble.Weak : (byte)0);
+        }
+        else
+        {
+            // sem personalização: azul padrão, jogador 1, gatilhos livres (só a vibração de teste, se houver)
+            frame = new PadOutputFrame(0, 0, 64, PadOutput.PlayerMask(1), 0, MuteLed.Off, new TriggerEffect(), new TriggerEffect(),
+                rumbling ? _rumble.Strong : (byte)0, rumbling ? _rumble.Weak : (byte)0);
+        }
+        bool bt = d.Connection == PadConnection.Bluetooth;
+        byte[] report = model == PadModel.DualShock4 ? PadOutput.DualShock4(frame, bt) : PadOutput.DualSense(frame, bt, _sequence++);
+        var buffer = new byte[Math.Max(report.Length, length)];
+        report.CopyTo(buffer, 0);
+        try { writer.Write(buffer, 0, buffer.Length); }
+        catch (IOException) { }
+        _lastSend = now;
+        _outputDirty = false;
+        _resetLight = false;
+        if (rumbleEnded) _rumble = default;
+    }
+
     private volatile string? _wanted;
     private volatile bool _reopen;
 
@@ -153,6 +211,8 @@ internal sealed class PadService
     private void ReadSony(PadDevice d, CancellationToken token)
     {
         using var hid = WinHid.OpenPad(d.Hid!);
+        using var writer = WinHid.OpenOutput(d.Hid!.Path, out int outLength);
+        _outputDirty = true;
         // no Bluetooth o controle só manda o relatório completo (com sensores e bateria) depois deste pedido
         try { hid.GetFeature(d.Sony == PadModel.DualShock4 ? (byte)0x02 : (byte)0x05); }
         catch (IOException) { }
@@ -164,10 +224,11 @@ internal sealed class PadService
         int misses = 0;
         while (!token.IsCancellationRequested && !_reopen)
         {
-            var report = hid.ReadInput(250);
+            SendOutput(d, writer, outLength);
+            var report = hid.ReadInput(100);
             if (report is null)
             {
-                if (++misses > 12) return;   // sumiu (desligou ou tirou o cabo): procura de novo
+                if (++misses > 30) return;   // sumiu (desligou ou tirou o cabo): procura de novo
                 continue;
             }
             misses = 0;

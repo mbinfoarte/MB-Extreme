@@ -171,6 +171,25 @@ public static class WinHid
         return times;
     }
 
+    /// <summary>Abre um canal só de escrita para os pacotes de saída (luz, gatilhos, vibração). Devolve null se não der.</summary>
+    public static FileStream? OpenOutput(string path, out int outputLength)
+    {
+        outputLength = 0;
+        var h = Open(path, true, false);
+        if (h.IsInvalid) { h.Dispose(); return null; }
+        if (HidD_GetPreparsedData(h, out IntPtr pre))
+        {
+            try
+            {
+                var caps = new HIDP_CAPS { Reserved = new ushort[17] };
+                HidP_GetCaps(pre, ref caps);
+                outputLength = caps.OutputReportByteLength;
+            }
+            finally { HidD_FreePreparsedData(pre); }
+        }
+        return new FileStream(h, FileAccess.Write, 0, false);
+    }
+
     /// <summary>Abre o controle para ler e mandar comandos.</summary>
     public static IHidChannel OpenPad(HidPadInfo pad) => new Channel(pad);
 

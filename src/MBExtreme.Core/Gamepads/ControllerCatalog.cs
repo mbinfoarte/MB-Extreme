@@ -113,7 +113,7 @@ public sealed record PollingStats(int Reports, double RateHz, double AverageMs, 
 }
 
 /// <summary>Curva de resposta do analógico.</summary>
-public enum StickCurve { Linear, Suave, Agressiva }
+public enum StickCurve { Linear, Suave, Agressiva, Personalizada }
 
 /// <summary>Perfil do controle por tipo de jogo (valores em porcentagem).</summary>
 public sealed class PadProfile
@@ -156,7 +156,7 @@ public static class PadProfiles
         double dz = Math.Clamp(p.Deadzone, 0, 50) / 100.0;
         if (r <= dz) return (0, 0);
         double t = Math.Min(1, (r - dz) / (1 - dz));             // 0..1 depois da zona morta
-        t = p.Curve switch { StickCurve.Suave => t * t, StickCurve.Agressiva => Math.Sqrt(t), _ => t };
+        t = p.Curve switch { StickCurve.Suave => t * t, StickCurve.Agressiva => Math.Sqrt(t), _ => t };   // Personalizada só existe nos ajustes finos
         double anti = Math.Clamp(p.AntiDeadzone, 0, 40) / 100.0;
         t = anti + (1 - anti) * t;
         t = Math.Min(1, t * Math.Clamp(p.Sensitivity, 10, 200) / 100.0);

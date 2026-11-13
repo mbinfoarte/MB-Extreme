@@ -622,6 +622,7 @@ public partial class MainWindow : Window
         "mbc-emu" => new MbEmulationPage(),
         "mbc-kbm" => new MbKbmPage(),
         "mbc-light" => new MbLightPage(),
+        "mbc-tune" => new MbTunePage(),
         "pad-info" => new PadInfoPage(),
         "pad-drivers" => new PadDriversPage(),
         "pad-profiles" => new PadProfilesPage(),

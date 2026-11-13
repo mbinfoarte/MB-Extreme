@@ -134,6 +134,7 @@ internal static class NavigationMap
             new("mbc-emu", "Emulação de controle", "\uE8AB"),
             new("mbc-kbm", "Teclado e mouse", "\uE765"),
             new("mbc-light", "Luz, gatilhos e vibração", "\uE781"),
+            new("mbc-tune", "Ajustes finos", "\uE9E9"),
             new("pad-profiles", "Perfis por jogo", "\uE8F1"),
         }),
         new("MEU PC", new SideItem[]

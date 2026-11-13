@@ -201,6 +201,12 @@ internal sealed class MbEmulationPage : MbControlPageBase
         gyro.Children.Add(Check("Só enquanto segura L2 (mirando)", () => _e.GyroOnlyWhenAiming, v => _e.GyroOnlyWhenAiming = v));
         st.Children.Add(gyro);
         st.Children.Add(Slider("Sensibilidade do giroscópio", 1, 100, () => _e.GyroSensitivity, v => _e.GyroSensitivity = v));
+        var fine = PadUi.Button("Ajustes finos com prévia ao vivo →");
+        fine.HorizontalAlignment = HorizontalAlignment.Left;
+        fine.Margin = new Thickness(0, 6, 0, 0);
+        fine.ToolTip = "Zona morta externa, curva personalizada, suavização, anti-retorno, curso dos gatilhos e filtro do giroscópio.";
+        fine.Click += (_, _) => MainWindow.Current?.Go("mbc-tune");
+        st.Children.Add(fine);
         return st;
     }
 

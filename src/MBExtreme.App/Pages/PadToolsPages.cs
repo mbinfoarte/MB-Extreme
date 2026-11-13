@@ -411,7 +411,7 @@ internal sealed class PadProfilesPage : UserControl
 
         _editor.Children.Add(PadUi.Muted("Curva do analógico"));
         var curves = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        foreach (var curve in Enum.GetValues<StickCurve>())
+        foreach (var curve in Enum.GetValues<StickCurve>().Where(c => c != StickCurve.Personalizada))
         {
             var c = curve;
             var b = new RadioButton { Content = curve switch { StickCurve.Suave => "Suave (mira fina)", StickCurve.Agressiva => "Agressiva (resposta rápida)", _ => "Linear" }, IsChecked = _current.Curve == curve, Margin = new Thickness(0, 0, 14, 0), GroupName = "curve" };

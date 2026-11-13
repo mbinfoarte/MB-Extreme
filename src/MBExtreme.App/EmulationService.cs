@@ -100,13 +100,21 @@ internal sealed class EmulationService
         AppServices.Pads.SetRumble(0, 0);
         Unhide();
         if (was) AppServices.Pads.Detach();
+        _filter.Reset();
+        _lastTicks = 0;
         Status = "Desligada.";
         Changed?.Invoke();
     }
 
+    private readonly PadFilter _filter = new();
+    private long _lastTicks;
+
     private void Send(PadState physical)
     {
-        var s = PadMapper.Map(physical, AppServices.Settings.Emulation);
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        double dt = _lastTicks == 0 ? 0 : Math.Min(0.1, (now - _lastTicks) / (double)System.Diagnostics.Stopwatch.Frequency);
+        _lastTicks = now;
+        var s = PadMapper.Map(physical, AppServices.Settings.Emulation, _filter, dt);
         lock (_lock)
         {
             try

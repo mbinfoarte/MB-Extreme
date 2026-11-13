@@ -23,6 +23,9 @@ public sealed class AppSettings
     /// <summary>Emulação de controle (controle virtual Xbox 360 / PS4).</summary>
     public MBExtreme.Core.Gamepads.EmulationSettings Emulation { get; set; } = new();
 
+    /// <summary>Teclado e mouse → controle virtual.</summary>
+    public MBExtreme.Core.Gamepads.KbmSettings Kbm { get; set; } = new();
+
     /// <summary>Nome do perfil do controle em uso.</summary>
     public string PadActiveProfile { get; set; } = "";
 

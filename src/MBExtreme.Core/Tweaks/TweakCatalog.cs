@@ -376,6 +376,31 @@ public static class TweakCatalog
                 Warning = "Consome um pouco mais de energia. O efeito é pequeno; meça antes e depois.",
             },
 
+            new PowerSettingTweak(store, "power-sleep-never", TweakCategory.Performance, TweakRisk.Low,
+                "Não suspender o PC sozinho (na tomada)",
+                "O PC deixa de entrar em suspensão por tempo parado quando está na tomada. Você ainda pode suspender pelo menu Iniciar.",
+                "238c9fa8-0aad-41ed-83f4-97be242c8f20", "29f6c1db-86da-48c5-9fdb-f2b67b1f44da", 0)
+            {
+                Effect = "Downloads, partidas na fila, servidores e transmissões não são interrompidos por suspensão automática.",
+                Warning = "Gasta mais energia se o PC ficar ligado sem uso. A tela continua desligando normalmente.",
+            },
+
+            new PowerSettingTweak(store, "power-hibernate-idle-never", TweakCategory.Performance, TweakRisk.Low,
+                "Não hibernar sozinho por tempo parado (na tomada)",
+                "Desliga a hibernação automática depois de um tempo sem uso, para o PC não \"apagar\" no meio de uma tarefa longa.",
+                "238c9fa8-0aad-41ed-83f4-97be242c8f20", "9d7815a6-7ee4-497e-8888-515a05f02364", 0)
+            {
+                Effect = "O PC não hiberna sozinho enquanto está na tomada.",
+            },
+
+            new PowerSettingTweak(store, "power-hybrid-sleep-off", TweakCategory.Performance, TweakRisk.Low,
+                "Desligar a suspensão híbrida (na tomada)",
+                "A suspensão híbrida grava a memória no disco antes de suspender; sem ela, suspender e voltar fica mais rápido.",
+                "238c9fa8-0aad-41ed-83f4-97be242c8f20", "94ac6d29-73ce-41a6-809f-6363ba21b47e", 0)
+            {
+                Effect = "Suspender e acordar mais rápido, sem gravar vários GB no disco.",
+            },
+
             new PowerSettingTweak(store, "power-usb-suspend", TweakCategory.Gaming, TweakRisk.Low,
                 "USB sem suspensão seletiva (na tomada)",
                 "Impede o Windows de desligar portas USB ociosas, o que pode causar atraso no primeiro movimento de mouse e teclado.",

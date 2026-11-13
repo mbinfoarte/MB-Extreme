@@ -72,6 +72,9 @@ internal static class AppServices
     /// <summary>MB Control: controle virtual (Xbox 360 / PS4) para os jogos.</summary>
     public static EmulationService Emulation { get; } = new();
 
+    /// <summary>MB Control: teclado e mouse viram um controle virtual.</summary>
+    public static KbmService Kbm { get; } = new();
+
     public static LicenseManager License { get; } = new();
 
     public static StudioController Studio { get; } = new();
@@ -114,6 +117,7 @@ internal static class AppServices
         License.Shutdown();
         AutoMemory.Shutdown();
         Emulation.Stop();
+        Kbm.Stop();
         Studio.Shutdown();
         Hotkeys.Shutdown();
         Fans.Shutdown();

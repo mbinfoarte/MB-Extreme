@@ -226,3 +226,36 @@ public class ModoJogoTurboTests
         Assert.Contains("Copilot", MBExtreme.Core.Games.GameModeRules.AutoClose);
     }
 }
+
+public class MbControlKbmTests
+{
+    [Fact]
+    public void Teclas_viram_botoes_e_analogico()
+    {
+        var s = MBExtreme.Core.Gamepads.KbmMapper.Build(new HashSet<string> { "MoveUp", "MoveRight", "Cross", "R2" }, 0.5, -0.2);
+        Assert.True(s.Buttons.HasFlag(PadButtons.Cross));
+        Assert.True(s.LY < 0 && s.LX > 0);
+        Assert.Equal(0.7071, s.LX, 3);
+        Assert.Equal(1, s.R2);
+        Assert.Equal(0.5, s.RX);
+    }
+
+    [Fact]
+    public void Mouse_parado_zero_e_mexendo_sai_da_zona_morta()
+    {
+        var k = new KbmSettings { AntiDeadzone = 20, Curve = StickCurve.Linear, Acceleration = 0, Sensitivity = 50 };
+        Assert.Equal((0.0, 0.0), KbmMapper.MouseToStick(0, 0, k));
+        var (x, y) = KbmMapper.MouseToStick(0.1, 0, k);
+        Assert.True(x >= 0.2 && y == 0);
+        Assert.Equal(1, KbmMapper.MouseToStick(100, 0, k).X, 3);
+        Assert.Equal(0.5, KbmMapper.Smooth(0, 1, 50), 3);
+    }
+
+    [Fact]
+    public void Teclas_padrao_existem()
+    {
+        foreach (var key in KbmMapper.DefaultBindings().Keys) Assert.True(KbmMapper.Keys.ContainsKey(key), key);
+        Assert.Equal("Espaço", KbmMapper.KeyLabel("Space"));
+        Assert.Equal("1", KbmMapper.KeyLabel("D1"));
+    }
+}

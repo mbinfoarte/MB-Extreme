@@ -60,6 +60,13 @@ public static class GameModeRules
     {
         ("WSearch", "Indexação da pesquisa do Windows"),
         ("DoSvc", "Otimização de entrega (downloads do Windows Update)"),
+        ("DiagTrack", "Telemetria do Windows"),
+        ("WerSvc", "Relatório de erros do Windows"),
+        ("SysMain", "SysMain (pré-carregamento de programas)"),
+        ("MapsBroker", "Download de mapas offline"),
+        ("PcaSvc", "Assistente de compatibilidade de programas"),
+        ("WMPNetworkSvc", "Compartilhamento do Windows Media Player"),
+        ("Spooler", "Impressão (volta ao sair do jogo)"),
     };
 
     /// <summary>Pode abaixar a prioridade deste processo? Só da sessão do usuário, nunca protegidos, nunca o jogo, nunca o próprio programa.</summary>

@@ -29,7 +29,7 @@ public sealed class GameBoostPage : ToolPageBase
             AppServices.Boost.Settings.BoostSmart, v => Save(s => s.BoostSmart = v)));
         Body.Children.Add(OptionBox("Modo Turbo: pedir para fechar também as outras janelas abertas (navegador, editores...). É como clicar no X: quem tiver algo sem salvar pergunta antes",
             AppServices.Boost.Settings.BoostCloseWindows, v => Save(s => s.BoostCloseWindows = v)));
-        Body.Children.Add(OptionBox("Pausar a indexação da pesquisa e os downloads do Windows Update enquanto joga (precisa de administrador)",
+        Body.Children.Add(OptionBox("Pausar serviços do Windows que não fazem falta no jogo (pesquisa, downloads do Windows Update, telemetria, relatório de erros, SysMain, impressão...). Todos voltam quando o jogo fecha",
             AppServices.Boost.Settings.BoostPauseServices, v => Save(s => s.BoostPauseServices = v)));
         Body.Children.Add(Muted("Nunca são tocados: Windows, antivírus, antitrapaça, lojas de jogos (Steam, Epic, Battle.net...), Discord, Spotify, OBS, drivers e áudio. " +
             "Ao fechar o jogo, a prioridade volta, as tarefas do Windows religam e o OneDrive/Google Drive/Dropbox reabrem.", 11));

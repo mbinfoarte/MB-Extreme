@@ -120,7 +120,7 @@ internal sealed class EmulationService
 
     private static bool B(PadState s, PadButtons b) => (s.Buttons & b) != 0;
 
-    private static void SendXbox(IXbox360Controller x, PadState s)
+    internal static void SendXbox(IXbox360Controller x, PadState s)
     {
         x.SetButtonState(Xbox360Button.A, B(s, PadButtons.Cross));
         x.SetButtonState(Xbox360Button.B, B(s, PadButtons.Circle));
@@ -146,7 +146,7 @@ internal sealed class EmulationService
         x.SubmitReport();
     }
 
-    private static void SendDs4(IDualShock4Controller d, PadState s)
+    internal static void SendDs4(IDualShock4Controller d, PadState s)
     {
         d.SetButtonState(DualShock4Button.Cross, B(s, PadButtons.Cross));
         d.SetButtonState(DualShock4Button.Circle, B(s, PadButtons.Circle));

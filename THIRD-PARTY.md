@@ -109,3 +109,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## NVIDIA Profile Inspector (identificadores de configurações do driver)
+- Uso: identificadores e valores de configurações do driver NVIDIA (`CustomSettingNames.xml`, versão 3.0.2.3) aplicados por jogo nos perfis da Biblioteca (energia, baixa latência ultra, limite de FPS em segundo plano, cache de shaders). Só os números foram usados; nenhum código do programa foi copiado.
+- Licença: MIT, Copyright (c) 2016 Orbmu2k. https://github.com/Orbmu2k/nvidiaProfileInspector
+
+## Referências estudadas sem uso de código
+- Pavise (GPL-3.0-only): lido apenas para comparar recursos de gerenciamento de jogos (lista de proteção de anti-cheat, restauração ao fechar o jogo). Nenhum código, texto ou arquivo foi copiado.
+- ScarOptimizing (GPL-3): scripts para celulares Android (ADB); não se aplica ao Windows e não foi usado.

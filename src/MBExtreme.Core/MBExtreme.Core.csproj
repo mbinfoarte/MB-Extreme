@@ -35,5 +35,6 @@
     <EmbeddedResource Include="Benchmark\Shaders\*.hlsl" LogicalName="MBExtreme.Bench.%(Filename).hlsl" />
     <EmbeddedResource Include="Benchmark\Shaders\*.dxil" LogicalName="MBExtreme.Bench.%(Filename).dxil" />
     <EmbeddedResource Include="Benchmark\Native\mbfsr.dll" LogicalName="MBExtreme.Bench.mbfsr.dll" />
+    <EmbeddedResource Include="Games\Data\game-titles.json" LogicalName="MBExtreme.Games.titles.json" />
   </ItemGroup>
 </Project>

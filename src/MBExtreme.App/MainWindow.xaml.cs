@@ -74,6 +74,13 @@ public partial class MainWindow : Window
         // disponível para suporte enquanto o programa estiver aberto (cada acesso exige o aceite do usuário)
         if (AppServices.Settings.RemoteAutoListen && AppServices.License.Config.ServerUrl.Length > 0) _ = AppServices.RemoteSupport.StartAsync();
         _ = AppServices.Fans.StartIfConfiguredAsync();
+        // perfis por jogo: cache do disco já, versão nova do servidor em segundo plano; e desfaz perfis que ficaram ligados
+        _ = Task.Run(async () =>
+        {
+            MBExtreme.Core.Games.GameTitleSync.LoadCache();
+            BoostController.RestoreStaleSessions();
+            await MBExtreme.Core.Games.GameTitleSync.RefreshAsync(AppServices.Web, MBExtreme.Core.AppInfo.FirebaseProjectId, MBExtreme.Core.AppInfo.FirestoreDatabaseId);
+        });
         UpdateFooter();
         VersionText.Text = VersionLabel;
         VersionButton.ToolTip = VersionTip;

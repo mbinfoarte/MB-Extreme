@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using MBExtreme.Core.Games;
 using MBExtreme.Core.Settings;
@@ -17,14 +18,57 @@ internal sealed class BoostController
         _watcher.GameStarted += (name, pid) =>
         {
             _startedAt = DateTime.Now;
+            StartTitleSessions(name);
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await StartAsync(name, pid)));
         };
         _watcher.GameStopped += name =>
         {
             if (_startedAt is { } start) AppServices.GameLibrary.AddPlaytime(name, (DateTime.Now - start).TotalMinutes, DateTime.Now);
             _startedAt = null;
+            EndTitleSessions(name);
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await StopAsync()));
         };
+    }
+
+    /// <summary>Perfil automático do jogo: liga os ajustes do Windows do perfil quando o jogo abre (fora da thread da interface).</summary>
+    private static void StartTitleSessions(string processName)
+    {
+        foreach (string id in AppServices.GameLibrary.IdsForExe(processName))
+        {
+            try { AppServices.GameOptimization.StartSession(id); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or System.Security.SecurityException or IOException) { }
+        }
+    }
+
+    /// <summary>O jogo fechou: desfaz os ajustes do Windows que o perfil automático ligou.</summary>
+    private static void EndTitleSessions(string processName)
+    {
+        foreach (string id in AppServices.GameLibrary.IdsForExe(processName))
+        {
+            try { AppServices.GameOptimization.EndSession(id); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or System.Security.SecurityException or IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// Ao abrir o programa: se o PC desligou com um jogo aberto, o perfil automático ficou ligado. Desfaz os que o jogo não está rodando.
+    /// </summary>
+    public static void RestoreStaleSessions()
+    {
+        foreach (string id in AppServices.GameLibrary.ActiveSessions())
+        {
+            string? exe = AppServices.GameLibrary.Get(id).ExeName;
+            bool running = false;
+            if (exe is not null)
+            {
+                var procs = System.Diagnostics.Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe));
+                running = procs.Length > 0;
+                foreach (var p in procs) p.Dispose();
+            }
+            if (running) continue;
+            try { AppServices.GameOptimization.EndSession(id); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or System.Security.SecurityException or IOException) { }
+        }
     }
 
     public AppSettings Settings => AppServices.Settings;
@@ -55,7 +99,10 @@ internal sealed class BoostController
     private async Task StartAsync(string game, int? pid)
     {
         // os outros processos dos seus jogos (launcher, ajudantes) também ficam de fora
-        var keep = Settings.BoostNeverClose.Concat(Settings.GameProcesses).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var keep = Settings.BoostNeverClose.Concat(Settings.GameProcesses).ToList();
+        // o perfil do título diz o que o jogo precisa aberto (anti-cheat, launcher): nunca fechar nem pausar
+        if (GameTitles.Find(null, game) is { } title) keep.AddRange(title.KeepRunning);
+        keep = keep.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var options = new BoostOptions(Settings.BoostCloseApps.ToList(), Settings.BoostSwitchPlan, Settings.BoostCleanMemory, Settings.MemoryAllowlist.ToList(),
             Settings.BoostSmart || Settings.BoostCloseWindows, Settings.BoostPauseServices, keep, Settings.BoostCloseWindows);
         try

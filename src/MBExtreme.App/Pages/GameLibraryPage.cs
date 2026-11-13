@@ -347,7 +347,9 @@ public sealed partial class GameLibraryPage : ToolPageBase
         _storeInfo.TryGetValue(game.Id, out var info);
 
         var settings = AppServices.GameLibrary.Get(game.Id);
+        var title = TitleOf(game);
         var profile = settings.ProfileKey is { } key ? GameProfiles.Find(key)
+            : title is not null ? GameProfiles.Find(title.Profile)
             : game.Launcher == GameLauncher.Manual && game.ExeName is null ? GameProfiles.App
             : GameProfiles.Classify(game.ExeName, info?.Genres, info?.Categories);
         var plan = GameOptimizer.Plan(profile, _maker, _tier, onHdd: false);
@@ -447,7 +449,11 @@ public sealed partial class GameLibraryPage : ToolPageBase
         var game = v.Game;
         var buttons = new WrapPanel { Margin = new Thickness(0, 6, 0, 4) };
         bool optimized = v.Settings.OptimizedAt is not null;
-        buttons.Children.Add(Tight(SmallButton(optimized ? "Reaplicar otimização" : "Otimizar", async (_, _) => await OptimizeAllAsync(game, v.Plan, v.Profile), !optimized)));
+        bool profiled = optimized || v.Settings.AutoProfile;
+        var apply = Tight(SmallButton(profiled ? "Reaplicar perfil" : "Aplicar perfil do jogo",
+            async (_, _) => await ApplyTitleAsync(game, v, v.Settings.AutoProfile || !optimized), !profiled));
+        apply.ToolTip = "Otimiza o Windows, o driver, a rede e a prioridade de CPU com o perfil deste jogo. Detalhes na aba Otimização.";
+        buttons.Children.Add(apply);
 
         if (AppServices.GameMeasure.GameId == game.Id)
             buttons.Children.Add(Tight(SmallButton("Parar medição", (_, _) => AppServices.GameMeasure.Stop(), true)));
@@ -458,7 +464,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
             buttons.Children.Add(measure);
         }
 
-        if (optimized) buttons.Children.Add(Tight(SmallButton("Desfazer", async (_, _) => await UndoAsync(game))));
+        if (profiled) buttons.Children.Add(Tight(SmallButton("Desfazer", async (_, _) => await UndoTitleAsync(game))));
         var cover = Tight(SmallButton("Buscar capa", async (_, _) => await PickCoverAsync(game)));
         cover.ToolTip = "Procura a capa deste jogo na internet para você escolher.";
         buttons.Children.Add(cover);
@@ -609,6 +615,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
     {
         var game = v.Game;
         var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        panel.Children.Add(TitleCard(v));
 
         bool nvidia = _maker == GpuMaker.Nvidia;
         panel.Children.Add(Group("Jogo", v.Rows.Where(r => r.Group != "Driver NVIDIA").ToList(), () => OpenDetails(0)));
@@ -684,6 +691,183 @@ public sealed partial class GameLibraryPage : ToolPageBase
         string t = title.Split('(')[0].Trim();
         if (t.Length == 0) t = title;
         return t.Length <= 46 ? t : t[..45].TrimEnd() + "…";
+    }
+
+    // ---- perfil do jogo (por título: EA FC é diferente de Call of Duty)
+
+    private UIElement TitleCard(GameView v)
+    {
+        var game = v.Game;
+        var s = v.Settings;
+        var title = TitleOf(game);
+        var box = new StackPanel();
+
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition());
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var names = new StackPanel();
+        names.Children.Add(new TextBlock
+        {
+            Text = title is null ? "Perfil do jogo: " + v.Profile.Title : "Perfil do jogo: " + title.Title,
+            FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
+        });
+        string kind = title is null ? "Perfil geral pelo tipo de jogo (este título ainda não tem perfil próprio)."
+            : v.Profile.Title + (title.Reflex ? " · tem NVIDIA Reflex" : "") + (title.AntiCheat.Length > 0 ? " · anti-cheat " + title.AntiCheat : "");
+        names.Children.Add(Muted(kind, 11));
+        head.Children.Add(names);
+        bool applied = s.AutoProfile || s.OptimizedAt is not null;
+        var state = new TextBlock
+        {
+            Text = s.SessionActive ? "● ligado agora" : s.AutoProfile ? "● automático" : applied ? "✓ aplicado" : "não aplicado",
+            FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Top,
+            Foreground = Brush(s.SessionActive || applied ? "OkBrush" : "MutedBrush"),
+        };
+        Grid.SetColumn(state, 1);
+        head.Children.Add(state);
+        box.Children.Add(head);
+
+        // o que o perfil faz no PC
+        var does = new List<string> { "Ajustes do Windows do tipo " + v.Profile.Title.Split('(')[0].Trim().ToLowerInvariant() };
+        if (title?.Priority ?? true) does.Add("prioridade máxima de CPU sempre que o jogo abrir");
+        does.Add("placa de vídeo de alto desempenho");
+        if (_maker == GpuMaker.Nvidia) does.Add(title is { Reflex: false, Profile: "competitive" } ? "driver NVIDIA no desempenho máximo e baixa latência ultra" : "driver NVIDIA no desempenho máximo");
+        if (title?.Fso == true) does.Add("otimizações de tela cheia desligadas");
+        does.Add("Modo Jogo fecha e pausa o que sobra" + (title is { KeepRunning.Count: > 0 } ? " (sem tocar em " + string.Join(", ", title.KeepRunning.Take(3)) + ")" : ""));
+        box.Children.Add(Muted("Aplica: " + string.Join(" · ", does) + ".", 11.5));
+
+        if (title is not null)
+        {
+            var plan = GameTitles.Plan(title, _maker, _tier);
+            box.Children.Add(new TextBlock { Text = "No menu do jogo · " + plan.TierName, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 2) });
+            foreach (string line in plan.InGame) box.Children.Add(Muted("•  " + line, 11.5));
+            if (plan.Tips.Count > 0)
+            {
+                box.Children.Add(new TextBlock { Text = "Dicas", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 2) });
+                foreach (string line in plan.Tips) box.Children.Add(Muted("•  " + line, 11.5));
+            }
+            foreach (string w in plan.Warnings)
+                box.Children.Add(new TextBlock { Text = "▲ " + w, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Foreground = Brush("WarnBrush"), Margin = new Thickness(0, 6, 0, 0) });
+        }
+        else
+            foreach (string line in v.Plan.Advice.Take(3)) box.Children.Add(Muted("•  " + line, 11.5));
+
+        var auto = new CheckBox
+        {
+            Content = "Automático: ligar ao abrir o jogo (pelo Jogar ou pela loja) e desfazer os ajustes do Windows quando ele fechar",
+            IsChecked = s.AutoProfile || s.OptimizedAt is null, Foreground = Brush("TextBrush"), FontSize = 11.5, Margin = new Thickness(0, 10, 0, 0),
+        };
+        if (s.OptimizedAt is not null || s.AutoProfile)
+            auto.Click += (_, _) =>
+            {
+                bool on = auto.IsChecked == true;
+                AppServices.GameLibrary.Update(game.Id, x =>
+                {
+                    x.AutoProfile = on;
+                    if (on && x.PlanTweaks.Count == 0) x.PlanTweaks = v.Plan.TweakIds.ToList();
+                    if (on) x.SessionActive = x.AppliedTweaks.Count > 0;
+                });
+                SetStatus(on ? "Perfil automático ligado: entra quando o jogo abre e sai quando fecha." : "Perfil automático desligado: os ajustes ficam como estão até você clicar em Desfazer.", "OkBrush");
+            };
+        box.Children.Add(auto);
+        if (game.ExeName is null)
+            box.Children.Add(Muted("Não achei o executável deste jogo: o automático só funciona depois de abrir o jogo pelo Jogar uma vez.", 10.5));
+
+        var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        buttons.Children.Add(Tight(SmallButton(applied ? "Reaplicar perfil do jogo" : "Aplicar perfil do jogo", async (_, _) => await ApplyTitleAsync(game, v, auto.IsChecked == true), !applied)));
+        if (applied) buttons.Children.Add(Tight(SmallButton("Desfazer perfil", async (_, _) => await UndoTitleAsync(game))));
+        box.Children.Add(buttons);
+
+        var card = CardOf(box);
+        card.Padding = new Thickness(14, 12, 14, 12);
+        card.Margin = new Thickness(0, 4, 0, 2);
+        card.BorderBrush = Brush("AccentBrush");
+        return card;
+    }
+
+    /// <summary>Aplica o perfil do jogo: otimização (Windows + driver + rede), prioridade de CPU, tela cheia e o modo automático.</summary>
+    private async Task ApplyTitleAsync(InstalledGame game, GameView v, bool auto)
+    {
+        var title = TitleOf(game);
+        await OptimizeAllAsync(game, v.Plan, v.Profile);
+        var notes = new List<string>();
+        if (game.ExeName is { } exe)
+        {
+            if ((title?.Priority ?? true) && !SafeIsPriority(exe))
+            {
+                try
+                {
+                    await Task.Run(() => AppServices.GamePriority.Apply(exe));
+                    AppServices.GameLibrary.Update(game.Id, x => x.HighPriority = true);
+                    notes.Add("prioridade máxima de CPU");
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException or ArgumentException) { notes.Add("prioridade: execute como administrador"); }
+            }
+            if (title?.Fso == true && !AppServices.GameLibrary.Get(game.Id).FsoDisabled && await Task.Run(() => GameFiles.FindExePath(game)) is { } exePath)
+            {
+                try
+                {
+                    AppServices.GameLibrary.Update(game.Id, x => GameWindowService.SetFullscreenOptimizations(exePath, true, x));
+                    notes.Add("tela cheia otimizada");
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException) { }
+            }
+            // o jogo entra na lista do Modo Jogo (fecha e pausa o resto quando ele abre)
+            string process = Path.GetFileNameWithoutExtension(exe);
+            var boost = AppServices.Boost.Settings;
+            if (!boost.GameProcesses.Contains(process, StringComparer.OrdinalIgnoreCase)) { boost.GameProcesses.Add(process); boost.Save(); }
+            AppServices.Boost.RefreshGames();
+            if (!boost.BoostAuto) AppServices.Boost.SetAuto(true);
+        }
+        var applied = AppServices.GameLibrary.Get(game.Id);
+        AppServices.GameLibrary.Update(game.Id, x =>
+        {
+            x.AutoProfile = auto;
+            x.TitleKey = title?.Key;
+            x.PlanTweaks = v.Plan.TweakIds.ToList();
+            x.SessionActive = auto && x.AppliedTweaks.Count > 0;
+        });
+        // automático com o jogo fechado: os ajustes do Windows (que valem para o PC todo) só entram quando o jogo abrir
+        bool running = game.ExeName is { } runningExe && IsRunning(runningExe);
+        if (auto && !running) await Task.Run(() => AppServices.GameOptimization.EndSession(game.Id));
+        SetStatus("Perfil do jogo aplicado" + (notes.Count > 0 ? " · " + string.Join(" · ", notes) : "") +
+            (auto ? ". Automático: os ajustes do Windows entram quando o jogo abre e saem quando ele fecha; prioridade, driver e placa de vídeo ficam só para este jogo." : "."), "OkBrush");
+        RefreshCard(game);
+        await RenderDetailAsync(game);
+    }
+
+    private static bool IsRunning(string exe)
+    {
+        var procs = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe));
+        foreach (var p in procs) p.Dispose();
+        return procs.Length > 0;
+    }
+
+    private static bool SafeIsPriority(string exe)
+    {
+        try { return AppServices.GamePriority.IsApplied(exe); }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException) { return false; }
+    }
+
+    /// <summary>Desfaz tudo o que o perfil do jogo mudou (Windows, driver, rede, prioridade e tela cheia) e desliga o automático.</summary>
+    private async Task UndoTitleAsync(InstalledGame game)
+    {
+        var s = AppServices.GameLibrary.Get(game.Id);
+        if (s.HighPriority && game.ExeName is { } exe)
+        {
+            try
+            {
+                await Task.Run(() => AppServices.GamePriority.Revert(exe));
+                AppServices.GameLibrary.Update(game.Id, x => x.HighPriority = false);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException) { }
+        }
+        if (s.FsoDisabled && await Task.Run(() => GameFiles.FindExePath(game)) is { } exePath)
+        {
+            try { AppServices.GameLibrary.Update(game.Id, x => GameWindowService.SetFullscreenOptimizations(exePath, false, x)); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException) { }
+        }
+        AppServices.GameLibrary.Update(game.Id, x => { x.AutoProfile = false; x.SessionActive = false; x.TitleKey = null; });
+        await UndoAsync(game);
     }
 
     // ---- detalhes (painel expandido no lugar da grade)
@@ -835,11 +1019,26 @@ public sealed partial class GameLibraryPage : ToolPageBase
             pre = AppServices.NvidiaDriver.Read(exe, DriverSettingIds.PreRenderLimit);
         }
         string? dlss = _maker == GpuMaker.Nvidia ? DlssInfo.Find(game.InstallPath) : null;
-        var catalog = DriverCatalog.SettingsFor(game.ExeName, _advanced);
+        var catalog = DriverItems(game);
         var values = new Dictionary<uint, DriverValue?>();
         if (driver && game.ExeName is { } exeCat)
             foreach (var item in catalog) values[item.Id] = AppServices.NvidiaDriver.Read(exeCat, item.Id);
-        return GameCompare.Build(profile, _maker, new GameSnapshot(states, titles, high, gpu, driver, power, pre, dlss, values), catalog, DriverCatalog.For(game.ExeName)?.HasReflex ?? false);
+        return GameCompare.Build(profile, _maker, new GameSnapshot(states, titles, high, gpu, driver, power, pre, dlss, values), catalog, HasReflex(game));
+    }
+
+    /// <summary>Perfil próprio do título (EA FC, Call of Duty...), se o jogo estiver no banco.</summary>
+    private static GameTitle? TitleOf(InstalledGame game) => GameTitles.Find(game.Name, game.ExeName);
+
+    private static bool HasReflex(InstalledGame game) => TitleOf(game)?.Reflex ?? DriverCatalog.For(game.ExeName)?.HasReflex ?? false;
+
+    /// <summary>Ajustes de driver NVIDIA do jogo: catálogo por executável + extras do perfil do título (baixa latência sem Reflex...).</summary>
+    private IReadOnlyList<DriverSetting> DriverItems(InstalledGame game)
+    {
+        var list = DriverCatalog.SettingsFor(game.ExeName, _advanced).ToList();
+        if (TitleOf(game) is { } title)
+            foreach (var extra in GameTitles.Plan(title, _maker, _tier).DriverExtras)
+                if ((_advanced || !extra.Advanced) && list.All(x => x.Id != extra.Id)) list.Add(extra);
+        return list;
     }
 
     private UIElement BuildTable(IReadOnlyList<SettingRow> rows, string heading = "Configuração atual × recomendada")
@@ -913,9 +1112,8 @@ public sealed partial class GameLibraryPage : ToolPageBase
 
     private async Task OptimizeAsync(InstalledGame game, OptimizationPlan plan, GameProfile profile)
     {
-        var catalogProfile = DriverCatalog.For(game.ExeName);
-        var driverPlan = DriverPlan.For(profile, _maker, catalogProfile?.HasReflex ?? false);
-        var catalogItems = _maker == GpuMaker.Nvidia ? DriverCatalog.SettingsFor(game.ExeName, _advanced) : Array.Empty<DriverSetting>();
+        var driverPlan = DriverPlan.For(profile, _maker, HasReflex(game));
+        var catalogItems = _maker == GpuMaker.Nvidia ? DriverItems(game) : Array.Empty<DriverSetting>();
         var pending = (await Task.Run(() => ReadRows(game, profile))).Where(r => r.CanFix && r.Group is "Driver NVIDIA" or "Placa de vídeo").ToList();
         bool withDriver = false;
         if (pending.Count > 0 && (!driverPlan.IsEmpty || catalogItems.Count > 0))
@@ -1011,6 +1209,17 @@ public sealed partial class GameLibraryPage : ToolPageBase
             }
             AppServices.Boost.RefreshGames();
             if (!settings.BoostAuto) AppServices.Boost.SetAuto(true);
+
+            // primeira vez pelo Jogar: liga o perfil automático (ajustes do Windows entram com o jogo e saem quando ele fecha)
+            var st = AppServices.GameLibrary.Get(game.Id);
+            if (!st.AutoProfile && st.OptimizedAt is null && st.AppliedTweaks.Count == 0)
+            {
+                var title = TitleOf(game);
+                var profile = st.ProfileKey is { } key ? GameProfiles.Find(key)
+                    : title is not null ? GameProfiles.Find(title.Profile) : GameProfiles.Classify(exe, null, null);
+                var tweaks = GameOptimizer.Plan(profile, _maker, _tier, onHdd: false).TweakIds.ToList();
+                AppServices.GameLibrary.Update(game.Id, x => { x.AutoProfile = true; x.PlanTweaks = tweaks; x.TitleKey = title?.Key; x.ProfileKey ??= profile.Key; });
+            }
         }
 
         if (measure)

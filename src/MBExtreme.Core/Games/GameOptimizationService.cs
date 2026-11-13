@@ -80,4 +80,32 @@ public sealed class GameOptimizationService
         _store.Update(gameId, s => { s.AppliedTweaks = new List<string>(); s.OptimizedAt = null; });
         return new OptimizationResult(reverted, kept, Array.Empty<string>(), failed);
     }
+
+    /// <summary>
+    /// Perfil automático: o jogo abriu. Religa os ajustes do Windows guardados no perfil (só os que não estavam ligados).
+    /// Não faz nada se o perfil automático estiver desligado ou se a sessão já estiver ativa.
+    /// </summary>
+    public OptimizationResult? StartSession(string gameId)
+    {
+        var s = _store.Get(gameId);
+        if (!s.AutoProfile || s.SessionActive || s.PlanTweaks.Count == 0) return null;
+        var profile = GameProfiles.Find(s.ProfileKey);
+        var result = Apply(gameId, s.ExeName, new OptimizationPlan(profile, s.PlanTweaks.ToList(), Array.Empty<string>()));
+        _store.Update(gameId, x => x.SessionActive = true);
+        return result;
+    }
+
+    /// <summary>
+    /// Perfil automático: o jogo fechou. Desfaz só os ajustes do Windows (que valem para o PC todo); prioridade, driver e GPU
+    /// ficam, porque só valem para este jogo. O jogo continua marcado como otimizado.
+    /// </summary>
+    public OptimizationResult? EndSession(string gameId)
+    {
+        var s = _store.Get(gameId);
+        if (!s.SessionActive) return null;
+        DateTime? optimizedAt = s.OptimizedAt;
+        var result = Undo(gameId);
+        _store.Update(gameId, x => { x.SessionActive = false; x.OptimizedAt = optimizedAt; });
+        return result;
+    }
 }

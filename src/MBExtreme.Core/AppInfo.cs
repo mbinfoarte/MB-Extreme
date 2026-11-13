@@ -17,6 +17,12 @@ public static class AppInfo
     /// </summary>
     public const string DefaultServerUrl = "https://southamerica-east1-people-api-493900.cloudfunctions.net/licenseApi";
 
+    /// <summary>Projeto Firebase do site (banco público dos perfis de jogos: documento config/gameProfiles).</summary>
+    public const string FirebaseProjectId = "people-api-493900";
+
+    /// <summary>Banco Firestore do site (não é o "(default)"; ver firebase-applet-config.json do site).</summary>
+    public const string FirestoreDatabaseId = "ai-studio-mbinfoarte-f0099f12-53d0-4452-aec1-0fab3ab634df";
+
     /// <summary>Dias de teste grátis do Pro em cada PC (sem pedir conta).</summary>
     public const int TrialDays = 3;
 

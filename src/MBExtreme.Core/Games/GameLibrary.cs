@@ -202,6 +202,18 @@ public sealed class GameSettings
 
     /// <summary>Último perfil pronto de driver aplicado (competitive, balanced, quality ou nip).</summary>
     public string? DriverPresetKey { get; set; }
+
+    /// <summary>Perfil do jogo automático: liga os ajustes do Windows quando o jogo abre e desfaz quando fecha.</summary>
+    public bool AutoProfile { get; set; }
+
+    /// <summary>Ajustes do Windows do perfil deste jogo (guardados ao aplicar, para religar sozinho no próximo jogo).</summary>
+    public List<string> PlanTweaks { get; set; } = new();
+
+    /// <summary>O perfil automático está ligado agora (o jogo está aberto); se o PC desligar no meio, é desfeito na próxima abertura.</summary>
+    public bool SessionActive { get; set; }
+
+    /// <summary>Chave do perfil de título (eafc, cod, valorant...) aplicado.</summary>
+    public string? TitleKey { get; set; }
 }
 
 public sealed class ManualGame
@@ -276,6 +288,21 @@ public sealed class GameLibraryStore
             Save();
             return true;
         }
+    }
+
+    /// <summary>Jogos da biblioteca com este executável (o vigia do Modo Jogo só sabe o nome do processo).</summary>
+    public IReadOnlyList<string> IdsForExe(string processName)
+    {
+        string exe = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? processName : processName + ".exe";
+        lock (_lock)
+            return _data.Settings.Where(kv => string.Equals(kv.Value.ExeName, exe, StringComparison.OrdinalIgnoreCase)).Select(kv => kv.Key).ToList();
+    }
+
+    /// <summary>Jogos com o perfil automático ainda marcado como ativo.</summary>
+    public IReadOnlyList<string> ActiveSessions()
+    {
+        lock (_lock)
+            return _data.Settings.Where(kv => kv.Value.SessionActive).Select(kv => kv.Key).ToList();
     }
 
     /// <summary>Quais outros jogos também dependem de um ajuste (para não desfazer o que outro jogo ainda usa).</summary>

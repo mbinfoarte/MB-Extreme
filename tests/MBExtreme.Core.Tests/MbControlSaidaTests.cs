@@ -88,3 +88,18 @@ public class MbControlSaidaTests
         Assert.Equal(0b11111, PadOutput.PlayerMask(5));
     }
 }
+
+public class MbControlDriversTests
+{
+    [Fact]
+    public void Pronto_so_com_o_controle_virtual()
+    {
+        var none = EmulationDrivers.Check(_ => false, () => false);
+        Assert.False(EmulationDrivers.Ready(none));
+        Assert.All(none, c => Assert.StartsWith("https://", c.Url));
+        var vigem = EmulationDrivers.Check(n => n == "ViGEmBus", () => true);
+        Assert.True(EmulationDrivers.Ready(vigem));
+        Assert.False(vigem.Single(c => c.Id == "hidhide").Installed);
+        Assert.Equal("opcional", vigem.Single(c => c.Id == "fakerinput").Need);
+    }
+}

@@ -42,3 +42,25 @@ Referências analisadas (só ideias de função; visual, textos, ícones e códi
 - Telas que o cliente ainda vai enviar.
 - Decisão sobre licença do VirtualPad (DualSense virtual).
 - Sites dualsensex.com e rewasd.com não abriram nesta sessão (rede); análise feita pelas imagens.
+
+## Análise do DS4Windows (código-fonte) e DS4Windows Nexus (pacote x64)
+Arquivos enviados pelo cliente; analisados sem executar nada.
+
+- Licença: **GPL-3.0** (DS4Windows e o fork Nexus). Não copiar código para o MB Extreme (fechado); usar só como referência de comportamento.
+- Arquitetura do DS4Windows:
+  - Entrada: DualShock 4, DualSense (com gatilhos adaptáveis), Switch Pro, Joy-Con, DS3 (HID próprio).
+  - Saída virtual: Xbox 360 e DS4 pelo ViGEm (Nefarius.ViGEm.Client).
+  - Teclado/mouse: SendInput (sem driver) ou FakerInput (driver de teclado/mouse virtual, MIT).
+  - HidHide (MIT) para esconder o controle físico.
+  - Servidor UDP (DSU) para giroscópio em emuladores; macros; ações especiais; troca automática de perfil pelo programa em foco;
+    curvas do analógico (editor Bézier); filtro One Euro para suavizar o giroscópio; debounce de botões; correção de drift.
+- DS4Windows Nexus (fork, out/2026): troca o ViGEm por **VIIPER + USBIP** para criar o controle virtual — inclui **DualSense virtual**
+  (pasta device/dualsense do VIIPER) sem o VirtualPad licenciado. USBip para Windows: BSD-2. A licença do próprio VIIPER **não veio
+  no pacote** (só a de uma dependência): verificar antes de usar.
+- Licenças dos drivers no pacote: HidHide 1.5.230 MIT · FakerInput 0.1.0 MIT · USBip 0.9.7.7 BSD-2 → podem ser distribuídos com o
+  aviso de licença. ViGEmBus (fora do pacote): BSD-3.
+
+### Consequências para o plano
+- Fase 2 pode ter dois motores: ViGEmBus (Xbox 360/DS4, simples) e, se a licença do VIIPER permitir, VIIPER+USBIP (DualSense virtual de verdade).
+- Teclado e mouse → controle e controle → teclado/mouse: SendInput primeiro; FakerInput opcional para jogos que ignoram SendInput.
+- Giroscópio: suavização One Euro (algoritmo público) e DSU para emuladores.

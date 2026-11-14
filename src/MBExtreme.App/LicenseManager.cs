@@ -182,6 +182,30 @@ internal sealed class LicenseManager
         }
     }
 
+    /// <summary>Conta do site direto pelo programa (e-mail e senha): login, cadastro, confirmação do e-mail e senha esquecida.</summary>
+    public AccountAuth Account => new(Http, MBExtreme.Core.AppInfo.FirebaseWebApiKey, MBExtreme.Core.AppInfo.FirebaseProjectId);
+
+    /// <summary>Troca a sessão da conta (janela de login do programa) pela licença deste PC. NeedVerify: falta confirmar o e-mail.</summary>
+    public async Task<(bool Ok, string Message, bool NeedVerify)> LoginWithAccountAsync(AccountSession session, string? inviteCode, CancellationToken token)
+    {
+        var client = Client();
+        if (client is null) return (false, "O servidor de licenças não está configurado.", false);
+        try
+        {
+            var result = await client.LoginWithTokenAsync(session.IdToken, _deviceId, DeviceIdentity.FriendlyName(), token, Device, inviteCode);
+            if (result.State == PollState.Pending) return (false, result.Message ?? "Confirme o seu e-mail.", true);
+            if (result.State != PollState.Approved || result.License is null) return (false, result.Message ?? "O login não foi concluído.", false);
+            var check = LicenseVerifier.Evaluate(result.License, Config.PublicKey, _deviceId, DateTimeOffset.UtcNow);
+            if (check.State is LicenseState.Invalid or LicenseState.WrongDevice)
+                return (false, "A licença recebida não é autêntica para este programa.", false);
+            Accept(result.License);
+            LastNotice = null;
+            return (true, $"Ativado: {Summary}.", false);
+        }
+        catch (LicenseNetworkException ex) { return (false, ex.Message, false); }
+        catch (OperationCanceledException) { return (false, "Login cancelado.", false); }
+    }
+
     /// <summary>Pede uma licença nova ao servidor. <paramref name="silent"/>: não mostra erro de rede (uso offline é normal).</summary>
     public async Task<(bool Ok, string Message)> RefreshAsync(bool silent = false)
     {

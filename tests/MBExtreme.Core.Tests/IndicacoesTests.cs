@@ -32,3 +32,17 @@ public class IndicacoesTests
         Assert.Contains("7 dias", me.ShareText);
     }
 }
+
+public class LoginContaTests
+{
+    [Theory]
+    [InlineData("{\"error\":{\"message\":\"INVALID_LOGIN_CREDENTIALS\"}}", "E-mail ou senha incorretos.")]
+    [InlineData("{\"error\":{\"message\":\"EMAIL_EXISTS\"}}", "Já existe uma conta com este e-mail. Use Entrar (ou Esqueci a senha).")]
+    [InlineData("{\"error\":{\"message\":\"WEAK_PASSWORD : Password should be at least 6 characters\"}}", "A senha precisa ter pelo menos 8 caracteres.")]
+    [InlineData("{\"error\":{\"message\":\"PASSWORD_LOGIN_DISABLED\"}}", "Entrar com e-mail e senha está temporariamente indisponível. Use Continuar com o Google.")]
+    public void Erros_da_conta_em_portugues(string json, string expected)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal(expected, MBExtreme.Core.Licensing.AccountAuth.Translate(doc.RootElement).Message);
+    }
+}

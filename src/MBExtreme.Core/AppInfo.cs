@@ -17,6 +17,12 @@ public static class AppInfo
     /// </summary>
     public const string DefaultServerUrl = "https://southamerica-east1-people-api-493900.cloudfunctions.net/licenseApi";
 
+    /// <summary>
+    /// Chave web do Firebase do site (a mesma que vai no site para qualquer navegador; não é segredo). Usada só para o login
+    /// por e-mail e senha na janela do programa (Firebase Authentication).
+    /// </summary>
+    public const string FirebaseWebApiKey = "AIzaSyBfUiFG5nXF7MisR8ZIAgY5hDaXEL4jQbk";
+
     /// <summary>Projeto Firebase do site (banco público dos perfis de jogos: documento config/gameProfiles).</summary>
     public const string FirebaseProjectId = "people-api-493900";
 

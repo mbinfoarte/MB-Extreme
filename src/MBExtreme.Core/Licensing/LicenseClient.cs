@@ -50,6 +50,24 @@ public sealed class LicenseClient
                ?? throw new LicenseNetworkException("Resposta inválida do servidor.");
     }
 
+    /// <summary>Login feito na janela do programa: troca o token da conta do site pela licença deste PC.</summary>
+    public async Task<PollResult> LoginWithTokenAsync(string idToken, string deviceId, string deviceName, CancellationToken token, DeviceInfo? info = null, string? inviteCode = null)
+    {
+        var response = await PostAsync("/v1/device/login", new { idToken, deviceId, deviceName, info, inviteCode }, token);
+        string? license = null, message = null, code = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+            license = doc.RootElement.TryGetProperty("license", out var l) ? l.GetString() : null;
+            message = doc.RootElement.TryGetProperty("message", out var m) ? m.GetString() : null;
+            code = doc.RootElement.TryGetProperty("code", out var c) ? c.GetString() : null;
+        }
+        catch (JsonException) { throw new LicenseNetworkException("Resposta inválida do servidor."); }
+        if (response.IsSuccessStatusCode && license is not null) return new PollResult(PollState.Approved, license, null);
+        if (response.StatusCode == HttpStatusCode.NotFound) throw new LicenseNetworkException("O servidor ainda não tem o login pelo programa. Use Continuar com o Google.");
+        return new PollResult(code == "email-not-verified" ? PollState.Pending : PollState.Denied, null, message ?? $"O servidor recusou ({(int)response.StatusCode}).");
+    }
+
     public async Task<PollResult> PollAsync(string deviceCode, string deviceId, CancellationToken token)
     {
         var response = await PostAsync("/v1/device/token", new { deviceCode, deviceId }, token);

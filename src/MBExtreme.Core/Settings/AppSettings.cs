@@ -34,6 +34,8 @@ public sealed class AppSettings
     public DateTime? RatingFirstUseUtc { get; set; }
     public DateTime? RatingSnoozeUtc { get; set; }
     public bool RatingDone { get; set; }
+    /// <summary>Fechou a janela de login sem entrar: não abre sozinha de novo até esta hora.</summary>
+    public DateTime? LoginPromptSnoozeUtc { get; set; }
 
     /// <summary>Programas (sem .exe) que o Modo Jogo pede para fechar quando um jogo abre.</summary>
     public List<string> BoostCloseApps { get; set; } = new();

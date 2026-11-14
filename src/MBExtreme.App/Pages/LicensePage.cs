@@ -419,30 +419,13 @@ public sealed class LicensePage : ToolPageBase
 
     // ---------------------------------------------------------------- ações
 
-    private async Task LoginAsync()
+    private Task LoginAsync()
     {
-        _loginCts = new CancellationTokenSource();
+        // janela própria de login: Google, e-mail e senha ou criar conta (o código no navegador fica só para o Google)
+        bool ok = MBExtreme.UI.Login.LoginWindow.Prompt(Window.GetWindow(this));
         Render();
-        SetStatus("Abrindo o navegador...");
-        try
-        {
-            var (ok, message) = await _license.LoginAsync(code =>
-            {
-                Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    _code.Text = code.UserCode;
-                    _codeCard.Visibility = Visibility.Visible;
-                    SetStatus($"Confirme no navegador que o código é {code.UserCode} e clique em Aprovar. Se o navegador não abriu: {code.VerificationUri}");
-                }));
-            }, _loginCts.Token);
-            SetStatus(message, ok ? "OkBrush" : "WarnBrush");
-        }
-        finally
-        {
-            _codeCard.Visibility = Visibility.Collapsed;
-            _loginCts = null;
-            Render();
-        }
+        if (ok) SetStatus("Pronto: este PC está ativado na sua conta.", "OkBrush");
+        return Task.CompletedTask;
     }
 
     private async Task RefreshAsync()

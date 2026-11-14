@@ -78,15 +78,77 @@ internal sealed class MbEmulationPage : MbControlPageBase
                 Foreground = PadUi.Res(c.Installed ? "OkBrush" : c.Need == "opcional" ? "MutedBrush" : "WarnBrush") });
             Grid.SetColumn(text, 1);
             grid.Children.Add(text);
-            var b = PadUi.Button(c.Installed ? "Reinstalar / atualizar" : "Baixar do site oficial", primary: !c.Installed && c.Need != "opcional");
-            b.VerticalAlignment = VerticalAlignment.Center;
-            b.Margin = new Thickness(10, 0, 0, 0);
+            var buttons = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+            var progress = new TextBlock { FontSize = 11.5, TextWrapping = TextWrapping.Wrap, MaxWidth = 220, Foreground = PadUi.Res("MutedBrush"), Margin = new Thickness(0, 4, 0, 0) };
             string url = c.Url;
-            b.Click += (_, _) => PadUi.Open(url);
-            Grid.SetColumn(b, 2);
-            grid.Children.Add(b);
+            if (DriverDownloads.For(c.Id) is { } package)
+            {
+                // instala daqui mesmo: baixa a versão mais nova do site oficial e roda o instalador
+                var install = PadUi.Button(c.Installed ? "Atualizar" : "Instalar", primary: !c.Installed && c.Need != "opcional");
+                install.Click += async (_, _) => await InstallAsync(package, c.Title, install, progress);
+                buttons.Children.Add(install);
+                var site = new TextBlock { FontSize = 11.5, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+                var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("site oficial")) { Foreground = PadUi.Res("MutedBrush") };
+                link.Click += (_, _) => PadUi.Open(url);
+                site.Inlines.Add(link);
+                buttons.Children.Add(site);
+            }
+            else
+            {
+                var b = PadUi.Button(c.Installed ? "Reinstalar / atualizar" : "Baixar do site oficial", primary: !c.Installed && c.Need != "opcional");
+                b.Click += (_, _) => PadUi.Open(url);
+                buttons.Children.Add(b);
+            }
+            buttons.Children.Add(progress);
+            Grid.SetColumn(buttons, 2);
+            grid.Children.Add(buttons);
             _parts.Children.Add(new Border { Background = PadUi.Res("Surface2Brush"), CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 0, 8), Child = grid });
         }
+    }
+
+    private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(5) };
+    private bool _installing;
+
+    /// <summary>Um clique: baixa o instalador oficial mais novo, confere o SHA-256 e roda (pede administrador ao Windows).</summary>
+    private async Task InstallAsync(DriverPackage package, string title, Button button, TextBlock progress)
+    {
+        if (_installing) { progress.Text = "Espere a outra instalação terminar."; return; }
+        _installing = true;
+        button.IsEnabled = false;
+        progress.Foreground = PadUi.Res("MutedBrush");
+        try
+        {
+            var (path, asset) = await DriverDownloads.DownloadAsync(Http, package, new Progress<string>(t => progress.Text = t), CancellationToken.None);
+            progress.Text = package.Silent ? $"Instalando {asset.Tag}... (o Windows pode pedir permissão)" : "Siga o instalador que abriu (Avançar até o fim).";
+            var info = package.Msi
+                ? new System.Diagnostics.ProcessStartInfo("msiexec.exe", $"/i \"{path}\" {package.Arguments}")
+                : new System.Diagnostics.ProcessStartInfo(path, package.Arguments);
+            info.UseShellExecute = true;
+            info.Verb = "runas";
+            info.WorkingDirectory = System.IO.Path.GetDirectoryName(path)!;
+            using var process = System.Diagnostics.Process.Start(info) ?? throw new InvalidOperationException("O instalador não abriu.");
+            await process.WaitForExitAsync();
+            var (ok, reboot) = DriverDownloads.Result(process.ExitCode);
+            progress.Text = ok ? (reboot ? "Instalado. Reinicie o PC para terminar." : "Instalado.") : process.ExitCode is 1602 or 1223 ? "Instalação cancelada." : $"O instalador terminou com erro ({process.ExitCode}).";
+            progress.Foreground = PadUi.Res(ok ? "OkBrush" : "WarnBrush");
+            try { System.IO.File.Delete(path); } catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { }
+            if (ok && reboot)
+                MessageBox.Show($"{title} foi instalado. O Windows precisa reiniciar para o driver começar a funcionar.", "Emulação de controle", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (System.ComponentModel.Win32Exception) { progress.Text = "Instalação cancelada (o Windows não recebeu permissão)."; progress.Foreground = PadUi.Res("WarnBrush"); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Net.Http.HttpRequestException or TaskCanceledException or System.IO.IOException or UnauthorizedAccessException)
+        {
+            progress.Text = ex.Message;
+            progress.Foreground = PadUi.Res("WarnBrush");
+        }
+        finally
+        {
+            _installing = false;
+            button.IsEnabled = true;
+        }
+        string keep = progress.Text;
+        Check();
+        _summary.Text += "  " + keep;
     }
 
     // ------------------------------------------------------------ passo 3: ligar o controle virtual

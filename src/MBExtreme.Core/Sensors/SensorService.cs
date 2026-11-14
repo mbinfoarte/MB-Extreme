@@ -21,6 +21,7 @@ public sealed class SensorService : IDisposable
                 IsGpuEnabled = true,
                 IsMotherboardEnabled = true,
                 IsControllerEnabled = true,
+                IsMemoryEnabled = true,   // temperatura dos pentes (sensor SPD), quando o pente tem
             };
             _computer.Open();
         }
@@ -55,6 +56,12 @@ public sealed class SensorService : IDisposable
         var fans = new List<FanReading>();
         var cpuTemps = new List<(string Name, double Value)>();
         var gpus = new List<GpuReading>();
+        string? cpuName = null;
+        var coreLoads = new List<(string, double)>();
+        var cpuVolts = new List<(string, double)>();
+        var boardVolts = new List<(string, double)>();
+        var memTemps = new List<(string, double)>();
+        var gpuExtra = new Dictionary<string, (double? Volt, double? MemClock, double? Hotspot, double? Used, double? Total)>();
 
         try
         {
@@ -64,6 +71,30 @@ public sealed class SensorService : IDisposable
                 bool isCpu = hardware.HardwareType == HardwareType.Cpu;
                 if (isCpu) { cpuFound = true; cpuSensors += hardware.Sensors.Count(x => x.SensorType == SensorType.Temperature && x.Value is float t && SensorRules.IsValidTemperature(t)); }
                 bool isGpu = hardware.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel;
+                if (isCpu) cpuName ??= hardware.Name;
+                foreach (var sensor in hardware.Sensors)
+                {
+                    if (sensor.Value is not float v) continue;
+                    if (isCpu && sensor.SensorType == SensorType.Load) coreLoads.Add((sensor.Name, v));
+                    if (isCpu && sensor.SensorType == SensorType.Voltage) cpuVolts.Add((sensor.Name, v));
+                    if (hardware.HardwareType is HardwareType.SuperIO or HardwareType.Motherboard && sensor.SensorType == SensorType.Voltage) boardVolts.Add((sensor.Name, v));
+                    if (hardware.HardwareType == HardwareType.Memory && sensor.SensorType == SensorType.Temperature && SensorRules.IsValidTemperature(v))
+                        memTemps.Add((hardware.Name.Contains("DIMM", StringComparison.OrdinalIgnoreCase) || sensor.Name.Contains("DIMM", StringComparison.OrdinalIgnoreCase) ? sensor.Name : hardware.Name + " " + sensor.Name, v));
+                }
+                if (isGpu)
+                {
+                    double? volt = null, memClock = null, hot = null, used = null, total = null;
+                    foreach (var sensor in hardware.Sensors)
+                    {
+                        if (sensor.Value is not float v) continue;
+                        if (sensor.SensorType == SensorType.Voltage) volt ??= v is > 0.4f and < 2f ? v : null;
+                        else if (sensor.SensorType == SensorType.Clock && sensor.Name.Contains("Memory", StringComparison.OrdinalIgnoreCase)) memClock = v;
+                        else if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("Hot", StringComparison.OrdinalIgnoreCase) && SensorRules.IsValidTemperature(v)) hot = v;
+                        else if (sensor.SensorType == SensorType.SmallData && sensor.Name.Contains("Memory Used", StringComparison.OrdinalIgnoreCase)) used = v;
+                        else if (sensor.SensorType == SensorType.SmallData && sensor.Name.Contains("Memory Total", StringComparison.OrdinalIgnoreCase)) total = v;
+                    }
+                    gpuExtra[hardware.Name] = (volt, memClock, hot, used, total);
+                }
 
                 foreach (var sensor in hardware.Sensors)
                 {
@@ -142,8 +173,12 @@ public sealed class SensorService : IDisposable
                 ? SensorRules.WhyCpuTemperatureIsMissing(IsAdministrator, _openError, cpuFound, cpuSensors)
                 : "Temperatura aproximada (zona térmica do Windows); para a leitura exata do núcleo, rode como administrador e instale o PawnIO.";
         }
+        var picked = UsageRules.PickGpu(gpus);
+        var extra = picked is not null && gpuExtra.TryGetValue(picked.Name, out var e) ? e : default;
+        var detail = new SensorDetail(cpuName, SensorPick.CoreLoads(coreLoads), SensorPick.CpuVoltage(cpuVolts, boardVolts),
+            picked?.Name, extra.Volt, extra.MemClock, extra.Hotspot, extra.Used, extra.Total, memTemps);
         return new SensorSnapshot(true, message, cpuTemp, cpuLoad, cpuPower, cpuClock,
-            gpuTemp, gpuLoad, gpuPower, gpuClock, fans);
+            gpuTemp, gpuLoad, gpuPower, gpuClock, fans) { Detail = detail };
     }
 
     /// <summary>Texto para o suporte: administrador, o que a biblioteca enxergou e cada sensor com valor.</summary>

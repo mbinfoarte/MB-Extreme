@@ -101,6 +101,7 @@ public partial class DashboardPage : UserControl
             await hero.AnalyzeAsync();
         };
         // ícones das funções nos cartões ao vivo (pulsam devagar) e o efeito de vidro do menu ao passar o mouse
+        BuildLiveCards();
         DecorateCard(CpuCard, "\uE950", Color.FromRgb(0xFF, 0xA9, 0x4D));
         DecorateCard(GpuCard, "\uE7F4", Color.FromRgb(0x6C, 0xB6, 0xFF));
         DecorateCard(RamCard, "\uE950", Color.FromRgb(0xC0, 0x84, 0xFC));
@@ -347,7 +348,7 @@ public partial class DashboardPage : UserControl
     {
         double used = 100 - memory.FreePercent;
         RamGauge.Value = memory.TotalBytes > 0 ? used : null;
-        RamDetail.Text = $"{memory.UsedBytes / BytesPerGb:0.0} GB de {memory.TotalBytes / BytesPerGb:0.#} GB";
+        UpdateRamTiles(memory);
         _memoryUsed = used;
         if (memory.TotalBytes > 0)
         {
@@ -564,16 +565,8 @@ public partial class DashboardPage : UserControl
 
         _cpuTemperature = s.CpuTemperature;
         CpuGauge.Value = s.CpuTemperature;
-        CpuDetail.Text = Join(
-            s.CpuLoad is double cl ? $"Uso {cl:0}%" : null,
-            s.CpuClockMhz is double cc ? $"{cc / 1000:0.0} GHz" : null,
-            s.CpuPowerWatts is double cp ? $"{cp:0} W" : null);
-
         GpuGauge.Value = s.GpuTemperature;
-        GpuDetail.Text = Join(
-            s.GpuLoad is double gl ? $"Uso {gl:0}%" : null,
-            s.GpuClockMhz is double gc ? $"{gc:0} MHz" : null,
-            s.GpuPowerWatts is double gp ? $"{gp:0} W" : null);
+        UpdateLive(s);
 
         if (s.CpuLoad is double value)
         {
@@ -586,10 +579,6 @@ public partial class DashboardPage : UserControl
             GpuUseChart.Values = _gpuHistory.ToList();
         }
 
-        // ventoinhas junto de cada peça: CPU (e bomba do cooler), placa de vídeo e, na CPU, as do gabinete
-        var fans = FanGroups.Split(s.Fans);
-        ShowFans(CpuFans, fans.Cpu, fans.Case.Count > 0 ? "Gabinete: " + FanGroups.Describe(fans.Case.Take(3)) : null);
-        ShowFans(GpuFans, fans.Gpu, null);
 
         double? total = s.CpuPowerWatts is null && s.GpuPowerWatts is null
             ? null
@@ -605,14 +594,6 @@ public partial class DashboardPage : UserControl
             Push(_powerGpuHistory, s.GpuPowerWatts ?? 0);
             _powerChart.Update(_powerTotalHistory.ToList(), _powerCpuHistory.ToList(), _powerGpuHistory.ToList());
         }
-    }
-
-    private void ShowFans(TextBlock target, IReadOnlyList<FanReading> own, string? extra)
-    {
-        string text = Join(own.Count > 0 ? "Ventoinhas: " + FanGroups.Describe(own) : null, extra);
-        bool none = text.Length == 0;
-        target.Text = none ? "Ventoinhas: sem leitura" : text;
-        target.Foreground = (Brush)FindResource(none ? "MutedBrush" : "TextBrush");
     }
 
     private static string Join(params string?[] parts) =>

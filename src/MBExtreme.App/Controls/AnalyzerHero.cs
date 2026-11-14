@@ -64,6 +64,8 @@ internal sealed class AnalyzerHero : UserControl
     private Border _full = null!;
     private readonly System.Windows.Threading.DispatcherTimer _collapseTimer = new() { Interval = TimeSpan.FromSeconds(6) };
     private int _score;
+    private readonly ContentControl _cleanHost = new() { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+    private string? _cleanText;
     private Brush _scoreBrush = Brushes.Transparent;
 
     /// <summary>Recolhido: só o anel pequeno com a nota (clicar abre de novo).</summary>
@@ -102,6 +104,7 @@ internal sealed class AnalyzerHero : UserControl
         var right = new StackPanel();
         right.Children.Add(_title);
         right.Children.Add(_subtitle);
+        right.Children.Add(_cleanHost);
         right.Children.Add(_rows);
         right.Children.Add(_actions);
         Grid.SetColumn(right, 1);
@@ -179,6 +182,14 @@ internal sealed class AnalyzerHero : UserControl
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(ringHost);
         row.Children.Add(text);
+        if (_cleanText is not null)
+        {
+            var broom = GlassFx.Broom(Color.FromRgb(0xFF, 0xC4, 0x00), 18);
+            broom.Margin = new Thickness(6, 0, 2, 0);
+            broom.VerticalAlignment = VerticalAlignment.Center;
+            broom.ToolTip = "Limpeza pendente: " + _cleanText;
+            row.Children.Add(broom);
+        }
         var button = new Button { Cursor = Cursors.Hand, Content = row, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, ToolTip = "Abrir a análise" };
         button.Template = PillTemplate();
         System.Windows.Automation.AutomationProperties.SetName(button, $"Saúde do PC {_score}. Abrir a análise");
@@ -310,6 +321,7 @@ internal sealed class AnalyzerHero : UserControl
         SetCollapsed(false);
         _busy = true;
         Orbit(false);
+        _cleanHost.Content = null;
         _cts = new CancellationTokenSource();
         _rows.Children.Clear();
         _actions.Children.Clear();
@@ -383,6 +395,7 @@ internal sealed class AnalyzerHero : UserControl
             ? $"Nada para resolver. Última análise: hoje às {_report.Finished.ToLocalTime():HH:mm}."
             : $"{open.Count} item(ns) para resolver. Os que têm a caixa \"Corrigir\" o MB Extreme resolve sozinho no \"Corrigir tudo\"; os outros abrem a tela certa pelo botão Resolver. Última análise: hoje às {_report.Finished.ToLocalTime():HH:mm}.";
 
+        ShowCleanup();
         _rows.Children.Clear();
         _boxes.Clear();
         // o que pede ação fica em linhas inteiras (com Corrigir/Resolver/Ignorar); o resto vira 3 colunas curtas
@@ -413,6 +426,39 @@ internal sealed class AnalyzerHero : UserControl
                 ShowResult();
                 return Task.CompletedTask;
             }));
+    }
+
+    /// <summary>
+    /// Vassourinha varrendo quando a análise achou arquivos para limpar (mesmo com a nota em 100 ou o item ignorado):
+    /// "Limpeza pendente: 729 MB" e o botão que já abre a Limpeza rodando.
+    /// </summary>
+    private void ShowCleanup()
+    {
+        var run = _report?.Checks.FirstOrDefault(r => r.Title.Contains("tempor", StringComparison.OrdinalIgnoreCase) || r.Title.Contains("lixo", StringComparison.OrdinalIgnoreCase));
+        var finding = run?.Findings.FirstOrDefault(f => f.Severity >= Severity.Info);
+        _cleanText = finding?.Title;
+        if (finding is null) { _cleanHost.Content = null; return; }
+        var yellow = Color.FromRgb(0xFF, 0xC4, 0x00);
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var broom = GlassFx.Broom(yellow, 22);
+        broom.Margin = new Thickness(0, 0, 10, 0);
+        broom.VerticalAlignment = VerticalAlignment.Center;
+        row.Children.Add(broom);
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+        text.Children.Add(new TextBlock { Text = "Limpeza pendente", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(yellow) });
+        text.Children.Add(new TextBlock { Text = finding.Title, FontSize = 11.5, Foreground = Res("MutedBrush") });
+        row.Children.Add(text);
+        var clean = new Button { Content = "Limpar agora", Style = (Style)Application.Current.FindResource("PrimaryButton"), Padding = new Thickness(12, 4, 12, 4), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        clean.Click += (_, _) => MainWindow.Current?.Go("cleanup", autoStart: true);
+        row.Children.Add(clean);
+        var chip = new Border
+        {
+            Child = row, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 6, 8, 6), BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xC4, 0x00)), Background = new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xC4, 0x00)),
+        };
+        GlassFx.Attach(chip, broom);
+        _cleanHost.Content = chip;
+        Motion.Enter(chip, fromY: 6);
     }
 
     private static bool NeedsAction(CheckRun run, ISet<string> ignored) =>

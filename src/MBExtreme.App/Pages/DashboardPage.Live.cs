@@ -155,12 +155,10 @@ public partial class DashboardPage
             {
                 bool pump = f.Name.Contains("pump", StringComparison.OrdinalIgnoreCase);
                 var spin = new RotateTransform(0);
-                var icon = new TextBlock
-                {
-                    Text = "", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 16, Width = 18, Height = 18, TextAlignment = TextAlignment.Center,
-                    Foreground = new SolidColorBrush(pump ? Color.FromRgb(0x6C, 0xB6, 0xFF) : Color.FromRgb(0xD4, 0xD4, 0xD8)),
-                    RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = spin, VerticalAlignment = VerticalAlignment.Center,
-                };
+                // ventoinha desenhada; a bomba do water cooler em azul
+                var icon = GlassFx.Fan(pump ? Color.FromRgb(0x6C, 0xB6, 0xFF) : Color.FromRgb(0xD4, 0xD4, 0xD8), 20);
+                icon.RenderTransform = spin;
+                icon.VerticalAlignment = VerticalAlignment.Center;
                 var rpm = new TextBlock { FontSize = 12.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
                 var row = new DockPanel { Margin = new Thickness(0, 3, 0, 0) };
                 DockPanel.SetDock(icon, Dock.Left);

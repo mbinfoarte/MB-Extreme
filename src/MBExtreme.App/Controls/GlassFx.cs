@@ -97,7 +97,12 @@ internal static class GlassFx
     }
 
     /// <summary>Ícone da função num quadradinho colorido (Segoe MDL2). breathe: pulsa devagar (cartões ao vivo).</summary>
-    public static Border Badge(string glyph, Color color, double size = 30, bool breathe = false)
+    private static readonly Random Phase = new();
+
+    public static Border Badge(string glyph, Color color, double size = 30, bool breathe = false) => Badge(glyph, color, size, breathe, alive: true);
+
+    /// <summary>alive: o ícone fica vivo o tempo todo (pulso leve com brilho, cada um no seu ritmo para não piscarem juntos).</summary>
+    public static Border Badge(string glyph, Color color, double size, bool breathe, bool alive)
     {
         var text = new TextBlock
         {
@@ -115,8 +120,65 @@ internal static class GlassFx
         {
             Motion.Pop(badge);
             if (breathe) badge.Dispatcher.BeginInvoke(new Action(() => Motion.Breathe(text, 1.12, 2.2)), System.Windows.Threading.DispatcherPriority.Background);
+            else if (alive && Motion.Enabled) Alive(text, badge, color);
         };
         return badge;
+    }
+
+    /// <summary>Pulso leve do ícone e brilho da moldura, com início sorteado (os ícones não pulsam todos juntos).</summary>
+    private static void Alive(TextBlock text, Border badge, Color color)
+    {
+        var begin = TimeSpan.FromMilliseconds(Phase.Next(0, 2400));
+        var scale = new ScaleTransform(1, 1);
+        text.RenderTransformOrigin = new Point(0.5, 0.5);
+        text.RenderTransform = scale;
+        var pulse = new DoubleAnimation(1, 1.14, new Duration(TimeSpan.FromSeconds(1.3)))
+        {
+            AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, BeginTime = begin, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+        };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, pulse);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, pulse);
+        var glow = new DropShadowEffect { Color = color, BlurRadius = 10, ShadowDepth = 0, Opacity = 0 };
+        badge.Effect = glow;
+        glow.BeginAnimation(DropShadowEffect.OpacityProperty, new DoubleAnimation(0, 0.55, new Duration(TimeSpan.FromSeconds(1.3)))
+        { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, BeginTime = begin });
+    }
+
+    /// <summary>Ventoinha desenhada (4 pás) para girar na velocidade real.</summary>
+    public static FrameworkElement Fan(Color color, double size = 20)
+    {
+        var brush = new SolidColorBrush(color);
+        var canvas = new Grid { Width = size, Height = size, RenderTransformOrigin = new Point(0.5, 0.5) };
+        var blades = System.Windows.Media.Geometry.Parse(
+            "M10,8.6 C10,3.6 12,0.6 15,0.6 C18,0.6 17.5,5.6 12.5,8.1 Z " +
+            "M11.4,10 C16.4,10 19.4,12 19.4,15 C19.4,18 14.4,17.5 11.9,12.5 Z " +
+            "M10,11.4 C10,16.4 8,19.4 5,19.4 C2,19.4 2.5,14.4 7.5,11.9 Z " +
+            "M8.6,10 C3.6,10 0.6,8 0.6,5 C0.6,2 5.6,2.5 8.1,7.5 Z");
+        canvas.Children.Add(new System.Windows.Shapes.Path { Data = blades, Fill = brush, Stretch = Stretch.Uniform, Opacity = 0.9 });
+        canvas.Children.Add(new System.Windows.Shapes.Ellipse { Width = size * 0.26, Height = size * 0.26, Fill = brush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+        return canvas;
+    }
+
+    /// <summary>Vassourinha desenhada que varre (balança) — indica que há limpeza a fazer.</summary>
+    public static FrameworkElement Broom(Color color, double size = 22)
+    {
+        var brush = new SolidColorBrush(color);
+        var grid = new Grid { Width = size, Height = size, RenderTransformOrigin = new Point(0.5, 0.1) };
+        var shape = System.Windows.Media.Geometry.Parse("M10,0 L11.4,0 L11.4,11 L10,11 Z M5,11 L16.4,11 L19,20 L2.4,20 Z");
+        grid.Children.Add(new System.Windows.Shapes.Path { Data = shape, Fill = brush, Stretch = Stretch.Uniform });
+        grid.Children.Add(new System.Windows.Shapes.Path
+        {
+            Data = System.Windows.Media.Geometry.Parse("M6,13 L4.6,19.4 M9,13 L8.4,19.4 M12.4,13 L13,19.4 M15.4,13 L16.8,19.4"),
+            Stroke = new SolidColorBrush(Color.FromRgb(0x12, 0x12, 0x14)), StrokeThickness = 0.9, Stretch = Stretch.Uniform, Margin = new Thickness(size * 0.12, size * 0.55, size * 0.12, 0),
+        });
+        if (Motion.Enabled)
+        {
+            var rotate = new RotateTransform(-14);
+            grid.RenderTransform = rotate;
+            rotate.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(-14, 14, new Duration(TimeSpan.FromSeconds(0.55)))
+            { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
+        }
+        return grid;
     }
 
     /// <summary>Botão com ícone e texto.</summary>

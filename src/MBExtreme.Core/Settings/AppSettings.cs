@@ -52,6 +52,8 @@ public sealed class AppSettings
     public int OverlayOpacity { get; set; } = 55;
     public string OverlayColor { get; set; } = "#FFFFFF";
     public bool OverlayFpsColors { get; set; } = true;
+    /// <summary>Passos de BIOS marcados como feitos (data e passo), para o histórico da Otimização de BIOS.</summary>
+    public List<string> BiosLog { get; set; } = new();
     public List<string> ProcessProfileStartup { get; set; } = new();
     public List<string> ProcessProfileTweaks { get; set; } = new();
 

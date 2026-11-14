@@ -23,7 +23,7 @@ public static class FeaturePolicy
     public static IReadOnlyDictionary<string, string> PagePlans { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         // Essencial: otimização e manutenção
-        ["hardware"] = Essencial, ["bios"] = Essencial, ["recipe"] = Essencial, ["netanalyzer"] = Essencial, ["wifi"] = Essencial,
+        ["hardware"] = Essencial, ["bios"] = Essencial, ["recipe"] = Essencial, ["bios-tune"] = Essencial, ["netanalyzer"] = Essencial, ["wifi"] = Essencial,
         ["drivers"] = Essencial, ["proc-profiles"] = Essencial, ["tweaks-perf"] = Essencial, ["net-tweaks"] = Essencial, ["duplicates"] = Essencial,
         ["largefiles"] = Essencial, ["shredder"] = Essencial,
         // Gamer: jogos, desempenho e benchmark

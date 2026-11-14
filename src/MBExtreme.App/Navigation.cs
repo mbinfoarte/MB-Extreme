@@ -75,6 +75,7 @@ internal static class NavigationMap
             new("win11", "Windows 11", "Confere se o PC atende aos requisitos do Windows 11 e o que falta.", "\uE770", "Hardware e BIOS"),
             new("bios", "BIOS e atualizações", "Versão da BIOS e onde achar a mais nova.", "\uE896", "Hardware e BIOS"),
             new("recipe", "Receita de BIOS", "XMP/EXPO, Resizable BAR e PBO para o seu PC.", "\uE713", "Hardware e BIOS"),
+            new("bios-tune", "Otimização de BIOS", "Plano de BIOS pelo seu hardware: EXPO/XMP, Resizable BAR, PBO/Curve Optimizer, undervolt e temperatura.", "\uE950", "Hardware e BIOS"),
         }),
         new("win", "Windows", "Sistema, discos, dispositivos, ferramentas, drivers e programas.", "\uE713", new Tile[]
         {
@@ -152,6 +153,7 @@ internal static class NavigationMap
         new("OTIMIZAR", new SideItem[]
         {
             new("hub-disks", "Dispositivos e discos", "\uEDA2"),
+            new("bios-tune", "Otimização de BIOS", "\uE950"),
             new("drivers", "Drivers", "\uE964"),
             new("hub-startup", "Processos e inicialização", "\uE7E8"),
             new("hub-clean", "Limpeza", "\uE74D"),

@@ -663,6 +663,7 @@ public partial class MainWindow : Window
         "startup" => new StartupPage(),
         "proc-profiles" => new ProcessProfilesPage(),
         "overlay-setup" => new OverlaySetupPage(),
+        "bios-tune" => new BiosTunePage(),
         "repair" => new RepairPage(),
         "diskmgr" => new DiskManagerPage(),
         "wallpaper" => new WallpaperPage(),

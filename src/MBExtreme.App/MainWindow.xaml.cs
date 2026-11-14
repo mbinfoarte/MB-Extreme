@@ -661,6 +661,7 @@ public partial class MainWindow : Window
         "compare" => new ComparePage(),
         "profiles" => new ProfilesPage(),
         "startup" => new StartupPage(),
+        "proc-profiles" => new ProcessProfilesPage(),
         "repair" => new RepairPage(),
         "diskmgr" => new DiskManagerPage(),
         "wallpaper" => new WallpaperPage(),

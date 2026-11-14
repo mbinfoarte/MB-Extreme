@@ -94,6 +94,7 @@ internal static class NavigationMap
             new("uninstaller", "Desinstalador", "Programas instalados e aplicativos do Windows: remova vários de uma vez.", "\uE74D", "Drivers e programas"),
             new("software", "Drivers e programas", "Atualize drivers e programas, instale ferramentas e remova o driver de vídeo, tudo num lugar só.", "\uE896", "Drivers e programas"),
             new("processes", "Processos", "Quem usa memória e processador, com encerramento seguro.", "\uE9D9", "Ferramentas"),
+            new("proc-profiles", "Processos e inicialização", "Exame automático e perfis de um clique: Gamer, Turbo, Trabalho, Notebook e Streamer.", "\uE7E8", "Ferramentas"),
             new("diskmap", "Mapa do disco", "Mapa colorido de quais pastas e arquivos estão enchendo o disco.", "\uE8B7", "Ferramentas"),
             new("largefiles", "Arquivos grandes", "Ache o que está ocupando espaço.", "\uE8B7", "Ferramentas"),
             new("duplicates", "Arquivos duplicados", "Cópias idênticas e espaço recuperável.", "\uE8C8", "Ferramentas"),
@@ -151,7 +152,7 @@ internal static class NavigationMap
         {
             new("hub-disks", "Dispositivos e discos", "\uEDA2"),
             new("drivers", "Drivers", "\uE964"),
-            new("hub-startup", "Inicialização", "\uE7E8"),
+            new("hub-startup", "Processos e inicialização", "\uE7E8"),
             new("hub-clean", "Limpeza", "\uE74D"),
             new("tweaks-all", "Otimizações", "\uE945"),
             new("speedtest", "Rede", "\uE774"),
@@ -189,7 +190,7 @@ internal static class NavigationMap
         ["programs"] = new[] { ("Instalar", "programs-install"), ("Atualizar", "programs-installed"), ("Desinstalador", "uninstaller"), ("Aplicativos do Windows", "debloat") },
         ["hub-hardware"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware") },
         ["hub-disks"] = new[] { ("Saúde, desfragmentar e TRIM", "storage"), ("Mapa do disco", "diskmap") },
-        ["hub-startup"] = new[] { ("Programas", "startup"), ("Serviços", "services") },
+        ["hub-startup"] = new[] { ("Exame e perfis", "proc-profiles"), ("Programas", "startup"), ("Serviços", "services") },
         ["hub-clean"] = new[] { ("Limpeza", "cleanup"), ("Memória", "memory"), ("Arquivos duplicados", "duplicates") },
         ["hub-fps"] = new[] { ("Gargalos", "bottleneck"), ("Medidor de FPS", "gamefps") },
     };

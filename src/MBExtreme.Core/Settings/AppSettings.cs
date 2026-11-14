@@ -36,6 +36,10 @@ public sealed class AppSettings
     public bool RatingDone { get; set; }
     /// <summary>Fechou a janela de login sem entrar: não abre sozinha de novo até esta hora.</summary>
     public DateTime? LoginPromptSnoozeUtc { get; set; }
+    /// <summary>Perfil da tela Processos e inicialização e o que ele mudou (para o Desfazer perfil).</summary>
+    public string? ProcessProfile { get; set; }
+    public List<string> ProcessProfileStartup { get; set; } = new();
+    public List<string> ProcessProfileTweaks { get; set; } = new();
 
     /// <summary>Programas (sem .exe) que o Modo Jogo pede para fechar quando um jogo abre.</summary>
     public List<string> BoostCloseApps { get; set; } = new();

@@ -650,7 +650,7 @@ public static class TweakCatalog
             BrowserTweak(store, "browser-brave", "Brave", @"SOFTWARE\Policies\BraveSoftware\Brave"),
         };
 
-        return tweaks.Concat(CommandTweaks.Create(store)).Concat(TweakCatalogExtra.Create(store)).ToList();
+        return tweaks.Concat(CommandTweaks.Create(store)).Concat(TweakCatalogExtra.Create(store)).Concat(TweakCatalogProcesses.Create(store)).ToList();
     }
 
     private static RegistryTweak BrowserTweak(TweakStore store, string id, string name, string policyPath) =>

@@ -24,7 +24,7 @@ public static class FeaturePolicy
     {
         // Essencial: otimização e manutenção
         ["hardware"] = Essencial, ["bios"] = Essencial, ["recipe"] = Essencial, ["netanalyzer"] = Essencial, ["wifi"] = Essencial,
-        ["drivers"] = Essencial, ["tweaks-perf"] = Essencial, ["net-tweaks"] = Essencial, ["duplicates"] = Essencial,
+        ["drivers"] = Essencial, ["proc-profiles"] = Essencial, ["tweaks-perf"] = Essencial, ["net-tweaks"] = Essencial, ["duplicates"] = Essencial,
         ["largefiles"] = Essencial, ["shredder"] = Essencial,
         // Gamer: jogos, desempenho e benchmark
         ["gamefps"] = Gamer, ["bench"] = Gamer, ["compare"] = Gamer, ["stress"] = Gamer, ["latency"] = Gamer, ["gameboost"] = Gamer,

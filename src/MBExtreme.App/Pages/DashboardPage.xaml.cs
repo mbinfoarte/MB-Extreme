@@ -68,7 +68,7 @@ public partial class DashboardPage : UserControl
             return;
         }
         bool signedIn = license.Status.Payload is not null;
-        _betaNotice = new Notice(signedIn ? "ESCOLHA SEU PLANO" : "TESTE GRÁTIS DE 3 DIAS", Yellow, "★",
+        _betaNotice = new Notice(signedIn ? "ESCOLHA SEU PLANO" : "TESTE GRÁTIS DE 3 DIAS", Yellow, "\uE734",
             signedIn ? "Seu teste grátis terminou" : "Plano Gamer liberado por 3 dias, sem cartão",
             signedIn ? "Assine para liberar otimizações, jogos, benchmark e estúdio" : "Crie a conta grátis em mbinfoarte.com.br e entre por aqui",
             signedIn ? "Ver planos" : "Ativar", false, LicensePage.StartTrialOrPlans,
@@ -100,6 +100,12 @@ public partial class DashboardPage : UserControl
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             await hero.AnalyzeAsync();
         };
+        // ícones das funções nos cartões ao vivo (pulsam devagar) e o efeito de vidro do menu ao passar o mouse
+        DecorateCard(CpuCard, "\uE950", Color.FromRgb(0xFF, 0xA9, 0x4D));
+        DecorateCard(GpuCard, "\uE7F4", Color.FromRgb(0x6C, 0xB6, 0xFF));
+        DecorateCard(RamCard, "\uE950", Color.FromRgb(0xC0, 0x84, 0xFC));
+        DecorateCard(NetBigCard, "\uE774", Color.FromRgb(0x3D, 0xDC, 0x97));
+        DecorateCard(PowerCard, "\uE945", Color.FromRgb(0xFF, 0xC4, 0x00));
         CpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("cpu-detail");
         GpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("gpu-detail");
         RamCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("ram-detail");
@@ -122,6 +128,34 @@ public partial class DashboardPage : UserControl
 
     private static bool _autoAnalyzed;
 
+    /// <summary>Põe o ícone da função antes do título do cartão (o primeiro texto de 15 pt) e liga o efeito de vidro ao passar o mouse.</summary>
+    private static void DecorateCard(Border card, string glyph, Color color)
+    {
+        var badge = GlassFx.Badge(glyph, color, 30, breathe: true);
+        var title = Find(card.Child);
+        if (title?.Parent is Panel panel)
+        {
+            int at = panel.Children.IndexOf(title);
+            panel.Children.RemoveAt(at);
+            var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            badge.Margin = new Thickness(0, 0, 10, 0);
+            row.Children.Add(badge);
+            title.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(title);
+            panel.Children.Insert(at, row);
+        }
+        GlassFx.Attach(card, badge);
+
+        static TextBlock? Find(DependencyObject? node)
+        {
+            if (node is TextBlock t && t.FontSize >= 15 && t.FontWeight == FontWeights.SemiBold) return t;
+            if (node is null) return null;
+            foreach (object child in LogicalTreeHelper.GetChildren(node))
+                if (child is DependencyObject d && Find(d) is { } found) return found;
+            return null;
+        }
+    }
+
     /// <summary>Faixa "Vídeo novo no canal" (some quando a pessoa fecha aquele vídeo).</summary>
     private void ShowVideo(MBExtreme.Core.Social.YouTubeVideo? video)
     {
@@ -131,7 +165,7 @@ public partial class DashboardPage : UserControl
             RenderNotices();
             return;
         }
-        _videoNotice = new Notice("VÍDEO NOVO NO CANAL", Yellow, "▶", video.Title, MBExtreme.Core.Social.YouTubeFeed.Ago(video.Published, DateTimeOffset.Now),
+        _videoNotice = new Notice("VÍDEO NOVO NO CANAL", Yellow, "\uE714", video.Title, MBExtreme.Core.Social.YouTubeFeed.Ago(video.Published, DateTimeOffset.Now),
             "Assistir", false, () => { try { Process.Start(new ProcessStartInfo(video.Url) { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { } },
             () =>
             {
@@ -155,8 +189,12 @@ public partial class DashboardPage : UserControl
         {
             var current = item;
             bool fixable = item.FixKind.Length > 0;
+            string glyph = item.TargetPage switch
+            {
+                "security" => "\uE72E", "disks" => "\uEDA2", "ram-detail" => "\uE950", "cpu-detail" => "\uE9CA", "startup" => "\uE7E8", _ => "\uE7BA",
+            };
             list.Add(new Notice(item.Urgent ? "ATENÇÃO" : "AVISO", item.Urgent ? Color.FromRgb(0xFF, 0x8A, 0x8E) : Color.FromRgb(0xFF, 0xA9, 0x4D),
-                item.Urgent ? "!" : "▲", item.Title, item.Detail,
+                glyph, item.Title, item.Detail,
                 fixable ? item.FixText : item.ActionText, fixable,
                 fixable ? () => _ = FixAsync(current) : () => MainWindow.Current?.Go(current.TargetPage),
                 Second: fixable ? "Ver" : null, SecondClick: fixable ? () => MainWindow.Current?.Go(current.TargetPage) : null,
@@ -222,12 +260,7 @@ public partial class DashboardPage : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var accent = new SolidColorBrush(n.Color);
-        var icon = new Border
-        {
-            Width = 30, Height = 30, CornerRadius = new CornerRadius(9), VerticalAlignment = VerticalAlignment.Center,
-            Background = new SolidColorBrush(Color.FromArgb(0x30, n.Color.R, n.Color.G, n.Color.B)),
-            Child = new TextBlock { Text = n.Glyph, FontSize = 14, FontWeight = FontWeights.Bold, Foreground = accent, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-        };
+        var icon = GlassFx.Badge(n.Glyph, n.Color, 32);
         grid.Children.Add(icon);
 
         var text = new StackPanel { Margin = new Thickness(10, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = n.Title + "\n" + n.Sub };
@@ -257,11 +290,13 @@ public partial class DashboardPage : UserControl
         Grid.SetColumn(buttons, 2);
         grid.Children.Add(buttons);
 
-        return new Border
+        var card = new Border
         {
             Background = (Brush)FindResource("Surface2Brush"), BorderBrush = (Brush)FindResource(n.Border), BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 0, compact ? 8 : 0, 8), Child = grid,
         };
+        GlassFx.Attach(card, icon);
+        return card;
     }
 
     private static string Rate(double bytesPerSecond)

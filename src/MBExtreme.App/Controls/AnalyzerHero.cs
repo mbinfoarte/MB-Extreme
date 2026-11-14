@@ -280,11 +280,23 @@ internal sealed class AnalyzerHero : UserControl
 
     private static TextBlock Muted(string text) => new() { Text = text, FontSize = 11.5, Foreground = Res("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
 
+    private static string ActionGlyph(string text) => text switch
+    {
+        "Corrigir tudo" => "\uE90F",
+        "Analisar de novo" => "\uE72C",
+        "Análise profunda" => "\uE9D9",
+        "Ver histórico" => "\uE81C",
+        "Recolher" => "\uE70E",
+        "Parar análise" => "\uE71A",
+        _ => text.StartsWith("Mostrar ignorados") ? "\uE7B3" : "",
+    };
+
     private Button Action(string text, bool primary, Func<Task> click, string? tip = null)
     {
+        string glyph = ActionGlyph(text);
         var b = new Button
         {
-            Content = text, Style = (Style)Application.Current.FindResource(primary ? "PrimaryButton" : "GhostButton"),
+            Content = glyph.Length > 0 ? GlassFx.IconContent(glyph, text) : text, Style = (Style)Application.Current.FindResource(primary ? "PrimaryButton" : "GhostButton"),
             Padding = new Thickness(14, 6, 14, 6), FontSize = 12.5, Margin = new Thickness(0, 0, 8, 0), ToolTip = tip,
         };
         b.Click += async (_, _) => await click();
@@ -413,11 +425,9 @@ internal sealed class AnalyzerHero : UserControl
         bool notVerified = run.Status is CheckStatus.Unavailable or CheckStatus.Error or CheckStatus.Cancelled;
         string detail = anyIgnored ? string.Join(" · ", run.Findings.Where(f => ignored.Contains(f.Id)).Select(f => f.Title)) + " (ignorado)"
             : notVerified ? DiagnosticText.StatusText(run.Status) : "Tudo certo";
-        var dot = new System.Windows.Shapes.Ellipse
-        {
-            Width = 8, Height = 8, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center,
-            Fill = anyIgnored || notVerified ? new SolidColorBrush(Color.FromRgb(0x52, 0x52, 0x5B)) : Res("OkBrush"),
-        };
+        var color = anyIgnored || notVerified ? Color.FromRgb(0x8E, 0x8E, 0x96) : Color.FromRgb(0x3D, 0xDC, 0x97);
+        var dot = GlassFx.Badge(CheckGlyph(run.Title), color, 26);
+        dot.Margin = new Thickness(0, 0, 9, 0);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = run.Title, FontSize = 12, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
         text.Children.Add(new TextBlock
@@ -429,11 +439,33 @@ internal sealed class AnalyzerHero : UserControl
         DockPanel.SetDock(dot, Dock.Left);
         dock.Children.Add(dot);
         dock.Children.Add(text);
-        return new Border
+        var card = new Border
         {
             Background = Res("Surface2Brush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 8, 6),
-            Child = dock, ToolTip = run.Title + "\n" + detail,
+            BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Child = dock, ToolTip = run.Title + "\n" + detail,
         };
+        GlassFx.Attach(card, dot);
+        return card;
+    }
+
+    /// <summary>Ícone de cada verificação pelo assunto (disco, limpeza, segurança, inicialização...).</summary>
+    internal static string CheckGlyph(string title)
+    {
+        string t = title.ToLowerInvariant();
+        if (t.Contains("smart") || t.Contains("saúde dos discos")) return "\uE95E";
+        if (t.Contains("trim") || t.Contains("otimização") || t.Contains("desfrag")) return "\uEC4A";
+        if (t.Contains("espaço") || t.Contains("disco")) return "\uEDA2";
+        if (t.Contains("tempor") || t.Contains("cache") || t.Contains("lixo")) return "\uE74D";
+        if (t.Contains("proteção do sistema") || t.Contains("restaura")) return "\uE81C";
+        if (t.Contains("proteção") || t.Contains("antiv") || t.Contains("segura") || t.Contains("firewall")) return "\uE72E";
+        if (t.Contains("abrem") || t.Contains("inicializa")) return "\uE7E8";
+        if (t.Contains("ajuste")) return "\uE713";
+        if (t.Contains("reinício") || t.Contains("reinicia")) return "\uE777";
+        if (t.Contains("data") || t.Contains("hora")) return "\uE823";
+        if (t.Contains("update") || t.Contains("atualiza")) return "\uE895";
+        if (t.Contains("driver")) return "\uE896";
+        if (t.Contains("memória")) return "\uE950";
+        return "\uE9D9";
     }
 
     /// <summary>Uma linha por verificação: ícone, nome, o que achou e, no fim, as ações de cada achado.</summary>

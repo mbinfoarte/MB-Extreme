@@ -20,7 +20,8 @@ internal sealed class MbLightPage : MbControlPageBase
 
     private readonly PadLightSettings _s = AppServices.Settings.PadLight;
     private readonly DispatcherTimer _save = new() { Interval = TimeSpan.FromMilliseconds(600) };
-    private readonly Rectangle _preview = new() { Height = 10, RadiusX = 5, RadiusY = 5, Margin = new Thickness(0, 2, 0, 14) };
+    private readonly Rectangle _preview = new() { Height = 8, Width = 78, RadiusX = 4, RadiusY = 4 };
+    private readonly System.Windows.Media.Effects.DropShadowEffect _glow = new() { ShadowDepth = 0, BlurRadius = 22, Opacity = 0.9 };
     private readonly TextBox _hex = new() { Width = 90, FontSize = 13, Margin = new Thickness(8, 0, 0, 0), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly TextBlock _ds4Note = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
     private readonly MBExtreme.UI.Controls.ColorPicker _picker = new();
@@ -36,15 +37,13 @@ internal sealed class MbLightPage : MbControlPageBase
         enable.Click += (_, _) => { _s.Enabled = enable.IsChecked == true; Changed(); };
         Body.Children.Add(enable);
 
-        Body.Children.Add(PadUi.Card(LightBar()));
-        var row = new UniformGrid { Columns = 2 };
-        row.Children.Add(PadUi.Card(Players()));
-        row.Children.Add(PadUi.Card(Rumble()));
-        Body.Children.Add(row);
-        var triggers = new UniformGrid { Columns = 2 };
-        triggers.Children.Add(PadUi.Card(Trigger("Gatilho esquerdo (L2)", _s.Left)));
-        triggers.Children.Add(PadUi.Card(Trigger("Gatilho direito (R2)", _s.Right)));
-        Body.Children.Add(triggers);
+        var side = new StackPanel();
+        side.Children.Add(PadUi.Card(Players()));
+        side.Children.Add(PadUi.Card(Rumble()));
+        Body.Children.Add(PadUi.Columns((PadUi.Card(LightBar()), 1.4), (side, 1)));
+        Body.Children.Add(PadUi.Columns(
+            (PadUi.Card(Trigger("\uE7FC", "Gatilho esquerdo (L2)", _s.Left)), 1),
+            (PadUi.Card(Trigger("\uE7FC", "Gatilho direito (R2)", _s.Right)), 1)));
         Body.Children.Add(PadUi.Muted("Os jogos com suporte ao PS5 mandam os próprios efeitos de gatilho; aqui você define o padrão para jogos que não usam e para testar o controle. A personalização volta ao padrão quando o controle é desligado sem o MB aberto.", 11.5));
         ShowColor();
     }
@@ -57,6 +56,19 @@ internal sealed class MbLightPage : MbControlPageBase
     }
 
     private static TextBlock Title(string text) => new() { Text = text, FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
+
+    /// <summary>Título com ícone vivo (mesmo estilo dos outros cartões do MB Control).</summary>
+    private static DockPanel IconTitle(string glyph, string text, UIElement? right = null)
+    {
+        var d = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        if (right is not null) { DockPanel.SetDock(right, Dock.Right); d.Children.Add(right); }
+        var badge = MBExtreme.UI.Controls.GlassFx.Badge(glyph, Color.FromRgb(0xFF, 0xC4, 0x00), 32);
+        badge.Margin = new Thickness(0, 0, 10, 0);
+        DockPanel.SetDock(badge, Dock.Left);
+        d.Children.Add(badge);
+        d.Children.Add(new TextBlock { Text = text, FontSize = 14.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        return d;
+    }
 
     private static UIElement Labeled(string label, Slider slider, Func<double, string> format)
     {
@@ -102,16 +114,26 @@ internal sealed class MbLightPage : MbControlPageBase
     private UIElement LightBar()
     {
         var st = new StackPanel();
-        st.Children.Add(Title("Barra de luz"));
-        st.Children.Add(Chips(new[] { (LightMode.Static, "Cor fixa"), (LightMode.Breathing, "Respiração"), (LightMode.Rainbow, "Multicor"), (LightMode.Strobe, "Estroboscópio"), (LightMode.Battery, "Pela bateria") },
-            () => _s.Mode, m => _s.Mode = m));
-        st.Children.Add(_preview);
+        st.Children.Add(IconTitle("\uEA80", "Barra de luz"));
 
         var cols = new Grid();
-        cols.ColumnDefinitions.Add(new ColumnDefinition());
-        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
         cols.ColumnDefinitions.Add(new ColumnDefinition());
         var left = new StackPanel();
+        // desenho simples do controle com a barra acesa na cor/efeito atual
+        var body = new Border
+        {
+            Height = 112, CornerRadius = new CornerRadius(46, 46, 56, 56), Background = PadUi.Res("Surface2Brush"),
+            BorderBrush = PadUi.Res("BorderBrush"), BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 0, 12),
+        };
+        _preview.VerticalAlignment = VerticalAlignment.Top;
+        _preview.Margin = new Thickness(0, 26, 0, 0);
+        _preview.Effect = _glow;
+        body.Child = _preview;
+        left.Children.Add(body);
+        st.Children.Add(Chips(new[] { (LightMode.Static, "Cor fixa"), (LightMode.Breathing, "Respiração"), (LightMode.Rainbow, "Multicor"), (LightMode.Strobe, "Estroboscópio"), (LightMode.Battery, "Pela bateria") },
+            () => _s.Mode, m => _s.Mode = m));
         var bright = NewSlider(0, 100, _s.Brightness);
         bright.ValueChanged += (_, _) => { _s.Brightness = (int)bright.Value; Changed(); };
         left.Children.Add(Labeled("Brilho", bright, v => $"{v:0}%"));
@@ -183,13 +205,14 @@ internal sealed class MbLightPage : MbControlPageBase
     {
         var (r, g, b) = PadOutput.LightColor(_s, (DateTime.Now - _t0).TotalMilliseconds, AppServices.Pads.State.Battery);
         _preview.Fill = new SolidColorBrush(Color.FromRgb(r, g, b));
+        _glow.Color = Color.FromRgb(r, g, b);
         if (!_hex.IsKeyboardFocused) _hex.Text = $"#{_s.R:X2}{_s.G:X2}{_s.B:X2}";
     }
 
     private UIElement Players()
     {
         var st = new StackPanel();
-        st.Children.Add(Title("Luzes do jogador e do mudo"));
+        st.Children.Add(IconTitle("\uE77B", "Jogador e mudo"));
         st.Children.Add(new TextBlock { Text = "Número do jogador", FontSize = 12.5, Margin = new Thickness(0, 0, 0, 4) });
         st.Children.Add(Chips(new[] { (0, "Apagadas"), (1, "1"), (2, "2"), (3, "3"), (4, "4"), (5, "Todas") }, () => _s.PlayerLeds, v => _s.PlayerLeds = v));
         st.Children.Add(new TextBlock { Text = "Brilho das luzes", FontSize = 12.5, Margin = new Thickness(0, 0, 0, 4) });
@@ -202,9 +225,9 @@ internal sealed class MbLightPage : MbControlPageBase
     private UIElement Rumble()
     {
         var st = new StackPanel();
-        st.Children.Add(Title("Teste de vibração"));
-        st.Children.Add(PadUi.Muted("Cada botão vibra por 1 segundo. Se um lado não vibrar, o motor pode estar com defeito.", 12));
-        var wrap = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+        st.Children.Add(IconTitle("\uE877", "Teste de vibração"));
+        st.Children.Add(PadUi.Muted("Cada botão vibra por 1 segundo. Se um lado não vibrar, o motor pode estar com defeito.", 11.5));
+        var wrap = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         foreach (var (label, strong, weak) in new[] { ("Motor forte (esquerdo)", (byte)255, (byte)0), ("Motor leve (direito)", (byte)0, (byte)255), ("Os dois", (byte)200, (byte)200) })
         {
             var b = PadUi.Button(label);
@@ -216,26 +239,45 @@ internal sealed class MbLightPage : MbControlPageBase
         return st;
     }
 
-    private UIElement Trigger(string title, TriggerEffect e)
+    private UIElement Trigger(string glyph, string title, TriggerEffect e)
     {
         var st = new StackPanel();
-        st.Children.Add(Title(title));
+        st.Children.Add(IconTitle(glyph, title));
         var details = new StackPanel();
+        // desenho do curso do gatilho: de onde a resistência começa até o fim, mais forte = mais amarelo
+        var fill = new Border { CornerRadius = new CornerRadius(9), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var travel = new Grid { Height = 34, Margin = new Thickness(0, 4, 0, 0) };
+        travel.Children.Add(new Border { CornerRadius = new CornerRadius(10), Background = PadUi.Res("Surface2Brush"), BorderBrush = PadUi.Res("BorderBrush"), BorderThickness = new Thickness(1) });
+        travel.Children.Add(fill);
+        travel.Children.Add(new TextBlock { Text = "curso do gatilho", FontSize = 10.5, Foreground = PadUi.Res("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0), IsHitTestVisible = false });
+        void Paint()
+        {
+            double from = e.Kind == TriggerKind.Off ? 1 : Math.Clamp((e.Start * 10 + 10) / 100.0, 0, 1);
+            double to = e.Kind == TriggerKind.Weapon ? Math.Clamp((Math.Max(e.End, e.Start + 1) * 10 + 10) / 100.0, from, 1) : 1;
+            byte a = (byte)(0x40 + Math.Clamp(e.Strength, 1, 8) * 0x16);
+            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            g.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0xFF, 0xC4, 0x00), from));
+            g.GradientStops.Add(new GradientStop(Color.FromArgb(0x30, 0xFF, 0xC4, 0x00), from));
+            g.GradientStops.Add(new GradientStop(Color.FromArgb(a, 0xFF, 0xC4, 0x00), to));
+            g.GradientStops.Add(new GradientStop(Color.FromArgb(e.Kind == TriggerKind.Weapon ? (byte)0 : a, 0xFF, 0xC4, 0x00), Math.Min(1, to + 0.001)));
+            fill.Background = g;
+        }
         void Build()
         {
             details.Children.Clear();
+            Paint();
             if (e.Kind == TriggerKind.Off) { details.Children.Add(PadUi.Muted("Gatilho livre, sem resistência.", 12)); return; }
             var start = NewSlider(e.Kind == TriggerKind.Weapon ? 2 : 0, e.Kind == TriggerKind.Weapon ? 7 : 9, e.Start);
-            start.ValueChanged += (_, _) => { e.Start = (int)start.Value; Changed(); };
+            start.ValueChanged += (_, _) => { e.Start = (int)start.Value; Paint(); Changed(); };
             details.Children.Add(Labeled("Onde começa (curso do gatilho)", start, v => $"{v * 10 + 10:0}%"));
             if (e.Kind == TriggerKind.Weapon)
             {
                 var end = NewSlider(3, 8, Math.Max(e.End, e.Start + 1));
-                end.ValueChanged += (_, _) => { e.End = (int)end.Value; Changed(); };
+                end.ValueChanged += (_, _) => { e.End = (int)end.Value; Paint(); Changed(); };
                 details.Children.Add(Labeled("Onde \"dispara\"", end, v => $"{v * 10 + 10:0}%"));
             }
             var strength = NewSlider(1, 8, e.Strength);
-            strength.ValueChanged += (_, _) => { e.Strength = (int)strength.Value; Changed(); };
+            strength.ValueChanged += (_, _) => { e.Strength = (int)strength.Value; Paint(); Changed(); };
             details.Children.Add(Labeled(e.Kind == TriggerKind.Vibration ? "Intensidade" : "Força", strength, v => $"{v:0}/8"));
             if (e.Kind == TriggerKind.Vibration)
             {
@@ -247,6 +289,7 @@ internal sealed class MbLightPage : MbControlPageBase
         st.Children.Add(Chips(new[] { (TriggerKind.Off, "Livre"), (TriggerKind.Resistance, "Resistência"), (TriggerKind.Weapon, "Arma (trava e dispara)"), (TriggerKind.Vibration, "Vibração") },
             () => e.Kind, k => { e.Kind = k; Build(); }));
         st.Children.Add(details);
+        st.Children.Add(travel);
         Build();
         return st;
     }

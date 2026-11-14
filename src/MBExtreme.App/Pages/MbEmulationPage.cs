@@ -11,47 +11,88 @@ namespace MBExtreme.UI.Pages;
 /// </summary>
 internal sealed class MbEmulationPage : MbControlPageBase
 {
-    private readonly StackPanel _parts = new();
-    private readonly TextBlock _summary = new() { FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) };
+    private readonly System.Windows.Controls.Primitives.UniformGrid _parts = new() { Margin = new Thickness(0, 10, 0, 0) };
+    private readonly TextBlock _summary = new() { FontSize = 12.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+    private readonly TextBlock _installNote = new() { FontSize = 11.5, TextWrapping = TextWrapping.Wrap };
+    private readonly Button _updateAll = PadUi.Button("Atualizar tudo", primary: true);
+    private readonly TextBlock _padState = new() { FontSize = 12, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
-    public MbEmulationPage() : base("Emulação de controle", "Faz os jogos enxergarem o seu controle PS4, PS5 ou Xbox como um controle nativo do Windows. Primeiro preparamos o PC; só instalamos o que for preciso, pelos sites oficiais.")
+    public MbEmulationPage() : base("Emulação de controle", "Faz os jogos enxergarem o seu controle PS4, PS5 ou Xbox como um controle nativo do Windows. Só instalamos o que for preciso, pelos sites oficiais.")
     {
+        // passo 1: os drivers lado a lado, cada um com o estado e o botão
         var step = new StackPanel();
-        step.Children.Add(new TextBlock { Text = "PASSO 1 · PREPARAR O PC", FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) });
-        step.Children.Add(_summary);
-        step.Children.Add(_parts);
+        var head = new DockPanel();
         var recheck = PadUi.Button("Verificar de novo");
-        recheck.HorizontalAlignment = HorizontalAlignment.Left;
-        recheck.Margin = new Thickness(0, 6, 0, 0);
         recheck.Click += (_, _) => Check();
-        step.Children.Add(recheck);
+        _updateAll.Margin = new Thickness(0);
+        _updateAll.Click += async (_, _) => await UpdateAllAsync();
+        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        right.Children.Add(recheck);
+        right.Children.Add(_updateAll);
+        DockPanel.SetDock(right, Dock.Right);
+        head.Children.Add(right);
+        var left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        left.Children.Add(PadUi.Head("PASSO 1 · PREPARAR O PC"));
+        left.Children.Add(_summary);
+        head.Children.Add(left);
+        step.Children.Add(head);
+        step.Children.Add(_parts);
+        step.Children.Add(_installNote);
         Body.Children.Add(PadUi.Card(step));
 
+        // passo 2 (pequeno) ao lado do passo 3
         var connect = new StackPanel();
-        connect.Children.Add(new TextBlock { Text = "PASSO 2 · CONECTAR O CONTROLE", FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)), Margin = new Thickness(0, 0, 0, 8) });
-        connect.Children.Add(Line("Pelo cabo USB", "Use um cabo que passa dados (não só carga): micro-USB no PS4, USB-C no PS5 e no Xbox Series."));
-        connect.Children.Add(Line("Pelo Bluetooth", "Com o controle desligado, segure PS + Share (PS4) ou PS + Create (PS5) até a luz piscar rápido. No Xbox, segure o botão de parear. Depois adicione o controle no Bluetooth do Windows."));
+        connect.Children.Add(PadUi.Head("PASSO 2 · CONECTAR O CONTROLE"));
+        connect.Children.Add(Line("\uE88E", "Cabo USB", "Cabo que passa dados (não só carga)."));
+        connect.Children.Add(Line("\uE702", "Bluetooth", "Segure PS + Create (PS5) ou PS + Share (PS4) até piscar rápido."));
         var bt = PadUi.Button("Abrir o Bluetooth do Windows");
         bt.HorizontalAlignment = HorizontalAlignment.Left;
-        bt.Margin = new Thickness(0, 8, 0, 0);
+        bt.Margin = new Thickness(0, 4, 0, 0);
         bt.Click += (_, _) => PadUi.Open("ms-settings:bluetooth");
         connect.Children.Add(bt);
-        Body.Children.Add(PadUi.Card(connect));
+        connect.Children.Add(_padState);
+        var row1 = PadUi.Columns((PadUi.Card(connect), 1), (PadUi.Card(Engine()), 2));
+        row1.Margin = new Thickness(0, 0, 0, 0);
+        Body.Children.Add(row1);
 
-        Body.Children.Add(PadUi.Card(Engine()));
-        Body.Children.Add(PadUi.Card(Tuning()));
-        Body.Children.Add(PadUi.Card(Remap()));
+        // ajustes e remapear lado a lado
+        Body.Children.Add(PadUi.Columns((PadUi.Card(Tuning()), 1.25), (PadUi.Card(Remap()), 1)));
         AppServices.Emulation.Changed += () => Dispatcher.BeginInvoke(new Action(ShowEngine));
+        Action reopen = () => Dispatcher.BeginInvoke(new Action(() => { if (IsLoaded) MainWindow.Current?.Reopen("mbc-emu", $"Perfil \"{AppServices.Settings.PadActiveProfile}\" aplicado na emulação."); }));
+        Loaded += (_, _) => PadProfileHub.Changed += reopen;
+        Unloaded += (_, _) => PadProfileHub.Changed -= reopen;
         Check();
     }
 
-    private static UIElement Line(string title, string text)
+    private static UIElement Line(string glyph, string title, string text)
     {
-        var st = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-        st.Children.Add(new TextBlock { Text = title, FontSize = 13, FontWeight = FontWeights.SemiBold });
-        st.Children.Add(PadUi.Muted(text, 12.5));
-        return st;
+        var g = new Grid { Margin = new Thickness(0, 8, 0, 4) };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition());
+        var badge = MBExtreme.UI.Controls.GlassFx.Badge(glyph, Color.FromRgb(0xFF, 0xC4, 0x00), 30);
+        badge.Margin = new Thickness(0, 0, 10, 0);
+        g.Children.Add(badge);
+        var st = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        st.Children.Add(new TextBlock { Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold });
+        st.Children.Add(PadUi.Muted(text, 11));
+        Grid.SetColumn(st, 1);
+        g.Children.Add(st);
+        return g;
     }
+
+    protected override void Slow()
+    {
+        var d = AppServices.Pads.Current;
+        _padState.Text = d is null ? "○ Nenhum controle conectado" : $"● {AppServices.Pads.DisplayName(d)} conectado " + (d.Connection == PadConnection.Bluetooth ? "pelo Bluetooth" : d.Connection == PadConnection.Usb ? "pelo cabo" : "");
+        _padState.Foreground = PadUi.Res(d is null ? "MutedBrush" : "OkBrush");
+    }
+
+    private static string Glyph(string id) => id switch
+    {
+        "vigem" => "\uE7FC", "viiper" => "\uE7FC", "hidhide" => "\uED1A", "fakerinput" => "\uE765", _ => "\uE74C",
+    };
+
+    private readonly List<(DriverPackage Package, string Title, Button Button, TextBlock Progress)> _updatable = new();
 
     private void Check()
     {
@@ -59,58 +100,88 @@ internal sealed class MbEmulationPage : MbControlPageBase
         var target = AppServices.Settings.Emulation.Target;
         bool ps5 = target is VirtualTarget.DualSense or VirtualTarget.DualSenseEdge;
         bool ready = EmulationDrivers.ReadyFor(list, target);
-        _summary.Text = ready ? "Tudo pronto para o controle virtual escolhido." : ps5 ? "Falta instalar o VIIPER para o PS5 virtual." : "Falta instalar o controle virtual (ViGEmBus) para emular.";
+        int ok = list.Count(c => c.Installed);
+        _summary.Text = ready ? $"{ok} de {list.Count} instalados · pronto para o controle escolhido" : ps5 ? "Falta instalar o VIIPER para o PS5 virtual" : "Falta instalar o controle virtual (ViGEmBus)";
         _summary.Foreground = PadUi.Res(ready ? "OkBrush" : "WarnBrush");
         _parts.Children.Clear();
+        _parts.Columns = Math.Max(1, list.Count);
+        _updatable.Clear();
         foreach (var c in list)
         {
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition());
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Margin = new Thickness(0, 5, 12, 0), VerticalAlignment = VerticalAlignment.Top,
-                Background = PadUi.Res(c.Installed ? "OkBrush" : c.Need == "opcional" ? "BorderBrush" : "WarnBrush") };
-            grid.Children.Add(dot);
-            var text = new StackPanel();
-            text.Children.Add(new TextBlock { Text = $"{c.Title} · {c.Need}", FontSize = 14, FontWeight = FontWeights.SemiBold });
-            text.Children.Add(PadUi.Muted(c.Purpose, 12));
-            text.Children.Add(new TextBlock { Text = c.Installed ? "Instalado" : c.Need == "opcional" ? "Não instalado · não é necessário para o controle" : "Falta instalar", FontSize = 12, FontWeight = FontWeights.SemiBold,
-                Foreground = PadUi.Res(c.Installed ? "OkBrush" : c.Need == "opcional" ? "MutedBrush" : "WarnBrush") });
-            Grid.SetColumn(text, 1);
-            grid.Children.Add(text);
-            var buttons = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-            var progress = new TextBlock { FontSize = 11.5, TextWrapping = TextWrapping.Wrap, MaxWidth = 220, Foreground = PadUi.Res("MutedBrush"), Margin = new Thickness(0, 4, 0, 0) };
+            int paren = c.Title.IndexOf(" (", StringComparison.Ordinal);
+            string name = paren > 0 ? c.Title[..paren] : c.Title;
+            string tech = paren > 0 ? c.Title[(paren + 2)..].TrimEnd(')') + " · " + c.Need : c.Need;
+            var st = new StackPanel();
+            var top = new Grid();
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            top.ColumnDefinitions.Add(new ColumnDefinition());
+            var badge = MBExtreme.UI.Controls.GlassFx.Badge(Glyph(c.Id), Color.FromRgb(0xFF, 0xC4, 0x00), 32);
+            badge.Margin = new Thickness(0, 0, 10, 0);
+            top.Children.Add(badge);
+            var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            names.Children.Add(new TextBlock { Text = name, FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = c.Purpose });
+            names.Children.Add(new TextBlock { Text = tech, FontSize = 11, Foreground = PadUi.Res("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = c.Title });
+            Grid.SetColumn(names, 1);
+            top.Children.Add(names);
+            st.Children.Add(top);
+
+            var bottom = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+            var progress = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = PadUi.Res("MutedBrush"), Margin = new Thickness(0, 6, 0, 0) };
             string url = c.Url;
+            Button action;
             if (DriverDownloads.For(c.Id) is { } package)
             {
-                // instala daqui mesmo: baixa a versão mais nova do site oficial e roda o instalador
-                var install = PadUi.Button(c.Installed ? "Atualizar" : "Instalar", primary: !c.Installed && c.Need != "opcional");
-                install.Click += async (_, _) => await InstallAsync(package, c.Title, install, progress);
-                buttons.Children.Add(install);
-                var site = new TextBlock { FontSize = 11.5, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
-                var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run("site oficial")) { Foreground = PadUi.Res("MutedBrush") };
-                link.Click += (_, _) => PadUi.Open(url);
-                site.Inlines.Add(link);
-                buttons.Children.Add(site);
+                action = Small(c.Installed ? "Atualizar" : "Instalar", !c.Installed && c.Need != "opcional");
+                action.Click += async (_, _) => await InstallAsync(package, c.Title, action, progress);
+                action.ToolTip = "Baixa a versão mais nova do site oficial e instala. Botão direito: abrir o site oficial.";
+                action.MouseRightButtonUp += (_, _) => PadUi.Open(url);
+                if (c.Installed) _updatable.Add((package, c.Title, action, progress));
             }
             else
             {
-                var b = PadUi.Button(c.Installed ? "Reinstalar / atualizar" : "Baixar do site oficial", primary: !c.Installed && c.Need != "opcional");
-                b.Click += (_, _) => PadUi.Open(url);
-                buttons.Children.Add(b);
+                action = Small(c.Installed ? "Reinstalar" : "Baixar", !c.Installed && c.Need != "opcional");
+                action.Click += (_, _) => PadUi.Open(url);
             }
-            buttons.Children.Add(progress);
-            Grid.SetColumn(buttons, 2);
-            grid.Children.Add(buttons);
-            _parts.Children.Add(new Border { Background = PadUi.Res("Surface2Brush"), CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 0, 8), Child = grid });
+            DockPanel.SetDock(action, Dock.Right);
+            bottom.Children.Add(action);
+            var state = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            string brush = c.Installed ? "OkBrush" : c.Need == "opcional" ? "MutedBrush" : "WarnBrush";
+            state.Children.Add(new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = PadUi.Res(brush), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            state.Children.Add(new TextBlock { Text = c.Installed ? "Instalado" : c.Need == "opcional" ? "Não instalado" : "Falta instalar", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = PadUi.Res(brush) });
+            bottom.Children.Add(state);
+            st.Children.Add(bottom);
+            st.Children.Add(progress);
+            var tile = new Border { Background = PadUi.Res("Surface2Brush"), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 0, 8, 0), Child = st };
+            MBExtreme.UI.Controls.GlassFx.Attach(tile, badge, bar: false);
+            _parts.Children.Add(tile);
         }
+        _updateAll.IsEnabled = _updatable.Count > 0 && !_installing;
+    }
+
+    private static Button Small(string text, bool primary)
+    {
+        var b = PadUi.Button(text, primary);
+        b.Margin = new Thickness(0);
+        b.Padding = new Thickness(10, 3, 10, 3);
+        b.FontSize = 11.5;
+        return b;
+    }
+
+    /// <summary>Atualiza um por um os componentes já instalados que o programa sabe baixar.</summary>
+    private async Task UpdateAllAsync()
+    {
+        foreach (var (package, title, button, progress) in _updatable.ToList())
+        {
+            await InstallAsync(package, title, button, progress, recheck: false);
+        }
+        Check();
     }
 
     private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(5) };
     private bool _installing;
 
     /// <summary>Um clique: baixa o instalador oficial mais novo, confere o SHA-256 e roda (pede administrador ao Windows).</summary>
-    private async Task InstallAsync(DriverPackage package, string title, Button button, TextBlock progress)
+    private async Task InstallAsync(DriverPackage package, string title, Button button, TextBlock progress, bool recheck = true)
     {
         if (_installing) { progress.Text = "Espere a outra instalação terminar."; return; }
         _installing = true;
@@ -147,8 +218,10 @@ internal sealed class MbEmulationPage : MbControlPageBase
             button.IsEnabled = true;
         }
         string keep = progress.Text;
+        if (!recheck) return;
         Check();
-        _summary.Text += "  " + keep;
+        _installNote.Text = title + ": " + keep;
+        _installNote.Foreground = progress.Foreground;
     }
 
     // ------------------------------------------------------------ passo 3: ligar o controle virtual
@@ -190,34 +263,60 @@ internal sealed class MbEmulationPage : MbControlPageBase
     }
 
     private UIElement Slider(string label, int min, int max, Func<int> get, Action<int> set, string unit = "%") =>
-        PadUi.SliderRow(label, min, max, get(), v => $"{v:0}{unit}", v => { set((int)v); Save(); }, 300);
+        PadUi.SliderRow(label, min, max, get(), v => $"{v:0}{unit}", v => { set((int)v); Save(); });
 
     private UIElement Engine()
     {
         _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); AppServices.Settings.Save(); };
         var st = new StackPanel();
         st.Children.Add(Head("PASSO 3 · LIGAR O CONTROLE VIRTUAL"));
-        st.Children.Add(new TextBlock { Text = "O jogo vai ver:", FontSize = 13, Margin = new Thickness(0, 0, 0, 6) });
-        st.Children.Add(Chips(new[]
-            {
-                (VirtualTarget.Xbox360, "Xbox 360 (funciona em quase todo jogo)"), (VirtualTarget.DualShock4, "PS4 (DualShock 4)"),
-                (VirtualTarget.DualSense, "PS5 (DualSense)"), (VirtualTarget.DualSenseEdge, "PS5 Edge (DualSense Edge)"),
-            },
-            () => _e.Target, t => { _e.Target = t; Check(); if (AppServices.Emulation.Running) AppServices.Emulation.Start(); }));
-        st.Children.Add(Check("Esconder o controle físico dos jogos (HidHide)", () => _e.HidePhysical, v => _e.HidePhysical = v));
-        var row = new WrapPanel();
+        st.Children.Add(PadUi.Muted("O jogo vai ver:", 12));
+        st.Children.Add(_targets);
+        FillTargets();
+        var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+        var hide = Check("Esconder o controle físico dos jogos (HidHide)", () => _e.HidePhysical, v => _e.HidePhysical = v);
+        hide.VerticalAlignment = VerticalAlignment.Center;
+        hide.Margin = new Thickness(0);
         _toggle.Click += (_, _) =>
         {
             if (AppServices.Emulation.Running) AppServices.Emulation.Stop();
             else if (AppServices.Pads.Current is null) MessageBox.Show("Conecte o controle primeiro (passo 2).", "Emulação", MessageBoxButton.OK, MessageBoxImage.Information);
             else AppServices.Emulation.Start();
         };
+        _toggle.Margin = new Thickness(0);
+        _toggle.Padding = new Thickness(22, 9, 22, 9);
+        _toggle.FontSize = 13.5;
+        DockPanel.SetDock(_toggle, Dock.Right);
         row.Children.Add(_toggle);
+        row.Children.Add(hide);
         st.Children.Add(row);
         st.Children.Add(_engineStatus);
         st.Children.Add(PadUi.Muted("Xbox e PS4 usam o ViGEmBus. PS5 e PS5 Edge usam o VIIPER (gratuito, cria um DualSense de verdade por USB virtual, com ícones de PS5 e giroscópio nos jogos). A emulação continua ligada enquanto o MB estiver aberto (pode minimizar).", 11.5));
         ShowEngine();
         return st;
+    }
+
+    private readonly System.Windows.Controls.Primitives.UniformGrid _targets = new() { Columns = 4, Margin = new Thickness(0, 6, 0, 4) };
+
+    private void FillTargets()
+    {
+        _targets.Children.Clear();
+        foreach (var (t, name, sub) in new[]
+        {
+            (VirtualTarget.Xbox360, "Xbox 360", "quase todo jogo"), (VirtualTarget.DualShock4, "PS4", "DualShock 4"),
+            (VirtualTarget.DualSense, "PS5", "DualSense"), (VirtualTarget.DualSenseEdge, "PS5 Edge", "DualSense Edge"),
+        })
+        {
+            var target = t;
+            _targets.Children.Add(PadUi.SelectTile("\uE7FC", name, sub, _e.Target == t, () =>
+            {
+                _e.Target = target;
+                Save();
+                FillTargets();
+                Check();
+                if (AppServices.Emulation.Running) AppServices.Emulation.Start();
+            }, vertical: true));
+        }
     }
 
     private void ShowEngine()
@@ -231,24 +330,18 @@ internal sealed class MbEmulationPage : MbControlPageBase
     private UIElement Tuning()
     {
         var st = new StackPanel();
-        st.Children.Add(Head("AJUSTES (VALEM DENTRO DO JOGO)"));
-        var copy = new ComboBox { Width = 240, Margin = new Thickness(0, 0, 8, 10), HorizontalAlignment = HorizontalAlignment.Left };
-        copy.Items.Add(new ComboBoxItem { Content = "Copiar de um perfil por jogo...", IsEnabled = false });
-        foreach (var p in AppServices.Settings.PadProfiles.Concat(PadProfiles.Defaults)) copy.Items.Add(new ComboBoxItem { Content = p.Name, Tag = p });
-        copy.SelectedIndex = 0;
-        copy.SelectionChanged += (_, _) =>
-        {
-            if (copy.SelectedItem is not ComboBoxItem { Tag: PadProfile p }) return;
-            foreach (var t in new[] { _e.Left, _e.Right }) { t.Deadzone = p.Deadzone; t.AntiDeadzone = p.AntiDeadzone; t.Sensitivity = p.Sensitivity; t.Curve = p.Curve; }
-            _e.TriggerDeadzone = p.TriggerDeadzone;
-            AppServices.Settings.Save();
-            MainWindow.Current?.Reopen("mbc-emu", $"Ajustes copiados do perfil \"{p.Name}\".");
-        };
-        st.Children.Add(copy);
-        var sticks = new WrapPanel();
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var pick = new StackPanel { Orientation = Orientation.Horizontal };
+        pick.Children.Add(new TextBlock { Text = "Usando o perfil", FontSize = 11.5, Foreground = PadUi.Res("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        pick.Children.Add(PadProfileHub.Picker(190));
+        DockPanel.SetDock(pick, Dock.Right);
+        head.Children.Add(pick);
+        head.Children.Add(PadUi.Head("AJUSTES (VALEM DENTRO DO JOGO)"));
+        st.Children.Add(head);
+        var stickCols = new List<UIElement>();
         foreach (var (name, t) in new[] { ("Analógico esquerdo", _e.Left), ("Analógico direito", _e.Right) })
         {
-            var col = new StackPanel { Margin = new Thickness(0, 0, 32, 0) };
+            var col = new StackPanel();
             col.Children.Add(new TextBlock { Text = name, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
             col.Children.Add(Slider("Zona morta", 0, 30, () => t.Deadzone, v => t.Deadzone = v));
             col.Children.Add(Slider("Anti-zona morta", 0, 30, () => t.AntiDeadzone, v => t.AntiDeadzone = v));
@@ -256,10 +349,9 @@ internal sealed class MbEmulationPage : MbControlPageBase
             col.Children.Add(Chips(new[] { (StickCurve.Linear, "Linear"), (StickCurve.Suave, "Suave"), (StickCurve.Agressiva, "Agressiva") }, () => t.Curve, c => t.Curve = c));
             col.Children.Add(Check("Zona morta por eixo (axial)", () => t.Axial, v => t.Axial = v));
             col.Children.Add(Check("Inverter o eixo vertical", () => t.InvertY, v => t.InvertY = v));
-            sticks.Children.Add(col);
+            stickCols.Add(col);
         }
-        st.Children.Add(sticks);
-        st.Children.Add(Slider("Zona morta dos gatilhos", 0, 30, () => _e.TriggerDeadzone, v => _e.TriggerDeadzone = v));
+        st.Children.Add(PadUi.Columns((stickCols[0], 1), (stickCols[1], 1)));
         var opts = new WrapPanel();
         opts.Children.Add(Check("Trocar os analógicos", () => _e.SwapSticks, v => _e.SwapSticks = v));
         opts.Children.Add(Check("Botões estilo Nintendo (troca ✕/○ e □/△)", () => _e.NintendoLayout, v => _e.NintendoLayout = v));
@@ -269,7 +361,9 @@ internal sealed class MbEmulationPage : MbControlPageBase
         gyro.Children.Add(Check("Ligar", () => _e.GyroAim, v => _e.GyroAim = v));
         gyro.Children.Add(Check("Só enquanto segura L2 (mirando)", () => _e.GyroOnlyWhenAiming, v => _e.GyroOnlyWhenAiming = v));
         st.Children.Add(gyro);
-        st.Children.Add(Slider("Sensibilidade do giroscópio", 1, 100, () => _e.GyroSensitivity, v => _e.GyroSensitivity = v));
+        st.Children.Add(PadUi.Columns(
+            (Slider("Zona morta dos gatilhos", 0, 30, () => _e.TriggerDeadzone, v => _e.TriggerDeadzone = v), 1),
+            (Slider("Sensibilidade do giroscópio", 1, 100, () => _e.GyroSensitivity, v => _e.GyroSensitivity = v), 1)));
         var fine = PadUi.Button("Ajustes finos com prévia ao vivo →");
         fine.HorizontalAlignment = HorizontalAlignment.Left;
         fine.Margin = new Thickness(0, 6, 0, 0);
@@ -290,12 +384,19 @@ internal sealed class MbEmulationPage : MbControlPageBase
     private UIElement Remap()
     {
         var st = new StackPanel();
-        st.Children.Add(Head("REMAPEAR BOTÕES"));
-        st.Children.Add(PadUi.Muted("Escolha o que cada botão faz no controle virtual. \"Desligado\" faz o botão não fazer nada.", 12));
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+        var reset = PadUi.Button("Voltar ao padrão");
+        reset.Margin = new Thickness(0);
+        reset.Click += (_, _) => { _e.Remap.Clear(); AppServices.Settings.Save(); MainWindow.Current?.Reopen("mbc-emu", "Botões voltaram ao padrão."); };
+        DockPanel.SetDock(reset, Dock.Right);
+        head.Children.Add(reset);
+        head.Children.Add(PadUi.Head("REMAPEAR BOTÕES"));
+        st.Children.Add(head);
+        st.Children.Add(PadUi.Muted("Escolha o que cada botão faz no controle virtual. Os trocados ficam em amarelo.", 11.5));
         var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 4, Margin = new Thickness(0, 8, 0, 0) };
         foreach (var (button, name) in Buttons)
         {
-            var box = new ComboBox { Margin = new Thickness(0, 2, 12, 8) };
+            var box = new ComboBox { Margin = new Thickness(0, 2, 8, 8), FontSize = 12 };
             box.Items.Add(new ComboBoxItem { Content = "Igual (" + name + ")", Tag = "" });
             box.Items.Add(new ComboBoxItem { Content = "Desligado", Tag = "None" });
             foreach (var (b2, n2) in Buttons) if (b2 != button) box.Items.Add(new ComboBoxItem { Content = n2, Tag = b2.ToString() });
@@ -306,18 +407,30 @@ internal sealed class MbEmulationPage : MbControlPageBase
             {
                 string tag = (string)((ComboBoxItem)box.SelectedItem).Tag;
                 if (tag.Length == 0) _e.Remap.Remove(key); else _e.Remap[key] = tag;
+                Mark(box, tag.Length > 0);
                 Save();
             };
+            Mark(box, current.Length > 0);
             var cell = new StackPanel();
-            cell.Children.Add(new TextBlock { Text = name, FontSize = 12 });
+            cell.Children.Add(new TextBlock { Text = name, FontSize = 11, Foreground = PadUi.Res("MutedBrush") });
             cell.Children.Add(box);
             grid.Children.Add(cell);
         }
         st.Children.Add(grid);
-        var reset = PadUi.Button("Voltar tudo ao padrão");
-        reset.HorizontalAlignment = HorizontalAlignment.Left;
-        reset.Click += (_, _) => { _e.Remap.Clear(); AppServices.Settings.Save(); MainWindow.Current?.Reopen("mbc-emu", "Botões voltaram ao padrão."); };
-        st.Children.Add(reset);
         return st;
+    }
+
+    private static void Mark(ComboBox box, bool changed)
+    {
+        if (changed)
+        {
+            box.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
+            box.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
+        }
+        else
+        {
+            box.ClearValue(Control.BorderBrushProperty);
+            box.ClearValue(Control.ForegroundProperty);
+        }
     }
 }

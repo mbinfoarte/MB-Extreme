@@ -81,8 +81,12 @@ public sealed partial class GameLibraryPage : ToolPageBase
 
         var gridScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _grid };
         _gridScroll = gridScroll;
-        Grid.SetColumn(gridScroll, 0);
-        _split.Children.Add(gridScroll);
+        var leftCol = new DockPanel();
+        DockPanel.SetDock(_filters, Dock.Top);
+        leftCol.Children.Add(_filters);
+        leftCol.Children.Add(gridScroll);
+        Grid.SetColumn(leftCol, 0);
+        _split.Children.Add(leftCol);
 
         var side = new Grid();
         side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -97,6 +101,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
         _split.Children.Add(card);
 
         ShowPlaceholder();
+        Body.Children.Add(_offer);
         Body.Children.Add(_split);
     }
 
@@ -165,6 +170,13 @@ public sealed partial class GameLibraryPage : ToolPageBase
             }
             SetStatus(_games.Count == 0 ? "Nenhum jogo encontrado. Use Adicionar jogo ou programa." : $"{_games.Count} item(ns) encontrado(s).", _games.Count == 0 ? "WarnBrush" : "OkBrush");
             RenderGrid();
+            // perfis publicados no painel do administrador: busca os mais novos e avisa quais jogos daqui têm um pronto
+            try
+            {
+                if (await GameTitleSync.RefreshAsync(AppServices.Web, MBExtreme.Core.AppInfo.FirebaseProjectId, MBExtreme.Core.AppInfo.FirestoreDatabaseId) > 0) RenderGrid();
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException or System.Text.Json.JsonException) { }
+            ShowProfileOffer();
         }
         finally
         {
@@ -172,17 +184,139 @@ public sealed partial class GameLibraryPage : ToolPageBase
         }
     }
 
+    // ------------------------------------------------------------ Perfil MB (perfis publicados no site) e filtro
+
+    private readonly Border _offer = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 10) };
+    private readonly WrapPanel _filters = new() { Margin = new Thickness(0, 0, 0, 6) };
+    private int _filter; // 0 todos, 1 com Perfil MB, 2 otimizados
+    private bool? _driverAnswer;
+
+    private static bool Profiled(GameSettings s) => s.OptimizedAt is not null || s.AutoProfile;
+
+    /// <summary>Versão do perfil (muda quando o perfil é editado no site), para avisar de novo só quando algo mudou.</summary>
+    private static string OfferKey(GameTitle t) =>
+        t.Key + "@" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(GameTitles.ToJson(new[] { t }))))[..12];
+
+    private List<(InstalledGame Game, GameTitle Title)> Matches() =>
+        _games.Select(g => (Game: g, Title: TitleOf(g))).Where(x => x.Title is not null).Select(x => (x.Game, x.Title!)).ToList();
+
+    private void ShowProfileOffer()
+    {
+        var pending = Matches().Where(m =>
+        {
+            var s = AppServices.GameLibrary.Get(m.Game.Id);
+            return !Profiled(s) && s.ProfileOffered != OfferKey(m.Title);
+        }).ToList();
+        if (pending.Count == 0) { _offer.Visibility = Visibility.Collapsed; return; }
+
+        var yellow = System.Windows.Media.Color.FromRgb(0xFF, 0xC4, 0x00);
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var badge = MBExtreme.UI.Controls.GlassFx.Badge("\uE734", yellow, 34);
+        badge.Margin = new Thickness(0, 0, 12, 0);
+        grid.Children.Add(badge);
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        string names = string.Join(", ", pending.Take(5).Select(p => p.Game.Name)) + (pending.Count > 5 ? $" e mais {pending.Count - 5}" : "");
+        text.Children.Add(new TextBlock { Text = pending.Count == 1 ? $"{pending[0].Game.Name} tem Perfil MB pronto" : $"Achei {pending.Count} jogos com Perfil MB pronto", FontSize = 14, FontWeight = FontWeights.SemiBold });
+        text.Children.Add(Muted(names + ". O perfil ajusta o Windows, o driver, a rede e a prioridade para cada jogo; entra quando o jogo abre e sai quando fecha.", 11.5));
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var choose = SmallButton("Escolher quais", (_, _) => { SetFilter(1); });
+        var apply = SmallButton(pending.Count == 1 ? "Aplicar (automático)" : $"Aplicar nos {pending.Count} (automático)", async (_, _) => await ApplyManyAsync(pending), true);
+        var close = SmallButton("✕", (_, _) =>
+        {
+            foreach (var p in pending) AppServices.GameLibrary.Update(p.Game.Id, x => x.ProfileOffered = OfferKey(p.Title));
+            _offer.Visibility = Visibility.Collapsed;
+        });
+        close.ToolTip = "Agora não (avisa de novo quando um perfil novo chegar)";
+        buttons.Children.Add(choose);
+        buttons.Children.Add(apply);
+        buttons.Children.Add(close);
+        Grid.SetColumn(buttons, 2);
+        grid.Children.Add(buttons);
+
+        var glass = new LinearGradientBrush { StartPoint = new System.Windows.Point(0, 0), EndPoint = new System.Windows.Point(1, 0) };
+        glass.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(0x38, 0xFF, 0xC4, 0x00), 0));
+        glass.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(0x08, 0xFF, 0xC4, 0x00), 1));
+        _offer.Background = glass;
+        _offer.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x70, 0xFF, 0xC4, 0x00));
+        _offer.BorderThickness = new Thickness(1);
+        _offer.CornerRadius = new CornerRadius(14);
+        _offer.Padding = new Thickness(14, 10, 14, 10);
+        _offer.Child = grid;
+        _offer.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Aplica o Perfil MB (no modo automático) em vários jogos, um de cada vez.</summary>
+    private async Task ApplyManyAsync(IReadOnlyList<(InstalledGame Game, GameTitle Title)> list)
+    {
+        if (_busy) return;
+        var ask = MessageBox.Show(
+            $"Aplicar o Perfil MB em {list.Count} jogo(s), no modo automático?\n\nOs ajustes do Windows entram só quando cada jogo abre e saem quando ele fecha. " +
+            "Tudo fica guardado e o botão Desfazer de cada jogo volta ao que era.\n\nSim = também ajustar o driver e a placa de vídeo de cada jogo\nNão = só Windows, rede e prioridade",
+            "Perfil MB", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (ask == MessageBoxResult.Cancel) return;
+        _busy = true;
+        _driverAnswer = ask == MessageBoxResult.Yes;
+        _offer.Visibility = Visibility.Collapsed;
+        int done = 0;
+        try
+        {
+            foreach (var (game, title) in list)
+            {
+                SetStatus($"Aplicando o Perfil MB em {game.Name} ({++done} de {list.Count})...");
+                var v = await BuildViewAsync(game, () => true);
+                if (v is null) continue;
+                await ApplyTitleAsync(game, v, auto: true);
+                AppServices.GameLibrary.Update(game.Id, x => x.ProfileOffered = OfferKey(title));
+            }
+            SetStatus($"Perfil MB aplicado em {done} jogo(s), no automático.", "OkBrush");
+        }
+        finally
+        {
+            _driverAnswer = null;
+            _busy = false;
+            RenderGrid();
+        }
+    }
+
+    private void SetFilter(int filter)
+    {
+        _filter = filter;
+        RenderGrid();
+    }
+
+    private void RenderFilters()
+    {
+        _filters.Children.Clear();
+        int withProfile = _games.Count(g => TitleOf(g) is not null);
+        int optimized = _games.Count(g => Profiled(AppServices.GameLibrary.Get(g.Id)));
+        foreach (var (i, label) in new[] { (0, $"Todos {_games.Count}"), (1, $"★ Com Perfil MB {withProfile}"), (2, $"Otimizados {optimized}") })
+        {
+            var chip = new System.Windows.Controls.Primitives.ToggleButton { Content = label, Style = (Style)FindResource("ChipToggle"), Margin = new Thickness(0, 0, 6, 6), IsChecked = _filter == i };
+            int f = i;
+            chip.Click += (_, _) => SetFilter(f);
+            _filters.Children.Add(chip);
+        }
+    }
+
     private void RenderGrid()
     {
         _grid.Children.Clear();
         _cards.Clear();
+        RenderFilters();
         foreach (var game in _games)
         {
+            if (_filter == 1 && TitleOf(game) is null) continue;
+            if (_filter == 2 && !Profiled(AppServices.GameLibrary.Get(game.Id))) continue;
             var card = BuildCard(game);
             _cards[game.Id] = card;
             _grid.Children.Add(card);
         }
-        if (_selected is not null && _games.FirstOrDefault(g => g.Id == _selected.Id) is { } still) Select(still, false);
+        if (_selected is not null && _games.FirstOrDefault(g => g.Id == _selected.Id) is { } still && _cards.ContainsKey(still.Id)) Select(still, false);
         else _selected = null;
         if (_selected is null) ShowPlaceholder();
     }
@@ -209,6 +343,15 @@ public sealed partial class GameLibraryPage : ToolPageBase
             Child = new TextBlock { Text = game.Name, FontSize = 11, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = System.Windows.Media.Brushes.White },
         };
         root.Children.Add(label);
+
+        if (TitleOf(game) is not null)
+            root.Children.Add(new Border
+            {
+                Background = Brush("AccentBrush"), CornerRadius = new CornerRadius(999), Padding = new Thickness(7, 2, 7, 2), Margin = new Thickness(6),
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Child = new TextBlock { Text = "★ Perfil MB", FontSize = 9.5, FontWeight = FontWeights.Bold, Foreground = System.Windows.Media.Brushes.Black },
+                ToolTip = Profiled(settings) ? "Perfil MB aplicado" : "Tem Perfil MB pronto: clique no jogo e em Aplicar perfil MB",
+            });
 
         if (settings.OptimizedAt is not null)
             root.Children.Add(new Border
@@ -344,8 +487,16 @@ public sealed partial class GameLibraryPage : ToolPageBase
             _storeInfo[game.Id] = await SteamStore.GetAsync(Http, appId, folder);
         }
         if (_selected?.Id != game.Id) return;
-        _storeInfo.TryGetValue(game.Id, out var info);
+        var view = await BuildViewAsync(game, () => _selected?.Id == game.Id);
+        if (view is null || _selected?.Id != game.Id) return;
+        _view = view;
+        Paint();
+    }
 
+    /// <summary>Monta tudo o que o painel e o "Aplicar perfil" precisam de um jogo (perfil, plano, leituras do PC e requisitos).</summary>
+    private async Task<GameView?> BuildViewAsync(InstalledGame game, Func<bool> stillWanted)
+    {
+        _storeInfo.TryGetValue(game.Id, out var info);
         var settings = AppServices.GameLibrary.Get(game.Id);
         var title = TitleOf(game);
         var profile = settings.ProfileKey is { } key ? GameProfiles.Find(key)
@@ -356,7 +507,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
 
         var rows = await Task.Run(() => ReadRows(game, profile));
         var netRows = await Task.Run(() => ReadNetworkRows(game));
-        if (_selected?.Id != game.Id) return;
+        if (!stillWanted()) return null;
 
         // compara o PC com os requisitos da loja (estimativa pelo nível do processador e da placa)
         RequirementReport? requirements = null;
@@ -369,10 +520,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.Management.ManagementException or AggregateException) { }
         }
-        if (_selected?.Id != game.Id) return;
-
-        _view = new GameView(game, info, settings, profile, plan, rows, netRows, requirements);
-        Paint();
+        return new GameView(game, info, settings, profile, plan, rows, netRows, requirements);
     }
 
     /// <summary>Desenha o painel do jogo: resumo e otimização na lateral, ou os detalhes ocupando o lugar da grade.</summary>
@@ -384,7 +532,6 @@ public sealed partial class GameLibraryPage : ToolPageBase
         _detail.Children.Clear();
 
         _sideTop.Children.Add(BuildHeader(v));
-        _sideTop.Children.Add(BuildActions(v));
 
         _tab = Math.Clamp(_tab, 0, 2);
         _sideTop.Children.Add(Chips(new[] { "Resumo", "Otimização", "Configurações" }, _tab, i => { _tab = i; Paint(); }));
@@ -419,56 +566,74 @@ public sealed partial class GameLibraryPage : ToolPageBase
     private UIElement BuildHeader(GameView v)
     {
         var game = v.Game;
-        var head = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        var s = v.Settings;
+        var head = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        if (_coverImages.TryGetValue(game.Id, out var coverImage))
-            head.Children.Add(new Border { Width = 54, Height = 81, CornerRadius = new CornerRadius(6), Margin = new Thickness(0, 0, 10, 0), Background = new ImageBrush(coverImage) { Stretch = Stretch.UniformToFill } });
+        var cover = new Border
+        {
+            Width = 84, Height = 126, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 12, 0), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1),
+            Background = _coverImages.TryGetValue(game.Id, out var coverImage) ? new ImageBrush(coverImage) { Stretch = Stretch.UniformToFill } : Brush("Surface2Brush"),
+        };
+        head.Children.Add(cover);
 
-        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        titles.Children.Add(new TextBlock { Text = game.Name, FontSize = 18, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-        var s = v.Settings;
+        var right = new DockPanel();
+        // Jogar grande + ações em ícones, embaixo
+        var actions = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        actions.ColumnDefinitions.Add(new ColumnDefinition());
+        actions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var play = SmallButton("▶  Jogar", (_, _) => Play(game), true);
+        play.Margin = new Thickness(0);
+        play.Padding = new Thickness(12, 8, 12, 8);
+        play.FontSize = 14;
+        actions.Children.Add(play);
+        var icons = new StackPanel { Orientation = Orientation.Horizontal };
+        if (AppServices.GameMeasure.GameId == game.Id)
+            icons.Children.Add(IconButton("\uE71A", "Parar medição de FPS", () => AppServices.GameMeasure.Stop()));
+        else if (game.ExeName is not null)
+            icons.Children.Add(IconButton("\uE916", "Medir FPS: abre o jogo e mede enquanto você joga; a sessão é guardada ao fechar o jogo.", () => Play(game, true)));
+        icons.Children.Add(IconButton("\uE91B", "Buscar capa na internet", async () => await PickCoverAsync(game)));
+        if (Profiled(s)) icons.Children.Add(IconButton("\uE7A7", "Desfazer tudo o que o perfil mudou neste jogo", async () => await UndoTitleAsync(game)));
+        Grid.SetColumn(icons, 1);
+        actions.Children.Add(icons);
+        DockPanel.SetDock(actions, Dock.Bottom);
+        right.Children.Add(actions);
+
+        var titles = new StackPanel();
+        titles.Children.Add(new TextBlock { Text = game.Name, FontSize = 19, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         string played = s.MinutesPlayed < 1 ? "sem registro de tempo" : $"{s.MinutesPlayed / 60:0.#} h jogadas" + (s.LastPlayed is { } last ? $" · último: {last:dd/MM}" : "");
         titles.Children.Add(Muted($"{game.LauncherName} · {played}", 11));
-        Grid.SetColumn(titles, 1);
-        head.Children.Add(titles);
-
-        var play = SmallButton("Jogar", (_, _) => Play(game), true);
-        play.Margin = new Thickness(10, 0, 0, 0);
-        play.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(play, 2);
-        head.Children.Add(play);
+        var tags = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var title = TitleOf(game);
+        if (title is not null) tags.Children.Add(Tag(Profiled(s) ? "★ Perfil MB aplicado" : "★ Perfil MB disponível", true));
+        tags.Children.Add(Tag(ShortTitle(v.Profile.Title), false));
+        if (s.SessionActive) tags.Children.Add(Tag("● ligado agora", false, "OkBrush"));
+        if (MBExtreme.Core.Gamepads.PadProfiles.ForGame(PadProfileHub.All(), game.ExeName) is { } pad) tags.Children.Add(Tag("Controle: " + pad.Name, false));
+        titles.Children.Add(tags);
+        right.Children.Add(titles);
+        Grid.SetColumn(right, 1);
+        head.Children.Add(right);
         return head;
     }
 
-    // ---- ações: otimizar, medir FPS e desfazer
-
-    private UIElement BuildActions(GameView v)
+    private Border Tag(string text, bool accent, string? brush = null) => new()
     {
-        var game = v.Game;
-        var buttons = new WrapPanel { Margin = new Thickness(0, 6, 0, 4) };
-        bool optimized = v.Settings.OptimizedAt is not null;
-        bool profiled = optimized || v.Settings.AutoProfile;
-        var apply = Tight(SmallButton(profiled ? "Reaplicar perfil" : "Aplicar perfil do jogo",
-            async (_, _) => await ApplyTitleAsync(game, v, v.Settings.AutoProfile || !optimized), !profiled));
-        apply.ToolTip = "Otimiza o Windows, o driver, a rede e a prioridade de CPU com o perfil deste jogo. Detalhes na aba Otimização.";
-        buttons.Children.Add(apply);
+        CornerRadius = new CornerRadius(999), Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 6, 4), BorderThickness = new Thickness(1),
+        Background = accent ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x30, 0xFF, 0xC4, 0x00)) : Brush("Surface2Brush"),
+        BorderBrush = accent ? Brush("AccentBrush") : Brush("BorderBrush"),
+        Child = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = accent ? Brush("AccentBrush") : Brush(brush ?? "TextBrush") },
+    };
 
-        if (AppServices.GameMeasure.GameId == game.Id)
-            buttons.Children.Add(Tight(SmallButton("Parar medição", (_, _) => AppServices.GameMeasure.Stop(), true)));
-        else if (game.ExeName is not null)
+    private Button IconButton(string glyph, string tip, Action click)
+    {
+        var b = new Button
         {
-            var measure = Tight(SmallButton("Medir FPS", (_, _) => Play(game, true)));
-            measure.ToolTip = "Abre o jogo e mede o FPS enquanto você joga; a sessão é guardada ao fechar o jogo.";
-            buttons.Children.Add(measure);
-        }
-
-        if (profiled) buttons.Children.Add(Tight(SmallButton("Desfazer", async (_, _) => await UndoTitleAsync(game))));
-        var cover = Tight(SmallButton("Buscar capa", async (_, _) => await PickCoverAsync(game)));
-        cover.ToolTip = "Procura a capa deste jogo na internet para você escolher.";
-        buttons.Children.Add(cover);
-        return buttons;
+            Content = new TextBlock { Text = glyph, FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"), FontSize = 15 },
+            Style = (Style)FindResource("GhostButton"), Width = 38, Height = 38, Padding = new Thickness(0), Margin = new Thickness(6, 0, 0, 0), ToolTip = tip,
+        };
+        System.Windows.Automation.AutomationProperties.SetName(b, tip);
+        b.Click += (_, _) => click();
+        return b;
     }
 
     private async Task PickCoverAsync(InstalledGame game)
@@ -525,7 +690,9 @@ public sealed partial class GameLibraryPage : ToolPageBase
         var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
         var game = v.Game;
         var info = v.Info;
-        panel.Children.Add(Muted((game.ExeName ?? "Executável não identificado") + (info is { Genres.Count: > 0 } ? " · " + string.Join(", ", info.Genres.Take(3)) : ""), 11));
+        panel.Children.Add(ProfileCard(v));
+        var tiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(0, 8, 0, 0) };
+        panel.Children.Add(tiles);
 
         // 1) otimização
         int gameFix = v.Rows.Count(r => r.CanFix || r.State == RowState.Different);
@@ -537,7 +704,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
         else if (optimized) { optLine = $"Otimizado, mas {fix} ponto(s) mudaram desde então"; optBrush = "WarnBrush"; }
         else if (fix == 0) { optLine = "Já está como o recomendado"; optBrush = "OkBrush"; }
         else { optLine = $"{fix} ponto(s) para otimizar"; optBrush = "WarnBrush"; }
-        panel.Children.Add(InfoCard("Otimização", optLine, optBrush,
+        tiles.Children.Add(StatTile("\uE73E", "Otimização", optLine, optBrush,
             $"Jogo: {(gameFix == 0 ? "tudo certo" : gameFix + " a ajustar")} · Rede: {(netFix == 0 ? "tudo certo" : netFix + " a ajustar")}",
             "Ver ajustes", () => { _tab = 1; Paint(); }));
 
@@ -562,11 +729,11 @@ public sealed partial class GameLibraryPage : ToolPageBase
             fpsBrush = "MutedBrush";
             fpsSub = game.ExeName is null ? "Não sei qual é o executável deste jogo." : "Clique em Medir FPS, jogue 2 a 3 minutos e feche o jogo.";
         }
-        panel.Children.Add(InfoCard("Desempenho (FPS)", fpsLine, fpsBrush, fpsSub, "Ver detalhes", () => OpenDetails(2)));
+        tiles.Children.Add(StatTile("\uE9D9", "Desempenho", fpsLine, fpsBrush, fpsSub, "Ver detalhes", () => OpenDetails(2)));
 
         // 3) rede
         var report = AppServices.NetReports.Get(game.Id).LastOrDefault();
-        panel.Children.Add(InfoCard("Rede e rota",
+        tiles.Children.Add(StatTile("\uE968", "Rede e rota",
             report is null ? "Rota ainda não analisada" : $"Ping médio {report.AvgMs:0} ms · oscilação {report.JitterMs:0.#} ms · perda {report.LossPercent:0.#}%",
             report is null ? "MutedBrush" : report.LossPercent > 2 || report.JitterMs > 15 ? "WarnBrush" : "OkBrush",
             report is null ? "Entre numa partida e use Ver detalhes → Analisar rota." : $"Medido em {report.At:dd/MM HH:mm} · {report.Host}",
@@ -577,7 +744,8 @@ public sealed partial class GameLibraryPage : ToolPageBase
         bool hasReq = info is { MinimumRequirements.Length: > 0 };
         string reqLine = v.Requirements is { Verdict: not Fit.Unknown } rr ? rr.Summary : hasReq ? "Mínimos informados pela loja" : "Sem requisitos informados";
         string reqBrush = v.Requirements?.Verdict switch { Fit.Recommended => "OkBrush", Fit.Minimum => v.Requirements.Summary.Contains("por pouco") ? "WarnBrush" : "OkBrush", Fit.Below => "BadBrush", _ => hasReq ? "TextBrush" : "MutedBrush" };
-        panel.Children.Add(InfoCard("Requisitos", reqLine, reqBrush, req, "Ver detalhes", () => OpenDetails(3)));
+        tiles.Children.Add(StatTile("\uE9F9", "Requisitos", reqLine, reqBrush, Shorten(req, 70), "Ver detalhes", () => OpenDetails(3)));
+        panel.Children.Add(Muted((game.ExeName ?? "Executável não identificado") + (info is { Genres.Count: > 0 } ? " · " + string.Join(", ", info.Genres.Take(3)) : "") + " · clique num cartão para ver os detalhes aqui embaixo.", 10.5));
         return panel;
     }
 
@@ -587,26 +755,111 @@ public sealed partial class GameLibraryPage : ToolPageBase
         return flat.Length <= max ? flat : flat[..max].TrimEnd() + "…";
     }
 
-    private Border InfoCard(string title, string line, string brush, string sub, string buttonText, Action open)
+    /// <summary>Cartão pequeno da grade 2×2 do resumo: ícone, nome, valor e uma linha; clicar abre os detalhes.</summary>
+    private Border StatTile(string glyph, string title, string line, string brush, string sub, string buttonText, Action open)
     {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var text = new StackPanel();
-        text.Children.Add(new TextBlock { Text = title, FontSize = 11, Foreground = Brush("MutedBrush") });
-        text.Children.Add(new TextBlock { Text = line, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = Brush(brush), TextWrapping = TextWrapping.Wrap });
-        text.Children.Add(new TextBlock { Text = sub, FontSize = 11, Foreground = Brush("MutedBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
-        grid.Children.Add(text);
-        var button = SmallButton(buttonText, (_, _) => open());
-        button.Padding = new Thickness(10, 4, 10, 4);
-        button.FontSize = 11.5;
-        button.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(button, 1);
-        grid.Children.Add(button);
-        var card = CardOf(grid);
-        card.Padding = new Thickness(12, 8, 8, 8);
-        card.Margin = new Thickness(0, 6, 0, 0);
+        var st = new StackPanel();
+        var top = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+        var badge = MBExtreme.UI.Controls.GlassFx.Badge(glyph, System.Windows.Media.Color.FromRgb(0xFF, 0xC4, 0x00), 26);
+        badge.Margin = new Thickness(0, 0, 8, 0);
+        top.Children.Add(badge);
+        top.Children.Add(new TextBlock { Text = title, FontSize = 11, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
+        st.Children.Add(top);
+        st.Children.Add(new TextBlock { Text = line, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Brush(brush), TextWrapping = TextWrapping.Wrap });
+        st.Children.Add(new TextBlock { Text = sub, FontSize = 10.5, Foreground = Brush("MutedBrush"), TextWrapping = TextWrapping.Wrap, MaxHeight = 30, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 0) });
+        var card = new Border
+        {
+            Background = Brush("Surface2Brush"), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(10, 9, 10, 9), Margin = new Thickness(0, 0, 8, 8), Cursor = System.Windows.Input.Cursors.Hand, ToolTip = buttonText, Child = st,
+        };
+        card.MouseLeftButtonUp += (_, _) => open();
+        MBExtreme.UI.Controls.GlassFx.Attach(card, badge, bar: false);
         return card;
+    }
+
+    /// <summary>Primeiro cartão do resumo: o Perfil MB do jogo (publicado no site) ou o perfil geral pelo tipo de jogo.</summary>
+    private UIElement ProfileCard(GameView v)
+    {
+        var game = v.Game;
+        var s = v.Settings;
+        var title = TitleOf(game);
+        bool applied = Profiled(s);
+        var box = new StackPanel();
+        var head = new DockPanel();
+        var state = new TextBlock
+        {
+            Text = s.SessionActive ? "● ligado agora" : s.AutoProfile ? "● automático" : applied ? "✓ aplicado" : "não aplicado", FontSize = 11.5, FontWeight = FontWeights.SemiBold,
+            Foreground = Brush(s.SessionActive || applied ? "OkBrush" : "WarnBrush"), VerticalAlignment = VerticalAlignment.Center,
+        };
+        DockPanel.SetDock(state, Dock.Right);
+        head.Children.Add(state);
+        head.Children.Add(new TextBlock
+        {
+            Text = title is null ? "PERFIL GERAL · " + ShortTitle(v.Profile.Title).ToUpperInvariant() : "PERFIL MB · " + title.Title.ToUpperInvariant(),
+            FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = Brush("AccentBrush"), TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
+        });
+        box.Children.Add(head);
+
+        var does = new List<string> { "ajustes do Windows de " + ShortTitle(v.Profile.Title).ToLowerInvariant() };
+        if (title?.Priority ?? true) does.Add("prioridade alta de CPU");
+        does.Add(_maker == GpuMaker.Nvidia ? "driver no desempenho máximo" : "placa de vídeo de alto desempenho");
+        if (title?.Fso == true) does.Add("tela cheia sem otimizações");
+        if (title is { Reflex: true }) does.Add("tem NVIDIA Reflex");
+        box.Children.Add(new TextBlock
+        {
+            Text = (title is null ? "Este jogo ainda não tem Perfil MB próprio; usa o perfil pelo tipo de jogo: " : "") + char.ToUpper(does[0][0]) + string.Join(", ", does)[1..] + ".",
+            FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0),
+        });
+        if (title is not null)
+        {
+            var plan = GameTitles.Plan(title, _maker, _tier);
+            if (plan.InGame.Count > 0)
+            {
+                box.Children.Add(new TextBlock { Text = "No menu do jogo · " + plan.TierName, FontSize = 11, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 8, 0, 2) });
+                var lines = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2 };
+                foreach (string line in plan.InGame.Take(4))
+                    lines.Children.Add(new TextBlock { Text = line, FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = line, Margin = new Thickness(0, 0, 8, 2) });
+                box.Children.Add(lines);
+            }
+        }
+        var auto = new CheckBox
+        {
+            Content = "Ligar sozinho quando o jogo abrir e desfazer quando fechar", IsChecked = s.AutoProfile || s.OptimizedAt is null,
+            Foreground = Brush("TextBrush"), FontSize = 11.5, Margin = new Thickness(0, 8, 0, 0),
+        };
+        if (applied)
+            auto.Click += (_, _) =>
+            {
+                bool on = auto.IsChecked == true;
+                AppServices.GameLibrary.Update(game.Id, x =>
+                {
+                    x.AutoProfile = on;
+                    if (on && x.PlanTweaks.Count == 0) x.PlanTweaks = v.Plan.TweakIds.ToList();
+                    if (on) x.SessionActive = x.AppliedTweaks.Count > 0;
+                });
+                SetStatus(on ? "Automático ligado: entra quando o jogo abre e sai quando fecha." : "Automático desligado: os ajustes ficam até você clicar em Desfazer.", "OkBrush");
+            };
+        box.Children.Add(auto);
+        var buttons = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        buttons.ColumnDefinitions.Add(new ColumnDefinition());
+        buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var apply = SmallButton(applied ? "Reaplicar perfil" : title is null ? "Aplicar perfil" : "Aplicar perfil MB", async (_, _) => await ApplyTitleAsync(game, v, auto.IsChecked == true), !applied);
+        apply.Margin = new Thickness(0);
+        buttons.Children.Add(apply);
+        var see = SmallButton("Ver o que muda", (_, _) => { _tab = 1; Paint(); });
+        Grid.SetColumn(see, 1);
+        see.Margin = new Thickness(8, 0, 0, 0);
+        buttons.Children.Add(see);
+        box.Children.Add(buttons);
+
+        var glass = new LinearGradientBrush { StartPoint = new System.Windows.Point(0, 0), EndPoint = new System.Windows.Point(1, 1) };
+        glass.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(title is null ? (byte)0x10 : (byte)0x2A, 0xFF, 0xC4, 0x00), 0));
+        glass.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(0x08, 0xFF, 0x8A, 0x00), 1));
+        return new Border
+        {
+            Background = glass, BorderBrush = title is null ? Brush("BorderBrush") : new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, 0xFF, 0xC4, 0x00)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 12, 14, 12), Child = box,
+        };
     }
 
     // ---- aba Otimização: duas listas curtas (jogo e rede)
@@ -1116,7 +1369,8 @@ public sealed partial class GameLibraryPage : ToolPageBase
         var catalogItems = _maker == GpuMaker.Nvidia ? DriverItems(game) : Array.Empty<DriverSetting>();
         var pending = (await Task.Run(() => ReadRows(game, profile))).Where(r => r.CanFix && r.Group is "Driver NVIDIA" or "Placa de vídeo").ToList();
         bool withDriver = false;
-        if (pending.Count > 0 && (!driverPlan.IsEmpty || catalogItems.Count > 0))
+        if (_driverAnswer is { } answer) withDriver = answer && pending.Count > 0 && (!driverPlan.IsEmpty || catalogItems.Count > 0);
+        else if (pending.Count > 0 && (!driverPlan.IsEmpty || catalogItems.Count > 0))
         {
             var ask = MessageBox.Show(
                 "Além dos ajustes do Windows, posso mudar estas configurações só para " + game.Name + ":\n\n" +

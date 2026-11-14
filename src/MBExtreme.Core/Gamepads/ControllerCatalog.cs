@@ -127,8 +127,15 @@ public sealed class PadProfile
     public int TriggerDeadzone { get; set; } = 5;
     public int Vibration { get; set; } = 100;
     public string Notes { get; set; } = "";
+    /// <summary>Executáveis dos jogos que usam este perfil (ex.: "FC27.exe"): quando um deles abre, o perfil entra sozinho.</summary>
+    public List<string> Games { get; set; } = new();
 
-    public PadProfile Clone() => (PadProfile)MemberwiseClone();
+    public PadProfile Clone()
+    {
+        var c = (PadProfile)MemberwiseClone();
+        c.Games = Games.ToList();
+        return c;
+    }
 }
 
 public static class PadProfiles
@@ -146,6 +153,50 @@ public static class PadProfiles
             Notes = "Equilíbrio entre precisão no passe e resposta rápida no drible." },
         new PadProfile { Name = "Aventura / RPG", GameType = "Aventura", Deadzone = 10, AntiDeadzone = 0, Sensitivity = 85, Curve = StickCurve.Suave, TriggerDeadzone = 5, Vibration = 100,
             Notes = "Câmera mais suave e confortável para jogar por muito tempo." },
+    };
+
+    /// <summary>Junta os perfis salvos com os prontos (os salvos vencem quando o nome é igual).</summary>
+    public static List<PadProfile> Merge(IEnumerable<PadProfile> saved) =>
+        saved.Concat(Defaults.Where(d => saved.All(s => !string.Equals(s.Name, d.Name, StringComparison.OrdinalIgnoreCase)))).ToList();
+
+    /// <summary>Perfil ligado ao executável do jogo, ou null.</summary>
+    public static PadProfile? ForGame(IEnumerable<PadProfile> profiles, string? exeOrProcess)
+    {
+        if (string.IsNullOrWhiteSpace(exeOrProcess)) return null;
+        string key = Norm(exeOrProcess);
+        return profiles.FirstOrDefault(p => p.Games.Any(g => Norm(g) == key));
+    }
+
+    private static string Norm(string exe)
+    {
+        string t = exe.Trim();
+        int slash = t.LastIndexOfAny(new[] { '\\', '/' });
+        string n = (slash >= 0 ? t[(slash + 1)..] : t).ToLowerInvariant();
+        return n.EndsWith(".exe", StringComparison.Ordinal) ? n[..^4] : n;
+    }
+
+    /// <summary>Leva os valores do perfil para a emulação (os dois analógicos, gatilhos e vibração).</summary>
+    public static void ApplyTo(EmulationSettings e, PadProfile p)
+    {
+        foreach (var t in new[] { e.Left, e.Right })
+        {
+            t.Deadzone = p.Deadzone;
+            t.AntiDeadzone = p.AntiDeadzone;
+            t.Sensitivity = p.Sensitivity;
+            t.Curve = p.Curve;
+        }
+        e.TriggerDeadzone = p.TriggerDeadzone;
+    }
+
+    /// <summary>Ícone simples pelo tipo de jogo (Segoe MDL2).</summary>
+    public static string Glyph(PadProfile p) => (p.GameType + " " + p.Name).ToLowerInvariant() switch
+    {
+        var t when t.Contains("tiro") || t.Contains("fps") => "\uE7C8",
+        var t when t.Contains("corrida") => "\uE804",
+        var t when t.Contains("luta") => "\uE945",
+        var t when t.Contains("esporte") || t.Contains("futebol") => "\uE805",
+        var t when t.Contains("aventura") || t.Contains("rpg") => "\uE909",
+        _ => "\uE7FC",
     };
 
     /// <summary>Aplica zona morta, anti-zona morta, curva e sensibilidade a um ponto do analógico (-1..1). Usado na prévia ao vivo.</summary>

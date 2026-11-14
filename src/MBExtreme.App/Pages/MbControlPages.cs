@@ -13,6 +13,63 @@ namespace MBExtreme.UI.Pages;
 /// Faixa fixa no alto das telas do MB Control, no estilo da seleção do menu lateral: o controle ativo e, com ícones,
 /// a ligação (USB ou Bluetooth), a bateria e a latência medida.
 /// </summary>
+/// <summary>Perfil de controle ativo: lista, troca (leva os valores para a emulação) e avisa as telas.</summary>
+internal static class PadProfileHub
+{
+    public static event Action? Changed;
+
+    public static List<PadProfile> All() => PadProfiles.Merge(AppServices.Settings.PadProfiles);
+
+    public static PadProfile? Active => All().FirstOrDefault(p => p.Name == AppServices.Settings.PadActiveProfile);
+
+    public static void Activate(PadProfile p)
+    {
+        var s = AppServices.Settings;
+        s.PadActiveProfile = p.Name;
+        PadProfiles.ApplyTo(s.Emulation, p);
+        s.Save();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Chamado quando um jogo abre: entra o perfil ligado ao executável dele (se houver e se o automático estiver ligado).</summary>
+    public static void OnGameStarted(string process)
+    {
+        if (!AppServices.Settings.PadAutoSwitch) return;
+        if (PadProfiles.ForGame(All(), process) is { } p && p.Name != AppServices.Settings.PadActiveProfile) Activate(p);
+    }
+
+    /// <summary>Caixa "Perfil do jogo" que fica no topo das telas do MB Control.</summary>
+    public static ComboBox Picker(double width)
+    {
+        var box = new ComboBox { Width = width, VerticalAlignment = VerticalAlignment.Center, ToolTip = "Perfil do controle (zona morta, curva, gatilhos). Troca sozinho quando o jogo ligado a ele abre." };
+        bool filling = false;
+        void Fill()
+        {
+            filling = true;
+            box.Items.Clear();
+            box.Items.Add(new ComboBoxItem { Content = "Padrão (sem perfil)", Tag = null });
+            foreach (var p in All())
+            {
+                var item = new ComboBoxItem { Content = p.Name, Tag = p };
+                box.Items.Add(item);
+                if (p.Name == AppServices.Settings.PadActiveProfile) box.SelectedItem = item;
+            }
+            if (box.SelectedItem is null) box.SelectedIndex = 0;
+            filling = false;
+        }
+        box.SelectionChanged += (_, _) =>
+        {
+            if (filling) return;
+            if (box.SelectedItem is ComboBoxItem { Tag: PadProfile p }) Activate(p);
+            else if (AppServices.Settings.PadActiveProfile.Length > 0) { AppServices.Settings.PadActiveProfile = ""; AppServices.Settings.Save(); Changed?.Invoke(); }
+        };
+        Action refresh = () => box.Dispatcher.BeginInvoke(new Action(Fill));
+        box.Loaded += (_, _) => { Fill(); Changed += refresh; };
+        box.Unloaded += (_, _) => Changed -= refresh;
+        return box;
+    }
+}
+
 internal sealed class PadStatusStrip : UserControl
 {
     private const string Icons = "Segoe MDL2 Assets";
@@ -61,15 +118,21 @@ internal sealed class PadStatusStrip : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.Children.Add(_ring);
+        var pick = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        pick.Children.Add(new TextBlock { Text = "Perfil do jogo", FontSize = 11.5, Foreground = PadUi.Res("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        pick.Children.Add(PadProfileHub.Picker(200));
+        grid.Children.Add(pick);
         var text = new StackPanel { Margin = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(_name);
         text.Children.Add(_sub);
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
         Grid.SetColumn(_stats, 2);
+        Grid.SetColumn(pick, 3);
         grid.Children.Add(_stats);
-        Grid.SetColumn(_off, 3);
+        Grid.SetColumn(_off, 4);
         grid.Children.Add(_off);
 
         // mesmo estilo da seleção do menu lateral: vidro escuro com brilho amarelo à esquerda
@@ -206,6 +269,7 @@ internal sealed class MbOverviewPage : MbControlPageBase
         bar.Children.Add(copy);
         bar.Children.Add(calib);
         Body.Children.Add(bar);
+        Body.Children.Add(ProfileBlock());
 
         var cols = new Grid();
         cols.ColumnDefinitions.Add(new ColumnDefinition());
@@ -235,6 +299,67 @@ internal sealed class MbOverviewPage : MbControlPageBase
     }
 
     private static TextBlock Tile() => new() { FontSize = 13, FontWeight = FontWeights.SemiBold };
+
+    // ---- perfil de controle (antes era a página "Perfis por jogo")
+
+    private readonly UniformGrid _profileTiles = new() { Columns = 6 };
+    private readonly TextBlock _profileSummary = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+
+    private UIElement ProfileBlock()
+    {
+        var yellow = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
+        var st = new StackPanel();
+        var head = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 10) };
+        var edit = PadUi.Button("Editar perfil");
+        edit.Click += (_, _) => MainWindow.Current?.Go("pad-profiles");
+        DockPanel.SetDock(edit, Dock.Right);
+        head.Children.Add(edit);
+        var auto = new CheckBox { Content = "Trocar sozinho pelo jogo", IsChecked = AppServices.Settings.PadAutoSwitch, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), FontSize = 12.5 };
+        auto.Click += (_, _) => { AppServices.Settings.PadAutoSwitch = auto.IsChecked == true; AppServices.Settings.Save(); };
+        DockPanel.SetDock(auto, Dock.Right);
+        head.Children.Add(auto);
+        var title = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        title.Children.Add(new TextBlock { Text = "PERFIL DE CONTROLE", FontSize = 12, FontWeight = FontWeights.Bold, Foreground = yellow, VerticalAlignment = VerticalAlignment.Center });
+        title.Children.Add(new TextBlock { Text = "  O perfil troca sozinho quando o jogo abre. Vale para a Emulação e os Ajustes finos.", FontSize = 12, Foreground = PadUi.Res("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+        head.Children.Add(title);
+        st.Children.Add(head);
+        st.Children.Add(_profileTiles);
+        st.Children.Add(_profileSummary);
+        var card = PadUi.Card(st);
+        card.BorderBrush = new SolidColorBrush(Color.FromArgb(0x70, 0xFF, 0xC4, 0x00));
+        card.BorderThickness = new Thickness(1);
+        card.Margin = new Thickness(0, 0, 0, 14);
+        Action refresh = () => Dispatcher.BeginInvoke(new Action(FillProfiles));
+        Loaded += (_, _) => { FillProfiles(); PadProfileHub.Changed += refresh; };
+        Unloaded += (_, _) => PadProfileHub.Changed -= refresh;
+        return card;
+    }
+
+    private void FillProfiles()
+    {
+        _profileTiles.Children.Clear();
+        var active = PadProfileHub.Active;
+        var yellow = Color.FromRgb(0xFF, 0xC4, 0x00);
+        foreach (var p in PadProfileHub.All())
+        {
+            bool on = p.Name == active?.Name;
+            string sub = p.Games.Count > 0 ? string.Join(", ", p.Games.Take(2).Select(System.IO.Path.GetFileNameWithoutExtension)) : p.GameType.Length > 0 ? p.GameType : "meu perfil";
+            _profileTiles.Children.Add(PadUi.SelectTile(PadProfiles.Glyph(p), p.Name, on ? "em uso" : sub, on, () => PadProfileHub.Activate(p)));
+        }
+        _profileTiles.Children.Add(PadUi.SelectTile("\uE710", "Novo perfil", "criar ou editar", false, () => MainWindow.Current?.Go("pad-profiles")));
+        _profileTiles.Columns = Math.Min(6, _profileTiles.Children.Count);
+        if (active is null)
+        {
+            _profileSummary.Text = "Nenhum perfil escolhido: a emulação usa os ajustes que estão na tela Emulação de controle.";
+            _profileSummary.Foreground = PadUi.Res("MutedBrush");
+            return;
+        }
+        string curve = active.Curve switch { StickCurve.Suave => "Suave", StickCurve.Agressiva => "Agressiva", _ => "Linear" };
+        _profileSummary.Text = $"Em uso: {active.Name} · zona morta {active.Deadzone}% · curva {curve} · sensibilidade {active.Sensitivity}% · gatilhos {active.TriggerDeadzone}% · vibração {active.Vibration}%"
+            + (active.Games.Count > 0 ? " · entra sozinho em " + string.Join(", ", active.Games) : "");
+        _profileSummary.Foreground = new SolidColorBrush(yellow);
+    }
+
 
     private static TextBlock Heading(string text) => new() { Text = text, FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
 

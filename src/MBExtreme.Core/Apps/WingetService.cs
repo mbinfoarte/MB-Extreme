@@ -6,7 +6,7 @@ namespace MBExtreme.Core.Apps;
 
 public sealed record WingetApp(string Name, string Id, string Version, string Available);
 
-public sealed record CatalogApp(string Id, string Title, string Description);
+public sealed record CatalogApp(string Id, string Title, string Description, string Category = "Utilitários");
 
 /// <summary>Atualiza e instala programas pelo winget, o instalador de pacotes da própria Microsoft.</summary>
 [SupportedOSPlatform("windows")]
@@ -17,21 +17,21 @@ public static class WingetService
     /// <summary>Programas comuns que dá para instalar com um clique.</summary>
     public static IReadOnlyList<CatalogApp> Catalog { get; } = new CatalogApp[]
     {
-        new("Valve.Steam", "Steam", "Loja e biblioteca de jogos."),
-        new("EpicGames.EpicGamesLauncher", "Epic Games Launcher", "Loja de jogos da Epic."),
-        new("Discord.Discord", "Discord", "Voz e texto para jogar em grupo."),
-        new("OBSProject.OBSStudio", "OBS Studio", "Gravação e transmissão de tela."),
-        new("Google.Chrome", "Google Chrome", "Navegador."),
-        new("Mozilla.Firefox", "Firefox", "Navegador."),
-        new("VideoLAN.VLC", "VLC", "Player de vídeo e música."),
+        new("Valve.Steam", "Steam", "Loja e biblioteca de jogos.", "Jogos"),
+        new("EpicGames.EpicGamesLauncher", "Epic Games Launcher", "Loja de jogos da Epic.", "Jogos"),
+        new("Discord.Discord", "Discord", "Voz e texto para jogar em grupo.", "Jogos"),
+        new("OBSProject.OBSStudio", "OBS Studio", "Gravação e transmissão de tela.", "Gravação"),
+        new("Google.Chrome", "Google Chrome", "Navegador.", "Internet"),
+        new("Mozilla.Firefox", "Firefox", "Navegador.", "Internet"),
+        new("VideoLAN.VLC", "VLC", "Player de vídeo e música.", "Mídia"),
         new("7zip.7zip", "7-Zip", "Compactador de arquivos."),
         new("Notepad++.Notepad++", "Notepad++", "Editor de texto."),
         new("Microsoft.PowerToys", "PowerToys", "Utilitários da Microsoft para o Windows."),
-        new("Guru3D.Afterburner", "MSI Afterburner", "Overclock e monitoramento de placa de vídeo."),
-        new("CPUID.CPU-Z", "CPU-Z", "Informações detalhadas da CPU."),
-        new("TechPowerUp.GPU-Z", "GPU-Z", "Informações detalhadas da placa de vídeo."),
-        new("REALiX.HWiNFO", "HWiNFO", "Sensores e informações de hardware."),
-        new("Intel.IntelDriverAndSupportAssistant", "Intel Driver & Support Assistant", "Atualiza drivers de componentes Intel."),
+        new("Guru3D.Afterburner", "MSI Afterburner", "Overclock e monitoramento de placa de vídeo.", "Hardware"),
+        new("CPUID.CPU-Z", "CPU-Z", "Informações detalhadas da CPU.", "Hardware"),
+        new("TechPowerUp.GPU-Z", "GPU-Z", "Informações detalhadas da placa de vídeo.", "Hardware"),
+        new("REALiX.HWiNFO", "HWiNFO", "Sensores e informações de hardware.", "Hardware"),
+        new("Intel.IntelDriverAndSupportAssistant", "Intel Driver & Support Assistant", "Atualiza drivers de componentes Intel.", "Hardware"),
     };
 
     public static bool IsValidId(string id) => SafeId.IsMatch(id);

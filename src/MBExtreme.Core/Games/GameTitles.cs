@@ -141,10 +141,17 @@ public static class GameTitles
         }
         if (string.IsNullOrWhiteSpace(gameName)) return null;
         string name = Normalize(gameName);
-        return titles
-            .SelectMany(t => t.Names.Select(n => (Title: t, Name: Normalize(n))))
-            .Where(x => x.Name.Length > 0 && (name == x.Name || name.StartsWith(x.Name + " ", StringComparison.Ordinal)))
+        var names = titles.Where(t => !t.Disabled).SelectMany(t => t.Names.Append(t.Title).Select(n => (Title: t, Name: Normalize(n)))).Where(x => x.Name.Length > 0).ToList();
+        var hit = names
+            .Where(x => name == x.Name || name.StartsWith(x.Name + " ", StringComparison.Ordinal))
             .OrderByDescending(x => x.Name.Length)
+            .Select(x => x.Title)
+            .FirstOrDefault();
+        if (hit is not null) return hit;
+        // mesmo nome escrito junto ou separado ("FC27" e "FC 27"); nomes muito curtos ficam de fora para não confundir
+        string compact = name.Replace(" ", "", StringComparison.Ordinal);
+        return compact.Length < 4 ? null : names
+            .Where(x => x.Name.Replace(" ", "", StringComparison.Ordinal) == compact)
             .Select(x => x.Title)
             .FirstOrDefault();
     }

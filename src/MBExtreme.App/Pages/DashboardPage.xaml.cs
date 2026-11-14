@@ -128,6 +128,9 @@ public partial class DashboardPage : UserControl
     }
 
     private static bool _autoAnalyzed;
+    private static bool _ratingClosed;
+    private bool _analyzed;
+    private RatingCard? _ratingCard;
 
     /// <summary>Põe o ícone da função antes do título do cartão (o primeiro texto de 15 pt) e liga o efeito de vidro ao passar o mouse.</summary>
     private static void DecorateCard(Border card, string glyph, Color color)
@@ -203,10 +206,12 @@ public partial class DashboardPage : UserControl
         }
         if (_betaNotice is not null) list.Add(_betaNotice);
         if (_videoNotice is not null) list.Add(_videoNotice);
+        // avaliação: depois que a análise terminou (um momento bom), uma vez, a partir do 2º dia com a conta
+        bool rating = _analyzed && !_ratingClosed && RatingCard.ShouldShow();
 
         NoticeColumn.Children.Clear();
         bool collapsed = _hero.Collapsed;
-        if (list.Count == 0)
+        if (list.Count == 0 && !rating)
         {
             NoticeColumn.Visibility = Visibility.Collapsed;
             HeroColumn.Width = new GridLength(1, GridUnitType.Star);
@@ -244,6 +249,7 @@ public partial class DashboardPage : UserControl
         if (_items.Count > 0) title.Children.Add(HealthText);
         head.Children.Add(title);
         NoticeColumn.Children.Add(head);
+        if (rating) NoticeColumn.Children.Add(_ratingCard ??= new RatingCard(() => { _ratingClosed = true; _ratingCard = null; RenderNotices(); }));
 
         Panel cards = collapsed
             ? new System.Windows.Controls.Primitives.UniformGrid { Columns = Math.Min(3, list.Count) }
@@ -402,8 +408,10 @@ public partial class DashboardPage : UserControl
         HealthText.Text = "· " + AttentionAdvisor.Headline(items);
         HealthText.Foreground = (Brush)FindResource(items.Count == 0 ? "OkBrush" : items.Any(i => i.Urgent) ? "BadBrush" : "WarnBrush");
 
+        bool first = !_analyzed;
+        _analyzed = true;
         string key = string.Join("|", items.Select(i => i.Title + i.Detail));
-        if (key == _attentionKey) return;
+        if (key == _attentionKey && !first) return;
         _attentionKey = key;
         _items = items;
         RenderNotices();

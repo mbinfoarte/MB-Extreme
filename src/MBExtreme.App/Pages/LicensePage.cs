@@ -41,6 +41,7 @@ public sealed class LicensePage : ToolPageBase
         Grid.SetColumn(_computer, 1);
         grid.Children.Add(_computer);
         Body.Children.Add(grid);
+        if (_license.Config.Configured) Body.Children.Add(new MBExtreme.UI.Controls.InviteCard());
 
         // Endereço do servidor e chave pública já vêm no programa; o painel de testes só aparece com MBX_LICENSE_DEV=1.
         if (Environment.GetEnvironmentVariable("MBX_LICENSE_DEV") == "1") Body.Children.Add(BuildAdvanced());

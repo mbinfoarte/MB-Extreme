@@ -82,37 +82,43 @@ public sealed class PostInstallPage : ToolPageBase
         var apps = PostInstallPlan.Apps(_profile, _installed).ToHashSet();
         Body.Children.Add(Heading($"3. Aplicativos para remover ({_installed.Count} encontrados)"));
         Body.Children.Add(Muted("Sem volta pelo programa: para ter de volta, instale pela Microsoft Store.", 11.5));
+        var appTiles = new List<UIElement>();
         foreach (var app in _installed.OrderBy(a => a.Level))
         {
-            var box = Check(app.Title, $"{LevelText(app.Level)} · {app.Note}");
+            var box = TileCheck(app.Title, $"{LevelText(app.Level)} · {app.Note}");
             box.IsChecked = apps.Contains(app);
             _items.Add((box, () => new AppRemovalOperation(app)));
-            Body.Children.Add(CardOf(box));
+            appTiles.Add(TileOf(box));
         }
+        if (appTiles.Count > 0) Body.Children.Add(TileGrid(appTiles, 4, 260));
         if (_installed.Count == 0) Body.Children.Add(Muted("Nenhum dos aplicativos da lista está instalado."));
 
         var tweaks = PostInstallPlan.Tweaks(_profile, _tweaks).ToHashSet();
         Body.Children.Add(Heading($"4. Ajustes do Windows ({_tweaks.Count} ainda não aplicados)"));
+        var tweakTiles = new List<UIElement>();
         foreach (var group in _tweaks.GroupBy(t => t.Category).OrderBy(g => g.Key))
         {
             foreach (var tweak in group.OrderBy(t => t.Risk))
             {
                 string detail = $"{RiskText(tweak.Risk)} · {tweak.Description}" + (tweak.Warning.Length > 0 ? "\nAtenção: " + tweak.Warning : "");
-                var box = Check(tweak.Title, detail);
+                var box = TileCheck(tweak.Title, detail, 3);
                 box.IsChecked = tweaks.Contains(tweak);
                 _items.Add((box, () => new TweakOperation(tweak, apply: true)));
-                Body.Children.Add(CardOf(box));
+                tweakTiles.Add(TileOf(box));
             }
         }
+        if (tweakTiles.Count > 0) Body.Children.Add(TileGrid(tweakTiles, 3, 320));
 
         Body.Children.Add(Heading("5. Programas para instalar"));
         Body.Children.Add(Muted("Instalados pelo winget, o instalador oficial da Microsoft, um de cada vez.", 11.5));
+        var programTiles = new List<UIElement>();
         foreach (var app in WingetService.Catalog)
         {
-            var box = Check(app.Title, app.Description);
+            var box = TileCheck(app.Title, app.Description, 1);
             _items.Add((box, () => new WingetOperation(app.Id, app.Title, upgrade: false)));
-            Body.Children.Add(CardOf(box));
+            programTiles.Add(TileOf(box));
         }
+        Body.Children.Add(TileGrid(programTiles, 4, 250));
 
         Body.Children.Add(Heading("6. Windows Update (opcional)"));
         Body.Children.Add(Muted("Depois de preparar, clique em \"Abrir o Windows Update\" no topo para procurar atualizações. O programa não muda as configurações do Windows Update.", 12));

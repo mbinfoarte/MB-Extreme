@@ -75,22 +75,59 @@ public sealed class ProgramsPage : ToolPageBase
         if (upgrades.Count > 0)
         {
             Body.Children.Add(Heading("Atualizações disponíveis"));
+            var tiles = new List<UIElement>();
             foreach (var app in upgrades)
             {
-                var box = Check(app.Name, $"{app.Version} → {app.Available}");
+                var box = TileCheck(app.Name, $"{app.Version} → {app.Available}", 1);
                 _upgrades[app] = box;
-                Body.Children.Add(CardOf(box));
+                tiles.Add(TileOf(box));
             }
+            Body.Children.Add(TileGrid(tiles, 4, 260));
         }
 
         Body.Children.Add(Heading("Instalar programas úteis"));
-        foreach (var app in WingetService.Catalog)
+        // filtros por categoria e busca
+        var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var search = new TextBox { Width = 240, Text = _query, FontSize = 12.5, VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Buscar programa" };
+        System.Windows.Automation.AutomationProperties.SetName(search, "Buscar programa");
+        DockPanel.SetDock(search, Dock.Right);
+        bar.Children.Add(search);
+        var grid = TileGrid(Array.Empty<UIElement>(), 4, 250);
+        var chipList = new List<System.Windows.Controls.Primitives.ToggleButton>();
+        var chips = new WrapPanel();
+        var cats = new[] { "Todos" }.Concat(WingetService.Catalog.Select(a => a.Category).Distinct().OrderBy(c => c)).ToList();
+        foreach (string cat in cats)
         {
-            var box = Check(app.Title, app.Description);
-            _installs[app] = box;
-            Body.Children.Add(CardOf(box));
+            int n = cat == "Todos" ? WingetService.Catalog.Count : WingetService.Catalog.Count(a => a.Category == cat);
+            var chip = new System.Windows.Controls.Primitives.ToggleButton { Content = $"{cat} {n}", Style = (Style)FindResource("ChipToggle"), Margin = new Thickness(0, 0, 6, 6), IsChecked = cat == _category };
+            string c = cat;
+            chip.Click += (_, _) => { _category = c; foreach (var o in chipList) o.IsChecked = o == chip; Fill(); };
+            chipList.Add(chip);
+            chips.Children.Add(chip);
         }
+        bar.Children.Add(chips);
+        Body.Children.Add(bar);
+        void Fill()
+        {
+            grid.Children.Clear();
+            foreach (var app in WingetService.Catalog)
+            {
+                if (!_installs.TryGetValue(app, out var box))
+                {
+                    box = TileCheck(app.Title, app.Description, 1);
+                    _installs[app] = box;
+                }
+                bool show = (_category == "Todos" || app.Category == _category)
+                    && (_query.Length == 0 || app.Title.Contains(_query, StringComparison.OrdinalIgnoreCase) || app.Description.Contains(_query, StringComparison.OrdinalIgnoreCase));
+                if (show) grid.Children.Add(box.Parent as Border ?? TileOf(box));
+            }
+        }
+        search.TextChanged += (_, _) => { _query = search.Text.Trim(); Fill(); };
+        Fill();
+        Body.Children.Add(grid);
     }
+
+    private string _category = "Todos", _query = "";
 
     private async Task RunAsync(bool upgrade)
     {

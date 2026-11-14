@@ -60,6 +60,72 @@ internal static class PadUi
         };
     }
 
+    /// <summary>Título amarelo de seção ("PASSO 1 · ...").</summary>
+    public static TextBlock Head(string text) => new() { Text = text, FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)), VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>Coloca cartões lado a lado (larguras proporcionais, espaço de 14 entre eles).</summary>
+    public static Grid Columns(params (UIElement Child, double Star)[] cols)
+    {
+        var g = new Grid();
+        for (int i = 0; i < cols.Length; i++)
+        {
+            if (i > 0) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(cols[i].Star, GridUnitType.Star) });
+            if (cols[i].Child is FrameworkElement fe) fe.VerticalAlignment = VerticalAlignment.Stretch;
+            Grid.SetColumn(cols[i].Child, i * 2);
+            g.Children.Add(cols[i].Child);
+        }
+        return g;
+    }
+
+    /// <summary>Cartão pequeno clicável com ícone, nome e linha de baixo; o escolhido fica amarelo.</summary>
+    public static Border SelectTile(string glyph, string name, string sub, bool on, Action? click, bool vertical = false)
+    {
+        var yellow = Color.FromRgb(0xFF, 0xC4, 0x00);
+        var icon = MBExtreme.UI.Controls.GlassFx.Badge(glyph, yellow, vertical ? 34 : 30);
+        var title = new TextBlock { Text = name, FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        var line = new TextBlock { Text = sub, FontSize = 11, Foreground = Res("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis };
+        UIElement content;
+        if (vertical)
+        {
+            var st = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            icon.HorizontalAlignment = HorizontalAlignment.Center;
+            icon.Margin = new Thickness(0, 0, 0, 6);
+            title.HorizontalAlignment = line.HorizontalAlignment = HorizontalAlignment.Center;
+            st.Children.Add(icon);
+            st.Children.Add(title);
+            st.Children.Add(line);
+            content = st;
+        }
+        else
+        {
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            icon.Margin = new Thickness(0, 0, 10, 0);
+            grid.Children.Add(icon);
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(title);
+            text.Children.Add(line);
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(text);
+            content = grid;
+        }
+        var b = new Border
+        {
+            Background = on ? new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xC4, 0x00)) : Res("Surface2Brush"),
+            BorderBrush = on ? new SolidColorBrush(yellow) : Res("BorderBrush"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 0, 8, 8), Child = content,
+        };
+        if (click is not null)
+        {
+            b.Cursor = System.Windows.Input.Cursors.Hand;
+            b.MouseLeftButtonUp += (_, _) => click();
+            MBExtreme.UI.Controls.GlassFx.Attach(b, bar: false);
+        }
+        return b;
+    }
+
     public static TextBlock Muted(string text, double size = 12) => new() { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap, Foreground = Res("MutedBrush") };
 
     public static void Open(string url)
@@ -335,7 +401,7 @@ internal sealed class PadProfilesPage : UserControl
 
     public PadProfilesPage()
     {
-        var root = PadUi.Root("Perfis do controle",
+        var root = PadUi.Root("Editar perfil de controle",
             "Monte e salve um perfil por tipo de jogo. A prévia mostra ao vivo como o analógico esquerdo fica com o perfil (ponto amarelo) e sem ele (ponto cinza). " +
             "Use os mesmos valores nas configurações de controle do jogo ou no Steam Input.", out var scroll);
 
@@ -380,8 +446,7 @@ internal sealed class PadProfilesPage : UserControl
         Unloaded += (_, _) => _timer.Stop();
     }
 
-    private static List<PadProfile> All() =>
-        AppServices.Settings.PadProfiles.Concat(PadProfiles.Defaults.Where(d => AppServices.Settings.PadProfiles.All(s => s.Name != d.Name))).ToList();
+    private static List<PadProfile> All() => PadProfileHub.All();
 
     private void FillList(string select)
     {
@@ -403,6 +468,10 @@ internal sealed class PadProfilesPage : UserControl
         name.TextChanged += (_, _) => _current.Name = name.Text.Trim();
         _editor.Children.Add(PadUi.Muted("Nome do perfil (ex.: Warzone, F1, Street Fighter)"));
         _editor.Children.Add(name);
+        var games = new TextBox { Text = string.Join(", ", _current.Games), Margin = new Thickness(0, 2, 0, 10), FontSize = 13 };
+        games.TextChanged += (_, _) => _current.Games = games.Text.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _editor.Children.Add(PadUi.Muted("Jogos que usam este perfil (arquivo do jogo, separado por vírgula, ex.: FC27.exe, cod.exe). Quando um deles abrir, o perfil entra sozinho."));
+        _editor.Children.Add(games);
         _editor.Children.Add(Slider("Zona morta do analógico", 0, 30, _current.Deadzone, v => _current.Deadzone = v, "%"));
         _editor.Children.Add(Slider("Anti-zona morta", 0, 30, _current.AntiDeadzone, v => _current.AntiDeadzone = v, "%"));
         _editor.Children.Add(Slider("Sensibilidade", 50, 150, _current.Sensitivity, v => _current.Sensitivity = v, "%"));
@@ -449,8 +518,7 @@ internal sealed class PadProfilesPage : UserControl
         var list = AppServices.Settings.PadProfiles;
         list.RemoveAll(p => p.Name == _current.Name);
         list.Add(_current.Clone());
-        AppServices.Settings.PadActiveProfile = _current.Name;
-        AppServices.Settings.Save();
+        PadProfileHub.Activate(_current.Clone());
         FillList(_current.Name);
         _notes.Foreground = PadUi.Res("OkBrush");
         _notes.Text = $"Perfil \"{_current.Name}\" salvo. Use estes valores nas configurações de controle do jogo ou no Steam Input.";

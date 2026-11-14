@@ -169,6 +169,8 @@ public static class ExeGuesser
 /// <summary>Dados que o MB Extreme guarda de cada jogo (não mexe nos arquivos do jogo).</summary>
 public sealed class GameSettings
 {
+    /// <summary>O aviso "tem Perfil MB pronto" já foi mostrado (aplicado ou dispensado) para este jogo e esta versão do perfil.</summary>
+    public string? ProfileOffered { get; set; }
     public bool HighPriority { get; set; }
     public bool BoostOnLaunch { get; set; } = true;
     public double MinutesPlayed { get; set; }

@@ -38,6 +38,33 @@ public class PerfisPorTituloTests
     public void Acha_o_titulo_pelo_exe_ou_pelo_nome(string? name, string? exe, string expected) =>
         Assert.Equal(expected, GameTitles.Find(GameTitles.Builtin, name, exe)?.Key);
 
+    [Fact]
+    public void Acha_o_titulo_com_o_nome_escrito_junto_ou_separado()
+    {
+        var titles = new[] { new GameTitle { Key = "er", Title = "Elden Ring", Names = { "Elden Ring" } }, new GameTitle { Key = "x", Title = "X", Names = { "X 1" } } };
+        Assert.Equal("er", GameTitles.Find(titles, "EldenRing", null)?.Key);
+        Assert.Equal("er", GameTitles.Find(titles, "ELDEN-RING", null)?.Key);
+        Assert.Null(GameTitles.Find(titles, "X1", null));   // curto demais para juntar sem confundir
+    }
+
+    [Fact]
+    public void Perfil_do_controle_entra_pelo_exe_do_jogo()
+    {
+        var a = new MBExtreme.Core.Gamepads.PadProfile { Name = "A", Games = { "FC27.exe" } };
+        var b = new MBExtreme.Core.Gamepads.PadProfile { Name = "B", Games = { "cod" } };
+        Assert.Equal("A", MBExtreme.Core.Gamepads.PadProfiles.ForGame(new[] { a, b }, "fc27")?.Name);
+        Assert.Equal("B", MBExtreme.Core.Gamepads.PadProfiles.ForGame(new[] { a, b }, @"C:\Games\cod.exe")?.Name);
+        Assert.Null(MBExtreme.Core.Gamepads.PadProfiles.ForGame(new[] { a, b }, "outro"));
+        var e = new MBExtreme.Core.Gamepads.EmulationSettings();
+        MBExtreme.Core.Gamepads.PadProfiles.ApplyTo(e, new MBExtreme.Core.Gamepads.PadProfile { Deadzone = 11, Sensitivity = 90, TriggerDeadzone = 3 });
+        Assert.Equal(11, e.Left.Deadzone);
+        Assert.Equal(90, e.Right.Sensitivity);
+        Assert.Equal(3, e.TriggerDeadzone);
+        var clone = a.Clone();
+        clone.Games.Add("x.exe");
+        Assert.Single(a.Games);   // a cópia não mexe na lista do original
+    }
+
     [Theory]
     [InlineData("Paladins", null)]
     [InlineData("Valorantine Story", null)]

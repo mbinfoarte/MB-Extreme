@@ -205,6 +205,53 @@ public abstract class ToolPageBase : UserControl
         return new CheckBox { Content = content, Foreground = Brush("TextBrush"), VerticalContentAlignment = VerticalAlignment.Top };
     }
 
+    /// <summary>Caixa de marcar compacta para as grades (nome em negrito e uma descrição curta).</summary>
+    protected CheckBox TileCheck(string text, string detail = "", int detailLines = 2)
+    {
+        var content = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
+        content.Children.Add(new TextBlock { Text = text, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        if (detail.Length > 0)
+            content.Children.Add(new TextBlock
+            {
+                Text = detail, FontSize = 11, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxHeight = 15 * detailLines, Foreground = Brush("MutedBrush"), ToolTip = detail,
+            });
+        return new CheckBox { Content = content, Foreground = Brush("TextBrush"), VerticalContentAlignment = VerticalAlignment.Top };
+    }
+
+    /// <summary>Cartão pequeno de uma grade: fica amarelo quando a caixa está marcada.</summary>
+    protected Border TileOf(CheckBox box)
+    {
+        if (box is FrameworkElement fe) UiTree.Free(fe);
+        var card = new Border
+        {
+            CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 0, 8, 8), Child = box,
+        };
+        void Paint()
+        {
+            bool on = box.IsChecked == true;
+            card.Background = on ? new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xC4, 0x00)) : Brush("Surface2Brush");
+            card.BorderBrush = on ? new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) : Brush("BorderBrush");
+        }
+        box.Checked += (_, _) => Paint();
+        box.Unchecked += (_, _) => Paint();
+        Paint();
+        return card;
+    }
+
+    /// <summary>Grade que se ajusta à largura: até <paramref name="max"/> colunas, cada uma com pelo menos <paramref name="minWidth"/>.</summary>
+    protected System.Windows.Controls.Primitives.UniformGrid TileGrid(IEnumerable<UIElement> items, int max = 4, double minWidth = 250)
+    {
+        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = max, Margin = new Thickness(0, 2, 0, 6) };
+        foreach (var item in items) grid.Children.Add(item);
+        grid.SizeChanged += (_, e) =>
+        {
+            int cols = Math.Clamp((int)(e.NewSize.Width / minWidth), 1, max);
+            if (grid.Columns != cols) grid.Columns = cols;
+        };
+        return grid;
+    }
+
     /// <summary>Grupo de botões de escolha única (o escolhido fica amarelo).</summary>
     protected StackPanel Choice(IReadOnlyList<string> options, int selected, Action<int> onChange)
     {

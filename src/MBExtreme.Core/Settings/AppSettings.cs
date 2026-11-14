@@ -28,6 +28,12 @@ public sealed class AppSettings
 
     /// <summary>Nome do perfil do controle em uso.</summary>
     public string PadActiveProfile { get; set; } = "";
+    /// <summary>Troca o perfil do controle sozinho quando um jogo ligado a um perfil abre.</summary>
+    public bool PadAutoSwitch { get; set; } = true;
+    /// <summary>Avaliação do programa: primeiro uso com a conta, "agora não" até quando, e se já respondeu.</summary>
+    public DateTime? RatingFirstUseUtc { get; set; }
+    public DateTime? RatingSnoozeUtc { get; set; }
+    public bool RatingDone { get; set; }
 
     /// <summary>Programas (sem .exe) que o Modo Jogo pede para fechar quando um jogo abre.</summary>
     public List<string> BoostCloseApps { get; set; } = new();

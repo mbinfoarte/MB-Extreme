@@ -38,6 +38,8 @@ public sealed class AppSettings
     public DateTime? LoginPromptSnoozeUtc { get; set; }
     /// <summary>Perfil da tela Processos e inicialização e o que ele mudou (para o Desfazer perfil).</summary>
     public string? ProcessProfile { get; set; }
+    /// <summary>Modo do PC escolhido no widget (Normal, Gamer, Turbo, Silencioso).</summary>
+    public string? PcMode { get; set; }
     public List<string> ProcessProfileStartup { get; set; } = new();
     public List<string> ProcessProfileTweaks { get; set; } = new();
 

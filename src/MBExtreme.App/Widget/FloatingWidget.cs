@@ -67,22 +67,92 @@ public sealed class FloatingWidget : Window
         row.Children.Add(Metric("DISCO", _disk));
         row.Children.Add(Metric("REDE", _netText));
 
-        // botões: abrir o app e esconder o widget
-        // a seta abre o Painel MB colado à barra (Modo jogo, otimizar, limpeza...); de lá, "Abrir o MB Extreme" abre o programa
-        row.Children.Add(IconButton("\uE740", "Abrir o Painel MB: Modo jogo, otimizar e atalhos", () =>
-        {
-            if (_openPanel is null) { _openApp(); return; }
-            _openPanel(new Rect(Left, Top, ActualWidth, ActualHeight));
-        }));
-        row.Children.Add(IconButton("", "Esconder o widget", HideWidget));
+        // ⤢ expande a própria barra (modos do PC e atalhos); ⤡ volta a ficar fina
+        _expandButton = IconButton("\uE740", "Mostrar os modos e os atalhos", ToggleExpand);
+        row.Children.Add(_expandButton);
+        row.Children.Add(IconButton("\uE711", "Esconder o widget", HideWidget));
 
+        var stack = new StackPanel();
+        stack.Children.Add(row);
+        _extra.Visibility = Visibility.Collapsed;
+        _extra.Margin = new Thickness(0, 10, 4, 4);
+        stack.Children.Add(_extra);
         return new Border
         {
             CornerRadius = new CornerRadius(16),
             Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x10, 0x10, 0x16)),
             BorderBrush = new SolidColorBrush(Color.FromArgb(0x60, 0xFF, 0xC4, 0x00)), BorderThickness = new Thickness(1),
-            Padding = new Thickness(12, 7, 8, 7), Child = row, Cursor = Cursors.SizeAll,
+            Padding = new Thickness(12, 7, 8, 7), Child = stack, Cursor = Cursors.SizeAll,
         };
+    }
+
+    // ------------------------------------------------------------ parte expandida: modos do PC e atalhos
+
+    private readonly StackPanel _extra = new() { Width = 420 };
+    private readonly TextBlock _modeStatus = new() { FontSize = 12, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White };
+    private Button? _expandButton;
+    private bool _expanded;
+
+    private void ToggleExpand()
+    {
+        _expanded = !_expanded;
+        if (_expandButton?.Content is TextBlock t) t.Text = _expanded ? "\uE73F" : "\uE740";
+        if (_expandButton is not null) _expandButton.ToolTip = _expanded ? "Recolher" : "Mostrar os modos e os atalhos";
+        if (_expanded) BuildExtra();
+        _extra.Visibility = _expanded ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void BuildExtra()
+    {
+        _extra.Children.Clear();
+        _modeStatus.Text = PcModes.Status();
+        _extra.Children.Add(_modeStatus);
+        _extra.Children.Add(new TextBlock { Text = "MODO DO PC", FontSize = 10, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA3)), Margin = new Thickness(0, 10, 0, 6) });
+        var modes = new System.Windows.Controls.Primitives.UniformGrid { Columns = 4 };
+        foreach (var (mode, glyph, color) in new[]
+        {
+            (PcModes.Mode.Normal, "\uE7E8", Color.FromRgb(0x6C, 0xB6, 0xFF)), (PcModes.Mode.Gamer, "\uE7FC", Color.FromRgb(0xFF, 0xC4, 0x00)),
+            (PcModes.Mode.Turbo, "\uE945", Color.FromRgb(0xFF, 0x8A, 0x00)), (PcModes.Mode.Silencioso, "\uE83F", Color.FromRgb(0x3D, 0xDC, 0x97)),
+        })
+        {
+            var m = mode;
+            var (title, sub) = PcModes.Describe(mode);
+            modes.Children.Add(ModeTile(glyph, color, title, sub, PcModes.Current == mode, async () =>
+            {
+                _modeStatus.Text = "Aplicando...";
+                await PcModes.ApplyAsync(m);
+                BuildExtra();
+            }));
+        }
+        _extra.Children.Add(modes);
+        var acts = new System.Windows.Controls.Primitives.UniformGrid { Columns = 5, Margin = new Thickness(0, 6, 0, 0) };
+        foreach (var (glyph, text, key, auto) in new[]
+        {
+            ("\uE945", "Otimizar", "tweaks-all", false), ("\uE7C8", "Gravar", "record", false), ("\uE74D", "Limpar", "cleanup", true),
+            ("\uE72E", "Proteção", "security", false), ("\uE8F2", "Suporte", "support", false),
+        })
+        {
+            string k = key; bool a = auto;
+            acts.Children.Add(ModeTile(glyph, Color.FromRgb(0xC9, 0xC9, 0xD1), text, "", false, () => { _openApp(); MainWindow.Current?.Go(k, a); return Task.CompletedTask; }));
+        }
+        _extra.Children.Add(acts);
+    }
+
+    private static Border ModeTile(string glyph, Color color, string title, string sub, bool on, Func<Task> click)
+    {
+        var st = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        st.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 17, Foreground = new SolidColorBrush(color), HorizontalAlignment = HorizontalAlignment.Center });
+        st.Children.Add(new TextBlock { Text = title, FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) });
+        if (sub.Length > 0) st.Children.Add(new TextBlock { Text = sub, FontSize = 9.5, Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA3)), TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap });
+        var b = new Border
+        {
+            CornerRadius = new CornerRadius(10), Padding = new Thickness(6, 8, 6, 8), Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand,
+            Background = new SolidColorBrush(on ? Color.FromArgb(0x40, 0xFF, 0xC4, 0x00) : Color.FromRgb(0x1B, 0x1B, 0x1F)),
+            BorderBrush = new SolidColorBrush(on ? Color.FromRgb(0xFF, 0xC4, 0x00) : Color.FromRgb(0x2A, 0x2A, 0x30)), BorderThickness = new Thickness(1), Child = st,
+        };
+        b.MouseLeftButtonDown += (_, e) => e.Handled = true;   // não começa a arrastar a janela
+        b.MouseLeftButtonUp += async (_, e) => { e.Handled = true; await click(); };
+        return b;
     }
 
     private static UIElement Metric(string label, TextBlock value)
@@ -132,6 +202,8 @@ public sealed class FloatingWidget : Window
             _disk.Text = _usage.Disk() is double d ? $"{d:0}%" : "…";
             var net = _net.Sample();
             _netText.Text = Speed(net.DownloadBytesPerSecond);
+            if (_expanded) _modeStatus.Text = PcModes.Status();
+            if (_expanded) _modeStatus.Text = PcModes.Status();
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { /* uma leitura falhou: tenta no próximo segundo */ }
     }

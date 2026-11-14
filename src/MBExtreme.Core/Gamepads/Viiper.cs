@@ -116,11 +116,11 @@ public sealed class ViiperClient
     }
 
     /// <summary>Versão do servidor, ou null se ele não está rodando.</summary>
-    public string? Ping()
+    public string? Ping(int timeoutMs = 800)
     {
         try
         {
-            var json = ViiperWire.Parse(Send("ping", timeoutMs: 800));
+            var json = ViiperWire.Parse(Send("ping", timeoutMs: timeoutMs));
             return json.ValueKind == JsonValueKind.Object && json.TryGetProperty("version", out var v) ? v.GetString() ?? "?" : "?";
         }
         catch (Exception ex) when (ex is IOException or SocketException or AggregateException or InvalidOperationException or JsonException) { return null; }

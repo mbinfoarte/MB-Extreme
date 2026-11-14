@@ -127,6 +127,12 @@ public sealed class PerfStore
     public PerfStore(string? path = null) =>
         _path = path ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "performance.json");
 
+    /// <summary>Todas as sessões de todos os jogos (para o "O que o MB já fez").</summary>
+    public IReadOnlyDictionary<string, List<PerfSession>> All()
+    {
+        lock (_lock) return Load();
+    }
+
     public IReadOnlyList<PerfSession> Get(string gameId)
     {
         lock (_lock) return Load().GetValueOrDefault(gameId) ?? new List<PerfSession>();

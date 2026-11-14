@@ -263,6 +263,12 @@ public sealed class GameLibraryStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
+    /// <summary>Quantos jogos atendem à condição (para os números da Conta e licença).</summary>
+    public int Count(Func<GameSettings, bool> predicate)
+    {
+        lock (_lock) return _data.Settings.Values.Count(predicate);
+    }
+
     public GameSettings Get(string id)
     {
         lock (_lock) return _data.Settings.TryGetValue(id, out var s) ? s : new GameSettings();

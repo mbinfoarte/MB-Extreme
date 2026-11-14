@@ -41,6 +41,7 @@ public sealed class LicensePage : ToolPageBase
         Grid.SetColumn(_computer, 1);
         grid.Children.Add(_computer);
         Body.Children.Add(grid);
+        Body.Children.Add(_extras);
         if (_license.Config.Configured) Body.Children.Add(new MBExtreme.UI.Controls.InviteCard());
 
         // Endereço do servidor e chave pública já vêm no programa; o painel de testes só aparece com MBX_LICENSE_DEV=1.
@@ -50,6 +51,7 @@ public sealed class LicensePage : ToolPageBase
         {
             _license.Changed += OnChanged;
             Render();
+            _ = LoadOverviewAsync();
             if (LoginOnOpen && !SignedIn && _license.Config.Configured && _loginCts is null) { LoginOnOpen = false; _ = LoginAsync(); }
         };
         Unloaded += (_, _) => _license.Changed -= OnChanged;
@@ -80,6 +82,7 @@ public sealed class LicensePage : ToolPageBase
         _profile.Content = BuildProfile();
         _plan.Content = BuildPlan();
         _computer.Content = BuildComputer();
+        _extras.Content = BuildExtras();
     }
 
     // ---------------------------------------------------------------- perfil
@@ -144,7 +147,11 @@ public sealed class LicensePage : ToolPageBase
         bool pro = LicenseExpiry.IsPro(status);
         nameRow.Children.Add(Pill(pro ? FeaturePolicy.Title(status.Plan).ToUpperInvariant() : config.Configured ? "GRÁTIS" : "BETA ABERTO", pro));
         text.Children.Add(nameRow);
-        string under = SignedIn ? $"{status.Payload!.Email} · conta conectada" : "Conta não conectada · a foto e o nome ficam só neste computador";
+        string under = SignedIn
+            ? InviteClient.MaskEmail(status.Payload!.Email) + (_overview?.MemberSinceMs is { } since ? $" · cliente desde {DateTimeOffset.FromUnixTimeMilliseconds(since).LocalDateTime:MM/yyyy}" : "")
+              + (_overview?.Provider == "google" ? " · entrou com o Google" : " · conta conectada")
+            : "Conta não conectada · a foto e o nome ficam só neste computador";
+        if (SignedIn && _overview?.EmailVerified == true) nameRow.Children.Add(Pill("✓ e-mail confirmado", false));
         text.Children.Add(new TextBlock { Text = under, FontSize = 13, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
         row.Children.Add(text);
 
@@ -237,6 +244,22 @@ public sealed class LicensePage : ToolPageBase
         head.Children.Add(titles);
         panel.Children.Add(head);
         if (_license.LastNotice is { Length: > 0 } notice) panel.Children.Add(Muted(notice, 12));
+        if (SignedIn && _overview is { } ov)
+        {
+            var tiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 14, 0, 0) };
+            var sub = ov.Subscription;
+            string charge = sub?.NextChargeMs is { } next
+                ? $"{DateTimeOffset.FromUnixTimeMilliseconds(next).LocalDateTime:dd/MM}" + (sub.AmountBrl is { } brl ? $" · R$ {brl:0.00}" : "")
+                : "—";
+            tiles.Children.Add(Tile(sub?.CancelAtPeriodEnd == true ? "Termina em" : "Próxima cobrança", charge, sub is null ? "sem assinatura ativa" : sub.CancelAtPeriodEnd ? "cancelada, não renova" : sub.Interval == "year" ? "plano anual" : "plano mensal"));
+            int used = ov.Devices.Count;
+            var pcs = Tile("Computadores", $"{used} de {Math.Max(1, ov.MaxDevices)}", "");
+            if (pcs.Child is StackPanel st)
+                st.Children.Add(new ProgressBar { Maximum = Math.Max(1, ov.MaxDevices), Value = used, Height = 6, Margin = new Thickness(0, 6, 0, 0), Style = (Style)FindResource("GradientProgress") });
+            tiles.Children.Add(pcs);
+            tiles.Children.Add(Tile("Dias ganhos indicando", $"+{ov.DaysEarned} dias", "indique um amigo abaixo", "AccentBrush"));
+            panel.Children.Add(tiles);
+        }
 
         if (pro && status.DaysLeft(DateTimeOffset.UtcNow) is int days)
         {
@@ -305,6 +328,102 @@ public sealed class LicensePage : ToolPageBase
         };
     }
 
+    private Border Tile(string label, string value, string sub, string brush = "TextBrush")
+    {
+        var st = new StackPanel();
+        st.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = Brush("MutedBrush") });
+        st.Children.Add(new TextBlock { Text = value, FontSize = 16, FontWeight = FontWeights.Bold, Foreground = Brush(brush), Margin = new Thickness(0, 2, 0, 0) });
+        if (sub.Length > 0) st.Children.Add(new TextBlock { Text = sub, FontSize = 11, Foreground = Brush("MutedBrush") });
+        return new Border { Background = Brush("Surface2Brush"), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 9, 12, 9), Margin = new Thickness(0, 0, 8, 0), Child = st };
+    }
+
+    // ---------------------------------------------------------------- o que o MB já fez e seus computadores
+
+    private AccountOverview? _overview;
+    private readonly ContentControl _extras = new();
+
+    private async Task LoadOverviewAsync()
+    {
+        if (!SignedIn || !MBExtreme.UI.Controls.InviteApi.Ready) return;
+        try
+        {
+            _overview = await MBExtreme.UI.Controls.InviteApi.Client.OverviewAsync(MBExtreme.UI.Controls.InviteApi.License, MBExtreme.UI.Controls.InviteApi.Device);
+            Render();
+        }
+        catch (LicenseNetworkException) { }
+    }
+
+    private UIElement BuildExtras()
+    {
+        var grid = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+
+        // o que o MB já fez neste PC (contado aqui mesmo)
+        var done = new StackPanel();
+        done.Children.Add(new TextBlock { Text = "O que o MB já fez neste PC", FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) });
+        var tiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2 };
+        long freed = AppServices.Settings.CleanupFreedTotalBytes;
+        tiles.Children.Add(Tile("liberados na limpeza", freed > 0 ? $"{freed / 1_073_741_824.0:0.0} GB" : "—", "", "OkBrush"));
+        var gains = AppServices.Perf.All().Values.Select(MBExtreme.Core.Games.PerfCompare.Build).Where(c => c.Before is not null && c.After is not null).Select(c => c.AvgChangePercent).ToList();
+        tiles.Children.Add(Tile("FPS médio nos jogos medidos", gains.Count > 0 ? $"{gains.Average():+0;-0;0}%" : "—", gains.Count > 0 ? $"{gains.Count} jogo(s) com antes e depois" : "meça antes e depois de otimizar", gains.Count > 0 && gains.Average() > 0 ? "OkBrush" : "TextBrush"));
+        var t3 = Tile("ajustes ativos", AppServices.Tweaks.Count(t => t.HasBackup).ToString(), "todos com Desfazer");
+        t3.Margin = new Thickness(0, 8, 8, 0);
+        tiles.Children.Add(t3);
+        var t4 = Tile("jogos na biblioteca com perfil", AppServices.GameLibrary.Count(s => s.AutoProfile || s.OptimizedAt is not null).ToString(), "ligam sozinhos ao abrir");
+        t4.Margin = new Thickness(0, 8, 8, 0);
+        tiles.Children.Add(t4);
+        done.Children.Add(tiles);
+        var dc = CardOf(done);
+        dc.Padding = new Thickness(20, 16, 20, 16);
+        grid.Children.Add(dc);
+
+        // seus computadores (da conta, pelo servidor)
+        var pcs = new StackPanel();
+        pcs.Children.Add(new TextBlock { Text = "Seus computadores" + (_overview is { } o ? $"  ·  {o.Devices.Count} de {Math.Max(1, o.MaxDevices)}" : ""), FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) });
+        if (_overview is null) pcs.Children.Add(Muted(SignedIn ? "Carregando..." : "Entre com a sua conta para ver os computadores dela.", 12));
+        else foreach (var d in _overview.Devices)
+        {
+            var row = new DockPanel();
+            if (!d.ThisPc)
+            {
+                var rm = ActionButton("Remover", async () => await RemoveDeviceAsync(d), false);
+                rm.MinHeight = 30;
+                rm.Padding = new Thickness(12, 4, 12, 4);
+                DockPanel.SetDock(rm, Dock.Right);
+                row.Children.Add(rm);
+            }
+            string seen = d.ThisPc ? "● agora" : d.LastSeenMs is { } ls ? "visto " + Ago(DateTimeOffset.FromUnixTimeMilliseconds(ls).UtcDateTime) : "";
+            var when = new TextBlock { Text = seen, FontSize = 11.5, Foreground = Brush(d.ThisPc ? "OkBrush" : "MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) };
+            DockPanel.SetDock(when, Dock.Right);
+            row.Children.Add(when);
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Text = d.Name + (d.ThisPc ? "  (este PC)" : ""), FontSize = 13, FontWeight = FontWeights.SemiBold });
+            if (d.Spec.Length > 0) text.Children.Add(new TextBlock { Text = d.Spec, FontSize = 11, Foreground = Brush("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
+            row.Children.Add(text);
+            pcs.Children.Add(new Border { Background = Brush("Surface2Brush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 8, 8), Margin = new Thickness(0, 0, 0, 6), Child = row });
+        }
+        var pc = CardOf(pcs);
+        pc.Padding = new Thickness(20, 16, 20, 16);
+        Grid.SetColumn(pc, 2);
+        grid.Children.Add(pc);
+        return grid;
+    }
+
+    private async Task RemoveDeviceAsync(AccountDevice d)
+    {
+        if (MessageBox.Show($"Tirar \"{d.Name}\" da sua conta?\n\nNaquele PC o programa volta ao modo grátis na próxima verificação. Limite: 3 trocas por mês.", "Seus computadores",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        try
+        {
+            await MBExtreme.UI.Controls.InviteApi.Client.RemoveDeviceAsync(MBExtreme.UI.Controls.InviteApi.License, MBExtreme.UI.Controls.InviteApi.Device, d.Id);
+            SetStatus($"{d.Name} saiu da conta.", "OkBrush");
+            await LoadOverviewAsync();
+        }
+        catch (LicenseNetworkException ex) { SetStatus(ex.Message, "WarnBrush"); }
+    }
+
     private TextBlock Label(string text) => new() { Text = text, FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush") };
 
     // ---------------------------------------------------------------- este computador
@@ -333,7 +452,6 @@ public sealed class LicensePage : ToolPageBase
         if (device.Cpu.Length > 0) top.Children.Add(Fact("Processador", device.Cpu));
         if (device.Gpu.Length > 0) top.Children.Add(Fact("Placa de vídeo", device.Gpu));
         if (device.RamGb > 0) top.Children.Add(Fact("Memória", $"{device.RamGb} GB"));
-        if ((_mac ??= DeviceFacts.PrimaryMac()) is { Length: > 0 } mac) top.Children.Add(Fact("Endereço MAC", mac));
         top.Children.Add(Fact("ID do PC na conta", DeviceFacts.ShortId(_license.DeviceId)));
         if (status.Payload is { } payload) top.Children.Add(Fact("PCs na conta", $"até {payload.MaxDevices}"));
         top.Children.Add(Fact("Versão", $"{MBExtreme.Core.AppInfo.Version} · compilação {MBExtreme.Core.Update.AppUpdates.CurrentBuild()}"));
@@ -363,7 +481,6 @@ public sealed class LicensePage : ToolPageBase
         return card;
     }
 
-    private string? _mac;
 
     private DockPanel Fact(string label, string value, string brush = "TextBrush")
     {

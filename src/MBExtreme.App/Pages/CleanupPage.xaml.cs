@@ -357,6 +357,8 @@ public partial class CleanupPage : UserControl
             });
 
             long total = result.freed + (result.memory?.FreedBytes ?? 0);
+            AppServices.Settings.CleanupFreedTotalBytes += result.freed;
+            AppServices.Settings.Save();
             var lines = new List<string> { $"{result.deleted} arquivos apagados." };
             if (result.skipped > 0) lines.Add($"{result.skipped} arquivos estavam em uso e foram mantidos.");
             if (result.memory is { } m)

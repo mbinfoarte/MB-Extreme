@@ -12,6 +12,10 @@ public sealed record InviteSummary(string Code, string Link, int Invited, int Te
     public string ShareText => $"Tô usando o MB Extreme pra deixar o PC mais rápido e os jogos com mais FPS. Testa {FriendTrialDays} dias grátis pelo meu link: {Link}";
 }
 
+public sealed record AccountDevice(string Id, string Name, string Spec, long? LastSeenMs, long? FirstSeenMs, bool ThisPc);
+public sealed record AccountSubscription(string Status, long? NextChargeMs, double? AmountBrl, string? Interval, bool CancelAtPeriodEnd);
+public sealed record AccountOverview(long? MemberSinceMs, bool EmailVerified, string Provider, AccountSubscription? Subscription, int MaxDevices, List<AccountDevice> Devices, int DaysEarned);
+
 public sealed record FeedbackData(int Stars, List<string> Likes, List<string> Issues, string Comment, string Version, string Plan);
 
 /// <summary>"Indique um amigo" e a avaliação do programa (servidor de licenças, autenticado pela licença deste PC).</summary>
@@ -44,6 +48,27 @@ public sealed class InviteClient
             return (true, $"Código aceito! Indicado por {who}: seu teste vai até {ok?.TrialDays ?? 7} dias.");
         }
         return (false, await MessageOf(r, token));
+    }
+
+    /// <summary>Resumo da conta: assinatura, computadores e dias ganhos indicando.</summary>
+    public async Task<AccountOverview> OverviewAsync(string license, string deviceId, CancellationToken token = default)
+    {
+        using var r = await PostAsync("/v1/account/overview", new { license, deviceId }, token);
+        return await r.Content.ReadFromJsonAsync<AccountOverview>(Json, token) ?? throw new LicenseNetworkException("Resposta vazia do servidor.");
+    }
+
+    /// <summary>Tira outro computador da conta.</summary>
+    public async Task RemoveDeviceAsync(string license, string deviceId, string target, CancellationToken token = default)
+    {
+        using var r = await PostAsync("/v1/account/remove-device", new { license, deviceId, target }, token);
+    }
+
+    /// <summary>E-mail com o meio escondido (m•••••@gmail.com) para mostrar na tela.</summary>
+    public static string MaskEmail(string email)
+    {
+        int at = email.IndexOf('@');
+        if (at <= 1) return email;
+        return email[0] + new string('•', Math.Min(6, at - 1)) + email[at..];
     }
 
     public async Task SendFeedbackAsync(string license, string deviceId, FeedbackData feedback, CancellationToken token = default)

@@ -15,7 +15,7 @@ Referências analisadas (só ideias de função; visual, textos, ícones e códi
 ### 2. Emulação de controle (controle virtual)
 - Objetivo: PS4, PS5 e Xbox funcionando nos jogos do Windows como controle nativo.
 - Drivers: ViGEmBus (gratuito, descontinuado em 2023; cria Xbox 360 e DualShock 4 virtuais) + HidHide (gratuito; esconde o controle físico para não haver comando duplicado).
-  DualSense virtual só com o VirtualPad da Nefarius (comercial, exige licença/contrato) — decisão pendente.
+  DualSense virtual: VIIPER (servidor GPL-3.0 à parte, instalado pelo usuário; API TCP local; clientes MIT) + usbip-win2 — implementado (PS5 e PS5 Edge).
 - Assistente guiado de instalação dos drivers (sites oficiais), tela de estado ("tudo certo"/o que falta), botão "Corrigir comando duplicado".
 - Seletor do dispositivo virtual: Nativo · Xbox 360 · DualShock 4 · (DualSense se licenciado).
 - Repasse de vibração, gatilhos adaptáveis e LED do jogo para o controle físico.

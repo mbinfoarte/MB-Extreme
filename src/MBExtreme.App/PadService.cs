@@ -149,6 +149,9 @@ internal sealed class PadService
         if (rumbleEnded) _rumble = default;
     }
 
+    /// <summary>Aparelhos que o MB não deve ler (o DualSense virtual que ele mesmo criou).</summary>
+    public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> IgnoredPaths = new(StringComparer.OrdinalIgnoreCase);
+
     private volatile string? _wanted;
     private volatile bool _reopen;
 
@@ -159,6 +162,7 @@ internal sealed class PadService
         {
             foreach (var p in WinHid.FindPads())
             {
+                if (IgnoredPaths.ContainsKey(p.Path)) continue;   // controle virtual criado pelo próprio MB (PS5 pelo VIIPER)
                 var conn = PadDetails.ConnectionOf(p.InputLength, p.Path);
                 list.Add(new PadDevice(p.Path, PadIds.Name(p.Model), conn, p.Model, p, null));
             }

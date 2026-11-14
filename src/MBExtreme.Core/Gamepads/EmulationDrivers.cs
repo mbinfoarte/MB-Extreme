@@ -15,10 +15,14 @@ public static class EmulationDrivers
     public const string VcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
 
     /// <summary>Monta a lista a partir de uma função que diz se um serviço/chave existe (permite testar sem Windows).</summary>
-    public static IReadOnlyList<DriverComponent> Check(Func<string, bool> serviceExists, Func<bool> vcRedist) => new[]
+    public static IReadOnlyList<DriverComponent> Check(Func<string, bool> serviceExists, Func<bool> vcRedist) => Check(serviceExists, vcRedist, () => false);
+
+    public static IReadOnlyList<DriverComponent> Check(Func<string, bool> serviceExists, Func<bool> vcRedist, Func<bool> viiper) => new[]
     {
         new DriverComponent("vigem", "Controle virtual (ViGEmBus)", "Cria o controle que os jogos enxergam: Xbox 360 ou PS4.", "obrigatório",
             serviceExists("ViGEmBus"), ViGEmUrl),
+        new DriverComponent("viiper", "Controle PS5 virtual (VIIPER + USBIP)", "Cria um DualSense (PS5) ou DualSense Edge virtual, com os ícones e recursos de PS5 nos jogos.", "para PS5",
+            viiper(), ViiperWire.ReleasesUrl),
         new DriverComponent("hidhide", "Esconder o controle físico (HidHide)", "Evita que o jogo receba cada comando duas vezes (o controle de verdade e o virtual).", "recomendado",
             serviceExists("HidHide"), HidHideUrl),
         new DriverComponent("fakerinput", "Teclado e mouse virtuais (FakerInput)", "Só para jogos que ignoram o teclado e o mouse simulados pelo Windows.", "opcional",
@@ -31,7 +35,14 @@ public static class EmulationDrivers
     public static bool Ready(IReadOnlyList<DriverComponent> list) => list.Any(c => c.Id == "vigem" && c.Installed);
 
     [SupportedOSPlatform("windows")]
-    public static IReadOnlyList<DriverComponent> CheckWindows() => Check(ServiceExists, VcRedistInstalled);
+    public static IReadOnlyList<DriverComponent> CheckWindows() => Check(ServiceExists, VcRedistInstalled,
+        () => File.Exists(ViiperClient.DefaultExe) || new ViiperClient().Ping() is not null);
+
+    /// <summary>O controle virtual escolhido tem o que precisa (PS5 pelo VIIPER; Xbox e PS4 pelo ViGEmBus).</summary>
+    public static bool ReadyFor(IReadOnlyList<DriverComponent> list, VirtualTarget target) =>
+        target is VirtualTarget.DualSense or VirtualTarget.DualSenseEdge
+            ? list.Any(c => c.Id == "viiper" && c.Installed)
+            : Ready(list);
 
     [SupportedOSPlatform("windows")]
     private static bool ServiceExists(string name)

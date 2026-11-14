@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Net.Sockets;
 using MBExtreme.Core.Gamepads;
 using Nefarius.ViGEm.Client;
 using Nefarius.ViGEm.Client.Exceptions;
@@ -22,7 +23,10 @@ internal sealed class EmulationService
     private string? _hiddenInstance;
     private readonly object _lock = new();
 
-    public bool Running => _xbox is not null || _ds4 is not null;
+    private TcpClient? _viiperStream;
+    private int _viiperBus = -1;
+
+    public bool Running => _xbox is not null || _ds4 is not null || _viiperStream is not null;
     public string Status { get; private set; } = "Desligada.";
     public event Action? Changed;
 
@@ -30,6 +34,7 @@ internal sealed class EmulationService
     {
         Stop();
         var e = AppServices.Settings.Emulation;
+        if (e.Target is VirtualTarget.DualSense or VirtualTarget.DualSenseEdge) return StartViiper(e);
         try
         {
             _client = new ViGEmClient();
@@ -83,12 +88,106 @@ internal sealed class EmulationService
         return true;
     }
 
+    /// <summary>
+    /// PS5 virtual: o VIIPER (programa à parte, instalado pela pessoa) cria um DualSense ou DualSense Edge por USBIP; o MB manda o estado
+    /// do controle pela API local e recebe a vibração do jogo de volta.
+    /// </summary>
+    private bool StartViiper(EmulationSettings e)
+    {
+        var client = new ViiperClient();
+        if (client.Ping() is null)
+        {
+            // instalado e parado: abre o servidor escondido e espera ele responder
+            string exe = ViiperClient.DefaultExe;
+            if (File.Exists(exe))
+            {
+                try { Process.Start(new ProcessStartInfo(exe, "server --update-notify=none") { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden })?.Dispose(); }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+                for (int i = 0; i < 16 && client.Ping() is null; i++) Thread.Sleep(250);
+            }
+            if (client.Ping() is null)
+            {
+                Status = File.Exists(exe)
+                    ? "O VIIPER (controle PS5 virtual) não abriu. Abra o VIIPER pelo menu Iniciar e ligue de novo."
+                    : "Para o PS5 virtual, instale o VIIPER (passo 1). Ele instala também o USBIP; o Windows pode pedir para reiniciar.";
+                Changed?.Invoke();
+                return false;
+            }
+        }
+
+        var before = SafePads();
+        try
+        {
+            _viiperBus = client.CreateBus();
+            string dev = client.AddDevice(_viiperBus, ViiperWire.DeviceType(e.Target));
+            _viiperStream = client.OpenStream(_viiperBus, dev);
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or AggregateException or InvalidOperationException or System.Text.Json.JsonException or KeyNotFoundException)
+        {
+            Status = "Não foi possível criar o PS5 virtual: " + ex.Message;
+            Stop();
+            return false;
+        }
+
+        // o DualSense virtual aparece como um controle de verdade: o MB não pode ler ele (senão leria a própria saída)
+        _ = Task.Run(async () =>
+        {
+            for (int i = 0; i < 20 && _viiperStream is not null; i++)
+            {
+                await Task.Delay(300);
+                foreach (string path in SafePads().Except(before, StringComparer.OrdinalIgnoreCase)) PadService.IgnoredPaths[path] = 0;
+            }
+        });
+
+        // vibração pedida pelo jogo → controle físico
+        var stream = _viiperStream;
+        var reader = new Thread(() =>
+        {
+            var buffer = new byte[ViiperWire.DualSenseFeedbackSize];
+            try
+            {
+                var net = stream.GetStream();
+                while (true)
+                {
+                    int got = 0;
+                    while (got < buffer.Length)
+                    {
+                        int n = net.Read(buffer, got, buffer.Length - got);
+                        if (n <= 0) return;
+                        got += n;
+                    }
+                    if (ViiperWire.ParseFeedback(buffer) is { } f) AppServices.Pads.SetRumble(f.RumbleLarge, f.RumbleSmall);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException or SocketException) { }
+        }) { IsBackground = true, Name = "MB VIIPER retorno" };
+        reader.Start();
+
+        AppServices.Pads.Attach();
+        AppServices.Pads.StateRead += Send;
+        if (e.HidePhysical) Hide();
+        Status = (e.Target == VirtualTarget.DualSenseEdge ? "Ligada: os jogos veem um DualSense Edge (PS5)." : "Ligada: os jogos veem um controle de PS5 (DualSense).")
+                 + (_hiddenInstance is not null ? " O controle físico está escondido." : e.HidePhysical ? " (HidHide não encontrado: o jogo pode ver os dois controles.)" : "");
+        Changed?.Invoke();
+        return true;
+    }
+
+    private static HashSet<string> SafePads()
+    {
+        try { return WinHid.FindPads().Select(p => p.Path).ToHashSet(StringComparer.OrdinalIgnoreCase); }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or DllNotFoundException) { return new HashSet<string>(StringComparer.OrdinalIgnoreCase); }
+    }
+
     public void Stop()
     {
         bool was = Running;
         AppServices.Pads.StateRead -= Send;
         lock (_lock)
         {
+            try { _viiperStream?.Dispose(); } catch (Exception) { }
+            _viiperStream = null;
+            if (_viiperBus >= 0) { int bus = _viiperBus; _ = Task.Run(() => new ViiperClient().RemoveBus(bus)); }
+            _viiperBus = -1;
             try { _xbox?.Disconnect(); } catch (Exception) { }
             try { _ds4?.Disconnect(); } catch (Exception) { }
             _xbox = null;
@@ -121,6 +220,7 @@ internal sealed class EmulationService
             {
                 if (_xbox is { } x) SendXbox(x, s);
                 else if (_ds4 is { } d) SendDs4(d, s);
+                else if (_viiperStream is { } v) v.GetStream().Write(ViiperWire.DualSense(s));
             }
             catch (Exception) { /* controle virtual removido no meio: o próximo Start recria */ }
         }

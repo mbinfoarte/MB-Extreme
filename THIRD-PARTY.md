@@ -117,3 +117,8 @@ SOFTWARE.
 ## Referências estudadas sem uso de código
 - Pavise (GPL-3.0-only): lido apenas para comparar recursos de gerenciamento de jogos (lista de proteção de anti-cheat, restauração ao fechar o jogo). Nenhum código, texto ou arquivo foi copiado.
 - ScarOptimizing (GPL-3): scripts para celulares Android (ADB); não se aplica ao Windows e não foi usado.
+
+## VIIPER (controle PS5 virtual) — programa à parte, não incluído
+- Uso: a emulação "PS5 (DualSense)" e "PS5 Edge" conversa pela API TCP local com o servidor VIIPER, que a própria pessoa instala pelo site oficial (https://github.com/Alia5/VIIPER). O MB Extreme não distribui nem embute o VIIPER.
+- Licença do servidor: GPL-3.0 (Peter Repukat). As bibliotecas cliente oficiais são MIT; o cliente do MB Extreme é implementação própria a partir da documentação pública da API e do formato do dispositivo DualSense.
+- O VIIPER usa o driver usbip-win2 (assinado), instalado pelo próprio instalador do VIIPER.

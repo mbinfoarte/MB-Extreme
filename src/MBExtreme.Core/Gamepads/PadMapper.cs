@@ -1,7 +1,7 @@
 namespace MBExtreme.Core.Gamepads;
 
 /// <summary>Controle virtual que o jogo vai enxergar.</summary>
-public enum VirtualTarget { Xbox360, DualShock4 }
+public enum VirtualTarget { Xbox360, DualShock4, DualSense, DualSenseEdge }
 
 /// <summary>Zona morta e resposta de um analógico na emulação.</summary>
 public sealed class StickTuning

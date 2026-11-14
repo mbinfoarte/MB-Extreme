@@ -56,8 +56,11 @@ internal sealed class MbEmulationPage : MbControlPageBase
     private void Check()
     {
         var list = EmulationDrivers.CheckWindows();
-        _summary.Text = EmulationDrivers.Ready(list) ? "Tudo pronto para o controle virtual." : "Falta instalar o controle virtual para emular.";
-        _summary.Foreground = PadUi.Res(EmulationDrivers.Ready(list) ? "OkBrush" : "WarnBrush");
+        var target = AppServices.Settings.Emulation.Target;
+        bool ps5 = target is VirtualTarget.DualSense or VirtualTarget.DualSenseEdge;
+        bool ready = EmulationDrivers.ReadyFor(list, target);
+        _summary.Text = ready ? "Tudo pronto para o controle virtual escolhido." : ps5 ? "Falta instalar o VIIPER para o PS5 virtual." : "Falta instalar o controle virtual (ViGEmBus) para emular.";
+        _summary.Foreground = PadUi.Res(ready ? "OkBrush" : "WarnBrush");
         _parts.Children.Clear();
         foreach (var c in list)
         {
@@ -133,8 +136,12 @@ internal sealed class MbEmulationPage : MbControlPageBase
         var st = new StackPanel();
         st.Children.Add(Head("PASSO 3 · LIGAR O CONTROLE VIRTUAL"));
         st.Children.Add(new TextBlock { Text = "O jogo vai ver:", FontSize = 13, Margin = new Thickness(0, 0, 0, 6) });
-        st.Children.Add(Chips(new[] { (VirtualTarget.Xbox360, "Xbox 360 (funciona em quase todo jogo)"), (VirtualTarget.DualShock4, "PS4 (ícones de PlayStation)") },
-            () => _e.Target, t => { _e.Target = t; if (AppServices.Emulation.Running) AppServices.Emulation.Start(); }));
+        st.Children.Add(Chips(new[]
+            {
+                (VirtualTarget.Xbox360, "Xbox 360 (funciona em quase todo jogo)"), (VirtualTarget.DualShock4, "PS4 (DualShock 4)"),
+                (VirtualTarget.DualSense, "PS5 (DualSense)"), (VirtualTarget.DualSenseEdge, "PS5 Edge (DualSense Edge)"),
+            },
+            () => _e.Target, t => { _e.Target = t; Check(); if (AppServices.Emulation.Running) AppServices.Emulation.Start(); }));
         st.Children.Add(Check("Esconder o controle físico dos jogos (HidHide)", () => _e.HidePhysical, v => _e.HidePhysical = v));
         var row = new WrapPanel();
         _toggle.Click += (_, _) =>
@@ -146,7 +153,7 @@ internal sealed class MbEmulationPage : MbControlPageBase
         row.Children.Add(_toggle);
         st.Children.Add(row);
         st.Children.Add(_engineStatus);
-        st.Children.Add(PadUi.Muted("PS5 como controle virtual depende de uma licença do driver e fica para depois. A emulação continua ligada enquanto o MB estiver aberto (pode minimizar).", 11.5));
+        st.Children.Add(PadUi.Muted("Xbox e PS4 usam o ViGEmBus. PS5 e PS5 Edge usam o VIIPER (gratuito, cria um DualSense de verdade por USB virtual, com ícones de PS5 e giroscópio nos jogos). A emulação continua ligada enquanto o MB estiver aberto (pode minimizar).", 11.5));
         ShowEngine();
         return st;
     }

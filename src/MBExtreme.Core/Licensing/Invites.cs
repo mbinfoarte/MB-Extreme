@@ -63,6 +63,26 @@ public sealed class InviteClient
         using var r = await PostAsync("/v1/account/remove-device", new { license, deviceId, target }, token);
     }
 
+    public async Task SaveBackupAsync(string license, string deviceId, string data, bool auto, CancellationToken token = default)
+    {
+        using var r = await PostAsync("/v1/backup/save", new { license, deviceId, data, auto }, token);
+    }
+
+    public async Task<IReadOnlyList<MBExtreme.Core.Settings.CloudBackupInfo>> ListBackupsAsync(string license, string deviceId, CancellationToken token = default)
+    {
+        using var r = await PostAsync("/v1/backup/list", new { license, deviceId }, token);
+        return (await r.Content.ReadFromJsonAsync<BackupList>(Json, token))?.Items ?? new List<MBExtreme.Core.Settings.CloudBackupInfo>();
+    }
+
+    public async Task<string> GetBackupAsync(string license, string deviceId, string id, CancellationToken token = default)
+    {
+        using var r = await PostAsync("/v1/backup/get", new { license, deviceId, id }, token);
+        return (await r.Content.ReadFromJsonAsync<BackupData>(Json, token))?.Data ?? throw new LicenseNetworkException("Backup vazio.");
+    }
+
+    private sealed record BackupList(List<MBExtreme.Core.Settings.CloudBackupInfo> Items);
+    private sealed record BackupData(string Data);
+
     /// <summary>E-mail com o meio escondido (m•••••@gmail.com) para mostrar na tela.</summary>
     public static string MaskEmail(string email)
     {

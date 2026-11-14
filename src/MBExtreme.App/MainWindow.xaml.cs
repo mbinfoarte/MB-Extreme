@@ -71,6 +71,8 @@ public partial class MainWindow : Window
         _ = Task.Run(() => MBExtreme.Core.Operations.OperationJournal.Shared.Prune(DateTimeOffset.Now));
         AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(() => { UpdateFooter(); _ = AppServices.ProLock.CheckAsync(); }));
         AppServices.License.Start();
+        // backup das configurações na conta: uma vez por dia, em segundo plano (só quando algo mudou)
+        _ = Task.Delay(TimeSpan.FromMinutes(2)).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(async () => await Controls.CloudBackupService.AutoAsync())));
         // disponível para suporte enquanto o programa estiver aberto (cada acesso exige o aceite do usuário)
         if (AppServices.Settings.RemoteAutoListen && AppServices.License.Config.ServerUrl.Length > 0) _ = AppServices.RemoteSupport.StartAsync();
         _ = AppServices.Fans.StartIfConfiguredAsync();

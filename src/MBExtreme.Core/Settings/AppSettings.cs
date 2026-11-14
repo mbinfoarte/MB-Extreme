@@ -56,6 +56,10 @@ public sealed class AppSettings
     public List<string> BiosLog { get; set; } = new();
     /// <summary>Total liberado pela Limpeza neste PC (para o "O que o MB já fez").</summary>
     public long CleanupFreedTotalBytes { get; set; }
+    /// <summary>Backup automático das configurações na conta (uma vez por dia quando algo mudou).</summary>
+    public bool CloudBackupAuto { get; set; } = true;
+    public DateTime? LastBackupUtc { get; set; }
+    public string? LastBackupHash { get; set; }
     public List<string> ProcessProfileStartup { get; set; } = new();
     public List<string> ProcessProfileTweaks { get; set; } = new();
 
@@ -563,7 +567,17 @@ public sealed class AppSettings
     /// <summary>Meta de FPS usada no relatório de gargalos.</summary>
     public int BottleneckTargetFps { get; set; } = 60;
 
-    private static string FolderPath =>
+    private static AppSettings? _restoring;
+
+    /// <summary>Grava as configurações restauradas e trava as gravações até o programa reiniciar.</summary>
+    public static void SaveRestoredAndFreeze(AppSettings restored)
+    {
+        _restoring = restored;
+        Frozen = true;
+        restored.Save();
+    }
+
+    public static string FolderPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme");
 
     private static string FilePath => Path.Combine(FolderPath, "settings.json");
@@ -583,8 +597,12 @@ public sealed class AppSettings
         return new AppSettings();
     }
 
+    /// <summary>Depois de restaurar um backup, o programa reinicia: nada mais grava por cima do arquivo restaurado.</summary>
+    public static bool Frozen { get; set; }
+
     public void Save()
     {
+        if (Frozen && !ReferenceEquals(this, _restoring)) return;
         try
         {
             Directory.CreateDirectory(FolderPath);

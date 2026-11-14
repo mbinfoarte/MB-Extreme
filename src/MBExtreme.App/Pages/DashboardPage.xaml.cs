@@ -46,70 +46,49 @@ public partial class DashboardPage : UserControl
     private bool _busy;
     private double? _lastPing;
 
-    /// <summary>Aviso de versão beta de avaliação (some quando a pessoa assina o Pro; pode fechar, e volta a aparecer quando sai uma versão nova).</summary>
+    /// <summary>Um aviso curto do Painel: etiqueta colorida, título e uma linha, um botão e (se der) o × para dispensar.</summary>
+    private sealed record Notice(string Tag, Color Color, string Glyph, string Title, string Sub, string Button, bool Primary, Action Click,
+        Action? Dismiss = null, string? DismissTip = null, string? Second = null, Action? SecondClick = null, string Border = "BorderBrush");
+
+    private static readonly Color Yellow = Color.FromRgb(0xFF, 0xC4, 0x00);
+    private Notice? _betaNotice, _videoNotice;
+    private IReadOnlyList<AttentionItem> _items = Array.Empty<AttentionItem>();
+    private readonly TextBlock HealthText = new() { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private AnalyzerHero _hero = null!;
+
+    /// <summary>Aviso do teste grátis / planos (some quando a pessoa assina; pode fechar, e volta numa versão nova).</summary>
     private void ShowBetaNotice()
     {
         var license = AppServices.License;
         bool isPro = MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status);
         if (isPro || AppServices.Settings.BetaNoticeHiddenBuild == MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString())
         {
-            BetaHost.Content = null; UpdateNotices();
+            _betaNotice = null;
+            RenderNotices();
             return;
         }
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var star = new TextBlock { Text = "★", FontSize = 22, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) };
-        grid.Children.Add(star);
-
-        var text = new StackPanel { Margin = new Thickness(14, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         bool signedIn = license.Status.Payload is not null;
-        text.Children.Add(new TextBlock
-        {
-            Text = signedIn ? "ESCOLHA SEU PLANO" : "TESTE GRÁTIS DE 3 DIAS",
-            FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)),
-        });
-        text.Children.Add(new TextBlock
-        {
-            Text = signedIn
-                ? "Seu teste grátis terminou. Assine o Essencial, Gamer, Creator ou Técnico para liberar de novo otimizações, jogos, benchmark e estúdio."
-                : "Crie sua conta grátis em mbinfoarte.com.br e entre por aqui: o plano Gamer (otimizações, jogos, benchmark 3D e Modo Jogo) fica liberado por 3 dias, sem cartão.",
-            FontSize = 13, TextWrapping = TextWrapping.Wrap,
-        });
-        Grid.SetColumn(text, 1);
-        grid.Children.Add(text);
-
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var plans = new Button { Content = signedIn ? "Ver planos" : "Ativar teste grátis", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(16, 6, 16, 6), FontSize = 13 };
-        plans.Click += (_, _) => LicensePage.StartTrialOrPlans();
-        var close = new Button { Content = "✕", Style = (Style)FindResource("SideFooterButton"), Margin = new Thickness(8, 0, 0, 0), ToolTip = "Esconder até a próxima versão" };
-        close.Click += (_, _) =>
-        {
-            AppServices.Settings.BetaNoticeHiddenBuild = MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString();
-            AppServices.Settings.Save();
-            BetaHost.Content = null; UpdateNotices();
-        };
-        buttons.Children.Add(plans);
-        buttons.Children.Add(close);
-        Grid.SetColumn(buttons, 2);
-        grid.Children.Add(buttons);
-
-        BetaHost.Content = new Border
-        {
-            Background = (Brush)FindResource("Surface2Brush"), BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)), BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Child = grid,
-        };
-        UpdateNotices();
+        _betaNotice = new Notice(signedIn ? "ESCOLHA SEU PLANO" : "TESTE GRÁTIS DE 3 DIAS", Yellow, "★",
+            signedIn ? "Seu teste grátis terminou" : "Plano Gamer liberado por 3 dias, sem cartão",
+            signedIn ? "Assine para liberar otimizações, jogos, benchmark e estúdio" : "Crie a conta grátis em mbinfoarte.com.br e entre por aqui",
+            signedIn ? "Ver planos" : "Ativar", false, LicensePage.StartTrialOrPlans,
+            () =>
+            {
+                AppServices.Settings.BetaNoticeHiddenBuild = MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString();
+                AppServices.Settings.Save();
+                _betaNotice = null;
+                RenderNotices();
+            }, "Esconder até a próxima versão");
+        RenderNotices();
     }
 
     public DashboardPage()
     {
         InitializeComponent();
         var hero = new AnalyzerHero();
+        _hero = hero;
         HeroHost.Content = hero;
+        hero.CollapsedChanged += _ => RenderNotices();
         ShowBetaNotice();
         ShowVideo(AppServices.Videos.Latest);
         AppServices.Videos.Found += v => Dispatcher.BeginInvoke(new Action(() => ShowVideo(v)));
@@ -143,55 +122,146 @@ public partial class DashboardPage : UserControl
 
     private static bool _autoAnalyzed;
 
-    /// <summary>Avisos lado a lado; com um só, ele ocupa a largura toda.</summary>
-    private void UpdateNotices()
-    {
-        BetaHost.Visibility = BetaHost.Content is null ? Visibility.Collapsed : Visibility.Visible;
-        VideoHost.Visibility = VideoHost.Content is null ? Visibility.Collapsed : Visibility.Visible;
-        int visible = (BetaHost.Content is null ? 0 : 1) + (VideoHost.Content is null ? 0 : 1);
-        NoticeGrid.Columns = Math.Max(1, visible);
-        NoticeGrid.Visibility = visible == 0 ? Visibility.Collapsed : Visibility.Visible;
-        BetaHost.Margin = new Thickness(0, 0, visible == 2 ? 5 : 0, 0);
-        VideoHost.Margin = new Thickness(visible == 2 ? 5 : 0, 0, 0, 0);
-    }
-
     /// <summary>Faixa "Vídeo novo no canal" (some quando a pessoa fecha aquele vídeo).</summary>
     private void ShowVideo(MBExtreme.Core.Social.YouTubeVideo? video)
     {
-        if (video is null || !AppServices.Settings.NotifyNewVideos || AppServices.Settings.DismissedVideoId == video.Id) { VideoHost.Content = null; UpdateNotices(); return; }
+        if (video is null || !AppServices.Settings.NotifyNewVideos || AppServices.Settings.DismissedVideoId == video.Id)
+        {
+            _videoNotice = null;
+            RenderNotices();
+            return;
+        }
+        _videoNotice = new Notice("VÍDEO NOVO NO CANAL", Yellow, "▶", video.Title, MBExtreme.Core.Social.YouTubeFeed.Ago(video.Published, DateTimeOffset.Now),
+            "Assistir", false, () => { try { Process.Start(new ProcessStartInfo(video.Url) { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { } },
+            () =>
+            {
+                AppServices.Settings.DismissedVideoId = video.Id;
+                AppServices.Settings.Save();
+                _videoNotice = null;
+                RenderNotices();
+            }, "Esconder este vídeo");
+        RenderNotices();
+    }
+
+    /// <summary>
+    /// Avisos ao lado da saúde: com a análise aberta, uma coluna de cartões curtos à direita; com ela recolhida, uma grade de até
+    /// 3 colunas ao lado do anel. Sem nenhum aviso, a saúde ocupa a largura toda.
+    /// </summary>
+    private void RenderNotices()
+    {
+        if (_hero is null) return;
+        var list = new List<Notice>();
+        foreach (var item in _items)
+        {
+            var current = item;
+            bool fixable = item.FixKind.Length > 0;
+            list.Add(new Notice(item.Urgent ? "ATENÇÃO" : "AVISO", item.Urgent ? Color.FromRgb(0xFF, 0x8A, 0x8E) : Color.FromRgb(0xFF, 0xA9, 0x4D),
+                item.Urgent ? "!" : "▲", item.Title, item.Detail,
+                fixable ? item.FixText : item.ActionText, fixable,
+                fixable ? () => _ = FixAsync(current) : () => MainWindow.Current?.Go(current.TargetPage),
+                Second: fixable ? "Ver" : null, SecondClick: fixable ? () => MainWindow.Current?.Go(current.TargetPage) : null,
+                Border: item.Urgent ? "BadBrush" : "WarnBrush"));
+        }
+        if (_betaNotice is not null) list.Add(_betaNotice);
+        if (_videoNotice is not null) list.Add(_videoNotice);
+
+        NoticeColumn.Children.Clear();
+        bool collapsed = _hero.Collapsed;
+        if (list.Count == 0)
+        {
+            NoticeColumn.Visibility = Visibility.Collapsed;
+            HeroColumn.Width = new GridLength(1, GridUnitType.Star);
+            NoticeColumnDef.MinWidth = 0;
+            NoticeColumnDef.Width = new GridLength(0);
+            return;
+        }
+        NoticeColumn.Visibility = Visibility.Visible;
+        HeroColumn.Width = collapsed ? GridLength.Auto : new GridLength(2, GridUnitType.Star);
+        NoticeColumnDef.Width = new GridLength(1, GridUnitType.Star);
+        NoticeColumnDef.MinWidth = collapsed ? 0 : 340;
+
+        // cabeçalho: "Avisos · resumo" e o Corrigir tudo
+        var head = new DockPanel { Margin = new Thickness(2, collapsed ? 2 : 0, 0, 8), LastChildFill = true };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        if (_items.Any(i => i.FixKind is "security" or "memory"))
+        {
+            var all = new Button { Content = "Corrigir tudo", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(14, 5, 14, 5), FontSize = 12 };
+            var items = _items;
+            all.Click += async (_, _) => await FixAllAsync(items);
+            actions.Children.Add(all);
+        }
+        if (_items.Count > 0)
+        {
+            var repair = new Button { Content = "Reparar o Windows", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(12, 5, 12, 5), FontSize = 12, Margin = new Thickness(6, 0, 0, 0),
+                ToolTip = "Verifica e repara os arquivos do Windows (SFC e DISM)." };
+            repair.Click += (_, _) => MainWindow.Current?.Go("repair");
+            actions.Children.Add(repair);
+        }
+        DockPanel.SetDock(actions, Dock.Right);
+        head.Children.Add(actions);
+        var title = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        title.Children.Add(new TextBlock { Text = "Avisos", FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        if (HealthText.Parent is Panel old) old.Children.Remove(HealthText);   // o texto passa para o cabeçalho novo
+        if (_items.Count > 0) title.Children.Add(HealthText);
+        head.Children.Add(title);
+        NoticeColumn.Children.Add(head);
+
+        Panel cards = collapsed
+            ? new System.Windows.Controls.Primitives.UniformGrid { Columns = Math.Min(3, list.Count) }
+            : new StackPanel();
+        foreach (var n in list) cards.Children.Add(NoticeCard(n, collapsed));
+        NoticeColumn.Children.Add(cards);
+        Motion.Cascade(cards, 40);
+    }
+
+    private Border NoticeCard(Notice n, bool compact)
+    {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var thumb = new Image { Width = 112, Height = 63, Stretch = Stretch.UniformToFill };
-        try { thumb.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(video.Thumbnail)); } catch (UriFormatException) { }
-        grid.Children.Add(new Border { CornerRadius = new CornerRadius(8), ClipToBounds = true, Child = thumb });
-        var text = new StackPanel { Margin = new Thickness(14, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock { Text = "▶ VÍDEO NOVO NO CANAL", FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) });
-        text.Children.Add(new TextBlock { Text = video.Title, FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
-        text.Children.Add(new TextBlock { Text = MBExtreme.Core.Social.YouTubeFeed.Ago(video.Published, DateTimeOffset.Now), FontSize = 11.5, Foreground = (Brush)FindResource("MutedBrush") });
+
+        var accent = new SolidColorBrush(n.Color);
+        var icon = new Border
+        {
+            Width = 30, Height = 30, CornerRadius = new CornerRadius(9), VerticalAlignment = VerticalAlignment.Center,
+            Background = new SolidColorBrush(Color.FromArgb(0x30, n.Color.R, n.Color.G, n.Color.B)),
+            Child = new TextBlock { Text = n.Glyph, FontSize = 14, FontWeight = FontWeights.Bold, Foreground = accent, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        };
+        grid.Children.Add(icon);
+
+        var text = new StackPanel { Margin = new Thickness(10, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = n.Title + "\n" + n.Sub };
+        text.Children.Add(new TextBlock { Text = n.Tag, FontSize = 10, FontWeight = FontWeights.Bold, Foreground = accent });
+        text.Children.Add(new TextBlock { Text = n.Title, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        if (!compact) text.Children.Add(new TextBlock { Text = n.Sub, FontSize = 11.5, Foreground = (Brush)FindResource("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
+
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var watch = new Button { Content = "▶ Assistir", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(16, 6, 16, 6), FontSize = 13 };
-        watch.Click += (_, _) => { try { Process.Start(new ProcessStartInfo(video.Url) { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { } };
-        var close = new Button { Content = "✕", Style = (Style)FindResource("SideFooterButton"), Margin = new Thickness(8, 0, 0, 0), ToolTip = "Esconder este vídeo" };
-        System.Windows.Automation.AutomationProperties.SetName(close, "Esconder o aviso do vídeo");
-        close.Click += (_, _) =>
+        var main = new Button { Content = n.Button, Style = (Style)FindResource(n.Primary ? "PrimaryButton" : "GhostButton"), Padding = new Thickness(11, 4, 11, 4), FontSize = 12 };
+        main.Click += (_, _) => n.Click();
+        buttons.Children.Add(main);
+        if (n.Second is { } second && n.SecondClick is { } secondClick)
         {
-            AppServices.Settings.DismissedVideoId = video.Id;
-            AppServices.Settings.Save();
-            VideoHost.Content = null;
-            UpdateNotices();
-        };
-        buttons.Children.Add(watch);
-        buttons.Children.Add(close);
+            var b = new Button { Content = second, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(10, 4, 10, 4), FontSize = 12, Margin = new Thickness(6, 0, 0, 0) };
+            b.Click += (_, _) => secondClick();
+            buttons.Children.Add(b);
+        }
+        if (n.Dismiss is { } dismiss)
+        {
+            var close = new Button { Content = "✕", Style = (Style)FindResource("SideFooterButton"), Margin = new Thickness(6, 0, 0, 0), ToolTip = n.DismissTip };
+            System.Windows.Automation.AutomationProperties.SetName(close, "Dispensar o aviso: " + n.Title);
+            close.Click += (_, _) => dismiss();
+            buttons.Children.Add(close);
+        }
         Grid.SetColumn(buttons, 2);
         grid.Children.Add(buttons);
-        var card = new Border { Style = (Style)FindResource("Card"), Padding = new Thickness(12, 10, 12, 10), Child = grid };
-        VideoHost.Content = card;
-        UpdateNotices();
-        Motion.Enter(card, fromY: 8);
+
+        return new Border
+        {
+            Background = (Brush)FindResource("Surface2Brush"), BorderBrush = (Brush)FindResource(n.Border), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 0, compact ? 8 : 0, 8), Child = grid,
+        };
     }
 
     private static string Rate(double bytesPerSecond)
@@ -293,59 +363,14 @@ public partial class DashboardPage : UserControl
 
     private void ShowAttention(IReadOnlyList<AttentionItem> items)
     {
-        HealthText.Text = AttentionAdvisor.Headline(items);
+        HealthText.Text = "· " + AttentionAdvisor.Headline(items);
         HealthText.Foreground = (Brush)FindResource(items.Count == 0 ? "OkBrush" : items.Any(i => i.Urgent) ? "BadBrush" : "WarnBrush");
 
         string key = string.Join("|", items.Select(i => i.Title + i.Detail));
         if (key == _attentionKey) return;
         _attentionKey = key;
-
-        AttentionPanel.Children.Clear();
-        if (items.Count == 0) return;
-
-        // cabeçalho: corrigir tudo o que dá para corrigir sozinho, ou reparar o Windows
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        if (items.Any(i => i.FixKind is "security" or "memory"))
-        {
-            var all = new Button { Content = "Corrigir tudo", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(18, 7, 18, 7) };
-            all.Click += async (_, _) => await FixAllAsync(items);
-            header.Children.Add(all);
-        }
-        var repair = new Button { Content = "Reparar o Windows (SFC e DISM)", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(8, 0, 0, 0) };
-        repair.Click += (_, _) => MainWindow.Current?.Go("repair");
-        header.Children.Add(repair);
-        AttentionPanel.Children.Add(header);
-
-        var cards = new UniformGrid { Columns = items.Count == 1 ? 1 : 2 };
-        foreach (var item in items)
-        {
-            var current = item;
-            var text = new StackPanel();
-            text.Children.Add(new TextBlock { Text = item.Title, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
-            text.Children.Add(new TextBlock { Text = item.Detail, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("MutedBrush"), Margin = new Thickness(0, 2, 0, 0) });
-
-            var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-            if (item.FixKind.Length > 0)
-            {
-                var fix = new Button { Content = item.FixText, Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 0, 8, 0), FontSize = 12.5 };
-                fix.Click += async (_, _) => await FixAsync(current);
-                buttons.Children.Add(fix);
-            }
-            var details = new Button { Content = item.ActionText, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(12, 5, 12, 5), FontSize = 12.5 };
-            details.Click += (_, _) => MainWindow.Current?.Go(current.TargetPage);
-            buttons.Children.Add(details);
-            text.Children.Add(buttons);
-
-            cards.Children.Add(new Border
-            {
-                Style = (Style)FindResource("Card"),
-                Padding = new Thickness(14, 10, 14, 10),
-                Margin = new Thickness(0, 0, 8, 8),
-                BorderBrush = (Brush)FindResource(item.Urgent ? "BadBrush" : "WarnBrush"),
-                Child = text,
-            });
-        }
-        AttentionPanel.Children.Add(cards);
+        _items = items;
+        RenderNotices();
     }
 
     private async Task FixAsync(AttentionItem item)

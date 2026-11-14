@@ -59,6 +59,18 @@ internal sealed class AnalyzerHero : UserControl
     private static readonly Brush Yellow = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
     private readonly RingGauge _ring = new() { Width = 132, Height = 132, Thickness = 9 };
     private readonly System.Windows.Shapes.Ellipse _halo = new() { Width = 132, Height = 132, StrokeThickness = 2, Opacity = 0 };
+    /// <summary>Pontinho que gira em volta do anel depois da análise (o anel "vivo").</summary>
+    private readonly Grid _orbit = new() { Width = 132, Height = 132, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+    private Border _full = null!;
+    private readonly System.Windows.Threading.DispatcherTimer _collapseTimer = new() { Interval = TimeSpan.FromSeconds(6) };
+    private int _score;
+    private Brush _scoreBrush = Brushes.Transparent;
+
+    /// <summary>Recolhido: só o anel pequeno com a nota (clicar abre de novo).</summary>
+    public bool Collapsed { get; private set; }
+
+    /// <summary>Avisa o Painel para reorganizar os avisos quando o cartão recolhe ou abre.</summary>
+    public event Action<bool>? CollapsedChanged;
     private readonly Grid _center = new();
     private readonly TextBlock _title = new() { FontSize = 20, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _subtitle = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) };
@@ -79,6 +91,12 @@ internal sealed class AnalyzerHero : UserControl
         _halo.Stroke = Yellow;
         ringHost.Children.Add(_halo);
         ringHost.Children.Add(_ring);
+        _orbit.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Width = 8, Height = 8, Fill = new SolidColorBrush(Color.FromRgb(0xB9, 0xF6, 0xD9)), VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0.5, 0, 0),
+        });
+        ringHost.Children.Add(_orbit);
         ringHost.Children.Add(_center);
         grid.Children.Add(ringHost);
         var right = new StackPanel();
@@ -89,21 +107,121 @@ internal sealed class AnalyzerHero : UserControl
         Grid.SetColumn(right, 1);
         grid.Children.Add(right);
 
-        Content = new Border
+        _full = new Border
         {
             CornerRadius = new CornerRadius(16), Padding = new Thickness(22, 20, 22, 20), BorderThickness = new Thickness(1),
             BorderBrush = Res("BorderBrush"),
             Background = new LinearGradientBrush(Color.FromRgb(0x17, 0x15, 0x0C), Color.FromRgb(0x10, 0x10, 0x12), 0),
             Child = grid,
         };
+        Content = _full;
+        // recolhe sozinho alguns segundos depois de uma análise sem nada para resolver (não enquanto o mouse está em cima)
+        _collapseTimer.Tick += (_, _) =>
+        {
+            if (IsMouseOver) return;
+            _collapseTimer.Stop();
+            SetCollapsed(true);
+        };
+        Unloaded += (_, _) => _collapseTimer.Stop();
         ShowIdle();
+    }
+
+    /// <summary>Recolhe (só o anel pequeno com a nota) ou abre a análise completa.</summary>
+    public void SetCollapsed(bool collapsed)
+    {
+        _collapseTimer.Stop();
+        if (collapsed && _report is null) return;
+        if (Collapsed == collapsed) return;
+        Collapsed = collapsed;
+        if (collapsed)
+        {
+            var compact = CompactView();
+            Content = compact;
+            Motion.Enter(compact, fromY: -6);
+        }
+        else
+        {
+            Content = _full;
+            Motion.Enter(_full, fromY: -6);
+        }
+        CollapsedChanged?.Invoke(collapsed);
+    }
+
+    /// <summary>O selo recolhido: anel pequeno com a nota, um pontinho girando e um brilho que pulsa devagar.</summary>
+    private FrameworkElement CompactView()
+    {
+        var ring = new RingGauge { Width = 50, Height = 50, Thickness = 5, Fill = _scoreBrush };
+        ring.Jump(_score);
+        var orbit = new Grid { Width = 50, Height = 50, IsHitTestVisible = false };
+        orbit.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Width = 5, Height = 5, Fill = new SolidColorBrush(Color.FromRgb(0xB9, 0xF6, 0xD9)), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        Motion.Spin(orbit, 5);
+        var halo = new System.Windows.Shapes.Ellipse { Width = 50, Height = 50, Stroke = _scoreBrush, StrokeThickness = 2, Opacity = 0.4 };
+        if (Motion.Enabled)
+        {
+            halo.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0.05, 0.6, new Duration(TimeSpan.FromSeconds(1.3)))
+            { AutoReverse = true, RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever });
+            Motion.Breathe(halo, 1.18, 1.3);
+        }
+        var ringHost = new Grid { Width = 50, Height = 50 };
+        ringHost.Children.Add(halo);
+        ringHost.Children.Add(ring);
+        ringHost.Children.Add(orbit);
+        ringHost.Children.Add(new TextBlock { Text = _score.ToString(), FontSize = 15, FontWeight = FontWeights.Bold, Foreground = _scoreBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 4, 0) };
+        text.Children.Add(new TextBlock { Text = _score >= 90 ? "PC em dia" : HealthScore.Headline(_score), FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Res("TextBrush") });
+        string when = _report is null ? "" : $"análise às {_report.Finished.ToLocalTime():HH:mm} · ";
+        text.Children.Add(new TextBlock { Text = when + "abrir", FontSize = 11, Foreground = Res("MutedBrush") });
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(ringHost);
+        row.Children.Add(text);
+        var button = new Button { Cursor = Cursors.Hand, Content = row, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, ToolTip = "Abrir a análise" };
+        button.Template = PillTemplate();
+        System.Windows.Automation.AutomationProperties.SetName(button, $"Saúde do PC {_score}. Abrir a análise");
+        button.Click += (_, _) => SetCollapsed(false);
+        return button;
+    }
+
+    private static ControlTemplate PillTemplate()
+    {
+        var template = new ControlTemplate(typeof(Button));
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(999));
+        border.SetValue(Border.BackgroundProperty, Application.Current.FindResource("Surface2Brush"));
+        border.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x1E, 0x4A, 0x36)));
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+        border.SetValue(Border.PaddingProperty, new Thickness(6, 6, 16, 6));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(presenter);
+        template.VisualTree = border;
+        return template;
+    }
+
+    private void Orbit(bool on)
+    {
+        if (on && Motion.Enabled)
+        {
+            _orbit.Visibility = Visibility.Visible;
+            Motion.Spin(_orbit, 6);
+        }
+        else
+        {
+            Motion.Stop(_orbit);
+            _orbit.Visibility = Visibility.Collapsed;
+        }
     }
 
     private static Brush Res(string key) => (Brush)Application.Current.FindResource(key);
 
     /// <summary>Brilho em volta do anel que pulsa (parado: chama para o ANALISAR; trabalhando: mostra atividade).</summary>
-    private void Halo(bool on)
+    private void Halo(bool on, Brush? color = null)
     {
+        _halo.Stroke = color ?? Yellow;
         if (!on || !Motion.Enabled)
         {
             _halo.BeginAnimation(OpacityProperty, null);
@@ -119,6 +237,7 @@ internal sealed class AnalyzerHero : UserControl
 
     private void ShowIdle()
     {
+        Orbit(false);
         Motion.Stop(_ring);
         Motion.Spin(_ring, 9);   // degradê girando devagar
         Halo(true);
@@ -176,7 +295,9 @@ internal sealed class AnalyzerHero : UserControl
     public async Task AnalyzeAsync()
     {
         if (_busy) return;
+        SetCollapsed(false);
         _busy = true;
+        Orbit(false);
         _cts = new CancellationTokenSource();
         _rows.Children.Clear();
         _actions.Children.Clear();
@@ -228,8 +349,11 @@ internal sealed class AnalyzerHero : UserControl
         int score = HealthScore.Of(_report.Findings, ignored);
         var color = HealthScore.Level(score) switch { 2 => Res("OkBrush"), 1 => Yellow, _ => Res("BadBrush") };
         _ring.Fill = color;
+        _score = score;
+        _scoreBrush = color;
         Motion.Stop(_ring);
-        Halo(false);
+        Halo(true, color);        // brilho da cor da nota, pulsando devagar
+        Orbit(true);
         _ring.Jump(0);
         _ring.AnimateTo(score);   // o anel enche até a nota
         _center.Children.Clear();
@@ -249,7 +373,14 @@ internal sealed class AnalyzerHero : UserControl
 
         _rows.Children.Clear();
         _boxes.Clear();
-        foreach (var run in _report.Checks) _rows.Children.Add(CheckRow(run, interactive: true));
+        // o que pede ação fica em linhas inteiras (com Corrigir/Resolver/Ignorar); o resto vira 3 colunas curtas
+        var compact = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 4, 0, 0) };
+        foreach (var run in _report.Checks)
+        {
+            if (NeedsAction(run, ignored)) _rows.Children.Add(CheckRow(run, interactive: true));
+            else compact.Children.Add(CompactRow(run, ignored));
+        }
+        if (compact.Children.Count > 0) _rows.Children.Add(compact);
         Motion.Cascade(_rows, 30);
 
         _actions.Children.Clear();
@@ -259,6 +390,9 @@ internal sealed class AnalyzerHero : UserControl
             "Imagem do Windows, arquivos do sistema e disco, só lendo (10 a 40 minutos). Abre no Painel inteligente."));
         Motion.Cascade(_actions, 50);
         _actions.Children.Add(Action("Ver histórico", false, () => { MainWindow.Current?.Go("diagnose"); return Task.CompletedTask; }));
+        if (!_report.Cancelled)
+            _actions.Children.Add(Action("Recolher", false, () => { SetCollapsed(true); return Task.CompletedTask; }, "Deixa só o anel da saúde no topo do Painel."));
+        if (open.Count == 0 && !_report.Cancelled) _collapseTimer.Start();
         if (ignored.Count > 0)
             _actions.Children.Add(Action($"Mostrar ignorados ({ignored.Count})", false, () =>
             {
@@ -267,6 +401,39 @@ internal sealed class AnalyzerHero : UserControl
                 ShowResult();
                 return Task.CompletedTask;
             }));
+    }
+
+    private static bool NeedsAction(CheckRun run, ISet<string> ignored) =>
+        run.Findings.Any(f => f.Severity >= Severity.Info && !ignored.Contains(f.Id));
+
+    /// <summary>Verificação sem nada para fazer: bolinha (verde ok, cinza ignorado ou não verificado), nome e uma linha curta.</summary>
+    private static UIElement CompactRow(CheckRun run, ISet<string> ignored)
+    {
+        bool anyIgnored = run.Findings.Any(f => f.Severity >= Severity.Info && ignored.Contains(f.Id));
+        bool notVerified = run.Status is CheckStatus.Unavailable or CheckStatus.Error or CheckStatus.Cancelled;
+        string detail = anyIgnored ? string.Join(" · ", run.Findings.Where(f => ignored.Contains(f.Id)).Select(f => f.Title)) + " (ignorado)"
+            : notVerified ? DiagnosticText.StatusText(run.Status) : "Tudo certo";
+        var dot = new System.Windows.Shapes.Ellipse
+        {
+            Width = 8, Height = 8, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center,
+            Fill = anyIgnored || notVerified ? new SolidColorBrush(Color.FromRgb(0x52, 0x52, 0x5B)) : Res("OkBrush"),
+        };
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = run.Title, FontSize = 12, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        text.Children.Add(new TextBlock
+        {
+            Text = detail, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Res("MutedBrush"),
+            FontStyle = anyIgnored ? FontStyles.Italic : FontStyles.Normal,
+        });
+        var dock = new DockPanel();
+        DockPanel.SetDock(dot, Dock.Left);
+        dock.Children.Add(dot);
+        dock.Children.Add(text);
+        return new Border
+        {
+            Background = Res("Surface2Brush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 8, 6),
+            Child = dock, ToolTip = run.Title + "\n" + detail,
+        };
     }
 
     /// <summary>Uma linha por verificação: ícone, nome, o que achou e, no fim, as ações de cada achado.</summary>
@@ -369,6 +536,8 @@ internal sealed class AnalyzerHero : UserControl
 
         _busy = true;
         _actions.Children.Clear();
+        _collapseTimer.Stop();
+        Orbit(false);
         Motion.Stop(_ring);
         Motion.Spin(_ring, 1.6);
         Halo(true);

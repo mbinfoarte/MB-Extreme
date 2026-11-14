@@ -533,9 +533,9 @@ public sealed partial class GameLibraryPage : ToolPageBase
 
         _sideTop.Children.Add(BuildHeader(v));
 
-        _tab = Math.Clamp(_tab, 0, 2);
-        _sideTop.Children.Add(Chips(new[] { "Resumo", "Otimização", "Configurações" }, _tab, i => { _tab = i; Paint(); }));
-        _detail.Children.Add(_tab == 0 ? SummaryPanel(v) : _tab == 1 ? OptimizePanel(v) : ConfigPanel(v));
+        _tab = Math.Clamp(_tab, 0, 3);
+        _sideTop.Children.Add(Chips(new[] { "Resumo", "Desempenho", "Otimização", "Configurações" }, _tab, i => { _tab = i; Paint(); }));
+        _detail.Children.Add(_tab switch { 0 => SummaryPanel(v), 1 => PerformancePanel(v), 2 => OptimizePanel(v), _ => ConfigPanel(v) });
         if (_inline >= 0)
         {
             // detalhes abrem aqui mesmo, logo abaixo, sem trocar a tela
@@ -706,7 +706,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
         else { optLine = $"{fix} ponto(s) para otimizar"; optBrush = "WarnBrush"; }
         tiles.Children.Add(StatTile("\uE73E", "Otimização", optLine, optBrush,
             $"Jogo: {(gameFix == 0 ? "tudo certo" : gameFix + " a ajustar")} · Rede: {(netFix == 0 ? "tudo certo" : netFix + " a ajustar")}",
-            "Ver ajustes", () => { _tab = 1; Paint(); }));
+            "Ver ajustes", () => { _tab = 2; Paint(); }));
 
         // 2) desempenho (FPS)
         var sessions = AppServices.Perf.Get(game.Id);
@@ -729,7 +729,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
             fpsBrush = "MutedBrush";
             fpsSub = game.ExeName is null ? "Não sei qual é o executável deste jogo." : "Clique em Medir FPS, jogue 2 a 3 minutos e feche o jogo.";
         }
-        tiles.Children.Add(StatTile("\uE9D9", "Desempenho", fpsLine, fpsBrush, fpsSub, "Ver detalhes", () => OpenDetails(2)));
+        tiles.Children.Add(StatTile("\uE9D9", "Desempenho", fpsLine, fpsBrush, fpsSub, "Ver detalhes", () => { _tab = 1; Paint(); }));
 
         // 3) rede
         var report = AppServices.NetReports.Get(game.Id).LastOrDefault();
@@ -846,7 +846,7 @@ public sealed partial class GameLibraryPage : ToolPageBase
         var apply = SmallButton(applied ? "Reaplicar perfil" : title is null ? "Aplicar perfil" : "Aplicar perfil MB", async (_, _) => await ApplyTitleAsync(game, v, auto.IsChecked == true), !applied);
         apply.Margin = new Thickness(0);
         buttons.Children.Add(apply);
-        var see = SmallButton("Ver o que muda", (_, _) => { _tab = 1; Paint(); });
+        var see = SmallButton("Ver o que muda", (_, _) => { _tab = 2; Paint(); });
         Grid.SetColumn(see, 1);
         see.Margin = new Thickness(8, 0, 0, 0);
         buttons.Children.Add(see);
@@ -1481,6 +1481,9 @@ public sealed partial class GameLibraryPage : ToolPageBase
             string? problem = AppServices.GameMeasure.Start(game, AppServices.GameLibrary.Get(game.Id).OptimizedAt is not null);
             if (problem is not null) { SetStatus(problem, "BadBrush"); return; }
         }
+        else if (game.ExeName is not null && AppServices.Settings.AutoMeasureGames && !AppServices.GameMeasure.IsMeasuring)
+            AppServices.GameMeasure.Start(game, AppServices.GameLibrary.Get(game.Id).OptimizedAt is not null);   // relatório da aba Desempenho, sem clicar em nada
+        if (AppServices.Settings.OverlayGames.Contains(game.Id)) AppServices.Overlay.ShowOverlay();
 
         try
         {
@@ -1689,6 +1692,151 @@ public sealed partial class GameLibraryPage : ToolPageBase
     private void OnMeasureFinished(string gameId, PerfSession? session)
     {
         if (_selected?.Id == gameId) _ = RenderDetailAsync(_selected);
+    }
+
+    // ---- aba Desempenho: FPS, 1% e 0,1% pior, travadas, gráfico, gargalo e sessões (antes era "Gargalos e FPS")
+
+    private UIElement PerformancePanel(GameView v)
+    {
+        var game = v.Game;
+        var panel = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var sessions = AppServices.Perf.Get(game.Id);
+        var last = sessions.LastOrDefault();
+
+        // contador na tela do jogo, por jogo
+        bool overlay = AppServices.Settings.OverlayGames.Contains(game.Id);
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var info = new StackPanel();
+        info.Children.Add(new TextBlock { Text = "Contador na tela do jogo", FontSize = 12.5, FontWeight = FontWeights.SemiBold });
+        info.Children.Add(Muted("FPS, 1% pior, gráfico e sensores por cima do jogo · Ctrl + Shift + F10 mostra e esconde", 10.5));
+        row.Children.Add(info);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var toggle = new CheckBox { IsChecked = overlay, Content = overlay ? "Ligado" : "Desligado", Foreground = Brush("TextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        toggle.Click += (_, _) =>
+        {
+            var list = AppServices.Settings.OverlayGames;
+            if (toggle.IsChecked == true) { if (!list.Contains(game.Id)) list.Add(game.Id); } else list.Remove(game.Id);
+            AppServices.Settings.Save();
+            toggle.Content = toggle.IsChecked == true ? "Ligado" : "Desligado";
+        };
+        buttons.Children.Add(toggle);
+        buttons.Children.Add(Tight(SmallButton("Ajustar", (_, _) => MainWindow.Current?.Go("overlay-setup"))));
+        Grid.SetColumn(buttons, 1);
+        row.Children.Add(buttons);
+        var ovCard = CardOf(row);
+        ovCard.Padding = new Thickness(12, 8, 8, 8);
+        panel.Children.Add(ovCard);
+
+        if (last is null)
+        {
+            panel.Children.Add(Muted("Ainda não há sessão medida. Jogue pelo botão Jogar (o MB mede sozinho e guarda ao fechar o jogo) ou use Medir FPS.", 11.5));
+            return panel;
+        }
+
+        // números da última sessão, com a diferença para a primeira sessão sem otimização
+        var before = sessions.FirstOrDefault(x => !x.Optimized && x != last);
+        string Diff(double now, double? then) => then is { } t && t > 0 ? $"{now - t:+0;-0;0} vs antes" : "";
+        var tiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 4, Margin = new Thickness(0, 8, 0, 0) };
+        tiles.Children.Add(Stat("FPS médio", $"{last.AvgFps:0}", Diff(last.AvgFps, before?.AvgFps), "TextBrush"));
+        tiles.Children.Add(Stat("1% pior", $"{last.Low1Fps:0}", Diff(last.Low1Fps, before?.Low1Fps), "TextBrush"));
+        tiles.Children.Add(Stat("0,1% pior", last.Low01Fps > 0 ? $"{last.Low01Fps:0}" : "—", before is { Low01Fps: > 0 } && last.Low01Fps > 0 ? Diff(last.Low01Fps, before.Low01Fps) : "", "TextBrush"));
+        tiles.Children.Add(Stat("Travadas", $"{last.Stutters}", "quadros lentos", last.Stutters > 10 ? "WarnBrush" : "TextBrush"));
+        panel.Children.Add(tiles);
+
+        if (last.FrameMs.Count > 10)
+        {
+            var chart = new StackPanel();
+            var head = new DockPanel();
+            var avg = new TextBlock { Text = $"média {last.AvgFrameMs:0.0} ms", FontSize = 10.5, Foreground = Brush("MutedBrush") };
+            DockPanel.SetDock(avg, Dock.Right);
+            head.Children.Add(avg);
+            head.Children.Add(new TextBlock { Text = "Tempo de quadro da última sessão (picos = travadas)", FontSize = 10.5, Foreground = Brush("MutedBrush") });
+            chart.Children.Add(head);
+            chart.Children.Add(FrameChart(last.FrameMs));
+            var c = CardOf(chart);
+            c.Padding = new Thickness(10, 8, 10, 8);
+            c.Margin = new Thickness(0, 4, 0, 6);
+            panel.Children.Add(c);
+        }
+
+        if (last.Bottleneck.Length > 0)
+        {
+            var g = new StackPanel();
+            g.Children.Add(new TextBlock { Text = "Gargalo: " + last.Bottleneck + (last.CpuAvg is { } cpu && last.GpuAvg is { } gpu ? $" · CPU {cpu:0}% · GPU {gpu:0}%" : ""), FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            if (last.Advice.Length > 0) g.Children.Add(Muted(last.Advice, 11.5));
+            var gc = CardOf(g);
+            gc.BorderBrush = Brush("AccentBrush");
+            gc.Padding = new Thickness(12, 9, 12, 9);
+            panel.Children.Add(gc);
+        }
+
+        // sessões
+        var table = new Grid { Margin = new Thickness(0, 8, 0, 4) };
+        foreach (double w in new[] { 1.3, 1.2, 0.6, 0.6, 1.6 }) table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(w, GridUnitType.Star) });
+        int r = 0;
+        void Cell(string text, int col, string brush = "TextBrush", bool bold = false)
+        {
+            var t = new TextBlock { Text = text, FontSize = 11, Margin = new Thickness(0, 2, 6, 2), Foreground = Brush(brush), FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, TextTrimming = TextTrimming.CharacterEllipsis };
+            Grid.SetRow(t, r); Grid.SetColumn(t, col); table.Children.Add(t);
+        }
+        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Cell("Sessão", 0, "MutedBrush", true); Cell("Duração", 1, "MutedBrush", true); Cell("FPS", 2, "MutedBrush", true); Cell("1%", 3, "MutedBrush", true); Cell("Gargalo", 4, "MutedBrush", true);
+        foreach (var x in sessions.AsEnumerable().Reverse().Take(8))
+        {
+            r++;
+            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Cell($"{x.StartedAt:dd/MM HH:mm}", 0); Cell($"{x.Seconds / 60} min · {(x.Optimized ? "otimizado" : "antes")}", 1); Cell($"{x.AvgFps:0}", 2, bold: true); Cell($"{x.Low1Fps:0}", 3);
+            Cell(x.Bottleneck.Length > 0 ? x.Bottleneck : "—", 4, x.Bottleneck.Contains("processador") || x.Bottleneck.Contains("térmico") ? "WarnBrush" : "MutedBrush");
+        }
+        panel.Children.Add(table);
+        var actions = new WrapPanel();
+        actions.Children.Add(Tight(SmallButton("Salvar relatório (imagem)", (_, _) => SaveImage(panel, game))));
+        actions.Children.Add(Tight(SmallButton("Medir FPS agora", (_, _) => Play(game, true))));
+        panel.Children.Add(actions);
+        panel.Children.Add(BuildPerformance(game));
+        return panel;
+    }
+
+    private Border Stat(string title, string value, string sub, string brush)
+    {
+        var st = new StackPanel();
+        st.Children.Add(new TextBlock { Text = title, FontSize = 10.5, Foreground = Brush("MutedBrush") });
+        st.Children.Add(new TextBlock { Text = value, FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brush(brush) });
+        if (sub.Length > 0) st.Children.Add(new TextBlock { Text = sub, FontSize = 10, Foreground = sub.StartsWith('+') ? Brush("OkBrush") : sub.StartsWith('-') ? Brush("WarnBrush") : Brush("MutedBrush") });
+        return new Border { Background = Brush("Surface2Brush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 7, 9, 7), Margin = new Thickness(0, 0, 6, 6), Child = st };
+    }
+
+    private static FrameworkElement FrameChart(IReadOnlyList<double> ms)
+    {
+        double max = Math.Max(20, ms.Max() * 1.1);
+        var line = new System.Windows.Shapes.Polyline { Stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0xC4, 0x00)), StrokeThickness = 1.4, Stretch = Stretch.None };
+        const double width = 400, height = 70;
+        for (int i = 0; i < ms.Count; i++) line.Points.Add(new System.Windows.Point(i * width / Math.Max(1, ms.Count - 1), height - ms[i] / max * height));
+        var canvas = new Canvas { Width = width, Height = height, ClipToBounds = true };
+        canvas.Children.Add(line);
+        return new Viewbox { Stretch = Stretch.Fill, Height = 70, Child = canvas, Margin = new Thickness(0, 4, 0, 0) };
+    }
+
+    private void SaveImage(FrameworkElement panel, InstalledGame game)
+    {
+        try
+        {
+            int w = (int)Math.Max(1, panel.ActualWidth), h = (int)Math.Max(1, panel.ActualHeight);
+            var bmp = new RenderTargetBitmap(w * 2, h * 2, 192, 192, PixelFormats.Pbgra32);
+            var bg = new DrawingVisual();
+            using (var dc = bg.RenderOpen()) dc.DrawRectangle(Brush("BgBrush"), null, new System.Windows.Rect(0, 0, w, h));
+            bmp.Render(bg);
+            bmp.Render(panel);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp));
+            string safe = string.Concat(game.Name.Split(Path.GetInvalidFileNameChars()));
+            string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), $"MB Extreme - {safe} - {DateTime.Now:yyyy-MM-dd HHmm}.png");
+            using (var fs = File.Create(file)) enc.Save(fs);
+            SetStatus("Relatório salvo em Documentos: " + Path.GetFileName(file), "OkBrush");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { SetStatus("Não deu para salvar a imagem: " + ex.Message, "WarnBrush"); }
     }
 
     private UIElement BuildPerformance(InstalledGame game)

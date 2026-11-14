@@ -40,6 +40,18 @@ public sealed class AppSettings
     public string? ProcessProfile { get; set; }
     /// <summary>Modo do PC escolhido no widget (Normal, Gamer, Turbo, Silencioso).</summary>
     public string? PcMode { get; set; }
+    /// <summary>Mede FPS e gargalo sozinho sempre que um jogo abre pelo Jogar da biblioteca.</summary>
+    public bool AutoMeasureGames { get; set; } = true;
+    /// <summary>Jogos (ids da biblioteca) com o contador na tela ligado.</summary>
+    public List<string> OverlayGames { get; set; } = new();
+    /// <summary>Contador na tela do jogo: posição (0 a 8, da esquerda para a direita e de cima para baixo), o que mostrar e aparência.</summary>
+    public int OverlayPosition { get; set; }
+    public List<string> OverlayItems { get; set; } = new() { "fps", "low1", "frametime", "graph", "cpu", "gpu", "vram" };
+    public bool OverlayHorizontal { get; set; }
+    public int OverlayScale { get; set; } = 100;
+    public int OverlayOpacity { get; set; } = 55;
+    public string OverlayColor { get; set; } = "#FFFFFF";
+    public bool OverlayFpsColors { get; set; } = true;
     public List<string> ProcessProfileStartup { get; set; } = new();
     public List<string> ProcessProfileTweaks { get; set; } = new();
 

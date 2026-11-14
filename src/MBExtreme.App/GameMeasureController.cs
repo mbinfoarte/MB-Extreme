@@ -1,7 +1,10 @@
 using System.IO;
 using System.Diagnostics;
 using System.Windows.Threading;
+using MBExtreme.Core.Bottleneck;
+using MBExtreme.Core.Fps;
 using MBExtreme.Core.Games;
+using MBExtreme.Core.Memory;
 
 namespace MBExtreme.UI;
 
@@ -19,6 +22,9 @@ internal sealed class GameMeasureController
     private bool _optimized, _seen, _startedMonitor;
     private int _waited, _missing;
     private DateTime _started;
+    private readonly List<BottleneckSample> _samples = new();
+    private SystemSampler? _sampler;
+    private bool _sampling;
 
     public GameMeasureController() => _timer.Tick += (_, _) => Tick();
 
@@ -49,7 +55,14 @@ internal sealed class GameMeasureController
         }
 
         _recorder = new SessionRecorder();
+        _samples.Clear();
         _process = Path.GetFileNameWithoutExtension(game.ExeName);
+        try
+        {
+            AppServices.Overlay.BeginCapture(_process);   // todos os quadros: 0,1% pior, travadas e o gráfico
+            _sampler = new SystemSampler();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) { }
         _optimized = optimized;
         _seen = false;
         _waited = _missing = 0;
@@ -72,6 +85,7 @@ internal sealed class GameMeasureController
             _seen = true;
             _missing = 0;
             _recorder.Add(reading.Fps, reading.Low1PercentFps, reading.FrameTimeMs);
+            _ = SampleAsync(reading);
             Set($"Medindo {GameName}: {reading.Fps:0} FPS · {_recorder.Count} s gravados" + (_recorder.Count < SessionRecorder.MinimumSeconds ? $" (mínimo {SessionRecorder.MinimumSeconds} s)" : ""));
             return;
         }
@@ -94,6 +108,32 @@ internal sealed class GameMeasureController
         if (GameId is not { } id) return;
         _timer.Stop();
         var session = save ? _recorder.Finish(_optimized, _started) : null;
+        CaptureResult? capture = null;
+        try { capture = AppServices.Overlay.IsCapturing ? AppServices.Overlay.EndCapture() : null; }
+        catch (InvalidOperationException) { }
+        _sampler?.Dispose();
+        _sampler = null;
+        if (session is not null)
+        {
+            if (capture is not null)
+            {
+                var (frames, pauses) = FrameAnalysis.FrameTimes(capture.PresentSeconds, 3);
+                if (frames.Count > 100)
+                {
+                    var m = FrameAnalysis.Compute(frames, pauses);
+                    session.Low01Fps = Math.Round(m.Low01Fps, 1);
+                    session.Stutters = m.Stutters;
+                    session.FrameMs = PerfSession.Downsample(frames);
+                }
+            }
+            var report = BottleneckAnalyzer.Analyze(GameName, _samples.ToList(), AppServices.Settings.BottleneckTargetFps);
+            session.Bottleneck = report.Samples > 0 ? BottleneckAnalyzer.Label(report.Primary) : "";
+            session.Advice = report.Advice.FirstOrDefault() ?? "";
+            var cpu = _samples.Where(x => x.CpuTotal is not null).Select(x => x.CpuTotal!.Value).ToList();
+            var gpu = _samples.Where(x => x.GpuLoad is not null).Select(x => x.GpuLoad!.Value).ToList();
+            session.CpuAvg = cpu.Count > 0 ? Math.Round(cpu.Average()) : null;
+            session.GpuAvg = gpu.Count > 0 ? Math.Round(gpu.Average()) : null;
+        }
         if (session is not null) AppServices.Perf.Add(id, session);
         if (_startedMonitor && !AppServices.Overlay.OverlayVisible) AppServices.Overlay.StopMonitoring();
         GameId = null;
@@ -101,6 +141,26 @@ internal sealed class GameMeasureController
             ? session is null ? $"Medição curta demais (menos de {SessionRecorder.MinimumSeconds} s); não foi guardada." : $"Medição guardada: {session.AvgFps:0} FPS em média, {session.Seconds} s."
             : "Medição cancelada.");
         Finished?.Invoke(id, session);
+    }
+
+    /// <summary>Uma medida por segundo de processador, placa de vídeo, memória e disco (para o gargalo da sessão).</summary>
+    private async Task SampleAsync(MBExtreme.Core.Fps.FpsReading fps)
+    {
+        if (_sampling) return;
+        _sampling = true;
+        try
+        {
+            var sensors = await AppServices.Sensors;
+            var s = await Task.Run(sensors.Read);
+            var sampler = _sampler;
+            double? core = null, queue = null;
+            if (sampler is not null) (core, queue) = await Task.Run(() => (sampler.MaxCoreLoad(), sampler.DiskQueue()));
+            var ram = MemoryService.GetStatus();
+            _samples.Add(new BottleneckSample(fps.Fps, fps.FrameTimeMs, fps.Low1PercentFps, s.CpuLoad, core ?? s.CpuLoad, s.CpuTemperature,
+                s.GpuLoad, s.GpuTemperature, 100 - ram.FreePercent, queue));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or AggregateException) { }
+        finally { _sampling = false; }
     }
 
     private void Set(string text)

@@ -662,6 +662,7 @@ public partial class MainWindow : Window
         "profiles" => new ProfilesPage(),
         "startup" => new StartupPage(),
         "proc-profiles" => new ProcessProfilesPage(),
+        "overlay-setup" => new OverlaySetupPage(),
         "repair" => new RepairPage(),
         "diskmgr" => new DiskManagerPage(),
         "wallpaper" => new WallpaperPage(),

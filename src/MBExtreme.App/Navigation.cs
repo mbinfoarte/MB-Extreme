@@ -94,6 +94,7 @@ internal static class NavigationMap
             new("uninstaller", "Desinstalador", "Programas instalados e aplicativos do Windows: remova vários de uma vez.", "\uE74D", "Drivers e programas"),
             new("software", "Drivers e programas", "Atualize drivers e programas, instale ferramentas e remova o driver de vídeo, tudo num lugar só.", "\uE896", "Drivers e programas"),
             new("processes", "Processos", "Quem usa memória e processador, com encerramento seguro.", "\uE9D9", "Ferramentas"),
+            new("overlay-setup", "Contador na tela do jogo", "FPS, 1% e 0,1% pior, gráfico e sensores por cima do jogo (estilo RivaTuner).", "\uE7F4", "Ferramentas"),
             new("proc-profiles", "Processos e inicialização", "Exame automático e perfis de um clique: Gamer, Turbo, Trabalho, Notebook e Streamer.", "\uE7E8", "Ferramentas"),
             new("diskmap", "Mapa do disco", "Mapa colorido de quais pastas e arquivos estão enchendo o disco.", "\uE8B7", "Ferramentas"),
             new("largefiles", "Arquivos grandes", "Ache o que está ocupando espaço.", "\uE8B7", "Ferramentas"),
@@ -161,7 +162,6 @@ internal static class NavigationMap
         new("JOGOS E ESTÚDIO", new SideItem[]
         {
             new("gamelibrary", "Biblioteca de jogos", "\uE7FC"),
-            new("hub-fps", "Gargalos e FPS", "\uE9D9"),
             new("record", "Gravação e live", "\uE714"),
             new("shorts", "Vídeos curtos", "\uE8B2"),
         }),

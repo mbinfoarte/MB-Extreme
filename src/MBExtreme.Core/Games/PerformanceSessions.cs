@@ -13,6 +13,33 @@ public sealed class PerfSession
     public double MinFps { get; set; }
     public double MaxFps { get; set; }
     public double AvgFrameMs { get; set; }
+    /// <summary>0,1% pior (pelos quadros capturados; 0 = sem captura de quadros).</summary>
+    public double Low01Fps { get; set; }
+    /// <summary>Travadas: quadros muito mais lentos que os vizinhos.</summary>
+    public int Stutters { get; set; }
+    public double? CpuAvg { get; set; }
+    public double? GpuAvg { get; set; }
+    /// <summary>Quem segurou o FPS (rótulo) e a primeira dica.</summary>
+    public string Bottleneck { get; set; } = "";
+    public string Advice { get; set; } = "";
+    /// <summary>Tempo de quadro (ms) resumido para o gráfico (até 240 pontos).</summary>
+    public List<double> FrameMs { get; set; } = new();
+
+    /// <summary>Resume uma série longa em até <paramref name="points"/> pontos, guardando o pior de cada trecho (os picos aparecem).</summary>
+    public static List<double> Downsample(IReadOnlyList<double> values, int points = 240)
+    {
+        if (values.Count <= points) return values.Select(v => Math.Round(v, 2)).ToList();
+        var result = new List<double>(points);
+        double step = values.Count / (double)points;
+        for (int i = 0; i < points; i++)
+        {
+            int a = (int)(i * step), b = Math.Min(values.Count, (int)((i + 1) * step));
+            double max = 0;
+            for (int j = a; j < b; j++) max = Math.Max(max, values[j]);
+            result.Add(Math.Round(max, 2));
+        }
+        return result;
+    }
 }
 
 /// <summary>Acumula as leituras de FPS de uma sessão (uma por segundo) e resume.</summary>

@@ -39,11 +39,11 @@
                         <TextBlock x:Name="CpuName" Text="—" FontSize="11.5" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="40,-2,0,0" />
                         <UniformGrid Columns="2" Margin="0,8,0,0">
                             <StackPanel>
-                                <ctl:ArcGauge x:Name="CpuGauge" Height="128" Unit="°C" Maximum="110" WarnAt="75" BadAt="90" />
+                                <ctl:LiveRing x:Name="CpuGauge" HorizontalAlignment="Center" Accent="#FFA94D" Unit="°C" Maximum="110" WarnAt="75" BadAt="90" />
                                 <TextBlock Text="Temperatura" FontSize="11.5" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                             <StackPanel>
-                                <ctl:ArcGauge x:Name="CpuUseGauge" Height="128" Unit="%" Maximum="100" WarnAt="85" BadAt="95" />
+                                <ctl:LiveRing x:Name="CpuUseGauge" HorizontalAlignment="Center" Accent="#FFC400" Unit="%" Maximum="100" WarnAt="85" BadAt="95" />
                                 <TextBlock Text="Uso" FontSize="11.5" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                         </UniformGrid>
@@ -65,11 +65,11 @@
                         <TextBlock x:Name="GpuName" Text="—" FontSize="11.5" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="40,-2,0,0" />
                         <UniformGrid Columns="2" Margin="0,8,0,0">
                             <StackPanel>
-                                <ctl:ArcGauge x:Name="GpuGauge" Height="128" Unit="°C" Maximum="110" WarnAt="78" BadAt="88" />
+                                <ctl:LiveRing x:Name="GpuGauge" HorizontalAlignment="Center" Accent="#6CB6FF" Unit="°C" Maximum="110" WarnAt="78" BadAt="88" />
                                 <TextBlock Text="Temperatura" FontSize="11.5" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                             <StackPanel>
-                                <ctl:ArcGauge x:Name="GpuUseGauge" Height="128" Unit="%" Maximum="100" WarnAt="90" BadAt="98" />
+                                <ctl:LiveRing x:Name="GpuUseGauge" HorizontalAlignment="Center" Accent="#FFC400" Unit="%" Maximum="100" WarnAt="90" BadAt="98" />
                                 <TextBlock Text="Uso" FontSize="11.5" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                         </UniformGrid>
@@ -108,11 +108,11 @@
                         <TextBlock x:Name="RamName" Text="—" FontSize="11.5" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="40,-2,0,0" />
                         <UniformGrid Columns="2" Margin="0,8,0,0">
                             <StackPanel>
-                                <ctl:ArcGauge x:Name="RamGauge" Height="128" Unit="%" Maximum="100" WarnAt="70" BadAt="85" />
+                                <ctl:LiveRing x:Name="RamGauge" HorizontalAlignment="Center" Accent="#C084FC" Unit="%" Maximum="100" WarnAt="70" BadAt="85" />
                                 <TextBlock Text="Em uso" FontSize="11.5" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                             <StackPanel>
-                                <ctl:ArcGauge x:Name="RamTempGauge" Height="128" Unit="°C" Maximum="95" WarnAt="60" BadAt="75" />
+                                <ctl:LiveRing x:Name="RamTempGauge" HorizontalAlignment="Center" Accent="#3DDC97" Unit="°C" Maximum="95" WarnAt="60" BadAt="75" />
                                 <TextBlock x:Name="RamTempLabel" Text="Temperatura" FontSize="11.5" TextAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                             </StackPanel>
                         </UniformGrid>

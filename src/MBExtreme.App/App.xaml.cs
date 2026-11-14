@@ -79,6 +79,13 @@ public partial class App : Application
         ApplyFirstRunOptions();
         SingleInstance.ListenForOthers(() => Dispatcher.BeginInvoke(new Action(() => (MainWindow as MainWindow)?.ActivateFromOther())));
 
+        // sem conta neste PC: primeiro só a janela de login (obrigatória); o programa abre depois de entrar ou criar a conta
+        if (!LoginGate())
+        {
+            Shutdown(0);
+            return;
+        }
+
         Accessibility.Install();
         // animações desligadas (opção do programa ou do Windows): efeitos de passar o mouse instantâneos
         Motion.ApplyToTheme(Resources.MergedDictionaries.Count > 0 ? Resources.MergedDictionaries[0] : Resources);
@@ -86,6 +93,21 @@ public partial class App : Application
     }
 
     private System.Threading.Mutex? _instance;
+
+    /// <summary>Exige a conta antes de mostrar o programa. False = fechou sem entrar (ou abriu com o Windows sem conta).</summary>
+    private bool LoginGate()
+    {
+        var license = AppServices.License;
+        if (!license.Config.Configured) return true;   // versão de testes sem servidor
+        license.Start();
+        if (license.Status.Payload is not null) return true;
+        if (StartInTray) return false;                    // ligou com o Windows e ainda não tem conta: não abre sozinho
+        var previous = ShutdownMode;
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;   // a janela de login fechar não pode encerrar antes da hora
+        bool ok = Login.LoginWindow.Gate();
+        ShutdownMode = previous;
+        return ok;
+    }
 
     /// <summary>Aberto pelo Windows ao entrar (--tray): fica só na bandeja, sem mostrar a janela.</summary>
     internal static bool StartInTray { get; private set; }

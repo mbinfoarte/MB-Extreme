@@ -71,8 +71,12 @@ internal sealed class LicenseManager
     public DeviceInfo Device => _deviceInfo ??= DeviceFacts.Collect($"{MBExtreme.Core.AppInfo.Version} ({MBExtreme.Core.Update.AppUpdates.CurrentBuild()})");
 
 
+    private bool _started;
+
     public void Start()
     {
+        if (_started) return;   // a tela de login já começa antes da janela principal
+        _started = true;
         _tokens = LoadTokens();
         Reevaluate();
         _timer.Start();

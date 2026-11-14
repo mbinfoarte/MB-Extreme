@@ -561,6 +561,18 @@ public sealed class LicensePage : ToolPageBase
         if (MessageBox.Show("Remover a licença deste computador?\n\nA vaga é liberada no site e você pode ativar outro PC.", "Conta e licença",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         SetStatus(await _license.SignOutAsync(), "OkBrush");
+        // a conta é obrigatória: some o programa e volta a janela de login (fechar = fecha o MB)
+        if (!_license.Config.Configured || _license.Status.Payload is not null) return;
+        var main = Window.GetWindow(this);
+        main?.Hide();
+        var app = Application.Current;
+        var previous = app.ShutdownMode;
+        app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        bool ok = MBExtreme.UI.Login.LoginWindow.Gate();
+        app.ShutdownMode = previous;
+        if (!ok) { app.Shutdown(); return; }
+        main?.Show();
+        Render();
     }
 
     private void OpenAccount() => OpenSite("/painel");

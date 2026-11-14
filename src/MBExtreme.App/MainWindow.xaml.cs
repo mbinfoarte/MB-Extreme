@@ -87,8 +87,6 @@ public partial class MainWindow : Window
         VersionText.Text = VersionLabel;
         VersionButton.ToolTip = VersionTip;
         Loaded += (_, _) => SetupTrayAndWidget();
-        // primeira coisa ao abrir sem conta: a janela de login (Google, e-mail e senha ou criar conta grátis)
-        if (!App.StartInTray) ContentRendered += (_, _) => PromptLogin();
         if (App.StartInTray)
         {
             // aberto pelo Windows ao entrar: só a bandeja (e a barra flutuante, se ligada)
@@ -96,22 +94,6 @@ public partial class MainWindow : Window
             WindowState = WindowState.Minimized;
             Loaded += (_, _) => { Hide(); ShowInTaskbar = true; WindowState = WindowState.Normal; };
         }
-    }
-
-    private bool _loginPrompted;
-
-    private void PromptLogin()
-    {
-        var s = AppServices.Settings;
-        if (_loginPrompted || !AppServices.License.Config.Configured || AppServices.License.Status.Payload is not null) return;
-        if (s.LoginPromptSnoozeUtc is { } until && DateTime.UtcNow < until) return;
-        _loginPrompted = true;
-        if (!Login.LoginWindow.Prompt(this))
-        {
-            s.LoginPromptSnoozeUtc = DateTime.UtcNow.AddHours(20);   // fechou: pergunta de novo amanhã (sempre dá para entrar em Conta e licença)
-            s.Save();
-        }
-        UpdateFooter();
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;

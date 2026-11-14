@@ -24,9 +24,13 @@ internal sealed class LoginWindow : Window
     /// <summary>Deu certo (a licença entrou).</summary>
     public bool Success { get; private set; }
 
-    public LoginWindow(bool signUp = false)
+    private readonly bool _required;
+
+    public LoginWindow(bool signUp = false, bool required = false)
     {
+        _required = required;
         Title = "MB Extreme · Entrar";
+        Icon = Application.Current?.MainWindow?.Icon ?? TryIcon();
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -36,7 +40,7 @@ internal sealed class LoginWindow : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = true;
 
-        var close = new Button { Content = "✕", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(8, 2, 8, 2), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right, ToolTip = "Fechar (dá para entrar depois em Conta e licença)" };
+        var close = new Button { Content = "✕", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(8, 2, 8, 2), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right, ToolTip = required ? "Fechar o MB Extreme" : "Fechar (dá para entrar depois em Conta e licença)" };
         close.Click += (_, _) => Close();
         var root = new StackPanel();
         root.Children.Add(close);
@@ -58,6 +62,17 @@ internal sealed class LoginWindow : Window
     }
 
     /// <summary>Abre a janela (se ainda não houver conta neste PC). Devolve true quando a licença entrou.</summary>
+    /// <summary>
+    /// Ao abrir o programa sem conta: só esta janela aparece (o programa fica escondido). Entrou ou criou a conta: o programa abre.
+    /// Fechou: o programa fecha. Devolve true quando a licença entrou.
+    /// </summary>
+    public static bool Gate()
+    {
+        var w = new LoginWindow(required: true) { ShowInTaskbar = true, Topmost = false };
+        w.ShowDialog();
+        return w.Success;
+    }
+
     public static bool Prompt(Window? owner, bool signUp = false)
     {
         var w = new LoginWindow(signUp);
@@ -193,7 +208,7 @@ internal sealed class LoginWindow : Window
             await ActivateAsync();
         }));
         _body.Children.Add(Link("Não tem conta?", "Criar conta grátis", ShowSignUp));
-        _body.Children.Add(Link("", "Continuar sem conta (modo grátis)", Close));
+        if (!_required) _body.Children.Add(Link("", "Continuar sem conta (modo grátis)", Close));
         Loaded += (_, _) => (email.Text.Length == 0 ? (Control)email : pass).Focus();
     }
 
@@ -333,6 +348,12 @@ internal sealed class LoginWindow : Window
         if (token.IsCancellationRequested) return;
         if (ok) { Success = true; ShowDone(message.Replace("Ativado: ", "")); }
         else { ShowSignIn(); Error(message); }
+    }
+
+    private static ImageSource? TryIcon()
+    {
+        try { return System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/Assets/app.ico")); }
+        catch (Exception ex) when (ex is System.IO.IOException or UriFormatException or NotSupportedException or InvalidOperationException) { return null; }
     }
 
     private static void Open(string url)

@@ -20,6 +20,7 @@ internal sealed class BoostController
             _startedAt = DateTime.Now;
             StartTitleSessions(name);
             Application.Current?.Dispatcher.BeginInvoke(new Action(() => MBExtreme.UI.Pages.PadProfileHub.OnGameStarted(name)));
+            Application.Current?.Dispatcher.BeginInvoke(new Action(() => AppServices.Kbm.OnGameStarted(name)));
             Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await StartAsync(name, pid)));
         };
         _watcher.GameStopped += name =>

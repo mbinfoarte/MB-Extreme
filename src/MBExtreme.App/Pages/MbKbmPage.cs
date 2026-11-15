@@ -21,6 +21,8 @@ internal sealed class MbKbmPage : MbControlPageBase
     private readonly Ellipse _dot = new() { Width = 12, Height = 12, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) };
     private readonly DispatcherTimer _save = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private readonly UniformGrid _keys = new() { Columns = 3 };
+    private readonly List<Action> _refresh = new();
+    private readonly TextBlock _presetState = new() { FontSize = 12, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
 
     public MbKbmPage() : base("Teclado e mouse → controle", "Jogue com mouse e teclado em jogos que só aceitam controle. O MB cria um controle virtual: as teclas viram botões e o mouse vira o analógico direito (a mira).")
     {
@@ -62,14 +64,30 @@ internal sealed class MbKbmPage : MbControlPageBase
         top.Children.Add(prev);
         Body.Children.Add(PadUi.Card(top));
 
+        // perfis prontos por jogo
+        var presets = new StackPanel();
+        presets.Children.Add(Head("PERFIL PRONTO DO JOGO"));
+        var cod = KbmPresets.CallOfDuty;
+        var presetRow = new WrapPanel();
+        var apply = PadUi.Button(cod.Name, primary: true);
+        apply.Click += (_, _) => ApplyPreset(cod);
+        presetRow.Children.Add(apply);
+        presetRow.Children.Add(_presetState);
+        presets.Children.Add(presetRow);
+        presets.Children.Add(PadUi.Muted(cod.Description + " Entra sozinho quando o jogo abre (com a troca automática de perfil ligada).", 11.5));
+        presets.Children.Add(new TextBlock { Text = "Ajuste também dentro do jogo:", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 4) });
+        foreach (var tip in cod.InGameTips) presets.Children.Add(PadUi.Muted("• " + tip, 11.5));
+        presets.Children.Add(PadUi.Muted("Só para COD com campanha offline (COD 4, World at War, MW2 e MW3 antigos, Black Ops 1 a 3, Ghosts, Advanced Warfare, MW Remastered, Infinite Warfare e WWII). Nos novos (MW 2019 em diante e Black Ops 6) o anti-cheat roda até na campanha: o MB desliga o controle virtual sozinho quando eles abrem.", 11.5));
+        Body.Children.Add(PadUi.Card(presets));
+
         // ajustes da mira
         var aim = new StackPanel();
         aim.Children.Add(Head("MOUSE → ANALÓGICO DIREITO (MIRA)"));
         var sliders = new WrapPanel();
-        sliders.Children.Add(PadUi.SliderRow("Sensibilidade", 1, 100, _s.Sensitivity, v => $"{v:0}%", v => { _s.Sensitivity = (int)v; Save(); }, 300));
-        sliders.Children.Add(PadUi.SliderRow("Aceleração", 0, 100, _s.Acceleration, v => $"{v:0}%", v => { _s.Acceleration = (int)v; Save(); }, 300));
-        sliders.Children.Add(PadUi.SliderRow("Anti-zona morta do jogo", 0, 40, _s.AntiDeadzone, v => $"{v:0}%", v => { _s.AntiDeadzone = (int)v; Save(); }, 300));
-        sliders.Children.Add(PadUi.SliderRow("Suavização", 0, 90, _s.Smoothing, v => $"{v:0}%", v => { _s.Smoothing = (int)v; Save(); }, 300));
+        sliders.Children.Add(Live(PadUi.SliderRow("Sensibilidade", 1, 100, _s.Sensitivity, v => $"{v:0}%", v => { _s.Sensitivity = (int)v; Save(); }, 300), () => _s.Sensitivity));
+        sliders.Children.Add(Live(PadUi.SliderRow("Aceleração", 0, 100, _s.Acceleration, v => $"{v:0}%", v => { _s.Acceleration = (int)v; Save(); }, 300), () => _s.Acceleration));
+        sliders.Children.Add(Live(PadUi.SliderRow("Anti-zona morta do jogo", 0, 40, _s.AntiDeadzone, v => $"{v:0}%", v => { _s.AntiDeadzone = (int)v; Save(); }, 300), () => _s.AntiDeadzone));
+        sliders.Children.Add(Live(PadUi.SliderRow("Suavização", 0, 90, _s.Smoothing, v => $"{v:0}%", v => { _s.Smoothing = (int)v; Save(); }, 300), () => _s.Smoothing));
         aim.Children.Add(sliders);
         aim.Children.Add(new TextBlock { Text = "Curva", FontSize = 12.5, Margin = new Thickness(0, 4, 0, 6) });
         aim.Children.Add(Chips(new[] { (StickCurve.Linear, "Linear"), (StickCurve.Suave, "Suave (mira fina)"), (StickCurve.Agressiva, "Agressiva (giro rápido)") }, () => _s.Curve, c => _s.Curve = c));
@@ -90,7 +108,7 @@ internal sealed class MbKbmPage : MbControlPageBase
         Body.Children.Add(PadUi.Card(keys));
         BuildKeys();
 
-        AppServices.Kbm.Changed += () => Dispatcher.BeginInvoke(new Action(Show));
+        AppServices.Kbm.Changed += () => Dispatcher.BeginInvoke(new Action(() => { if (!IsLoaded) return; foreach (var r in _refresh) r(); BuildKeys(); Show(); ShowPreset(); }));
         var live = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
         live.Tick += (_, _) =>
         {
@@ -98,11 +116,45 @@ internal sealed class MbKbmPage : MbControlPageBase
             Canvas.SetLeft(_dot, 60 + st.RX * 52 - 6);
             Canvas.SetTop(_dot, 60 + st.RY * 52 - 6);
         };
-        Loaded += (_, _) => { live.Start(); Show(); };
+        Loaded += (_, _) => { live.Start(); foreach (var r in _refresh) r(); BuildKeys(); Show(); ShowPreset(); };
         Unloaded += (_, _) => live.Stop();
     }
 
-    private void Save() { _save.Stop(); _save.Start(); }
+    private void Save() { _save.Stop(); _save.Start(); ShowPreset(); }
+
+    private Border Live(Border row, Func<int> get)
+    {
+        var slider = FindSlider(row);
+        if (slider is not null) _refresh.Add(() => slider.Value = get());
+        return row;
+    }
+
+    private static Slider? FindSlider(DependencyObject root)
+    {
+        if (root is Slider s) return s;
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            if (FindSlider(child) is { } found) return found;
+        return null;
+    }
+
+    private void ApplyPreset(KbmPreset preset)
+    {
+        var oldTarget = _s.Target;
+        preset.ApplyTo(_s);
+        foreach (var r in _refresh) r();
+        BuildKeys();
+        AppServices.Settings.Save();
+        if (AppServices.Kbm.Running && oldTarget != _s.Target) AppServices.Kbm.Start();
+        ShowPreset();
+        Show();
+    }
+
+    private void ShowPreset()
+    {
+        bool on = KbmPresets.CallOfDuty.Matches(_s);
+        _presetState.Text = on ? "✓ em uso" : "clique para aplicar (troca a mira e as teclas)";
+        _presetState.Foreground = PadUi.Res(on ? "OkBrush" : "MutedBrush");
+    }
 
     private void Show()
     {
@@ -126,7 +178,9 @@ internal sealed class MbKbmPage : MbControlPageBase
             list.Add((b, value));
             wrap.Children.Add(b);
         }
-        foreach (var (b, v) in list) b.IsChecked = EqualityComparer<T>.Default.Equals(v, get());
+        void Sync() { foreach (var (b, v) in list) b.IsChecked = EqualityComparer<T>.Default.Equals(v, get()); }
+        Sync();
+        _refresh.Add(Sync);
         return wrap;
     }
 

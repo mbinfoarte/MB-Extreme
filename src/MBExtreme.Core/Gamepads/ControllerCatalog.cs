@@ -145,6 +145,9 @@ public static class PadProfiles
     {
         new PadProfile { Name = "Tiro (FPS)", GameType = "Tiro", Deadzone = 6, AntiDeadzone = 4, Sensitivity = 100, Curve = StickCurve.Suave, TriggerDeadzone = 2, Vibration = 40,
             Notes = "Zona morta baixa para mira fina, curva suave para não passar do alvo e gatilho curto para atirar mais rápido. Pouca vibração para não tremer a mira." },
+        new PadProfile { Name = "Call of Duty (campanha)", GameType = "Tiro", Deadzone = 5, AntiDeadzone = 0, Sensitivity = 100, Curve = StickCurve.Linear, TriggerDeadzone = 0, Vibration = 50,
+            Games = KbmPresets.CallOfDuty.Games.ToList(),
+            Notes = "Zona morta pequena no MB e a do jogo no mínimo, curva linear (o próprio COD já suaviza) e gatilho sem zona morta para o tiro sair na hora. Entra sozinho quando um COD com campanha offline abre." },
         new PadProfile { Name = "Corrida", GameType = "Corrida", Deadzone = 3, AntiDeadzone = 0, Sensitivity = 90, Curve = StickCurve.Linear, TriggerDeadzone = 0, Vibration = 100,
             Notes = "Direção linear e gatilhos sem zona morta para dosar acelerador e freio. Vibração cheia para sentir a pista." },
         new PadProfile { Name = "Luta", GameType = "Luta", Deadzone = 12, AntiDeadzone = 0, Sensitivity = 100, Curve = StickCurve.Linear, TriggerDeadzone = 10, Vibration = 60,

@@ -43,6 +43,12 @@ internal sealed class KbmService
     {
         Stop();
         var s = AppServices.Settings.Kbm;
+        if (RunningProtectedGame() is { } blocked)
+        {
+            Status = $"Não liguei: {blocked} é um Call of Duty com anti-cheat até na campanha. Jogue com mouse e teclado direto.";
+            Changed?.Invoke();
+            return false;
+        }
         try
         {
             _client = new ViGEmClient();
@@ -82,6 +88,32 @@ internal sealed class KbmService
         Status = $"Ligado. {s.ToggleKey} pausa e volta.";
         Changed?.Invoke();
         return true;
+    }
+
+    /// <summary>
+    /// Jogo abriu: COD com anti-cheat desliga a conversão (evita banimento); jogo com perfil pronto de teclado e mouse
+    /// recebe o perfil (se a troca automática de perfil estiver ligada).
+    /// </summary>
+    public void OnGameStarted(string process)
+    {
+        if (KbmPresets.IsProtected(process))
+        {
+            if (!Running) return;
+            Stop(true);
+            Status = "Desligado: este Call of Duty tem anti-cheat até na campanha. Jogue com mouse e teclado direto, sem o controle virtual.";
+            Changed?.Invoke();
+            return;
+        }
+        if (!AppServices.Settings.PadAutoSwitch || KbmPresets.ForGame(process) is not { } preset) return;
+        var s = AppServices.Settings.Kbm;
+        if (preset.Matches(s)) return;
+        bool wasRunning = Running;
+        var target = s.Target;
+        preset.ApplyTo(s);
+        AppServices.Settings.Save();
+        if (wasRunning && target != s.Target) Start();
+        Status = (Running ? Status + " " : "Desligado. ") + $"Perfil \"{preset.Name}\" aplicado.";
+        Changed?.Invoke();
     }
 
     public void Stop() => Stop(false);
@@ -124,6 +156,21 @@ internal sealed class KbmService
         return IntPtr.Zero;
     }
 
+    private static string? RunningProtectedGame() => FirstRunning(KbmPresets.ProtectedGames);
+    private static string? RunningPresetGame() => FirstRunning(KbmPresets.All.SelectMany(p => p.Games));
+
+    private static string? FirstRunning(IEnumerable<string> names)
+    {
+        foreach (string name in names)
+        {
+            var found = Process.GetProcessesByName(name);
+            bool any = found.Length > 0;
+            foreach (var p in found) p.Dispose();
+            if (any) return name;
+        }
+        return null;
+    }
+
     private static bool Down(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
 
     private void Loop(CancellationToken token)
@@ -131,10 +178,24 @@ internal sealed class KbmService
         var watch = Stopwatch.StartNew();
         double last = 0, sx = 0, sy = 0;
         bool toggleWas = false;
+        double nextScan = 0;
+        string? lastPresetGame = null;
         var actions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         while (!token.IsCancellationRequested)
         {
             Thread.Sleep(2);
+            // a cada 3 s: COD com anti-cheat aberto desliga tudo; COD com campanha offline recebe o perfil pronto
+            if (watch.Elapsed.TotalMilliseconds >= nextScan)
+            {
+                nextScan = watch.Elapsed.TotalMilliseconds + 3000;
+                string? game = RunningProtectedGame() ?? RunningPresetGame();
+                if (game is not null && game != lastPresetGame)
+                {
+                    lastPresetGame = game;
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => OnGameStarted(game)));
+                }
+                else if (game is null) lastPresetGame = null;
+            }
             var s = AppServices.Settings.Kbm;
             double now = watch.Elapsed.TotalMilliseconds, dt = Math.Max(0.5, now - last);
             last = now;

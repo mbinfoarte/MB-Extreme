@@ -210,6 +210,28 @@ internal sealed class LicenseManager
         catch (OperationCanceledException) { return (false, "Login cancelado.", false); }
     }
 
+    /// <summary>Chave de licença (MBXT-XXXX-XXXX-XXXX-XXXX) comprada ou recebida: vincula à conta e troca a licença deste PC.</summary>
+    public async Task<(bool Ok, string Message)> ClaimKeyAsync(string key, CancellationToken token = default)
+    {
+        var client = Client();
+        if (client is null) return (false, "O servidor de licenças não está configurado.");
+        if (_tokens.Count == 0) return (false, "Entre na sua conta antes de usar a chave.");
+        if (LicenseClient.NormalizeKey(key).Length < 8) return (false, "Digite a chave completa (ex.: MBXT-XXXX-XXXX-XXXX-XXXX).");
+        try
+        {
+            var result = await client.ClaimKeyAsync(_tokens[0], _deviceId, key, token);
+            if (result.State != PollState.Approved || result.License is null) return (false, result.Message ?? "A chave não foi aceita.");
+            var check = LicenseVerifier.Evaluate(result.License, Config.PublicKey, _deviceId, DateTimeOffset.UtcNow);
+            if (check.State is LicenseState.Invalid or LicenseState.WrongDevice)
+                return (false, "A licença recebida não é autêntica para este programa.");
+            Accept(result.License);
+            LastNotice = null;
+            return (true, $"Chave ativada! Agora: {Summary}.");
+        }
+        catch (LicenseNetworkException ex) { return (false, ex.Message); }
+        catch (OperationCanceledException) { return (false, "Cancelado."); }
+    }
+
     /// <summary>Pede uma licença nova ao servidor. <paramref name="silent"/>: não mostra erro de rede (uso offline é normal).</summary>
     public async Task<(bool Ok, string Message)> RefreshAsync(bool silent = false)
     {

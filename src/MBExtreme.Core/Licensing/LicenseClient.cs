@@ -68,6 +68,33 @@ public sealed class LicenseClient
         return new PollResult(code == "email-not-verified" ? PollState.Pending : PollState.Denied, null, message ?? $"O servidor recusou ({(int)response.StatusCode}).");
     }
 
+    /// <summary>Vincula uma chave de licença (MBXT-...) à conta deste PC. Devolve a licença nova ou o motivo da recusa.</summary>
+    public async Task<PollResult> ClaimKeyAsync(string license, string deviceId, string key, CancellationToken token)
+    {
+        var response = await PostAsync("/v1/license/claim-key", new { license, deviceId, key = NormalizeKey(key) }, token);
+        string? newLicense = null, message = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+            newLicense = doc.RootElement.TryGetProperty("license", out var l) ? l.GetString() : null;
+            message = doc.RootElement.TryGetProperty("message", out var m) ? m.GetString() : null;
+        }
+        catch (JsonException) { throw new LicenseNetworkException("Resposta inválida do servidor."); }
+        if (response.IsSuccessStatusCode && newLicense is not null) return new PollResult(PollState.Approved, newLicense, null);
+        if (response.StatusCode == HttpStatusCode.TooManyRequests) return new PollResult(PollState.Denied, null, message ?? "Muitas tentativas. Aguarde alguns minutos.");
+        return new PollResult(PollState.Denied, null, message ?? $"O servidor recusou ({(int)response.StatusCode}).");
+    }
+
+    /// <summary>Chave em maiúsculas, sem espaços; hífens trocados de lugar ou ausentes viram MBXT-XXXX-XXXX-XXXX-XXXX.</summary>
+    public static string NormalizeKey(string key)
+    {
+        string raw = new(key.Where(c => char.IsAsciiLetterOrDigit(c) || c == '-').Select(char.ToUpperInvariant).ToArray());
+        string bare = raw.Replace("-", "");
+        if (bare.Length == 20 && bare.StartsWith("MBXT", StringComparison.Ordinal))
+            return string.Join("-", Enumerable.Range(0, 5).Select(i => bare.Substring(i * 4, 4)));
+        return raw.Trim('-');
+    }
+
     public async Task<PollResult> PollAsync(string deviceCode, string deviceId, CancellationToken token)
     {
         var response = await PostAsync("/v1/device/token", new { deviceCode, deviceId }, token);

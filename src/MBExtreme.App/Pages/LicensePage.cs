@@ -21,6 +21,9 @@ public sealed class LicensePage : ToolPageBase
     private readonly TextBox _url = new() { MaxWidth = 460, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 6, 0, 8) };
     private readonly TextBox _key = new() { MaxWidth = 460, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 6, 0, 8) };
     private CancellationTokenSource? _loginCts;
+    private readonly TextBox _licenseKey = new() { FontFamily = new FontFamily("Consolas"), FontSize = 16, MaxLength = 32, Padding = new Thickness(10, 7, 10, 7), CharacterCasing = CharacterCasing.Upper, VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _keyResult = new() { FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
+    private Border? _keyCard;
 
     public LicensePage() : base("Conta e licença", "Seu perfil, o plano deste computador e onde gerenciar a assinatura.")
     {
@@ -41,6 +44,7 @@ public sealed class LicensePage : ToolPageBase
         Grid.SetColumn(_computer, 1);
         grid.Children.Add(_computer);
         Body.Children.Add(grid);
+        if (_license.Config.Configured) Body.Children.Add(_keyCard = BuildKeyCard());
         Body.Children.Add(_extras);
         if (_license.Config.Configured)
         {
@@ -87,6 +91,74 @@ public sealed class LicensePage : ToolPageBase
         _plan.Content = BuildPlan();
         _computer.Content = BuildComputer();
         _extras.Content = BuildExtras();
+        if (_keyCard is not null) _keyCard.Visibility = SignedIn ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ---------------------------------------------------------------- chave de licença
+
+    /// <summary>"Tenho uma chave de licença": a chave comprada ou recebida (MBXT-XXXX-XXXX-XXXX-XXXX) entra na conta e vale na hora.</summary>
+    private Border BuildKeyCard()
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(Label("TENHO UMA CHAVE DE LICENÇA"));
+        panel.Children.Add(Muted("Comprou na loja, ganhou de presente ou recebeu do suporte? Digite a chave aqui: ela fica ligada à sua conta e o plano é liberado neste PC na hora.", 12.5));
+
+        var row = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 420 });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        System.Windows.Automation.AutomationProperties.SetName(_licenseKey, "Chave de licença");
+        _licenseKey.ToolTip = "Formato: MBXT-XXXX-XXXX-XXXX-XXXX";
+        row.Children.Add(_licenseKey);
+        var activate = ActionButton("Ativar chave", async () => await ClaimKeyAsync(), true);
+        activate.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(activate, 1);
+        row.Children.Add(activate);
+        _licenseKey.KeyDown += async (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) { e.Handled = true; await ClaimKeyAsync(); } };
+        _licenseKey.TextChanged += (_, _) => _keyResult.Visibility = Visibility.Collapsed;
+        panel.Children.Add(row);
+        panel.Children.Add(new TextBlock { Text = "Formato: MBXT-XXXX-XXXX-XXXX-XXXX · pode colar com ou sem os traços", FontSize = 11.5, Foreground = Brush("MutedBrush"), Margin = new Thickness(0, 6, 0, 0) });
+        panel.Children.Add(_keyResult);
+
+        var card = CardOf(panel);
+        card.Margin = new Thickness(0, 10, 0, 0);
+        card.Padding = new Thickness(24, 18, 24, 18);
+        return card;
+    }
+
+    private bool _claiming;
+    private async Task ClaimKeyAsync()
+    {
+        if (_claiming) return;
+        string key = _licenseKey.Text.Trim();
+        if (key.Length == 0) { ShowKeyResult("Digite ou cole a chave.", false); _licenseKey.Focus(); return; }
+        _claiming = true;
+        _licenseKey.IsEnabled = false;
+        ShowKeyResult("Conferindo a chave...", null);
+        try
+        {
+            var (ok, message) = await _license.ClaimKeyAsync(key);
+            ShowKeyResult(message, ok);
+            if (ok)
+            {
+                _licenseKey.Text = "";
+                ShowKeyResult(message, true); // limpar o campo esconde o aviso (TextChanged)
+                MainWindow.Current?.UpdateFooter();
+                _ = LoadOverviewAsync();
+            }
+        }
+        finally
+        {
+            _claiming = false;
+            _licenseKey.IsEnabled = true;
+        }
+    }
+
+    private void ShowKeyResult(string text, bool? ok)
+    {
+        _keyResult.Text = (ok == true ? "✓ " : ok == false ? "✕ " : "") + text;
+        _keyResult.Foreground = Brush(ok == true ? "OkBrush" : ok == false ? "BadBrush" : "MutedBrush");
+        _keyResult.Visibility = Visibility.Visible;
     }
 
     // ---------------------------------------------------------------- perfil

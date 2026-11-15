@@ -51,3 +51,21 @@ public class KbmPresetTests
         Assert.Equal("Call of Duty (campanha)", p!.Name);
     }
 }
+
+public class PadGameProfileTests
+{
+    [Theory]
+    [InlineData("cod.exe", "Call of Duty (2019 a 2026)")]
+    [InlineData("BlackOps3.exe", "Call of Duty (campanha)")]
+    [InlineData("GTA5_Enhanced.exe", "GTA V")]
+    [InlineData("FarCry6.exe", "Far Cry")]
+    [InlineData("re4.exe", "Resident Evil")]
+    public void GameOpensItsProfile(string exe, string profile) => Assert.Equal(profile, PadProfiles.ForGame(PadProfiles.Defaults, exe)?.Name);
+
+    [Fact]
+    public void NoExeInTwoProfiles()
+    {
+        var all = PadProfiles.Defaults.SelectMany(p => p.Games.Select(g => g.ToLowerInvariant())).ToList();
+        Assert.Equal(all.Count, all.Distinct().Count());
+    }
+}

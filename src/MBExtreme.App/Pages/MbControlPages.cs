@@ -48,11 +48,25 @@ internal static class PadProfileHub
             filling = true;
             box.Items.Clear();
             box.Items.Add(new ComboBoxItem { Content = "Padrão (sem perfil)", Tag = null });
-            foreach (var p in All())
+            // organizado: os que a pessoa salvou, depois por jogo (entram sozinhos) e por tipo de jogo
+            var all = All();
+            var saved = all.Where(p => AppServices.Settings.PadProfiles.Any(x => x.Name == p.Name)).ToList();
+            var groups = new[]
             {
-                var item = new ComboBoxItem { Content = p.Name, Tag = p };
-                box.Items.Add(item);
-                if (p.Name == AppServices.Settings.PadActiveProfile) box.SelectedItem = item;
+                ("MEUS PERFIS", saved),
+                ("POR JOGO · entram sozinhos", all.Except(saved).Where(p => p.Games.Count > 0).ToList()),
+                ("POR TIPO DE JOGO", all.Except(saved).Where(p => p.Games.Count == 0).ToList()),
+            };
+            foreach (var (title, list) in groups)
+            {
+                if (list.Count == 0) continue;
+                box.Items.Add(new ComboBoxItem { Content = title, IsEnabled = false, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) });
+                foreach (var p in list)
+                {
+                    var item = new ComboBoxItem { Content = p.Name, Tag = p, Padding = new Thickness(14, 3, 6, 3) };
+                    box.Items.Add(item);
+                    if (p.Name == AppServices.Settings.PadActiveProfile) box.SelectedItem = item;
+                }
             }
             if (box.SelectedItem is null) box.SelectedIndex = 0;
             filling = false;

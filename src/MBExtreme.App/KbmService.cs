@@ -45,7 +45,7 @@ internal sealed class KbmService
         var s = AppServices.Settings.Kbm;
         if (RunningProtectedGame() is { } blocked)
         {
-            Status = $"Não liguei: {blocked} é um Call of Duty com anti-cheat até na campanha. Jogue com mouse e teclado direto.";
+            Status = $"Não liguei: {blocked} tem anti-cheat até na campanha (Call of Duty ou Battlefield). Jogue com mouse e teclado direto ou com o controle de PS5.";
             Changed?.Invoke();
             return false;
         }
@@ -100,7 +100,7 @@ internal sealed class KbmService
         {
             if (!Running) return;
             Stop(true);
-            Status = "Desligado: este Call of Duty tem anti-cheat até na campanha. Jogue com mouse e teclado direto, sem o controle virtual.";
+            Status = "Desligado: este jogo (Call of Duty ou Battlefield) tem anti-cheat até na campanha. Jogue com mouse e teclado direto ou com o controle de PS5, sem o controle virtual.";
             Changed?.Invoke();
             return;
         }

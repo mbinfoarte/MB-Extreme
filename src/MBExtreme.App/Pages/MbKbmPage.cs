@@ -77,7 +77,7 @@ internal sealed class MbKbmPage : MbControlPageBase
         presets.Children.Add(PadUi.Muted(cod.Description + " Entra sozinho quando o jogo abre (com a troca automática de perfil ligada).", 11.5));
         presets.Children.Add(new TextBlock { Text = "Ajuste também dentro do jogo:", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 4) });
         foreach (var tip in cod.InGameTips) presets.Children.Add(PadUi.Muted("• " + tip, 11.5));
-        presets.Children.Add(PadUi.Muted("Só para COD com campanha offline (COD 4, World at War, MW2 e MW3 antigos, Black Ops 1 a 3, Ghosts, Advanced Warfare, MW Remastered, Infinite Warfare e WWII). Nos novos (MW 2019 em diante e Black Ops 6) o anti-cheat roda até na campanha: o MB desliga o controle virtual sozinho quando eles abrem.", 11.5));
+        presets.Children.Add(PadUi.Muted("Só para COD com campanha offline (COD 4, World at War, MW2 e MW3 antigos, Black Ops 1 a 3, Ghosts, Advanced Warfare, MW Remastered, Infinite Warfare e WWII). Nos novos (MW 2019 em diante, Black Ops 6 e 7) e no Battlefield 6 o anti-cheat roda até na campanha: o MB desliga o controle virtual sozinho quando eles abrem. Para o mouse nesses jogos, use MB Control › Mira do mouse.", 11.5));
         Body.Children.Add(PadUi.Card(presets));
 
         // ajustes da mira

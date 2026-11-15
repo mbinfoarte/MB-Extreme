@@ -69,3 +69,39 @@ public class PadGameProfileTests
         Assert.Equal(all.Count, all.Distinct().Count());
     }
 }
+
+public class MouseAimTests
+{
+    [Fact]
+    public void Cs2_Sens2_800dpi_Is_About_26cm()
+        => Assert.InRange(MouseAim.CmPer360(0.022, 2, 800), 25.9, 26.1);
+
+    [Fact]
+    public void Convert_Cs2ToValorant_DividesBy318()
+    {
+        var cs = MouseAim.Games.First(g => g.Name.StartsWith("Counter"));
+        var val = MouseAim.Games.First(g => g.Name == "Valorant");
+        Assert.InRange(MouseAim.Convert(cs, 2, 800, val, 800), 0.627, 0.630);
+    }
+
+    [Fact]
+    public void SensitivityFor_RoundTrips()
+    {
+        double s = MouseAim.SensitivityFor(0.0066, 32, 1600);
+        Assert.InRange(MouseAim.CmPer360(0.0066, s, 1600), 31.99, 32.01);
+    }
+
+    [Theory]
+    [InlineData(1.0, 1000)]
+    [InlineData(8.0, 125)]
+    [InlineData(0.25, 4000)]
+    public void PollingRate_SnapsToStandard(double gapMs, int expected)
+    {
+        var times = Enumerable.Range(0, 300).Select(i => i * gapMs).ToList();
+        times.Add(times[^1] + 500); // uma pausa não atrapalha
+        Assert.Equal(expected, MouseAim.PollingRate(times)!.Value.Hz);
+    }
+
+    [Fact]
+    public void PollingRate_TooFewSamples_IsNull() => Assert.Null(MouseAim.PollingRate(new double[] { 0, 1, 2 }));
+}

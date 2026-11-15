@@ -136,6 +136,7 @@ internal static class NavigationMap
             new("padcalib", "Calibrador", "\uE9D9"),
             new("mbc-emu", "Emulação de controle", "\uE8AB"),
             new("mbc-kbm", "Teclado e mouse", "\uE765"),
+            new("mouse-aim", "Mira do mouse", "\uE962"),
             new("mbc-light", "Luz, gatilhos e vibração", "\uE781"),
             new("mbc-tune", "Ajustes finos", "\uE9E9"),
         }),

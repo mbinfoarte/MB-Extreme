@@ -71,8 +71,8 @@ public static class KbmPresets
             "Se a mira andar sozinha, abaixe a anti-zona morta do MB de 2 em 2%. Se demorar para mexer, suba.",
         });
 
-    /// <summary>Call of Duty com anti-cheat (Ricochet) até na campanha: aqui o controle virtual não deve ficar ligado.</summary>
-    public static IReadOnlyList<string> ProtectedGames { get; } = new[] { "cod", "cod24-cod", "ModernWarfare", "BlackOpsColdWar", "Vanguard", "cod22-cod", "cod23-cod" };
+    /// <summary>Call of Duty e Battlefield com anti-cheat (Ricochet, Javelin) até na campanha: aqui o controle virtual não deve ficar ligado.</summary>
+    public static IReadOnlyList<string> ProtectedGames { get; } = new[] { "cod", "cod24-cod", "ModernWarfare", "BlackOpsColdWar", "Vanguard", "cod22-cod", "cod23-cod", "bf6", "BF2042" };
 
     public static IReadOnlyList<KbmPreset> All { get; } = new[] { CallOfDuty };
 

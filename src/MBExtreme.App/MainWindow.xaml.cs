@@ -623,6 +623,7 @@ public partial class MainWindow : Window
         "mbc-overview" => new MbOverviewPage(),
         "mbc-emu" => new MbEmulationPage(),
         "mbc-kbm" => new MbKbmPage(),
+        "mouse-aim" => new MouseAimPage(),
         "mbc-light" => new MbLightPage(),
         "mbc-tune" => new MbTunePage(),
         "pad-info" => new PadInfoPage(),

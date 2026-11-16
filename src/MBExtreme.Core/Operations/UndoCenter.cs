@@ -31,6 +31,12 @@ public static class UndoCenter
                 continue;
             }
             if (entry.RolledBack) { items.Add(new UndoItem(entry, null, false, "Já desfeito.")); continue; }
+            if (entry.Kind == OperationKind.Registry)
+            {
+                bool backup = entry.TargetId is { } folder && Directory.Exists(folder) && Directory.EnumerateFiles(folder, "*.reg").Any();
+                items.Add(new UndoItem(entry, null, backup, backup ? "Volta importando a cópia do registro guardada antes." : "A cópia do registro não existe mais."));
+                continue;
+            }
             items.Add(new UndoItem(entry, null, false, entry.Kind == OperationKind.Setting && entry.Message.Length > 0 ? entry.Message : IrreversibleNote(entry.Kind)));
         }
         return items;

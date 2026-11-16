@@ -670,6 +670,7 @@ public partial class MainWindow : Window
         "processes" => new ProcessesPage(),
         "largefiles" => new LargeFilesPage(),
         "duplicates" => new DuplicatesPage(),
+        "registry" => new RegistryCleanPage(),
         "cleanextras" => new CleanExtrasPage(),
         "shredder" => new ShredderPage(),
         "autoshutdown" => new AutoShutdownPage(),

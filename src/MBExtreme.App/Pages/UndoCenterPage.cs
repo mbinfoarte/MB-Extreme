@@ -54,17 +54,25 @@ public sealed class UndoCenterPage : ToolPageBase
     {
         if (_busy) return;
         var chosen = _boxes.Where(b => b.Box.IsChecked == true && b.Item.Tweak is not null).Select(b => b.Item).ToList();
-        if (chosen.Count == 0) { SetStatus("Marque pelo menos um ajuste para restaurar.", "WarnBrush"); return; }
-        if (MessageBox.Show($"Voltar {chosen.Count} {(chosen.Count == 1 ? "ajuste" : "ajustes")} ao valor original?", "Central Desfazer",
+        var registry = _boxes.Where(b => b.Box.IsChecked == true && b.Item.Entry.Kind == OperationKind.Registry && b.Item.Entry.TargetId is not null).Select(b => b.Item).ToList();
+        if (chosen.Count + registry.Count == 0) { SetStatus("Marque pelo menos um ajuste para restaurar.", "WarnBrush"); return; }
+        int total = chosen.Count + registry.Count;
+        if (MessageBox.Show($"Voltar {total} {(total == 1 ? "item" : "itens")} ao valor original?", "Central Desfazer",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
         _busy = true;
         SetStatus("Restaurando...");
         try
         {
+            int regOk = 0, regFailed = 0;
+            foreach (var item in registry)
+            {
+                var (ok1, bad) = await Task.Run(() => MBExtreme.Core.Apps.RegistryBackup.Restore(item.Entry.TargetId!));
+                if (bad == 0 && ok1 > 0) { OperationJournal.Shared.MarkRolledBack(item.Entry, DateTimeOffset.Now); regOk++; } else regFailed++;
+            }
             var targets = chosen.Select(i => (i.Entry, (IReversibleOperation)new TweakOperation(i.Tweak!, apply: true))).ToList();
-            var results = await Task.Run(() => OperationQueue.Shared.Rollback(targets));
-            int ok = results.Count(r => r.Result.IsSuccess), failed = results.Count - ok;
+            var results = targets.Count == 0 ? new List<(JournalEntry Entry, OperationResult Result)>() : (await Task.Run(() => OperationQueue.Shared.Rollback(targets))).Select(r => (r.Entry, r.Result)).ToList();
+            int ok = results.Count(r => r.Result.IsSuccess) + regOk, failed = results.Count(r => !r.Result.IsSuccess) + regFailed;
             bool reboot = results.Any(r => r.Result.State == OperationState.RebootRequired);
             Load();
             string text = $"{ok} restaurado(s)" + (failed > 0 ? $", {failed} com problema: " + string.Join("; ", results.Where(r => !r.Result.IsSuccess).Select(r => r.Entry.Title + " — " + r.Result.Message)) : ".")

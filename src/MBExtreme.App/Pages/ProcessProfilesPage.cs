@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using MBExtreme.Core.Apps;
 using MBExtreme.Core.Startup;
 using MBExtreme.Core.Tools;
 using MBExtreme.Core.Tweaks;
@@ -248,18 +249,7 @@ public sealed class ProcessProfilesPage : ToolPageBase
     }
 
     /// <summary>Caminho do executável na linha de comando da inicialização (para mostrar o ícone do programa).</summary>
-    internal static string? ExePathOf(string command)
-    {
-        if (string.IsNullOrWhiteSpace(command)) return null;
-        string c = Environment.ExpandEnvironmentVariables(command.Trim());
-        if (c.StartsWith('"'))
-        {
-            int end = c.IndexOf('"', 1);
-            return end > 1 ? c[1..end] : null;
-        }
-        int exe = c.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
-        return exe > 0 ? c[..(exe + 4)] : null;
-    }
+    internal static string? ExePathOf(string command) => CommandLine.ExePath(command);
 
     private List<Tweak> Pending(PcProfile? profile = null)
     {

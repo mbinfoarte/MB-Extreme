@@ -63,6 +63,9 @@ public sealed class AppSettings
     public List<string> ProcessProfileStartup { get; set; } = new();
     public List<string> ProcessProfileTweaks { get; set; } = new();
 
+    /// <summary>Desinstalador: apaga sozinho os restos que com certeza eram do programa (pasta dele, chaves dele, atalhos).</summary>
+    public bool UninstallAutoLeftovers { get; set; }
+
     /// <summary>Programas (sem .exe) que o Modo Jogo pede para fechar quando um jogo abre.</summary>
     public List<string> BoostCloseApps { get; set; } = new();
 

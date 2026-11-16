@@ -11,7 +11,12 @@ public enum ProgramSource { Win32, Store }
 /// <summary>Um programa instalado, como o Windows registra (Aplicativos instalados).</summary>
 public sealed record InstalledProgram(
     string Name, string Version, string Publisher, ProgramSource Source, DateTime? InstalledOn, long? SizeBytes,
-    string? InstallLocation, string? IconPath, string? UninstallCommand, string? QuietUninstallCommand, string? StoreFullName);
+    string? InstallLocation, string? IconPath, string? UninstallCommand, string? QuietUninstallCommand, string? StoreFullName)
+{
+    /// <summary>Onde o Windows guarda o registro do programa ("HKLM64", "HKLM32" ou "HKCU" + nome da chave em Uninstall).</summary>
+    public string? RegistryHive { get; init; }
+    public string? RegistryKeyName { get; init; }
+}
 
 /// <summary>Inventário dos programas: os de instalador comum (registro "Uninstall") e os da Microsoft Store.</summary>
 public static class InstalledPrograms
@@ -80,7 +85,11 @@ public static class InstalledPrograms
                         ParseInstallDate(key.GetValue("InstallDate") as string), size,
                         (key.GetValue("InstallLocation") as string)?.Trim().Trim('"') is { Length: > 0 } location ? location : null,
                         IconFile(key.GetValue("DisplayIcon") as string),
-                        key.GetValue("UninstallString") as string, key.GetValue("QuietUninstallString") as string, null));
+                        key.GetValue("UninstallString") as string, key.GetValue("QuietUninstallString") as string, null)
+                    {
+                        RegistryHive = hive == RegistryHive.CurrentUser ? "HKCU" : view == RegistryView.Registry32 ? "HKLM32" : "HKLM64",
+                        RegistryKeyName = sub,
+                    });
                 }
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException) { }
@@ -139,4 +148,31 @@ public static class InstalledPrograms
     public static InstalledProgram? Match(IReadOnlyList<InstalledProgram> programs, string wingetName) =>
         programs.FirstOrDefault(p => p.Source == ProgramSource.Win32 && p.Name.Equals(wingetName, StringComparison.OrdinalIgnoreCase))
         ?? programs.FirstOrDefault(p => p.Source == ProgramSource.Win32 && (p.Name.StartsWith(wingetName, StringComparison.OrdinalIgnoreCase) || wingetName.StartsWith(p.Name, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>A chave do programa em "Uninstall" ainda existe? (desinstaladores que se copiam e saem antes de terminar)</summary>
+    [SupportedOSPlatform("windows")]
+    public static bool StillRegistered(InstalledProgram program)
+    {
+        if (program.RegistryKeyName is not { } name) return false;
+        var (hive, view) = program.RegistryHive switch
+        {
+            "HKCU" => (RegistryHive.CurrentUser, RegistryView.Default),
+            "HKLM32" => (RegistryHive.LocalMachine, RegistryView.Registry32),
+            _ => (RegistryHive.LocalMachine, RegistryView.Registry64),
+        };
+        try
+        {
+            using var key = RegistryKey.OpenBaseKey(hive, view).OpenSubKey(UninstallKey + "\\" + name);
+            return key is not null;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException) { return false; }
+    }
+
+    /// <summary>Caminho completo da chave do programa em "Uninstall" (para limpar a entrada que sobrou).</summary>
+    public static string? RegistryPath(InstalledProgram program) => program.RegistryKeyName is not { } name ? null : program.RegistryHive switch
+    {
+        "HKCU" => @"HKCU\" + UninstallKey + "\\" + name,
+        "HKLM32" => @"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" + name,
+        _ => @"HKLM\" + UninstallKey + "\\" + name,
+    };
 }

@@ -19,7 +19,7 @@ internal static class CompactPick
     private static SolidColorBrush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
     /// <summary>Cartão com caixinha. Clicar em qualquer parte marca/desmarca; fica amarelo quando marcado.</summary>
-    public static Border Card(CheckBox box, FrameworkElement icon, string title, string detail, TextBlock? tag = null)
+    public static Border Card(CheckBox box, FrameworkElement icon, string title, string detail, FrameworkElement? tag = null)
     {
         UiTree.Free(box);
         if (tag is not null) UiTree.Free(tag);

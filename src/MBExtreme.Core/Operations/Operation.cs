@@ -24,6 +24,8 @@ public enum OperationKind
     /// <summary>Configuração que se desfaz na própria página de origem (Modo de Jogo, plano de energia, inicialização...).</summary>
     Setting,
     Other,
+    /// <summary>Chaves do registro apagadas com cópia (.reg) guardada: TargetId é a pasta da cópia.</summary>
+    Registry,
 }
 
 public enum OperationRisk

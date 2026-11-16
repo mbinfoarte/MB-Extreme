@@ -119,94 +119,83 @@ internal static class NavigationMap
     };
 
     /// <summary>
-    /// Menu lateral: itens diretos agrupados em seções (como um painel de controle). Os módulos completos continuam
-    /// em "Todas as ferramentas".
+    /// Menu lateral: uma lista só com os módulos. Painel no início, os outros em ordem alfabética e Sobre sempre no fim.
+    /// Módulos com várias ferramentas abrem uma tela de abas (veja <see cref="Hubs"/>).
     /// </summary>
     public static IReadOnlyList<SideSection> Sidebar { get; } = new SideSection[]
     {
         new("", new SideItem[]
         {
             new("home", "Painel", "\uE80F"),
-            new("postinstall", "Pós-formatação", "\uE896"),
-            new("programs", "Programas", "\uE71D"),
-        }),
-        new("MB CONTROL", new SideItem[]
-        {
-            new("mbc-overview", "Meu controle", "\uE7FC"),
-            new("padcalib", "Calibrador", "\uE9D9"),
-            new("mbc-emu", "Emulação de controle", "\uE8AB"),
-            new("mbc-kbm", "Teclado e mouse", "\uE765"),
-            new("mouse-aim", "Mira do mouse", "\uE962"),
-            new("mbc-light", "Luz, gatilhos e vibração", "\uE781"),
-            new("mbc-tune", "Ajustes finos", "\uE9E9"),
-        }),
-        new("MEU PC", new SideItem[]
-        {
-            new("hub-hardware", "Hardware", "\uE7F8"),
-            new("monitor-hz", "Monitor e Hz", "\uE7F4"),
-            new("wallpaper", "Papel de parede", "\uE771"),
-            new("win11", "Windows", "\uE770"),
-        }),
-        new("TESTES", new SideItem[]
-        {
             new("bench", "Benchmark", "\uE9D9"),
+            new("gamelibrary", "Biblioteca de Jogos", "\uE7FC"),
+            new("hub-control", "Controle", "\uE7FC"),
+            new("shorts", "Editor de Vídeos", "\uE8B2"),
+            new("record", "Gravação e Lives", "\uE714"),
+            new("hub-meupc", "Meu PC", "\uE7F8"),
+            new("social", "Nossas Redes", "\uE716"),
+            new("hub-otimizar", "Otimizar", "\uE945"),
             new("periphtest", "Periféricos", "\uE765"),
-        }),
-        new("OTIMIZAR", new SideItem[]
-        {
-            new("hub-disks", "Dispositivos e discos", "\uEDA2"),
-            new("bios-tune", "Otimização de BIOS", "\uE950"),
-            new("drivers", "Drivers", "\uE964"),
-            new("hub-startup", "Processos e inicialização", "\uE7E8"),
-            new("hub-clean", "Limpeza", "\uE74D"),
-            new("tweaks-all", "Otimizações", "\uE945"),
-            new("speedtest", "Rede", "\uE774"),
-            new("repair", "Reparo do Windows", "\uE90F"),
-        }),
-        new("JOGOS E ESTÚDIO", new SideItem[]
-        {
-            new("gamelibrary", "Biblioteca de jogos", "\uE7FC"),
-            new("record", "Gravação e live", "\uE714"),
-            new("shorts", "Vídeos curtos", "\uE8B2"),
-        }),
-        new("SEGURANÇA", new SideItem[]
-        {
-            new("formatbackup", "Backup para formatar", "\uE74E"),
-            new("undo", "Central Desfazer", "\uE7A7"),
-            new("restorepoints", "Pontos de restauração", "\uE81C"),
-            new("security", "Proteção do Windows", "\uE72E"),
-        }),
-        new("MB INFOARTE", new SideItem[]
-        {
-            new("social", "Nossas redes", "\uE716"),
-            new("about", "Sobre", "\uE946"),
-            new("suggest", "Sugestões", "\uE8BD"),
-            new("support", "Suporte", "\uE8F2"),
+            new("hub-personal", "Personalização", "\uE771"),
+            new("postinstall", "Pós-Formatação", "\uE896"),
+            new("programs", "Programas", "\uE71D"),
+            new("hub-seguranca", "Segurança", "\uE72E"),
+            new("hub-sobre", "Sobre", "\uE946"),
         }),
     };
 
     /// <summary>
     /// Telas que juntam várias ferramentas em abas (chave da tela → abas em ordem). Abrir uma ferramenta que está numa delas
-    /// (pelo Painel, pela busca, por um atalho) abre a tela com a aba certa e destaca o item no menu.
+    /// (pelo Painel, pela busca, por um atalho) abre a tela com a aba certa e destaca o item no menu. Uma aba pode ser outra
+    /// tela de abas (ex.: Otimizar › Limpeza › Memória).
     /// </summary>
     public static IReadOnlyDictionary<string, (string Title, string Key)[]> Hubs { get; } = new Dictionary<string, (string, string)[]>
     {
         ["programs"] = new[] { ("Instalar", "programs-install"), ("Atualizar", "programs-installed"), ("Desinstalador", "uninstaller"), ("Aplicativos do Windows", "debloat") },
-        ["hub-hardware"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware") },
-        ["hub-disks"] = new[] { ("Saúde, desfragmentar e TRIM", "storage"), ("Mapa do disco", "diskmap") },
-        ["hub-startup"] = new[] { ("Exame e perfis", "proc-profiles"), ("Programas", "startup"), ("Serviços", "services") },
+        ["hub-control"] = new[]
+        {
+            ("Meu controle", "mbc-overview"), ("Calibrador", "padcalib"), ("Emulação", "mbc-emu"), ("Teclado e mouse", "mbc-kbm"),
+            ("Mira do mouse", "mouse-aim"), ("Luz, gatilhos e vibração", "mbc-light"), ("Ajustes finos", "mbc-tune"),
+        },
+        ["hub-meupc"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware"), ("Monitor e Hz", "monitor-hz"), ("Windows", "win11"), ("Dispositivos", "devices") },
+        ["hub-personal"] = new[] { ("Papel de parede", "wallpaper"), ("Iluminação RGB", "rgb"), ("Coolers, fans e controladora", "fans") },
+        ["hub-otimizar"] = new[]
+        {
+            ("Processos e inicialização", "hub-startup"), ("Limpeza", "hub-clean"), ("Otimizações", "tweaks-all"), ("Discos", "hub-disks"),
+            ("Drivers", "drivers"), ("BIOS", "bios-tune"), ("Rede", "speedtest"), ("Reparo do Windows", "repair"),
+        },
+        ["hub-startup"] = new[] { ("Otimizar", "proc-profiles"), ("Programas da inicialização", "startup"), ("Processos abertos", "processes"), ("Serviços", "services") },
         ["hub-clean"] = new[] { ("Limpeza", "cleanup"), ("Memória", "memory"), ("Arquivos duplicados", "duplicates") },
+        ["hub-disks"] = new[] { ("Saúde, desfragmentar e TRIM", "storage"), ("Mapa do disco", "diskmap") },
+        ["hub-seguranca"] = new[] { ("Proteção do Windows", "security"), ("Pontos de restauração", "restorepoints"), ("Central Desfazer", "undo"), ("Backup para formatar", "formatbackup") },
+        ["hub-sobre"] = new[] { ("Suporte", "support"), ("Sugestões", "suggest"), ("Sobre", "about") },
         ["hub-fps"] = new[] { ("Gargalos", "bottleneck"), ("Medidor de FPS", "gamefps") },
     };
+
+    /// <summary>Caminho de telas de abas até a ferramenta, da mais de fora para a mais de dentro (vazio se não estiver em nenhuma).</summary>
+    public static IReadOnlyList<string> HubPath(string pageKey)
+    {
+        var path = new List<string>();
+        string? current = pageKey;
+        while (HubOf(current) is { } hub && !path.Contains(hub))
+        {
+            path.Insert(0, hub);
+            current = hub;
+        }
+        return path;
+    }
 
     /// <summary>Tela de abas que contém a ferramenta (ou null).</summary>
     public static string? HubOf(string pageKey) =>
         Hubs.FirstOrDefault(h => h.Value.Any(t => t.Key == pageKey)).Key;
 
     /// <summary>Tela de atalho do menu lateral que representa a página (a própria ou nenhuma).</summary>
-    public static string? SideKeyOf(string pageKey) =>
-        Sidebar.SelectMany(s => s.Items).Any(i => i.Key == pageKey) ? pageKey
-        : HubOf(pageKey) is { } hub && Sidebar.SelectMany(s => s.Items).Any(i => i.Key == hub) ? hub : null;
+    public static string? SideKeyOf(string pageKey)
+    {
+        var items = Sidebar.SelectMany(s => s.Items).Select(i => i.Key).ToHashSet();
+        if (items.Contains(pageKey)) return pageKey;
+        return HubPath(pageKey).FirstOrDefault(items.Contains);
+    }
 
     /// <summary>
     /// Busca do menu: acha qualquer ferramenta pelo nome, pela descrição ou pelo grupo, sem ligar para acentos e maiúsculas.

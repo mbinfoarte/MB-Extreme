@@ -9,7 +9,7 @@ using MBExtreme.Core.Gamepads;
 
 namespace MBExtreme.UI.Pages;
 
-/// <summary>MB Control · Teclado e mouse → controle: liga a conversão, ajusta a mira do mouse e troca as teclas de cada botão.</summary>
+/// <summary>Controle · Teclado e mouse → controle: liga a conversão, ajusta a mira do mouse e troca as teclas de cada botão.</summary>
 internal sealed class MbKbmPage : MbControlPageBase
 {
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
@@ -53,7 +53,7 @@ internal sealed class MbKbmPage : MbControlPageBase
         row.Children.Add(new TextBlock { Text = $"Atalho para pausar e voltar: {_s.ToggleKey}", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0), Foreground = PadUi.Res("MutedBrush") });
         left.Children.Add(row);
         left.Children.Add(_status);
-        left.Children.Add(PadUi.Muted("Precisa do driver do controle virtual (ViGEmBus): instale em MB Control › Emulação de controle, passo 1. Em jogos que travam o mouse no centro, tudo funciona igual.", 11.5));
+        left.Children.Add(PadUi.Muted("Precisa do driver do controle virtual (ViGEmBus): instale em Controle › Emulação de controle, passo 1. Em jogos que travam o mouse no centro, tudo funciona igual.", 11.5));
         top.Children.Add(left);
         var prev = new StackPanel { Margin = new Thickness(16, 0, 0, 0) };
         prev.Children.Add(new TextBlock { Text = "Mira ao vivo", FontSize = 12, Foreground = PadUi.Res("MutedBrush"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 6) });
@@ -77,7 +77,7 @@ internal sealed class MbKbmPage : MbControlPageBase
         presets.Children.Add(PadUi.Muted(cod.Description + " Entra sozinho quando o jogo abre (com a troca automática de perfil ligada).", 11.5));
         presets.Children.Add(new TextBlock { Text = "Ajuste também dentro do jogo:", FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 4) });
         foreach (var tip in cod.InGameTips) presets.Children.Add(PadUi.Muted("• " + tip, 11.5));
-        presets.Children.Add(PadUi.Muted("Só para COD com campanha offline (COD 4, World at War, MW2 e MW3 antigos, Black Ops 1 a 3, Ghosts, Advanced Warfare, MW Remastered, Infinite Warfare e WWII). Nos novos (MW 2019 em diante, Black Ops 6 e 7) e no Battlefield 6 o anti-cheat roda até na campanha: o MB desliga o controle virtual sozinho quando eles abrem. Para o mouse nesses jogos, use MB Control › Mira do mouse.", 11.5));
+        presets.Children.Add(PadUi.Muted("Só para COD com campanha offline (COD 4, World at War, MW2 e MW3 antigos, Black Ops 1 a 3, Ghosts, Advanced Warfare, MW Remastered, Infinite Warfare e WWII). Nos novos (MW 2019 em diante, Black Ops 6 e 7) e no Battlefield 6 o anti-cheat roda até na campanha: o MB desliga o controle virtual sozinho quando eles abrem. Para o mouse nesses jogos, use Controle › Mira do mouse.", 11.5));
         Body.Children.Add(PadUi.Card(presets));
 
         // ajustes da mira

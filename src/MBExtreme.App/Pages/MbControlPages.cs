@@ -10,7 +10,7 @@ using MBExtreme.UI.Controls;
 namespace MBExtreme.UI.Pages;
 
 /// <summary>
-/// Faixa fixa no alto das telas do MB Control, no estilo da seleção do menu lateral: o controle ativo e, com ícones,
+/// Faixa fixa no alto das telas do Controle, no estilo da seleção do menu lateral: o controle ativo e, com ícones,
 /// a ligação (USB ou Bluetooth), a bateria e a latência medida.
 /// </summary>
 /// <summary>Perfil de controle ativo: lista, troca (leva os valores para a emulação) e avisa as telas.</summary>
@@ -38,7 +38,7 @@ internal static class PadProfileHub
         if (PadProfiles.ForGame(All(), process) is { } p && p.Name != AppServices.Settings.PadActiveProfile) Activate(p);
     }
 
-    /// <summary>Caixa "Perfil do jogo" que fica no topo das telas do MB Control.</summary>
+    /// <summary>Caixa "Perfil do jogo" que fica no topo das telas do Controle.</summary>
     public static ComboBox Picker(double width)
     {
         var box = new ComboBox { Width = width, VerticalAlignment = VerticalAlignment.Center, ToolTip = "Perfil do controle (zona morta, curva, gatilhos). Troca sozinho quando o jogo ligado a ele abre." };
@@ -212,11 +212,11 @@ internal sealed class PadStatusStrip : UserControl
     {
         string? mac = AppServices.Pads.Info?.BluetoothAddress;
         if (mac is null || !MBExtreme.Core.Gamepads.WinBluetooth.Disconnect(mac))
-            MessageBox.Show("Não foi possível desligar pelo PC. Segure o botão PS por 10 segundos para desligar o controle.", "MB Control", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Não foi possível desligar pelo PC. Segure o botão PS por 10 segundos para desligar o controle.", "Controle", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }
 
-/// <summary>Base das telas do MB Control: faixa de status, título e a leitura do controle enquanto a tela está aberta.</summary>
+/// <summary>Base das telas do Controle: faixa de status, título e a leitura do controle enquanto a tela está aberta.</summary>
 internal abstract class MbControlPageBase : UserControl
 {
     protected readonly PadStatusStrip Strip = new();
@@ -249,7 +249,7 @@ internal abstract class MbControlPageBase : UserControl
     protected virtual void Slow() { }
 }
 
-/// <summary>MB Control · Meu controle: desenho ao vivo, informações do aparelho, recursos, renomear e copiar.</summary>
+/// <summary>Controle · Meu controle: desenho ao vivo, informações do aparelho, recursos, renomear e copiar.</summary>
 internal sealed class MbOverviewPage : MbControlPageBase
 {
     private readonly PadView _pad = new() { Margin = new Thickness(0, 6, 0, 6), HorizontalAlignment = HorizontalAlignment.Center };
@@ -273,7 +273,7 @@ internal sealed class MbOverviewPage : MbControlPageBase
         var copy = PadUi.Button("Copiar informações");
         copy.Click += (_, _) =>
         {
-            try { Clipboard.SetText(PadDetails.ToText("MB Control · " + (AppServices.Pads.Current?.Name ?? "controle"), _rows, _feat)); }
+            try { Clipboard.SetText(PadDetails.ToText("Controle · " + (AppServices.Pads.Current?.Name ?? "controle"), _rows, _feat)); }
             catch (System.Runtime.InteropServices.COMException) { }
         };
         var calib = PadUi.Button("Calibrar", primary: true);
@@ -462,10 +462,10 @@ internal sealed class MbOverviewPage : MbControlPageBase
         string? key = pads.Info?.BluetoothAddress ?? pads.Info?.Serial;
         if (pads.Current is null || key is null)
         {
-            MessageBox.Show("Conecte um controle PlayStation para dar um nome a ele.", "MB Control", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Conecte um controle PlayStation para dar um nome a ele.", "Controle", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        var dialog = new FormDialog(Window.GetWindow(this), "Renomear controle", "O nome aparece no MB Control e no topo das telas.", "Salvar");
+        var dialog = new FormDialog(Window.GetWindow(this), "Renomear controle", "O nome aparece no Controle e no topo das telas.", "Salvar");
         var name = dialog.Text("Nome", pads.DisplayName(pads.Current), 40);
         if (dialog.ShowDialog() != true) return;
         AppServices.Settings.PadNames[key] = name().Trim();
@@ -476,7 +476,7 @@ internal sealed class MbOverviewPage : MbControlPageBase
     }
 }
 
-/// <summary>Telas do MB Control que ainda vão chegar: mostram o que vem e em que etapa.</summary>
+/// <summary>Telas do Controle que ainda vão chegar: mostram o que vem e em que etapa.</summary>
 internal sealed class MbSoonPage : MbControlPageBase
 {
     public MbSoonPage(string title, string subtitle, params string[] items) : base(title, subtitle)

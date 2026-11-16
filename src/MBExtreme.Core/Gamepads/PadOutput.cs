@@ -23,7 +23,7 @@ public sealed class TriggerEffect
     public TriggerEffect Clone() => (TriggerEffect)MemberwiseClone();
 }
 
-/// <summary>Luz, gatilhos e vibração que o MB Control manda para o controle (salvo nas configurações).</summary>
+/// <summary>Luz, gatilhos e vibração que o Controle manda para o controle (salvo nas configurações).</summary>
 public sealed class PadLightSettings
 {
     public bool Enabled { get; set; }

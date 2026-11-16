@@ -68,7 +68,7 @@ internal sealed class KbmService
         catch (Exception ex) when (ex is VigemBusNotFoundException or VigemBusAccessFailedException or VigemBusVersionMismatchException or VigemNoFreeSlotException)
         {
             Status = ex is VigemBusNotFoundException
-                ? "O driver do controle virtual (ViGEmBus) não está instalado. Instale em MB Control › Emulação de controle (passo 1)."
+                ? "O driver do controle virtual (ViGEmBus) não está instalado. Instale em Controle › Emulação de controle (passo 1)."
                 : "O driver do controle virtual não respondeu: " + ex.Message;
             Stop(silent: true);
             Changed?.Invoke();

@@ -71,13 +71,13 @@ internal static class AppServices
 
     public static MemoryAutoCleaner AutoMemory { get; } = new();
 
-    /// <summary>MB Control: o controle escolhido, lido o tempo todo enquanto alguma tela do MB Control está aberta.</summary>
+    /// <summary>Controle: o controle escolhido, lido o tempo todo enquanto alguma tela do Controle está aberta.</summary>
     public static PadService Pads { get; } = new();
 
-    /// <summary>MB Control: controle virtual (Xbox 360 / PS4) para os jogos.</summary>
+    /// <summary>Controle: controle virtual (Xbox 360 / PS4) para os jogos.</summary>
     public static EmulationService Emulation { get; } = new();
 
-    /// <summary>MB Control: teclado e mouse viram um controle virtual.</summary>
+    /// <summary>Controle: teclado e mouse viram um controle virtual.</summary>
     public static KbmService Kbm { get; } = new();
 
     public static LicenseManager License { get; } = new();

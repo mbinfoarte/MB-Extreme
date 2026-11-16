@@ -57,7 +57,7 @@ internal static class InviteApi
 /// </summary>
 internal sealed class RatingCard : Border
 {
-    private static readonly string[] Likes = { "Limpeza", "Otimização de jogos", "Benchmark", "MB Control", "Gravação e live", "Painel ao vivo" };
+    private static readonly string[] Likes = { "Limpeza", "Otimização de jogos", "Benchmark", "Controle", "Gravação e live", "Painel ao vivo" };
     private static readonly string[] Issues = { "Ficou mais lento", "Jogo travou", "Difícil de usar", "Faltou uma função", "Erro ou travamento", "Preço" };
     private static readonly string[] Labels = { "", "Ruim", "Fraco", "Regular", "Bom", "Excelente!" };
 

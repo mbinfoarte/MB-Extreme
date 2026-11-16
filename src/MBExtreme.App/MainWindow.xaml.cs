@@ -258,10 +258,15 @@ public partial class MainWindow : Window
 
         // ferramenta que fica numa tela de abas: abre a tela e escolhe a aba
         UserControl? inner = null;
-        if (NavigationMap.HubOf(key) is { } hub && !NavigationMap.Hubs.ContainsKey(key))
+        var path = NavigationMap.HubPath(key);
+        if (path.Count > 0)
         {
-            ShowPage(hub);
-            if (_inner.TryGetValue(hub, out var hubPage) && hubPage is TabsPage tabs) inner = tabs.Select(key);
+            // abre a tela de fora e desce aba por aba (ex.: Otimizar › Limpeza › Memória)
+            ShowPage(path[0]);
+            _inner.TryGetValue(path[0], out var page);
+            for (int i = 0; i < path.Count && page is TabsPage tabs; i++)
+                page = tabs.Select(i + 1 < path.Count ? path[i + 1] : key);
+            inner = page;
         }
         else
         {
@@ -595,7 +600,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Tela de abas (Limpeza, Dispositivos e discos...): cada aba é a ferramenta de sempre.</summary>
-    private static TabsPage CreateHub(string key) => new(key == "hub-clean" ? TurboStrip.Build() : null,
+    private static TabsPage CreateHub(string key) => new(key == "hub-clean" ? TurboStrip.Build() : null, NavigationMap.HubOf(key) is not null,
         NavigationMap.Hubs[key].Select(t => (t.Title, t.Key, (Func<UserControl>)(() => CreateInner(t.Key, NavigationMap.TileOf(t.Key))))).ToArray());
 
     private static UserControl CreateInner(string key, Tile? tile) => NavigationMap.Hubs.ContainsKey(key) ? CreateHub(key) : key switch

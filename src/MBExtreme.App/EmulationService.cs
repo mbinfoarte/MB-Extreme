@@ -11,7 +11,7 @@ using Nefarius.ViGEm.Client.Targets.Xbox360;
 namespace MBExtreme.UI;
 
 /// <summary>
-/// Motor de emulação do MB Control: cria um controle virtual (Xbox 360 ou PS4) pelo ViGEmBus e repassa o controle físico,
+/// Motor de emulação do Controle: cria um controle virtual (Xbox 360 ou PS4) pelo ViGEmBus e repassa o controle físico,
 /// já com remapeamento, zonas mortas, curvas e mira pelo giroscópio. A vibração do jogo volta para o controle físico.
 /// Com o HidHide instalado, o controle físico fica escondido dos jogos (o MB continua lendo).
 /// </summary>

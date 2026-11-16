@@ -470,7 +470,7 @@
     </Style>
 
 
-    <!-- MB Control: barra deslizante minimalista (trilho fino, parte cheia em degradê amarelo, botão redondo com brilho) -->
+    <!-- Controle: barra deslizante minimalista (trilho fino, parte cheia em degradê amarelo, botão redondo com brilho) -->
     <Style x:Key="MbSliderRepeat" TargetType="RepeatButton">
         <Setter Property="Focusable" Value="False" />
         <Setter Property="IsTabStop" Value="False" />

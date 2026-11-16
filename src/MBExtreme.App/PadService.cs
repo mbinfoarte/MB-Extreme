@@ -5,7 +5,7 @@ using MBExtreme.UI.Pages;
 
 namespace MBExtreme.UI;
 
-/// <summary>Um controle que o MB Control pode usar.</summary>
+/// <summary>Um controle que o Controle pode usar.</summary>
 internal sealed record PadDevice(string Key, string Name, PadConnection Connection, PadModel? Sony, HidPadInfo? Hid, uint? XInputSlot)
 {
     public bool IsSony => Sony is not null && Hid is not null;
@@ -13,7 +13,7 @@ internal sealed record PadDevice(string Key, string Name, PadConnection Connecti
 
 /// <summary>
 /// Lê o controle escolhido numa linha própria (USB e Bluetooth) e guarda o último estado, a taxa de atualização medida,
-/// as informações do aparelho e os tempos conectado/parado. As telas do MB Control leem daqui.
+/// as informações do aparelho e os tempos conectado/parado. As telas do Controle leem daqui.
 /// </summary>
 internal sealed class PadService
 {
@@ -68,7 +68,7 @@ internal sealed class PadService
         if (Interlocked.Increment(ref _users) != 1) return;
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
-        new Thread(() => Loop(token)) { IsBackground = true, Name = "MB Control" }.Start();
+        new Thread(() => Loop(token)) { IsBackground = true, Name = "Controle" }.Start();
     }
 
     /// <summary>A tela fechou; sem telas abertas a leitura para.</summary>

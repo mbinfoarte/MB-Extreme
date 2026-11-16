@@ -34,7 +34,7 @@ internal static class PadUi
         Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0), FontSize = 12.5,
     };
 
-    /// <summary>Barra deslizante do MB Control: nome à esquerda, valor em destaque à direita e a barra minimalista embaixo.</summary>
+    /// <summary>Barra deslizante do Controle: nome à esquerda, valor em destaque à direita e a barra minimalista embaixo.</summary>
     public static Border SliderRow(string label, double min, double max, double value, Func<double, string> format, Action<double> changed, double width = double.NaN)
     {
         var valueText = new TextBlock { Text = format(value), FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)) };

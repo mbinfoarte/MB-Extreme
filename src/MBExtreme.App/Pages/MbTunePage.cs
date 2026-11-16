@@ -9,7 +9,7 @@ using MBExtreme.UI.Controls;
 namespace MBExtreme.UI.Pages;
 
 /// <summary>
-/// MB Control · Ajustes finos: zona morta interna e externa, curva personalizada, força vertical, suavização e anti-retorno por analógico;
+/// Controle · Ajustes finos: zona morta interna e externa, curva personalizada, força vertical, suavização e anti-retorno por analógico;
 /// zona morta, curso e gatilho sensível por gatilho; zona morta, filtro e inversão do giroscópio. Tudo com prévia ao vivo
 /// (o ponto cinza é o controle de verdade, o amarelo é o que o jogo recebe). Vale na emulação (controle virtual).
 /// </summary>

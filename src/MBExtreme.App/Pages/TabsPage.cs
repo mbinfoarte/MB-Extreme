@@ -15,14 +15,17 @@ internal sealed class TabsPage : UserControl
     public TabsPage(params (string Title, string Key, Func<UserControl> Create)[] tabs) : this(null, tabs) { }
 
     /// <summary>Com <paramref name="header"/>: uma faixa fixa acima das abas (ex.: o Turbo da Limpeza).</summary>
-    public TabsPage(UIElement? header, params (string Title, string Key, Func<UserControl> Create)[] tabs)
+    public TabsPage(UIElement? header, params (string Title, string Key, Func<UserControl> Create)[] tabs) : this(header, false, tabs) { }
+
+    /// <summary>Com <paramref name="inner"/>: abas menores, para uma tela de abas dentro de outra (ex.: Otimizar › Limpeza).</summary>
+    public TabsPage(UIElement? header, bool inner, params (string Title, string Key, Func<UserControl> Create)[] tabs)
     {
         _tabs = tabs;
-        var bar = new WrapPanel { Margin = new Thickness(40, 14, 40, 0) };
+        var bar = new WrapPanel { Margin = new Thickness(40, inner ? 4 : 14, 40, 0) };
         for (int i = 0; i < _tabs.Length; i++)
         {
             int index = i;
-            var button = new Button { Content = _tabs[i].Title, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(14, 6, 14, 6), FontSize = 13 };
+            var button = new Button { Content = _tabs[i].Title, Margin = new Thickness(0, 0, 6, 6), Padding = inner ? new Thickness(11, 4, 11, 4) : new Thickness(14, 6, 14, 6), FontSize = inner ? 12 : 13 };
             button.Click += (_, _) => Select(index);
             _buttons.Add(button);
             bar.Children.Add(button);

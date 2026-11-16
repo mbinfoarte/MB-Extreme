@@ -6,7 +6,7 @@ using MBExtreme.Core.Gamepads;
 namespace MBExtreme.UI.Pages;
 
 /// <summary>
-/// MB Control · Emulação de controle: assistente que verifica o PC (drivers do controle virtual, HidHide, FakerInput),
+/// Controle · Emulação de controle: assistente que verifica o PC (drivers do controle virtual, HidHide, FakerInput),
 /// ajuda a conectar o controle e mostra o que o motor de emulação vai fazer.
 /// </summary>
 internal sealed class MbEmulationPage : MbControlPageBase

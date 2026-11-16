@@ -9,7 +9,7 @@ using MBExtreme.Core.Gamepads;
 
 namespace MBExtreme.UI.Pages;
 
-/// <summary>MB Control · Luz, gatilhos e vibração: barra de luz (cores e modos), luzes do jogador, mudo, gatilhos adaptáveis e teste de vibração.</summary>
+/// <summary>Controle · Luz, gatilhos e vibração: barra de luz (cores e modos), luzes do jogador, mudo, gatilhos adaptáveis e teste de vibração.</summary>
 internal sealed class MbLightPage : MbControlPageBase
 {
     private static readonly string[] Palette =
@@ -33,7 +33,7 @@ internal sealed class MbLightPage : MbControlPageBase
         _ds4Note.Foreground = PadUi.Res("WarnBrush");
         Body.Children.Add(_ds4Note);
 
-        var enable = new CheckBox { Content = "Usar a luz e os gatilhos do MB Control", IsChecked = _s.Enabled, FontSize = 14, Margin = new Thickness(0, 0, 0, 12) };
+        var enable = new CheckBox { Content = "Usar a luz e os gatilhos do Controle", IsChecked = _s.Enabled, FontSize = 14, Margin = new Thickness(0, 0, 0, 12) };
         enable.Click += (_, _) => { _s.Enabled = enable.IsChecked == true; Changed(); };
         Body.Children.Add(enable);
 
@@ -57,7 +57,7 @@ internal sealed class MbLightPage : MbControlPageBase
 
     private static TextBlock Title(string text) => new() { Text = text, FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
 
-    /// <summary>Título com ícone vivo (mesmo estilo dos outros cartões do MB Control).</summary>
+    /// <summary>Título com ícone vivo (mesmo estilo dos outros cartões do Controle).</summary>
     private static DockPanel IconTitle(string glyph, string text, UIElement? right = null)
     {
         var d = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };

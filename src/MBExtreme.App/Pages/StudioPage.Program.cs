@@ -45,7 +45,7 @@ public sealed partial class StudioPage
         if (frame is null)
         {
             _programImage.Source = null;
-            _programEmpty.Text = running ? (show ? "Carregando a imagem..." : "Imagem \"No ar\" desligada (Programa › Avançado)") : "Fora do ar";
+            _programEmpty.Text = running ? (show ? "Carregando a imagem..." : "Imagem \"No ar\" desligada (Gravação › Avançado)") : "Fora do ar";
             _programEmpty.Visibility = Visibility.Visible;
             return;
         }
@@ -143,7 +143,7 @@ public sealed partial class StudioPage
         return panel;
     }
 
-    // ---------------------------------------------------------------- opções das cenas (Programa › Avançado)
+    // ---------------------------------------------------------------- opções das cenas (Gravação › Avançado)
 
     private void BuildSceneOptions()
     {

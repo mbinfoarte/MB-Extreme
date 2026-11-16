@@ -1027,7 +1027,7 @@ public sealed partial class StudioPage : ToolPageBase
         on.IsChecked = _s.StudioStatsOn;
         on.Click += (_, _) => { _s.StudioStatsOn = on.IsChecked == true; UpdateStatsVisibility(); };
         _tabStats.Children.Add(on);
-        _tabStats.Children.Add(Muted("Precisa da chave do SEU canal (grátis), em Programa › Contas e chaves.", 11));
+        _tabStats.Children.Add(Muted("Precisa da chave do SEU canal (grátis), em Live › Contas e chaves.", 11));
 
         _syncingId = true;
         _statsId.Text = _s.StudioChatId;
@@ -1604,7 +1604,7 @@ public sealed partial class StudioPage : ToolPageBase
         _customUrl.Text = _s.StudioCustomUrl;
         _customUrl.Visibility = Vis(service == StreamService.Custom);
         _tabStream.Children.Add(_customUrl);
-        _customUrl.ToolTip = "Endereço do servidor (Kick e outras plataformas informam). A chave fica em Programa › Contas e chaves.";
+        _customUrl.ToolTip = "Endereço do servidor (Kick e outras plataformas informam). A chave fica em Live › Contas e chaves.";
 
         // chat
         var chatRow = new WrapPanel();
@@ -2198,8 +2198,8 @@ public sealed partial class StudioPage : ToolPageBase
         StreamTarget? verticalTarget = null;
         if (VerticalLiveWanted && !_s.StudioVerticalOn && !_rehearsing)
         {
-            if (!_s.StudioVerticalCopy) return (null, "A live vertical sai junto com a horizontal: escolha \"Os dois\" na prévia (ou desligue a live vertical em Transmitir › Conexão).");
-            if (VerticalLiveKey().Length == 0) return (null, "Falta a chave da live vertical (Transmitir › Conexão › Live vertical).");
+            if (!_s.StudioVerticalCopy) return (null, "A live vertical sai junto com a horizontal: escolha \"Os dois\" na prévia (ou desligue a live vertical em Live › Conexão e qualidade).");
+            if (VerticalLiveKey().Length == 0) return (null, "Falta a chave da live vertical (Live › Conexão e qualidade › Live vertical).");
             if (encoder.Codec != VideoCodec.H264) return (null, "A live vertical exige um codificador H.264.");
             verticalTarget = VerticalLive.Target((VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3), _s.StudioVLiveUrl, VerticalLiveKey());
         }

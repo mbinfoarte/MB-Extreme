@@ -22,7 +22,7 @@ public sealed partial class StudioPage
 
     private bool YouTubeConnected => !string.IsNullOrEmpty(_s.StudioYtRefreshProtected);
 
-    /// <summary>Parte de Programa › Contas e chaves: Client ID, segredo e o botão para conectar a conta.</summary>
+    /// <summary>Parte de Live › Contas e chaves: Client ID, segredo e o botão para conectar a conta.</summary>
     private void AddYouTubeAccount(Panel target)
     {
         foreach (var box in new FrameworkElement[] { _ytId, _ytSecret, _ytStatus }) Detach(box);
@@ -66,7 +66,7 @@ public sealed partial class StudioPage
             row.Children.Add(disconnect);
         }
         target.Children.Add(Field("", row, 170));
-        _ytStatus.Text = YouTubeConnected ? "✓ Conta conectada: dá para enviar vídeos em Transmitir › Extras ou pelo botão Enviar na lista de gravações." : "Conta não conectada.";
+        _ytStatus.Text = YouTubeConnected ? "✓ Conta conectada: dá para enviar vídeos em Overlays › Chat e extras ou pelo botão Enviar na lista de gravações." : "Conta não conectada.";
         _ytStatus.Foreground = Brush(YouTubeConnected ? "OkBrush" : "MutedBrush");
         target.Children.Add(Field("", _ytStatus, 170));
     }
@@ -118,8 +118,8 @@ public sealed partial class StudioPage
     private async Task<string> AccessTokenAsync()
     {
         if (_ytToken is { } t && !t.Expired(DateTime.UtcNow)) return t.AccessToken;
-        string refresh = SecretStore.Unprotect(_s.StudioYtRefreshProtected) ?? throw new InvalidOperationException("Conecte a conta do YouTube em Programa › Contas e chaves.");
-        string secret = SecretStore.Unprotect(_s.StudioYtSecretProtected) ?? throw new InvalidOperationException("Falta a chave secreta do cliente OAuth (Programa › Contas e chaves).");
+        string refresh = SecretStore.Unprotect(_s.StudioYtRefreshProtected) ?? throw new InvalidOperationException("Conecte a conta do YouTube em Live › Contas e chaves.");
+        string secret = SecretStore.Unprotect(_s.StudioYtSecretProtected) ?? throw new InvalidOperationException("Falta a chave secreta do cliente OAuth (Live › Contas e chaves).");
         _ytToken = await YouTubeUpload.RefreshAsync(UploadHttp, _s.StudioYtClientId, secret, refresh, CancellationToken.None);
         return _ytToken.AccessToken;
     }

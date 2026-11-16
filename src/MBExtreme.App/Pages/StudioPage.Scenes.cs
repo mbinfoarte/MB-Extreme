@@ -304,7 +304,7 @@ public sealed partial class StudioPage
             SceneChanged();
         }), true)).ToList();
         options.Add(("Nova câmera ou celular...", () => _selectTab?.Invoke(4), true));
-        if (addable.Count == 0) SetStatus("Todas as fontes já estão nesta cena. Para mais câmeras, use Gravar › Câmeras.");
+        if (addable.Count == 0) SetStatus("Todas as fontes já estão nesta cena. Para mais câmeras, use Gravação › Câmeras.");
         ShowMenu(anchor, options);
     }
 

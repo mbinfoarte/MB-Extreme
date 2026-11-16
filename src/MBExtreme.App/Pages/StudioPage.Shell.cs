@@ -204,7 +204,7 @@ public sealed partial class StudioPage
         }
 
         string res = Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Name;
-        string encoder = _encoders.Count > 0 ? _encoders[Math.Min(_encoderIndex, _encoders.Count - 1)].Title : "codificador: detectar em Programa › Avançado";
+        string encoder = _encoders.Count > 0 ? _encoders[Math.Min(_encoderIndex, _encoders.Count - 1)].Title : "codificador: detectar em Gravação › Avançado";
         _infoLine.Text = $"{res} · {_s.StudioFps} fps      {encoder}";
         if (AppServices.Recorder.IsRecording)
         {

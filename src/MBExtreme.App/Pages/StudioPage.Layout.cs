@@ -31,15 +31,17 @@ public sealed partial class StudioPage
     private void BuildSettings()
     {
         var tabs = new[] { _tabVideo, _tabVertical, _tabImage, _tabAudio, _tabCamera, _tabChannel, _tabPixCard, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced, _tabExtras, _tabAccounts };
-        string[] names = { "Vídeo", "Vertical", "Imagem", "Áudio", "Câmeras", "Canal", "Pix", "Conexão", "Estatísticas", "Replay", "Atalhos", "Avançado", "Extras", "Contas e chaves" };
+        string[] names = { "Vídeo", "Vertical", "Imagem", "Áudio", "Câmeras", "Logo, abertura e faixa", "Pix", "Conexão e qualidade", "Estatísticas", "Replay", "Atalhos", "Avançado", "Chat e extras", "Contas e chaves" };
+        // seções como na maquete aprovada: o que é da live, da gravação, do replay e o que aparece por cima do vídeo (vale para os três)
         var groups = new (string Label, string Icon, int[] Tabs)[]
         {
-            ("Gravar", "record", new[] { 4, 3, 0, 2, 1, 9 }),
-            ("Transmitir", "stream", new[] { 5, 6, 8, 7, 12 }),
-            ("Programa", "gear", new[] { 13, 10, 11 }),
+            ("Live", "stream", new[] { 7, 13, 8 }),
+            ("Gravação", "record", new[] { 0, 4, 3, 2, 1, 11 }),
+            ("Replay", "replay", new[] { 9, 10 }),
+            ("Overlays", "gear", new[] { 5, 6, 12 }),
         };
         var lastTab = groups.Select(g => g.Tabs[0]).ToArray();
-        _settingsTab = 4;
+        _settingsTab = 7;
 
         var bigRow = new Grid { Margin = new Thickness(0, 14, 0, 8) };
         var subRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
@@ -329,17 +331,17 @@ public sealed partial class StudioPage
         openChat.HorizontalAlignment = HorizontalAlignment.Left;
         openChat.Margin = new Thickness(0, 6, 0, 0);
         chat.Children.Add(openChat);
-        chat.Children.Add(Muted("O canal ou a live do chat ficam em Transmitir › Conexão.", 11));
+        chat.Children.Add(Muted("O canal ou a live do chat ficam em Live › Conexão e qualidade.", 11));
         cards.Children.Add(SummaryCard("Chat ao vivo", _s.StudioChatAuto, "Mostra o chat e destaca as perguntas para você responder.", chat, "Configurar", BuildExtras));
 
         cards.Children.Add(SummaryCard("Legendas ao vivo", _s.StudioCaptionOn, "Escreve na tela o que você fala, em tempo real.", "Configurar", () => _selectTab?.Invoke(1)));
         cards.Children.Add(SummaryCard("Clipes automáticos", _s.StudioAutoClip, "Salva sozinho os melhores lances pelo som da partida.", "Configurar", () => _selectTab?.Invoke(9)));
         cards.Children.Add(SummaryCard("Vídeos curtos (Shorts)", null, "Corta trechos de um vídeo longo em vídeos verticais.", "Abrir", () => MainWindow.Current?.Go("shorts")));
-        cards.Children.Add(SummaryCard("Enviar vídeo ao YouTube", YouTubeConnected, YouTubeConnected ? "Manda uma gravação ou um clipe direto para o seu canal." : "Conecte a conta uma vez em Programa › Contas e chaves.", "Enviar", () => OpenUploadDialog()));
+        cards.Children.Add(SummaryCard("Enviar vídeo ao YouTube", YouTubeConnected, YouTubeConnected ? "Manda uma gravação ou um clipe direto para o seu canal." : "Conecte a conta uma vez em Live › Contas e chaves.", "Enviar", () => OpenUploadDialog()));
         _tabExtras.Children.Add(cards);
     }
 
-    // ---------------------------------------------------------------- Programa › Contas e chaves
+    // ---------------------------------------------------------------- Live › Contas e chaves
 
     private void BuildAccounts()
     {
@@ -350,7 +352,7 @@ public sealed partial class StudioPage
         var keyHead = new WrapPanel();
         keyHead.Children.Add(new TextBlock { Text = $"Chave de transmissão · {PlatformSpecs.For(service).Name}", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 8, 4), VerticalAlignment = VerticalAlignment.Center });
         keyHead.Children.Add(Help("Twitch: painel do criador › Configurações › Transmissão. YouTube: Transmitir ao vivo › Chave. Facebook: Produtor de transmissões ao vivo. " +
-            "Kick e outras: escolha \"Outro servidor\" em Transmitir › Conexão e use o endereço que a plataforma informa. A chave nunca aparece em mensagens nem em relatórios."));
+            "Kick e outras: escolha \"Outro servidor\" em Live › Conexão e qualidade e use o endereço que a plataforma informa. A chave nunca aparece em mensagens nem em relatórios."));
         _tabAccounts.Children.Add(keyHead);
         if (!_keyLoaded)
         {

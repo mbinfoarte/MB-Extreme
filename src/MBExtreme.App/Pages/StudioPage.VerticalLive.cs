@@ -37,8 +37,8 @@ public sealed partial class StudioPage
             UpdateVerticalLive();
             SetStatus(i switch
             {
-                1 => "Formato vertical: grava e transmite em pé (Shorts, Reels, TikTok). A montagem fica em Gravar › Vertical.",
-                2 => "Os dois: o vídeo normal e, junto, o vertical (arquivo próprio e, se ligada, a live vertical em Transmitir › Conexão).",
+                1 => "Formato vertical: grava e transmite em pé (Shorts, Reels, TikTok). A montagem fica em Gravação › Vertical.",
+                2 => "Os dois: o vídeo normal e, junto, o vertical (arquivo próprio e, se ligada, a live vertical em Live › Conexão e qualidade).",
                 _ => "Formato horizontal (normal).",
             });
         });
@@ -68,7 +68,7 @@ public sealed partial class StudioPage
         var head = new WrapPanel();
         head.Children.Add(new TextBlock { Text = "Live vertical ao mesmo tempo", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 8, 4), VerticalAlignment = VerticalAlignment.Center });
         head.Children.Add(Help("Transmite a horizontal na plataforma de cima (ex.: YouTube) e, ao mesmo tempo, a vertical no Instagram, TikTok ou num segundo canal do YouTube. " +
-            "O vertical usa a montagem de Gravar › Vertical. Pesa mais: são dois vídeos codificados e duas lives saindo pela sua internet (some as duas taxas no teste de internet). " +
+            "O vertical usa a montagem de Gravação › Vertical. Pesa mais: são dois vídeos codificados e duas lives saindo pela sua internet (some as duas taxas no teste de internet). " +
             "Para fazer live só na vertical, escolha Instagram (vertical) ou TikTok (vertical) na Plataforma acima."));
         panel.Children.Add(head);
 
@@ -132,6 +132,6 @@ public sealed partial class StudioPage
         RefreshStudioLayout();
         UpdateVerticalLive();
         BuildStream();
-        SetStatus($"Live só na vertical no {spec.Name}: o vídeo principal passou para Vertical. {spec.HowToKey} A chave vai em Programa › Contas e chaves.", "OkBrush");
+        SetStatus($"Live só na vertical no {spec.Name}: o vídeo principal passou para Vertical. {spec.HowToKey} A chave vai em Live › Contas e chaves.", "OkBrush");
     }
 }

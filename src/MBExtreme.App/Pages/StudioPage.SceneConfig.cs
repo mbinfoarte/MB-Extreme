@@ -73,7 +73,7 @@ public sealed partial class StudioPage
                 if (camIndex < 0)
                 {
                     if (cameras.Count >= StudioCommand.MaxCameras)
-                        return (null, $"As cenas usam mais de {StudioCommand.MaxCameras} câmeras diferentes. Para trocar de cena sem reiniciar, use até {StudioCommand.MaxCameras} no total (ou desligue a troca sem reiniciar em Programa › Avançado).");
+                        return (null, $"As cenas usam mais de {StudioCommand.MaxCameras} câmeras diferentes. Para trocar de cena sem reiniciar, use até {StudioCommand.MaxCameras} no total (ou desligue a troca sem reiniciar em Gravação › Avançado).");
                     cameras.Add(setting);
                     camIndex = cameras.Count - 1;
                 }

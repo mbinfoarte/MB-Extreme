@@ -51,7 +51,7 @@ public sealed partial class StudioPage
         // ---- codificador (todos os que a placa tem: H.264, HEVC, AV1)
         if (_encoders.Count == 0)
         {
-            panel.Children.Add(Field("Codificador", Muted("Detecte os codificadores da sua placa em Programa › Avançado para escolher H.264, HEVC ou AV1.", 11.5), 120));
+            panel.Children.Add(Field("Codificador", Muted("Detecte os codificadores da sua placa em Gravação › Avançado para escolher H.264, HEVC ou AV1.", 11.5), 120));
         }
         else
         {

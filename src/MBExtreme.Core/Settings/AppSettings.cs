@@ -194,6 +194,8 @@ public sealed class AppSettings
     public bool StudioPreviewEconomy { get; set; }
     /// <summary>Logo desenhado pelo programa numa camada própria: tamanho e posição mudam na hora, sem reiniciar a live.</summary>
     public bool StudioLiveOverlay { get; set; } = true;
+    /// <summary>Animações e gráficos do programa no Hz do monitor (144, 165...) em vez de 60.</summary>
+    public bool MatchMonitorHz { get; set; } = true;
     /// <summary>Ponto do logo (0 = em cima à esquerda ... 8 = embaixo à direita); -1 = ainda no modo antigo (canto + %).</summary>
     public int StudioLogoAnchor { get; set; } = -1;
     /// <summary>Largura do logo em pixels num vídeo de 1920 (cresce ou diminui junto com o vídeo).</summary>

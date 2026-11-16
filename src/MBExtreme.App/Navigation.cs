@@ -143,6 +143,7 @@ internal static class NavigationMap
         new("MEU PC", new SideItem[]
         {
             new("hub-hardware", "Hardware", "\uE7F8"),
+            new("monitor-hz", "Monitor e Hz", "\uE7F4"),
             new("wallpaper", "Papel de parede", "\uE771"),
             new("win11", "Windows", "\uE770"),
         }),

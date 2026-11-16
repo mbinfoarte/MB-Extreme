@@ -652,6 +652,7 @@ public partial class MainWindow : Window
         "repair" => new RepairPage(),
         "diskmgr" => new DiskManagerPage(),
         "wallpaper" => new WallpaperPage(),
+        "monitor-hz" => new MonitorPage(),
         "license" => new LicensePage(),
         "support" or "remote" or "remote-console" => new RemoteAccessPage(),   // Suporte: uma tela só, estilo AnyDesk
         "social" => new SocialPage(),

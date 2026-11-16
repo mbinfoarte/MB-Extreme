@@ -86,6 +86,13 @@ public partial class App : Application
             return;
         }
 
+        // animações no Hz do monitor (o WPF trava em 60 por padrão): em 144/165 Hz o programa fica tão fluido quanto a tela
+        if (AppServices.Settings.MatchMonitorHz)
+        {
+            int hz = Math.Clamp(NativeDisplay.PrimaryHz(), 60, 240);
+            try { System.Windows.Media.Animation.Timeline.DesiredFrameRateProperty.OverrideMetadata(typeof(System.Windows.Media.Animation.Timeline), new FrameworkPropertyMetadata { DefaultValue = hz }); }
+            catch (ArgumentException) { }   // já ajustado nesta execução
+        }
         Accessibility.Install();
         // animações desligadas (opção do programa ou do Windows): efeitos de passar o mouse instantâneos
         Motion.ApplyToTheme(Resources.MergedDictionaries.Count > 0 ? Resources.MergedDictionaries[0] : Resources);

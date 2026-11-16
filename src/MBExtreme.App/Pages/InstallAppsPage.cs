@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using MBExtreme.Core.Apps;
 using MBExtreme.Core.Operations;
+using MBExtreme.UI.Controls;
 
 namespace MBExtreme.UI.Pages;
 
@@ -16,9 +17,9 @@ public sealed class InstallAppsPage : UserControl
     private readonly Dictionary<string, CheckBox> _boxes = new();
     private readonly Dictionary<string, TextBlock> _states = new();
     private ISet<string> _installed = new HashSet<string>();
-    private readonly TextBox _search = new() { Padding = new Thickness(10, 6, 10, 6), FontSize = 13 };
-    private readonly WrapPanel _chips = new() { Margin = new Thickness(0, 10, 0, 6) };
-    private readonly UniformGrid _grid = new() { Columns = 4 };
+    private readonly TextBox _search;
+    private readonly WrapPanel _chips = new();
+    private readonly UniformGrid _grid = CompactPick.Grid(6, 240);
     private readonly TextBlock _status = new() { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
     private readonly Button _install;
     private string _category = "Todos";
@@ -28,42 +29,55 @@ public sealed class InstallAppsPage : UserControl
 
     public InstallAppsPage()
     {
-        var root = new DockPanel { Margin = new Thickness(40, 24, 40, 16) };
+        var root = new DockPanel { Margin = new Thickness(28, 18, 28, 14) };
         var head = new StackPanel();
-        head.Children.Add(new TextBlock { Text = "Programas", FontSize = 28, FontWeight = FontWeights.SemiBold });
-        head.Children.Add(new TextBlock { Text = "Instale os programas mais usados em poucos cliques, sem procurar site por site. Vem do winget, o instalador oficial da Microsoft, direto do fabricante, sem programas extras.", Foreground = Res("MutedBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 10) });
-        System.Windows.Automation.AutomationProperties.SetName(_search, "Procurar programa");
-        _search.TextChanged += (_, _) => Fill();
-        head.Children.Add(_search);
+        var titleRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        titleRow.Children.Add(new TextBlock { Text = "Programas", FontSize = 20, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Bottom });
+        titleRow.Children.Add(new TextBlock { Text = "Instale direto do fabricante pelo winget, o instalador oficial da Microsoft, sem programas extras.", FontSize = 12, Foreground = Res("MutedBrush"), VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(10, 0, 0, 2), TextWrapping = TextWrapping.Wrap });
+        head.Children.Add(titleRow);
 
-        head.Children.Add(new TextBlock { Text = "Kits prontos", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
-        var kits = new UniformGrid { Columns = 6 };
+        // barra única: busca, filtros, contador e o botão principal
+        var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var (searchBox, search) = CompactPick.Search("Buscar programa...", 240);
+        _search = search;
+        _search.TextChanged += (_, _) => Fill();
+        DockPanel.SetDock(searchBox, Dock.Left);
+        bar.Children.Add(searchBox);
+        _install = CompactPick.Button("Instalar", primary: true);
+        _install.Click += async (_, _) => await InstallAsync();
+        DockPanel.SetDock(_install, Dock.Right);
+        bar.Children.Add(_install);
+        var clear = CompactPick.Button("Desmarcar tudo");
+        clear.Click += (_, _) => { foreach (var b in _boxes.Values) b.IsChecked = false; UpdateCount(); };
+        DockPanel.SetDock(clear, Dock.Right);
+        bar.Children.Add(clear);
+        _chips.Margin = new Thickness(10, 0, 0, 0);
+        _chips.VerticalAlignment = VerticalAlignment.Center;
+        bar.Children.Add(_chips);
+        head.Children.Add(bar);
+
+        // kits prontos: faixa fina, um clique marca o kit
+        head.Children.Add(new TextBlock { Text = "KITS PRONTOS (um clique marca todos)", FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = Res("MutedBrush"), Margin = new Thickness(0, 2, 0, 4) });
+        var kits = new UniformGrid { Columns = 6, Margin = new Thickness(0, 0, 0, 8) };
         foreach (var kit in AppCatalog.Kits)
         {
             var k = kit;
             int count = AppCatalog.InKit(kit.Key).Count;
-            kits.Children.Add(ToolCard.Build(kit.Title, $"{count} programas · {kit.Description}", kit.Icon, () => MarkKit(k)));
+            var b = new Button { Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(10, 4, 10, 4), MinHeight = 36, Margin = new Thickness(0, 0, 6, 0), HorizontalContentAlignment = HorizontalAlignment.Left, ToolTip = kit.Description };
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(new TextBlock { Text = kit.Title, FontSize = 12.5, FontWeight = FontWeights.SemiBold });
+            row.Children.Add(new TextBlock { Text = $"  {count} programas", FontSize = 11, Foreground = Res("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
+            b.Content = row;
+            b.Click += (_, _) => MarkKit(k);
+            kits.Children.Add(b);
         }
         head.Children.Add(kits);
-        head.Children.Add(_chips);
         DockPanel.SetDock(head, Dock.Top);
         root.Children.Add(head);
 
-        var bottom = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-        bottom.ColumnDefinitions.Add(new ColumnDefinition());
-        bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        bottom.Children.Add(_status);
-        var clear = new Button { Content = "Desmarcar tudo", Style = (Style)Application.Current.FindResource("GhostButton"), Padding = new Thickness(14, 7, 14, 7), FontSize = 13, Margin = new Thickness(8, 0, 8, 0) };
-        clear.Click += (_, _) => { foreach (var b in _boxes.Values) b.IsChecked = false; UpdateCount(); };
-        Grid.SetColumn(clear, 1);
-        bottom.Children.Add(clear);
-        _install = new Button { Content = "Instalar", Style = (Style)Application.Current.FindResource("PrimaryButton"), Padding = new Thickness(22, 7, 22, 7), FontSize = 13 };
-        _install.Click += async (_, _) => await InstallAsync();
-        Grid.SetColumn(_install, 2);
-        bottom.Children.Add(_install);
-        DockPanel.SetDock(bottom, Dock.Bottom);
-        root.Children.Add(bottom);
+        _status.Margin = new Thickness(0, 8, 0, 0);
+        DockPanel.SetDock(_status, Dock.Bottom);
+        root.Children.Add(_status);
 
         root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _grid });
         Content = root;
@@ -75,7 +89,7 @@ public sealed class InstallAppsPage : UserControl
             box.Checked += (_, _) => UpdateCount();
             box.Unchecked += (_, _) => UpdateCount();
             _boxes[entry.Id] = box;
-            _states[entry.Id] = new TextBlock { FontSize = 10.5, Margin = new Thickness(0, 4, 0, 0) };
+            _states[entry.Id] = CompactPick.Tag("");
         }
         BuildChips();
         Fill();
@@ -91,7 +105,7 @@ public sealed class InstallAppsPage : UserControl
             string c = cat;
             var b = new Button
             {
-                Content = cat, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(12, 4, 12, 4), FontSize = 12,
+                Content = cat, Margin = new Thickness(0, 2, 6, 2), Padding = new Thickness(10, 2, 10, 2), FontSize = 11.5, MinHeight = 26,
                 Style = (Style)Application.Current.FindResource(cat == _category ? "PrimaryButton" : "GhostButton"),
             };
             b.Click += (_, _) => { _category = c; BuildChips(); Fill(); };
@@ -109,74 +123,12 @@ public sealed class InstallAppsPage : UserControl
             if (q.Length > 0 && !entry.Title.Contains(q, StringComparison.CurrentCultureIgnoreCase) && !entry.Description.Contains(q, StringComparison.CurrentCultureIgnoreCase)) continue;
             _grid.Children.Add(Card(entry));
         }
-        Motion.Cascade(_grid, 12);
     }
 
     private Border Card(CatalogEntry entry)
     {
-        var box = _boxes[entry.Id];
-        if (box.Parent is Panel old) old.Children.Remove(box);
         var state = _states[entry.Id];
-        if (state.Parent is Panel oldState) oldState.Children.Remove(state);
-        var text = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
-        text.Children.Add(new TextBlock { Text = entry.Title, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
-        text.Children.Add(new TextBlock { Text = entry.Description, FontSize = 11, Foreground = Res("MutedBrush"), TextWrapping = TextWrapping.Wrap, MaxHeight = 30 });
-        text.Children.Add(state);
-        var row = new DockPanel();
-        DockPanel.SetDock(box, Dock.Left);
-        row.Children.Add(box);
-        var icon = Icon(entry);
-        DockPanel.SetDock(icon, Dock.Left);
-        row.Children.Add(icon);
-        row.Children.Add(text);
-        var border = new Border
-        {
-            Background = Res("SurfaceBrush"), BorderBrush = Res("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(10, 9, 10, 9), Margin = new Thickness(0, 0, 8, 8), Child = row, Cursor = System.Windows.Input.Cursors.Hand,
-        };
-        border.MouseLeftButtonUp += (_, e) => { if (e.OriginalSource is not CheckBox) box.IsChecked = box.IsChecked != true; };
-        return border;
-    }
-
-    private static readonly Dictionary<string, Geometry> Shapes = new();
-
-    /// <summary>Ícone do programa (desenho da marca na cor dela) ou, se não houver, as iniciais num quadrado colorido.</summary>
-    private static FrameworkElement Icon(CatalogEntry entry)
-    {
-        var tile = new Border
-        {
-            Width = 34, Height = 34, CornerRadius = new CornerRadius(8), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top,
-            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x23)),
-        };
-        if (AppIcons.Known.TryGetValue(entry.Id, out var known))
-        {
-            if (!Shapes.TryGetValue(entry.Id, out var shape))
-            {
-                try { shape = Geometry.Parse("F1 " + known.Path); shape.Freeze(); }
-                catch (FormatException) { shape = Geometry.Empty; }
-                Shapes[entry.Id] = shape;
-            }
-            if (!shape.IsEmpty())
-            {
-                var color = (Color)ColorConverter.ConvertFromString(known.Color);
-                // marcas pretas ou muito escuras somem no fundo escuro: desenha em branco
-                double light = (0.299 * color.R + 0.587 * color.G + 0.114 * color.B) / 255;
-                tile.Child = new System.Windows.Shapes.Path
-                {
-                    Data = shape, Stretch = Stretch.Uniform, Width = 20, Height = 20,
-                    Fill = new SolidColorBrush(light < 0.22 ? Colors.White : color),
-                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                };
-                return tile;
-            }
-        }
-        tile.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(AppIcons.FallbackColor(entry.Id)));
-        tile.Child = new TextBlock
-        {
-            Text = AppIcons.Initials(entry.Title), FontSize = 12.5, FontWeight = FontWeights.Bold, Foreground = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-        };
-        return tile;
+        return CompactPick.Card(_boxes[entry.Id], CompactPick.CatalogIcon(entry.Id, entry.Title), entry.Title, entry.Description, state);
     }
 
     private void MarkKit(AppKit kit)
@@ -210,7 +162,7 @@ public sealed class InstallAppsPage : UserControl
         foreach (var (id, state) in _states)
         {
             bool has = _installed.Contains(id);
-            state.Text = has ? "✔ Já instalado" : "";
+            state.Text = has ? "✔ Instalado" : "";
             state.Foreground = Res("OkBrush");
         }
     }

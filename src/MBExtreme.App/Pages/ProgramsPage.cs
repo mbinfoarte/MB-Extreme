@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using MBExtreme.Core.Apps;
 using MBExtreme.Core.Operations;
+using MBExtreme.UI.Controls;
 
 namespace MBExtreme.UI.Pages;
 
@@ -17,32 +18,42 @@ public sealed class ProgramsPage : ToolPageBase
     private readonly Dictionary<WingetApp, CheckBox> _upgrades = new();
     private readonly Dictionary<CatalogApp, CheckBox> _installs = new();
     private IReadOnlyList<InstalledProgram>? _inventory;
-    private readonly TextBox _search = new() { Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 0, 0, 10) };
-    private readonly StackPanel _inventoryList = new();
+    private readonly Dictionary<InstalledProgram, CheckBox> _removes = new();
+    private readonly System.Windows.Controls.Primitives.UniformGrid _inventoryGrid = CompactPick.Grid(6, 250);
+    private TextBox? _inventorySearch;
+    private readonly WrapPanel _inventoryChips = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+    private Button? _removeButton;
+    private string _inventoryFilter = "Todos", _inventorySort = "Nome";
     private IReadOnlyList<WingetApp> _lastUpgrades = Array.Empty<WingetApp>();
     private CancellationTokenSource? _cts;
+    private readonly bool _uninstaller;
 
     public ProgramsPage() : this(false) { }
 
     /// <summary>startWithInventory: abre já na lista do que está instalado (tela Desinstalador).</summary>
-    public ProgramsPage(bool startWithInventory) : base(startWithInventory ? "Desinstalador" : "Programas",
-        "Atualize seus programas e instale ferramentas úteis pelo winget, o gerenciador de pacotes da Microsoft. Tudo roda um de cada vez, e o programa avisa se o que vai ser atualizado está aberto.")
+    public ProgramsPage(bool startWithInventory) : base(startWithInventory ? "Desinstalador" : "Atualizar programas", "")
     {
-        AddButton("Procurar atualizações", async (_, _) => await SearchAsync());
-        AddButton("Atualizar selecionados", async (_, _) => await RunAsync(upgrade: true));
-        AddButton("Instalar selecionados", async (_, _) => await RunAsync(upgrade: false), false);
-        AddButton("Programas instalados", async (_, _) => await ShowInventoryAsync(), false);
-        AddButton("Parar", (_, _) => _cts?.Cancel(), false);
-        AddSelectionButtons(() => _upgrades.Values.Concat(_installs.Values));
-        _search.TextChanged += (_, _) => FillInventory();
-        System.Windows.Automation.AutomationProperties.SetName(_search, "Procurar programa instalado");
+        _uninstaller = startWithInventory;
+        HideHeader();
+        Body.Margin = new Thickness(0);
         Loaded += async (_, _) =>
         {
             if (Body.Children.Count > 0) return;
             if (startWithInventory) await ShowInventoryAsync();
-            else Render(Array.Empty<WingetApp>());
+            else { Render(Array.Empty<WingetApp>()); await SearchAsync(); }
         };
     }
+
+    /// <summary>Título pequeno com a descrição na mesma linha.</summary>
+    private UIElement Title(string title, string sub)
+    {
+        var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        row.Children.Add(new TextBlock { Text = title, FontSize = 20, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Bottom });
+        row.Children.Add(new TextBlock { Text = sub, FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(10, 0, 0, 2) });
+        return row;
+    }
+
+    private static TextBlock Section(string text) => new() { Text = text, FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = (Brush)Application.Current.FindResource("MutedBrush"), Margin = new Thickness(0, 6, 0, 4) };
 
     private async Task SearchAsync()
     {
@@ -66,47 +77,60 @@ public sealed class ProgramsPage : ToolPageBase
         }
     }
 
+    /// <summary>Ícone de um programa do winget: o da lista, se for conhecido, senão as iniciais.</summary>
+    private static FrameworkElement WingetIcon(string id, string name) => CompactPick.CatalogIcon(id, name);
+
     private void Render(IReadOnlyList<WingetApp> upgrades)
     {
         Body.Children.Clear();
         _upgrades.Clear();
         _installs.Clear();
+        Body.Children.Add(Title("Atualizar programas", upgrades.Count == 0 ? "Procura versões novas pelo winget e atualiza um de cada vez." : $"{upgrades.Count} atualização(ões) encontrada(s)"));
+
+        // barra: busca, filtros e ações
+        var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var (searchBox, search) = CompactPick.Search("Buscar programa...", 240);
+        search.Text = _query;
+        DockPanel.SetDock(searchBox, Dock.Left);
+        bar.Children.Add(searchBox);
+        var update = CompactPick.Button("Atualizar selecionados", primary: true);
+        update.Click += async (_, _) => await RunAsync(upgrade: true);
+        var install = CompactPick.Button("Instalar selecionados");
+        install.Click += async (_, _) => await RunAsync(upgrade: false);
+        var again = CompactPick.Button("Procurar de novo");
+        again.Click += async (_, _) => await SearchAsync();
+        var stop = CompactPick.Button("Parar");
+        stop.Click += (_, _) => _cts?.Cancel();
+        foreach (var b in new[] { update, install, again, stop }) { DockPanel.SetDock(b, Dock.Right); bar.Children.Add(b); }
+        var chips = new WrapPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        bar.Children.Add(chips);
+        Body.Children.Add(bar);
 
         if (upgrades.Count > 0)
         {
-            Body.Children.Add(Heading("Atualizações disponíveis"));
-            var tiles = new List<UIElement>();
+            var upGrid = CompactPick.Grid(6, 250);
             foreach (var app in upgrades)
             {
-                var box = TileCheck(app.Name, $"{app.Version} → {app.Available}", 1);
+                var box = new CheckBox { IsChecked = true };
                 _upgrades[app] = box;
-                tiles.Add(TileOf(box));
+                upGrid.Children.Add(CompactPick.Card(box, WingetIcon(app.Id, app.Name), app.Name, $"{app.Version} → {app.Available}", CompactPick.Tag("Nova versão", "AccentBrush")));
             }
-            Body.Children.Add(TileGrid(tiles, 4, 260));
+            Body.Children.Add(upGrid);
         }
 
-        Body.Children.Add(Heading("Instalar programas úteis"));
-        // filtros por categoria e busca
-        var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var search = new TextBox { Width = 240, Text = _query, FontSize = 12.5, VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Buscar programa" };
-        System.Windows.Automation.AutomationProperties.SetName(search, "Buscar programa");
-        DockPanel.SetDock(search, Dock.Right);
-        bar.Children.Add(search);
-        var grid = TileGrid(Array.Empty<UIElement>(), 4, 250);
+        Body.Children.Add(Section("INSTALAR FERRAMENTAS ÚTEIS"));
+        var grid = CompactPick.Grid(6, 250);
         var chipList = new List<System.Windows.Controls.Primitives.ToggleButton>();
-        var chips = new WrapPanel();
         var cats = new[] { "Todos" }.Concat(WingetService.Catalog.Select(a => a.Category).Distinct().OrderBy(c => c)).ToList();
         foreach (string cat in cats)
         {
             int n = cat == "Todos" ? WingetService.Catalog.Count : WingetService.Catalog.Count(a => a.Category == cat);
-            var chip = new System.Windows.Controls.Primitives.ToggleButton { Content = $"{cat} {n}", Style = (Style)FindResource("ChipToggle"), Margin = new Thickness(0, 0, 6, 6), IsChecked = cat == _category };
+            var chip = new System.Windows.Controls.Primitives.ToggleButton { Content = $"{cat} {n}", Style = (Style)FindResource("ChipToggle"), Margin = new Thickness(0, 2, 6, 2), IsChecked = cat == _category };
             string c = cat;
             chip.Click += (_, _) => { _category = c; foreach (var o in chipList) o.IsChecked = o == chip; Fill(); };
             chipList.Add(chip);
             chips.Children.Add(chip);
         }
-        bar.Children.Add(chips);
-        Body.Children.Add(bar);
         void Fill()
         {
             grid.Children.Clear();
@@ -114,12 +138,12 @@ public sealed class ProgramsPage : ToolPageBase
             {
                 if (!_installs.TryGetValue(app, out var box))
                 {
-                    box = TileCheck(app.Title, app.Description, 1);
+                    box = new CheckBox();
                     _installs[app] = box;
                 }
                 bool show = (_category == "Todos" || app.Category == _category)
                     && (_query.Length == 0 || app.Title.Contains(_query, StringComparison.OrdinalIgnoreCase) || app.Description.Contains(_query, StringComparison.OrdinalIgnoreCase));
-                if (show) grid.Children.Add(box.Parent as Border ?? TileOf(box));
+                if (show) grid.Children.Add(CompactPick.Card(box, CompactPick.CatalogIcon(app.Id, app.Title), app.Title, app.Description));
             }
         }
         search.TextChanged += (_, _) => { _query = search.Text.Trim(); Fill(); };
@@ -210,74 +234,131 @@ public sealed class ProgramsPage : ToolPageBase
         return list;
     }
 
-    // ---------------------------------------------------------------- inventário
+    // ---------------------------------------------------------------- inventário (Desinstalador)
 
     private async Task ShowInventoryAsync(bool keepStatus = false)
     {
         if (!keepStatus) SetStatus("Lendo os programas instalados...");
         _inventory = await Task.Run(InstalledPrograms.List);
+        _removes.Clear();
         Body.Children.Clear();
-        Body.Children.Add(Heading($"Programas instalados ({_inventory.Count})"));
-        Body.Children.Add(Muted("Lidos do próprio Windows (Aplicativos instalados) e da Microsoft Store. A última vez que cada um foi aberto não é mostrada: o Windows não guarda isso de forma confiável.", 11.5));
-        Body.Children.Add(UiTree.Free(_search));
-        Body.Children.Add(UiTree.Free(_inventoryList));
+        long total = _inventory.Sum(p => p.SizeBytes ?? 0);
+        Body.Children.Add(Title("Desinstalador", $"{_inventory.Count} programas · {MBExtreme.Core.Diagnostics.DiagnosticRules.Size(total)} ocupados"));
+
+        var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var (searchBox, search) = CompactPick.Search("Buscar programa instalado...", 240);
+        _inventorySearch = search;
+        search.TextChanged += (_, _) => FillInventory();
+        DockPanel.SetDock(searchBox, Dock.Left);
+        bar.Children.Add(searchBox);
+        _removeButton = CompactPick.Button("Desinstalar selecionados", primary: true);
+        _removeButton.Click += async (_, _) => await UninstallSelectedAsync();
+        var none = CompactPick.Button("Desmarcar");
+        none.Click += (_, _) => { foreach (var b in _removes.Values) b.IsChecked = false; };
+        var sort = new ComboBox { Width = 150, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = "Ordenar" };
+        foreach (var o in new[] { "Nome", "Tamanho", "Mais recentes" }) sort.Items.Add("Ordenar: " + o);
+        sort.SelectedIndex = Array.IndexOf(new[] { "Nome", "Tamanho", "Mais recentes" }, _inventorySort);
+        sort.SelectionChanged += (_, _) => { _inventorySort = new[] { "Nome", "Tamanho", "Mais recentes" }[Math.Max(0, sort.SelectedIndex)]; FillInventory(); };
+        foreach (FrameworkElement b in new FrameworkElement[] { _removeButton, none, sort }) { DockPanel.SetDock(b, Dock.Right); bar.Children.Add(b); }
+        bar.Children.Add(UiTree.Free(_inventoryChips));
+        Body.Children.Add(bar);
+        BuildInventoryChips();
+        Body.Children.Add(UiTree.Free(_inventoryGrid));
         FillInventory();
-        if (!keepStatus) SetStatus("");
+        UpdateRemoveButton();
+        if (!keepStatus) SetStatus("Marque os programas e clique em Desinstalar selecionados: vai um de cada vez, com ponto de restauração antes.");
+    }
+
+    private static bool IsBig(InstalledProgram p) => p.SizeBytes is >= 500L * 1024 * 1024;
+    private static bool IsRecent(InstalledProgram p) => p.InstalledOn is { } d && d >= DateTime.Today.AddDays(-30);
+
+    private void BuildInventoryChips()
+    {
+        if (_inventory is null) return;
+        _inventoryChips.Children.Clear();
+        var filters = new (string Name, Func<InstalledProgram, bool> Test)[]
+        {
+            ("Todos", _ => true), ("Grandes", IsBig), ("Recentes", IsRecent), ("Microsoft Store", p => p.Source == ProgramSource.Store),
+        };
+        foreach (var (name, test) in filters)
+        {
+            string n = name;
+            var chip = new System.Windows.Controls.Primitives.ToggleButton
+            {
+                Content = $"{name} {_inventory.Count(test)}", Style = (Style)FindResource("ChipToggle"), Margin = new Thickness(0, 2, 6, 2), IsChecked = name == _inventoryFilter,
+            };
+            chip.Click += (_, _) => { _inventoryFilter = n; BuildInventoryChips(); FillInventory(); };
+            _inventoryChips.Children.Add(chip);
+        }
     }
 
     private void FillInventory()
     {
         if (_inventory is null) return;
-        _inventoryList.Children.Clear();
-        string query = _search.Text.Trim();
-        var shown = _inventory.Where(p => query.Length == 0 || p.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || p.Publisher.Contains(query, StringComparison.CurrentCultureIgnoreCase)).Take(300).ToList();
+        _inventoryGrid.Children.Clear();
+        string query = _inventorySearch?.Text.Trim() ?? "";
+        IEnumerable<InstalledProgram> list = _inventory.Where(p => query.Length == 0 || p.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || p.Publisher.Contains(query, StringComparison.CurrentCultureIgnoreCase));
+        list = _inventoryFilter switch
+        {
+            "Grandes" => list.Where(IsBig),
+            "Recentes" => list.Where(IsRecent),
+            "Microsoft Store" => list.Where(p => p.Source == ProgramSource.Store),
+            _ => list,
+        };
+        list = _inventorySort switch
+        {
+            "Tamanho" => list.OrderByDescending(p => p.SizeBytes ?? 0),
+            "Mais recentes" => list.OrderByDescending(p => p.InstalledOn ?? DateTime.MinValue),
+            _ => list.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase),
+        };
+        var shown = list.Take(400).ToList();
         foreach (var program in shown)
         {
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition());
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var icon = new Image { Width = 28, Height = 28, VerticalAlignment = VerticalAlignment.Center };
-            grid.Children.Add(icon);
-            if (program.IconPath is { } iconPath) _ = LoadIconAsync(icon, iconPath);
-            var text = new StackPanel();
-            text.Children.Add(new TextBlock { Text = program.Name, FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+            if (!_removes.TryGetValue(program, out var box))
+            {
+                box = new CheckBox { IsEnabled = program.Source == ProgramSource.Store || program.UninstallCommand is not null };
+                box.Checked += (_, _) => UpdateRemoveButton();
+                box.Unchecked += (_, _) => UpdateRemoveButton();
+                _removes[program] = box;
+            }
             var details = new List<string>();
-            if (program.Version.Length > 0) details.Add(program.Version);
             if (program.Publisher.Length > 0) details.Add(program.Publisher);
             if (program.SizeBytes is { } size) details.Add(MBExtreme.Core.Diagnostics.DiagnosticRules.Size(size));
-            if (program.InstalledOn is { } date) details.Add("instalado em " + date.ToString("dd/MM/yyyy"));
-            if (program.Source == ProgramSource.Store) details.Add("Microsoft Store");
-            text.Children.Add(Muted(string.Join(" · ", details), 11.5));
-            Grid.SetColumn(text, 1);
-            grid.Children.Add(text);
-            var remove = SmallButton("Desinstalar", async (_, _) => await UninstallAsync(program));
-            System.Windows.Automation.AutomationProperties.SetName(remove, "Desinstalar " + program.Name);
-            remove.IsEnabled = program.Source == ProgramSource.Store || program.UninstallCommand is not null;
-            Grid.SetColumn(remove, 2);
-            remove.VerticalAlignment = VerticalAlignment.Center;
-            grid.Children.Add(remove);
-            _inventoryList.Children.Add(CardOf(grid));
+            if (program.InstalledOn is { } date) details.Add(date.ToString("dd/MM/yyyy"));
+            TextBlock? tag = program.Source == ProgramSource.Store ? CompactPick.Tag("Store") : IsRecent(program) ? CompactPick.Tag("Novo", "AccentBrush") : IsBig(program) ? CompactPick.Tag("Grande") : null;
+            var card = CompactPick.Card(box, CompactPick.ProgramIcon(program.IconPath, program.Name), program.Name, string.Join(" · ", details), tag);
+            card.ToolTip = $"{program.Name} {program.Version}".Trim() + (box.IsEnabled ? "" : "\nEste programa não informou como desinstalar. Use Configurações > Aplicativos.");
+            _inventoryGrid.Children.Add(card);
         }
-        if (shown.Count == 0) _inventoryList.Children.Add(Muted("Nenhum programa encontrado."));
+        if (shown.Count == 0) _inventoryGrid.Children.Add(Muted("Nenhum programa encontrado."));
     }
 
-    private static async Task LoadIconAsync(Image target, string path)
+    private void UpdateRemoveButton()
     {
-        var source = await Task.Run(() =>
-        {
-            try
-            {
-                if (!System.IO.File.Exists(path)) return null;
-                using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
-                if (icon is null) return null;
-                var bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-                bitmap.Freeze();
-                return (ImageSource)bitmap;
-            }
-            catch (Exception ex) when (ex is ArgumentException or System.IO.IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException) { return null; }
-        });
-        if (source is not null) target.Source = source;
+        if (_removeButton is null) return;
+        var chosen = _removes.Where(p => p.Value.IsChecked == true).Select(p => p.Key).ToList();
+        long bytes = chosen.Sum(p => p.SizeBytes ?? 0);
+        _removeButton.Content = chosen.Count == 0 ? "Desinstalar selecionados" : $"Desinstalar {chosen.Count} selecionado(s)" + (bytes > 0 ? " · " + MBExtreme.Core.Diagnostics.DiagnosticRules.Size(bytes) : "");
+        _removeButton.IsEnabled = chosen.Count > 0;
+    }
+
+    private async Task UninstallSelectedAsync()
+    {
+        var chosen = _removes.Where(p => p.Value.IsChecked == true).Select(p => p.Key).ToList();
+        if (chosen.Count == 0) return;
+        var processes = await Task.Run(ProcessPaths);
+        var open = chosen.SelectMany(p => InstalledPrograms.RunningFrom(p.InstallLocation, processes).Select(x => $"{p.Name} ({x})")).ToList();
+        string list = string.Join("\n", chosen.Take(12).Select(p => "• " + p.Name)) + (chosen.Count > 12 ? $"\n... e mais {chosen.Count - 12}" : "");
+        string warning = open.Count > 0 ? "\n\nAbertos agora (feche antes): " + string.Join(", ", open) : "";
+        if (MessageBox.Show($"Desinstalar {chosen.Count} programa(s)?\n\n{list}{warning}\n\nAntes, o MB cria um ponto de restauração. Cada programa pode abrir a janela do próprio desinstalador.",
+                "Desinstalar", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        SetStatus("Criando ponto de restauração...");
+        var (ok, error) = await Task.Run(() => MBExtreme.Core.Windows.RestorePoints.CreateNow("MB Extreme: antes de desinstalar programas"));
+        if (!ok && MessageBox.Show($"Não deu para criar o ponto de restauração ({error}).\n\nDesinstalar mesmo assim?", "Ponto de restauração",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) { SetStatus("Cancelado."); return; }
+        await RunQueueAsync(chosen.Select(p => (IOperation)new UninstallOperation(p)).ToList(), "Desinstalando, um de cada vez");
+        _inventory = null;
+        await ShowInventoryAsync(keepStatus: true);
     }
 
     private async Task UninstallAsync(InstalledProgram program)

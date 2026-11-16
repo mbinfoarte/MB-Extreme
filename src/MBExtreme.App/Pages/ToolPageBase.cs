@@ -11,7 +11,7 @@ public abstract class ToolPageBase : UserControl
 {
     private readonly TextBlock _status = new() { Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap };
     protected readonly StackPanel Buttons = new() { Orientation = Orientation.Horizontal };
-    protected readonly StackPanel Body = new() { Margin = new Thickness(0, 16, 0, 0) };
+    protected readonly StackPanel Body = new() { Margin = new Thickness(0, 12, 0, 0) };
     protected readonly ProgressPanel Progress = new() { Visibility = Visibility.Collapsed };
     private readonly ScrollViewer _main;
 
@@ -19,13 +19,14 @@ public abstract class ToolPageBase : UserControl
 
     protected ToolPageBase(string title, string description)
     {
-        var root = new StackPanel { Margin = new Thickness(40, 32, 40, 32) };
-        _title = new TextBlock { Text = title, FontSize = 28, FontWeight = FontWeights.SemiBold };
+        var root = new StackPanel { Margin = new Thickness(28, 20, 28, 24) };
+        _title = new TextBlock { Text = title, FontSize = 22, FontWeight = FontWeights.SemiBold };
         root.Children.Add(_title);
         _description = new TextBlock
         {
             Text = description,
-            Margin = new Thickness(0, 4, 0, 18),
+            Margin = new Thickness(0, 2, 0, 12),
+            FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush("MutedBrush"),
         };
@@ -109,7 +110,9 @@ public abstract class ToolPageBase : UserControl
         {
             Content = text,
             Style = (Style)FindResource(primary ? "PrimaryButton" : "GhostButton"),
-            Margin = new Thickness(Buttons.Children.Count == 0 ? 0 : 12, 0, 0, 0),
+            Margin = new Thickness(Buttons.Children.Count == 0 ? 0 : 8, 0, 0, 0),
+            Padding = new Thickness(14, 6, 14, 6),
+            MinHeight = 34,
         };
         button.Click += click;
         Buttons.Children.Add(button);

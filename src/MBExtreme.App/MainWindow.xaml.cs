@@ -327,6 +327,8 @@ public partial class MainWindow : Window
                 System.Windows.Automation.AutomationProperties.SetName(toggle, $"{header}: {(open ? "aberta" : "recolhida")}");
                 _sections[header] = (items, Set);
             }
+            if (section.Header.Length == 0 && !first)   // seção sem título depois da primeira: só uma linha separando
+                NavPanel.Children.Add(new Border { Height = 1, Margin = new Thickness(10, 8, 10, 8), Background = (Brush)FindResource("BorderBrush") });
             NavPanel.Children.Add(items);
             foreach (var item in section.Items)
                 AddNavItem(items, item.Key, item.Title, item.Icon, item.Key == "home");

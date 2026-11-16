@@ -119,7 +119,7 @@ internal static class NavigationMap
     };
 
     /// <summary>
-    /// Menu lateral: uma lista só com os módulos. Painel no início, os outros em ordem alfabética e Sobre sempre no fim.
+    /// Menu lateral: Painel no início, os módulos em ordem alfabética e, separados no fim, os de informação (Nossas Redes e Sobre).
     /// Módulos com várias ferramentas abrem uma tela de abas (veja <see cref="Hubs"/>).
     /// </summary>
     public static IReadOnlyList<SideSection> Sidebar { get; } = new SideSection[]
@@ -133,13 +133,17 @@ internal static class NavigationMap
             new("shorts", "Editor de Vídeos", "\uE8B2"),
             new("record", "Gravação e Lives", "\uE714"),
             new("hub-meupc", "Meu PC", "\uE7F8"),
-            new("social", "Nossas Redes", "\uE716"),
             new("hub-otimizar", "Otimizar", "\uE945"),
-            new("periphtest", "Periféricos", "\uE765"),
+            new("hub-perif", "Periféricos", "\uE765"),
             new("hub-personal", "Personalização", "\uE771"),
             new("postinstall", "Pós-Formatação", "\uE896"),
             new("programs", "Programas", "\uE71D"),
             new("hub-seguranca", "Segurança", "\uE72E"),
+        }),
+        // informação (não são módulos do sistema): sempre no fim, separados por uma linha
+        new("", new SideItem[]
+        {
+            new("social", "Nossas Redes", "\uE716"),
             new("hub-sobre", "Sobre", "\uE946"),
         }),
     };
@@ -157,7 +161,12 @@ internal static class NavigationMap
             ("Meu controle", "mbc-overview"), ("Calibrador", "padcalib"), ("Emulação", "mbc-emu"), ("Teclado e mouse", "mbc-kbm"),
             ("Mira do mouse", "mouse-aim"), ("Luz, gatilhos e vibração", "mbc-light"), ("Ajustes finos", "mbc-tune"),
         },
-        ["hub-meupc"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware"), ("Monitor e Hz", "monitor-hz"), ("Windows", "win11"), ("Dispositivos", "devices") },
+        ["hub-meupc"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware"), ("Monitor e Hz", "monitor-hz"), ("Windows", "win11") },
+        ["hub-perif"] = new[]
+        {
+            ("Teste de periféricos", "periphtest"), ("Limpar cache de USB", "ghosts"), ("Dispositivos conectados", "devices"),
+            ("Pendrives e HDs externos", "removable"), ("Pendrive original?", "fakecheck"),
+        },
         ["hub-personal"] = new[] { ("Papel de parede", "wallpaper"), ("Iluminação RGB", "rgb"), ("Coolers, fans e controladora", "fans") },
         ["hub-otimizar"] = new[]
         {

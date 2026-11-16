@@ -35,6 +35,11 @@ internal static class AppServices
     /// <summary>Configurações do usuário: uma única cópia, para um salvamento não apagar o do outro.</summary>
     public static MBExtreme.Core.Settings.AppSettings Settings { get; } = LoadSettings();
 
+    /// <summary>Central de avisos (sino na janela e aviso do Windows pela bandeja).</summary>
+    public static MBExtreme.Core.Notices.NoticeCenter Notices { get; } = new(
+        System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "avisos.json"),
+        kind => !Settings.NoticesOff.Contains(kind.ToString()));
+
     private static MBExtreme.Core.Settings.AppSettings LoadSettings()
     {
         var settings = MBExtreme.Core.Settings.AppSettings.Load();

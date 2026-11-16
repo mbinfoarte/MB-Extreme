@@ -15,7 +15,8 @@ internal sealed class TrayIcon : IDisposable
 {
     private const int WmTray = 0x0400 + 1;   // WM_APP+1
     private const int NimAdd = 0, NimModify = 1, NimDelete = 2;
-    private const int NifMessage = 0x01, NifIcon = 0x02, NifTip = 0x04;
+    private const int NifMessage = 0x01, NifIcon = 0x02, NifTip = 0x04, NifInfo = 0x10;
+    private const int NiifUser = 0x04, NinBalloonUserClick = 0x0400 + 5;
     private const int WmLButtonUp = 0x0202, WmLButtonDblClk = 0x0203, WmRButtonUp = 0x0205, WmContextMenu = 0x007B;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -28,6 +29,30 @@ internal sealed class TrayIcon : IDisposable
         public int uCallbackMessage;
         public IntPtr hIcon;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
+        public int dwState;
+        public int dwStateMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo;
+        public int uTimeoutOrVersion;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szInfoTitle;
+        public int dwInfoFlags;
+        public Guid guidItem;
+        public IntPtr hBalloonIcon;
+    }
+
+    /// <summary>Clique no aviso do Windows (abre o programa no lugar certo).</summary>
+    public Action? BalloonClicked { get; set; }
+
+    /// <summary>Aviso do Windows (canto da tela) com o ícone do MB.</summary>
+    public void ShowBalloon(string title, string text)
+    {
+        if (!_added) return;
+        var data = _data;
+        data.uFlags = NifInfo;
+        data.szInfoTitle = title.Length > 63 ? title[..63] : title;
+        data.szInfo = text.Length > 255 ? text[..255] : text;
+        data.dwInfoFlags = NiifUser;
+        data.hBalloonIcon = _data.hIcon;
+        Shell_NotifyIcon(NimModify, ref data);
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
@@ -76,7 +101,8 @@ internal sealed class TrayIcon : IDisposable
     {
         if (msg != WmTray) return IntPtr.Zero;
         int mouse = lParam.ToInt32();
-        if (mouse == WmLButtonUp) { _onPanel(); handled = true; }          // um clique: painel MB
+        if (mouse == NinBalloonUserClick) { (BalloonClicked ?? _onOpen)(); handled = true; }
+        else if (mouse == WmLButtonUp) { _onPanel(); handled = true; }          // um clique: painel MB
         else if (mouse == WmLButtonDblClk) { _onOpen(); handled = true; }  // dois cliques: o programa
         else if (mouse is WmRButtonUp or WmContextMenu) { ShowMenu(); handled = true; }
         return IntPtr.Zero;

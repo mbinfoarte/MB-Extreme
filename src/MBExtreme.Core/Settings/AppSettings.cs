@@ -238,6 +238,11 @@ public sealed class AppSettings
 
     /// <summary>Abrir o MB Extreme com o Windows, direto na bandeja.</summary>
     public bool StartWithWindows { get; set; }
+    /// <summary>Tipos de aviso desligados (nomes de NoticeKind).</summary>
+    public List<string> NoticesOff { get; set; } = new();
+    /// <summary>Mostrar os avisos também como aviso do Windows (canto da tela).</summary>
+    public bool NoticesToast { get; set; } = true;
+    public DateTime? LastStartupNotice { get; set; }
 
     /// <summary>Posição guardada do widget flutuante (-1 = ainda não movido).</summary>
     public double WidgetX { get; set; } = -1;

@@ -28,6 +28,8 @@ internal static class CloudBackupService
         s.LastBackupUtc = DateTime.UtcNow;
         s.LastBackupHash = hash;
         s.Save();
+        AppServices.Notices.Add(new MBExtreme.Core.Notices.Notice("backup-" + DateTime.Now.ToString("yyyyMMddHH"), MBExtreme.Core.Notices.NoticeKind.Backup,
+            "Backup das configurações feito", "Suas configurações do MB estão salvas na sua conta.", DateTime.Now, PageKey: "license"));
         return "Backup salvo na sua conta.";
     }
 

@@ -108,7 +108,7 @@ public partial class App : Application
         if (!license.Config.Configured) return true;   // versão de testes sem servidor
         license.Start();
         if (license.Status.Payload is not null) return true;
-        if (StartInTray) return false;                    // ligou com o Windows e ainda não tem conta: não abre sozinho
+        // ligou com o Windows e ainda não tem conta: a janela de login aparece ao chegar na área de trabalho (fechar = não abre o MB)
         var previous = ShutdownMode;
         ShutdownMode = ShutdownMode.OnExplicitShutdown;   // a janela de login fechar não pode encerrar antes da hora
         bool ok = Login.LoginWindow.Gate();

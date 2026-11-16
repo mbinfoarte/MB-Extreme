@@ -166,6 +166,8 @@ public partial class MainWindow : Window
     private void SetupTrayAndWidget()
     {
         _tray = new TrayIcon(this, ShowFromTray, ToggleWidget, () => AppServices.Settings.WidgetEnabled, ExitApp, ShowTrayPanel);
+        SetupNotices();
+        StartupNotice();
         if (AppServices.Settings.WidgetEnabled) ShowWidget();
         // botão direito do Windows ligado: regrava (o caminho do programa pode ter mudado numa atualização)
         if (AppServices.Settings.ShellMenuEnabled && Environment.ProcessPath is { } exe)

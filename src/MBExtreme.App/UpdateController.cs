@@ -133,6 +133,9 @@ internal sealed class UpdateController
         _manifest = manifest;
         var state = AppUpdates.Evaluate(AppUpdates.CurrentBuild(), manifest);
         string news = string.IsNullOrWhiteSpace(manifest.Notes) ? "" : "\n" + Shorten(manifest.Notes);
+        if (state == UpdateState.Available)
+            AppServices.Notices.Add(new MBExtreme.Core.Notices.Notice("update-" + manifest.Build, MBExtreme.Core.Notices.NoticeKind.Update,
+                "Versão nova do MB Extreme", $"Compilação {manifest.Build} disponível." + (AppServices.Settings.AutoUpdate ? " Baixando sozinha." : " Clique para atualizar."), DateTime.Now));
         switch (state)
         {
             case UpdateState.Required:

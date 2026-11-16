@@ -36,3 +36,43 @@ public class GaleriaWallpaperTests
         Assert.Empty(MbGallery.Parse("""{ "items": [ { "id": "x", "title": "X", "theme": "", "width": 1, "height": 1, "file": "../x.jpg", "thumb": "wallpapers/t.jpg", "bytes": 0 } ] }"""));
     }
 }
+
+/// <summary>Versões por formato de tela (4K, ultrawide e vertical) e a escolha da versão certa para cada monitor.</summary>
+public class GaleriaWallpaperFormatosTests
+{
+    private const string Json = """
+    { "version": 2, "items": [
+      { "id": "cidade-neon", "title": "Cidade neon", "theme": "Jogos", "width": 3840, "height": 2160,
+        "file": "wallpapers/v2/cidade-neon-4k.jpg", "thumb": "wallpapers/v2/miniaturas/cidade-neon.jpg", "bytes": 10,
+        "variants": [
+          { "kind": "ultrawide", "width": 5120, "height": 2160, "file": "wallpapers/v2/cidade-neon-ultrawide.jpg", "bytes": 20 },
+          { "kind": "vertical", "width": 2160, "height": 3840, "file": "wallpapers/v2/cidade-neon-vertical.jpg", "bytes": 30 },
+          { "kind": "ruim", "width": 100, "height": 100, "file": "../fora.jpg", "bytes": 1 } ] },
+      { "id": "so-vertical", "title": "Controle", "theme": "Jogos", "width": 2160, "height": 3840,
+        "file": "wallpapers/v2/controle-vertical.jpg", "thumb": "wallpapers/v2/miniaturas/controle-v.jpg", "bytes": 5 } ] }
+    """;
+
+    [Theory]
+    [InlineData(3440, 1440, "ultrawide")]
+    [InlineData(2560, 1080, "ultrawide")]
+    [InlineData(1920, 1080, "4k")]
+    [InlineData(3840, 2160, "4k")]
+    [InlineData(1440, 2560, "vertical")]
+    [InlineData(1080, 1920, "vertical")]
+    public void Escolhe_o_formato_de_cada_monitor(int w, int h, string kind)
+    {
+        var item = MbGallery.Parse(Json)[0];
+        Assert.Equal(kind, MbGallery.Pick(item, w, h).Kind);
+    }
+
+    [Fact]
+    public void Caminho_perigoso_numa_versao_e_descartado_e_versao_antiga_continua_lendo()
+    {
+        var items = MbGallery.Parse(Json);
+        Assert.Equal(3, items[0].AllVariants().Count());
+        Assert.DoesNotContain(items[0].AllVariants(), v => v.File.Contains(".."));
+        Assert.False(items[0].IsVertical);
+        Assert.True(items[1].IsVertical);
+        Assert.Equal("wallpapers/v2/controle-vertical.jpg", MbGallery.Pick(items[1], 3440, 1440).File);
+    }
+}

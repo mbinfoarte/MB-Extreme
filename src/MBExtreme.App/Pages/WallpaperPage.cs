@@ -24,6 +24,7 @@ public sealed class WallpaperPage : ToolPageBase
     private string _tab = "mb";
 
     private Func<int, int, Task<string?>>? _resolve;   // devolve o caminho do arquivo para aplicar, na resolução pedida
+    private bool _fromGallery;                          // a seleção é da galeria do MB (já vem no formato de cada tela)
     private string _selectionName = "";
     private readonly Border _preview = new() { Height = 150, CornerRadius = new CornerRadius(10), Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x18)), BorderThickness = new Thickness(1) };
     private readonly Image _previewImage = new() { Stretch = Stretch.UniformToFill };
@@ -152,7 +153,7 @@ public sealed class WallpaperPage : ToolPageBase
     // ---------------------------------------------------------------- MB Extreme
     private void ShowMb()
     {
-        _grid.Children.Add(FullWidth(Muted("Wallpapers do MB Extreme em 4K (3840 × 2160): jogos, desempenho e futurista. A miniatura carrega agora; a imagem completa só baixa quando você aplica.", 11.5)));
+        _grid.Children.Add(FullWidth(Muted("Wallpapers do MB Extreme com temas de jogos, em alta resolução. Cada um vem em 4K, ultrawide (21:9) e/ou vertical: o MB baixa a versão certa para cada monitor, sem esticar nem borrar.", 11.5)));
         _ = LoadGalleryAsync();
     }
 
@@ -168,7 +169,10 @@ public sealed class WallpaperPage : ToolPageBase
             _grid.Children.Add(FullWidth(Muted("Sem internet agora: a galeria não carregou. Enquanto isso, use uma imagem do seu PC (aba Do meu PC).", 12)));
             return;
         }
-        foreach (var item in items)
+        // monitor em pé escolhido: as artes verticais aparecem primeiro
+        var (tw, th) = TargetResolution();
+        bool verticalTarget = th > tw;
+        foreach (var item in items.OrderBy(i => i.IsVertical != verticalTarget))
         {
             var it = item;
             var thumb = new BitmapImage();
@@ -181,15 +185,18 @@ public sealed class WallpaperPage : ToolPageBase
                 thumb.EndInit();
             }
             catch (Exception ex) when (ex is UriFormatException or NotSupportedException) { continue; }
-            _grid.Children.Add(Thumb(thumb, $"{item.Title} · {item.Theme}", () =>
+            string formats = string.Join(" · ", it.AllVariants().Select(v => v.Kind switch { "ultrawide" => "21:9", "vertical" => "vertical", _ => "4K" }).Distinct());
+            _grid.Children.Add(Thumb(thumb, $"{item.Title} · {formats}", () =>
             {
                 _selectionName = "MB Extreme · " + it.Title;
-                _resolve = async (_, _) =>
+                _resolve = async (w, h) =>
                 {
-                    SetStatus($"Baixando \"{it.Title}\" em 4K...");
-                    return await MbGallery.DownloadAsync(Http, it, Folder);
+                    var v = MbGallery.Pick(it, w, h);
+                    SetStatus($"Baixando \"{it.Title}\" ({v.Width} × {v.Height})...");
+                    return await MbGallery.DownloadAsync(Http, v, Folder);
                 };
                 Select(thumb, _selectionName);
+                _fromGallery = true;
             }));
         }
     }
@@ -302,6 +309,7 @@ public sealed class WallpaperPage : ToolPageBase
 
     private void Select(ImageSource preview, string name)
     {
+        _fromGallery = false;
         _previewImage.Source = preview;
         _apply!.IsEnabled = true;
         SetStatus("Selecionado: " + name + ". Clique em Aplicar no Windows.", "OkBrush");
@@ -328,11 +336,29 @@ public sealed class WallpaperPage : ToolPageBase
         SetStatus("Aplicando...");
         try
         {
-            var (w, h) = TargetResolution();
-            string? file = await _resolve(w, h);
-            if (file is null || !File.Exists(file)) { SetStatus("Não foi possível preparar a imagem.", "BadBrush"); return; }
-            string? monitor = _fit == WallpaperFit.Span ? null : _targetMonitorId;   // span é sempre em todos
-            bool ok = await Task.Run(() => DesktopWallpaper.Apply(file, _fit, monitor));
+            // Galeria do MB: as artes já vêm no formato de cada tela, então "Esticar" só deformaria; vira "Preencher".
+            var fit = _fromGallery && _fit == WallpaperFit.Stretch ? WallpaperFit.Fill : _fit;
+            string? monitor = fit == WallpaperFit.Span ? null : _targetMonitorId;   // span é sempre em todos
+            var each = monitor is null && fit != WallpaperFit.Span ? _monitors.Where(m => m.Width > 0 && m.Height > 0).ToList() : new List<WallpaperMonitor>();
+            bool ok;
+            if (each.Count > 1)
+            {
+                // "Todos os monitores": cada monitor recebe a versão da imagem no formato dele (ex.: ultrawide deitado e vertical em pé)
+                ok = true;
+                foreach (var m in each)
+                {
+                    string? f = await _resolve(m.Width, m.Height);
+                    if (f is null || !File.Exists(f)) { SetStatus("Não foi possível preparar a imagem.", "BadBrush"); return; }
+                    ok &= await Task.Run(() => DesktopWallpaper.Apply(f, fit, m.Id));
+                }
+            }
+            else
+            {
+                var (w, h) = TargetResolution();
+                string? file = await _resolve(w, h);
+                if (file is null || !File.Exists(file)) { SetStatus("Não foi possível preparar a imagem.", "BadBrush"); return; }
+                ok = await Task.Run(() => DesktopWallpaper.Apply(file, fit, monitor));
+            }
             SetStatus(ok
                 ? (monitor is null ? "Papel de parede aplicado em todos os monitores." : "Papel de parede aplicado no monitor escolhido.")
                 : "O Windows não aceitou aplicar o papel de parede.", ok ? "OkBrush" : "BadBrush");

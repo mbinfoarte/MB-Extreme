@@ -4,7 +4,18 @@ using System.Text.Json.Serialization;
 
 namespace MBExtreme.Core.Wallpaper;
 
-/// <summary>Um wallpaper da galeria do MB Extreme (feito no Canva, em 4K), guardado no repositório público de downloads.</summary>
+/// <summary>Uma versão do wallpaper num formato de tela: "4k" (16:9), "ultrawide" (21:9) ou "vertical" (9:16).</summary>
+public sealed record MbGalleryVariant(
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("width")] int Width,
+    [property: JsonPropertyName("height")] int Height,
+    [property: JsonPropertyName("file")] string File,
+    [property: JsonPropertyName("bytes")] long Bytes);
+
+/// <summary>
+/// Um wallpaper da galeria do MB Extreme, guardado no repositório público de downloads. <see cref="File"/> é a versão principal
+/// (versões antigas do programa só leem ela); <see cref="Variants"/> traz a mesma arte em outros formatos de tela.
+/// </summary>
 public sealed record MbGalleryItem(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("title")] string Title,
@@ -13,11 +24,26 @@ public sealed record MbGalleryItem(
     [property: JsonPropertyName("height")] int Height,
     [property: JsonPropertyName("file")] string File,
     [property: JsonPropertyName("thumb")] string Thumb,
-    [property: JsonPropertyName("bytes")] long Bytes);
+    [property: JsonPropertyName("bytes")] long Bytes,
+    [property: JsonPropertyName("variants")] IReadOnlyList<MbGalleryVariant>? Variants = null)
+{
+    /// <summary>Arte feita para monitor em pé (todas as versões são mais altas que largas).</summary>
+    public bool IsVertical => AllVariants().All(v => v.Height > v.Width);
+
+    /// <summary>A versão principal e as outras, sem repetir arquivo.</summary>
+    public IEnumerable<MbGalleryVariant> AllVariants()
+    {
+        var main = new MbGalleryVariant(Height > Width ? "vertical" : "4k", Width, Height, File, Bytes);
+        return new[] { main }.Concat(Variants ?? Array.Empty<MbGalleryVariant>())
+            .Where(v => v.Width > 0 && v.Height > 0)
+            .GroupBy(v => v.File, StringComparer.OrdinalIgnoreCase).Select(g => g.First());
+    }
+}
 
 /// <summary>
 /// Galeria de wallpapers do MB Extreme: a lista (wallpapers.json) e as imagens ficam no repositório público de downloads, então dá para
-/// acrescentar wallpapers novos sem lançar versão. O programa mostra as miniaturas e só baixa o 4K do que a pessoa aplicar.
+/// acrescentar wallpapers novos sem lançar versão. O programa mostra as miniaturas e só baixa, do que a pessoa aplicar, a versão
+/// que combina com cada monitor (4K 16:9, ultrawide 21:9 ou vertical).
 /// </summary>
 public static class MbGallery
 {
@@ -34,6 +60,7 @@ public static class MbGallery
             var manifest = JsonSerializer.Deserialize<Manifest>(json);
             return (manifest?.Items ?? new List<MbGalleryItem>())
                 .Where(i => !string.IsNullOrWhiteSpace(i.Id) && !string.IsNullOrWhiteSpace(i.Title) && IsSafePath(i.File) && IsSafePath(i.Thumb))
+                .Select(i => i with { Variants = i.Variants?.Where(v => v is not null && IsSafePath(v.File) && v.Width > 0 && v.Height > 0).ToList() })
                 .GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
                 .ToList();
         }
@@ -67,8 +94,25 @@ public static class MbGallery
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return Array.Empty<MbGalleryItem>(); }
     }
 
-    /// <summary>Baixa o wallpaper em 4K para a pasta (reaproveita se já estiver lá) e devolve o caminho do arquivo.</summary>
-    public static async Task<string> DownloadAsync(HttpClient http, MbGalleryItem item, string folder, CancellationToken ct = default)
+    /// <summary>
+    /// Versão que melhor cobre uma tela de <paramref name="width"/> × <paramref name="height"/>: o formato mais parecido
+    /// (assim "Preencher" corta o mínimo e nada deforma); no empate, a de maior resolução.
+    /// </summary>
+    public static MbGalleryVariant Pick(MbGalleryItem item, int width, int height)
+    {
+        double screen = width > 0 && height > 0 ? (double)width / height : 16.0 / 9.0;
+        return item.AllVariants()
+            .OrderBy(v => Math.Abs(Math.Log((double)v.Width / v.Height / screen)))
+            .ThenByDescending(v => (long)v.Width * v.Height)
+            .First();
+    }
+
+    /// <summary>Baixa a versão principal do wallpaper (reaproveita se já estiver na pasta) e devolve o caminho do arquivo.</summary>
+    public static Task<string> DownloadAsync(HttpClient http, MbGalleryItem item, string folder, CancellationToken ct = default) =>
+        DownloadAsync(http, new MbGalleryVariant("", item.Width, item.Height, item.File, item.Bytes), folder, ct);
+
+    /// <summary>Baixa uma versão do wallpaper para a pasta (reaproveita se já estiver lá) e devolve o caminho do arquivo.</summary>
+    public static async Task<string> DownloadAsync(HttpClient http, MbGalleryVariant item, string folder, CancellationToken ct = default)
     {
         if (!IsSafePath(item.File)) throw new InvalidOperationException("Caminho inválido na galeria.");
         Directory.CreateDirectory(folder);

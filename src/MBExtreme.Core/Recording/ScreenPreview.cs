@@ -31,7 +31,7 @@ public static class ScreenPreview
         return -1;
     }
 
-    /// <summary>Taxa da prévia: 60 quadros por segundo, para ficar tão fluida quanto a tela de verdade.</summary>
+    /// <summary>Taxa padrão da prévia: 60 quadros por segundo (a tela do estúdio pede a do monitor, até 120).</summary>
     public const int Fps = 60;
 
     /// <summary>
@@ -49,7 +49,7 @@ public static class ScreenPreview
     /// <summary>Versão nítida: imagem crua BGRA do tamanho exato (sem JPEG), desenhada direto na tela.</summary>
     public static IReadOnlyList<string> RawArgs(int output, PixelRect? crop, string? chain, int width, int height, int fps = Fps)
     {
-        string rate = Math.Clamp(fps, 5, 60).ToString(CultureInfo.InvariantCulture);
+        string rate = Math.Clamp(fps, 5, 120).ToString(CultureInfo.InvariantCulture);
         string cut = crop is { } c ? $"crop={c.Width}:{c.Height}:{c.X}:{c.Y}," : "";
         string filters = $"hwdownload,format=bgra,{cut}scale={width}:{height}:flags=bilinear," + (string.IsNullOrEmpty(chain) ? "" : chain + ",") + "format=bgra";
         return new[]
@@ -66,7 +66,7 @@ public static class ScreenPreview
     /// </summary>
     public static IReadOnlyList<string> WindowArgs(long hwnd, string? chain, int width, int height, int fps = Fps)
     {
-        string rate = Math.Clamp(fps, 5, 60).ToString(CultureInfo.InvariantCulture);
+        string rate = Math.Clamp(fps, 5, 120).ToString(CultureInfo.InvariantCulture);
         string grab = $"gfxcapture=hwnd={hwnd}:max_framerate={rate}:capture_cursor=1:capture_border=0:display_border=0"
                       + $":width={width}:height={height}:resize_mode=scale_aspect:scale_mode=bicubic";
         string filters = "hwdownload,format=bgra," + (string.IsNullOrEmpty(chain) ? "" : chain + ",") + "format=bgra";

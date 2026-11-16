@@ -190,6 +190,8 @@ public sealed class AppSettings
 
     /// <summary>Mostra a imagem "No ar" (uma cópia pequena do vídeo final) na tela do estúdio.</summary>
     public bool StudioProgramView { get; set; } = true;
+    /// <summary>Prévia econômica (30 quadros por segundo) em vez da fluida (no Hz do monitor, até 120).</summary>
+    public bool StudioPreviewEconomy { get; set; }
 
     /// <summary>Limite (minutos) dos comandos comuns do Reparo do Windows; DISM, SFC e CHKDSK nunca são cortados.</summary>
     public int RepairTimeoutMinutes { get; set; } = 15;

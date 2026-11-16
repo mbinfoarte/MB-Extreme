@@ -144,6 +144,15 @@ public sealed partial class StudioPage
         info.Children.Add(_infoLine);
         panel.Children.Add(info);
 
+        // prévia fluida (no Hz do monitor, pela placa de vídeo) ou econômica (30 quadros, para PC mais fraco)
+        int hz = NativeDisplay.PrimaryHz();
+        var mode = Chips(new[] { $"Prévia fluida ({Math.Min(hz, 120)} FPS)", "Econômica (30 FPS)" }, _s.StudioPreviewEconomy ? 1 : 0, i =>
+        {
+            _s.StudioPreviewEconomy = i == 1;
+            StopScreenFeed();   // reabre no ritmo novo no próximo quadro
+        });
+        mode.Margin = new Thickness(0, 6, 0, 0);
+        panel.Children.Add(mode);
         panel.Children.Add(_previewNote);
         Detach(_health);
         Detach(_warnings);

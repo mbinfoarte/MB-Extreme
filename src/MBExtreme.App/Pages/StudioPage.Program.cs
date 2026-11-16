@@ -54,9 +54,11 @@ public sealed partial class StudioPage
         _programShown = f.Number;
         if (JpegImage(f.Jpeg) is not { } image) return;   // um quadro ruim: espera o próximo
         _programImage.Source = image;
-        if (!_s.StudioSceneStudioMode)
+        // prévia fluida ligada: a grande vem da placa de vídeo no Hz do monitor; a imagem "No ar" fica só no quadro pequeno.
+        // No ensaio (ou na prévia econômica) a grande mostra o próprio vídeo que está saindo.
+        if (!_s.StudioSceneStudioMode && (rehearsal || _s.StudioPreviewEconomy || !_screenFeedShowing))
         {
-            // sem o modo estúdio, a prévia grande é o próprio vídeo que está saindo: nada de copiar a tela do jogo durante a gravação
+            // a prévia grande é o próprio vídeo que está saindo: nada de copiar a tela do jogo durante a gravação
             _preview.Source = image;
             _lastFrame = image;
             _previewNote.Text = rehearsal

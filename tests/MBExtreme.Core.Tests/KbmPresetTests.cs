@@ -105,3 +105,33 @@ public class MouseAimTests
     [Fact]
     public void PollingRate_TooFewSamples_IsNull() => Assert.Null(MouseAim.PollingRate(new double[] { 0, 1, 2 }));
 }
+
+public class RefreshRatesTests
+{
+    [Fact]
+    public void Lista_so_as_taxas_da_resolucao_atual()
+    {
+        var modes = new[]
+        {
+            new MBExtreme.Core.Display.DisplayMode(3440, 1440, 60), new(3440, 1440, 100), new(3440, 1440, 144), new(3440, 1440, 165), new(3440, 1440, 165),
+            new(3440, 1440, 30), new(2560, 1080, 200), new(1920, 1080, 60),
+        };
+        Assert.Equal(new[] { 60, 100, 144, 165 }, MBExtreme.Core.Display.RefreshRates.For(modes, 3440, 1440));
+    }
+
+    [Fact]
+    public void Avisa_quando_esta_abaixo_do_maximo()
+    {
+        var m = new MBExtreme.Core.Display.MonitorRates("\\\\.\\DISPLAY2", "Monitor 2", false, 1080, 1920, 60, new[] { 60, 75 });
+        Assert.True(m.BelowMax);
+        Assert.True(m.Vertical);
+        Assert.Equal(75, m.MaxHz);
+    }
+
+    [Theory]
+    [InlineData(165, false, 120)]
+    [InlineData(60, false, 60)]
+    [InlineData(165, true, 30)]
+    [InlineData(0, false, 60)]
+    public void Fps_da_previa(int hz, bool eco, int expected) => Assert.Equal(expected, MBExtreme.Core.Display.RefreshRates.PreviewFps(hz, eco));
+}

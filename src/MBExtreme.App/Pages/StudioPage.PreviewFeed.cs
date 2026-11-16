@@ -24,21 +24,26 @@ public sealed partial class StudioPage
         string? signature = null;
         IReadOnlyList<string>? args = null;
         (int W, int H) size = default;
-        bool allowed = IsLoaded && _ffmpegPath is not null && !_studio.IsRunning && !AppServices.Recorder.IsRecording;
+        // no ar: a prévia fluida continua pela placa de vídeo (uma captura pequena e separada, não pesa no envio);
+        // no modo estúdio (prévia de outra cena) quem mostra é a imagem "No ar"
+        bool live = _studio.IsRunning;
+        bool rehearsal = live && _studio.Session.Request is { Rehearsal: true };
+        bool allowed = IsLoaded && _ffmpegPath is not null && !AppServices.Recorder.IsRecording && (!live || !_s.StudioSceneStudioMode && !rehearsal && !_s.StudioPreviewEconomy);
+        int fps = MBExtreme.Core.Display.RefreshRates.PreviewFps(MonitorHz(), _s.StudioPreviewEconomy);
         if (allowed && ScreenFeedTarget() is { } target)
         {
             var source = target.Crop ?? _displayList.First(d => d.Index == target.Output).Bounds;
             double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
-            size = ScreenPreview.Size(shown, source.Width, source.Height);
-            args = ScreenPreview.RawArgs(target.Output, target.Crop, CurrentFilter().ToChain(), size.W, size.H);
+            size = ScreenPreview.Size(live ? Math.Min(shown, 1280) : shown, source.Width, source.Height);
+            args = ScreenPreview.RawArgs(target.Output, target.Crop, CurrentFilter().ToChain(), size.W, size.H, fps);
             signature = string.Join(" ", args);
         }
         else if (allowed && WindowFeedTarget() is { } window)
         {
             // "conteúdo da janela": pelo Windows.Graphics.Capture, na placa de vídeo (se o FFmpeg não tiver, volta para a cópia pelo GDI)
             double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
-            size = ScreenPreview.Size(shown, Math.Max(2, window.Area.Width), Math.Max(2, window.Area.Height));
-            args = ScreenPreview.WindowArgs(window.Handle.ToInt64(), CurrentFilter().ToChain(), size.W, size.H);
+            size = ScreenPreview.Size(live ? Math.Min(shown, 1280) : shown, Math.Max(2, window.Area.Width), Math.Max(2, window.Area.Height));
+            args = ScreenPreview.WindowArgs(window.Handle.ToInt64(), CurrentFilter().ToChain(), size.W, size.H, fps);
             signature = string.Join(" ", args);
         }
 
@@ -65,19 +70,29 @@ public sealed partial class StudioPage
 
     private void ShowScreenFrame(MBExtreme.UI.Recording.RawFrameFeed feed)
     {
-        if (!ReferenceEquals(_screenFeed, feed) || _studio.IsRunning) return;
+        if (!ReferenceEquals(_screenFeed, feed) || _studio.IsRunning && _s.StudioSceneStudioMode) return;
         var image = feed.Bitmap;
         bool first = !_screenFeedShowing || !ReferenceEquals(_preview.Source, image);
         _screenFeedShowing = true;
         if (first)
         {
             _preview.Source = image;
-            _previewNote.Text = "É assim que o vídeo vai sair (ao vivo, pela placa de vídeo).";
+            _previewNote.Text = _studio.IsRunning ? "No ar: prévia fluida pela placa de vídeo (logo, Pix e câmeras aparecem marcados por cima)." : "É assim que o vídeo vai sair (ao vivo, pela placa de vídeo).";
             _previewNote.Foreground = Brush("MutedBrush");
             UpdateGhosts();
         }
         _lastFrame = image;
         UpdateVerticalLive();
+    }
+
+    private int _monitorHz;
+    private DateTime _monitorHzRead;
+
+    /// <summary>Hz do monitor principal (lido a cada 30 s: muda se a pessoa trocar na tela Monitor).</summary>
+    private int MonitorHz()
+    {
+        if (DateTime.Now - _monitorHzRead > TimeSpan.FromSeconds(30)) { _monitorHz = NativeDisplay.PrimaryHz(); _monitorHzRead = DateTime.Now; }
+        return _monitorHz;
     }
 
     private void StopScreenFeed()

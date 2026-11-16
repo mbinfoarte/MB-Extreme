@@ -192,6 +192,7 @@ public sealed partial class StudioPage : ToolPageBase
 
         _studio.Notice += OnNotice;
         _camTimer.Tick += (_, _) => DrawCameraFrames();
+        InitLiveOverlay();
         _timer.Tick += (_, _) => Tick();
         _statsTimer.Tick += async (_, _) =>
         {
@@ -1288,19 +1289,18 @@ public sealed partial class StudioPage : ToolPageBase
         var logo = new CheckBox { Content = "Deixar o logo sempre num canto do vídeo", IsChecked = _s.StudioLogoOn, Foreground = Brush("TextBrush") };
         logo.Click += (_, _) => _s.StudioLogoOn = logo.IsChecked == true;
         logoPanel.Children.Add(logo);
-        int[] logoSizes = { 5, 8, 12 };
-        logoPanel.Children.Add(Field("Canto", Chips(CornerNames, Math.Clamp(_s.StudioLogoCorner, 0, 3), i => _s.StudioLogoCorner = i), 140));
-        logoPanel.Children.Add(Field("Tamanho", Chips(logoSizes.Select(v => v + "%").ToList(), Math.Max(0, Array.IndexOf(logoSizes, _s.StudioLogoPercent)), i => _s.StudioLogoPercent = logoSizes[i]), 140));
+        logoPanel.Children.Add(LogoEditor());
         logoPanel.Children.Add(_logoPreview);
+        logoPanel.Children.Add(Muted("Aparece na live, na gravação e no replay. Mudou tamanho, transparência ou posição com a live no ar? Entra na hora, sem reiniciar.", 11));
 
-        foreach (var panel in new[] { introPanel, lowerPanel, logoPanel })
+        foreach (var panel in new[] { introPanel, lowerPanel })
             panel.Children.Add(Muted("Segue o relógio da transmissão e aparece também na gravação e no replay. Com o estúdio no ar, entra ao usar \"Aplicar agora\".", 11));
 
         var cards = new WrapPanel();
         cards.Children.Add(SummaryCard("Identidade", null, _s.StudioChannelName.Length > 0 ? _s.StudioChannelName : "Nome, apresentador, frase, logo e cor do canal.", identity, "Editar", BuildChannel));
         cards.Children.Add(SummaryCard("Abertura", _s.StudioIntroOn, $"Cartão de entrada, {_s.StudioIntroSeconds} s na tela.", introPanel, "Editar", BuildChannel));
         cards.Children.Add(SummaryCard("Faixa com nome", _s.StudioLowerOn, _s.StudioLowerEveryMinutes == 0 ? "Aparece uma vez, no rodapé." : $"Volta a cada {_s.StudioLowerEveryMinutes} min.", lowerPanel, "Editar", BuildChannel));
-        cards.Children.Add(SummaryCard("Logo", _s.StudioLogoOn, _s.StudioChannelLogo is null ? "Sua marca num canto da tela (escolha o logo em Identidade)." : $"Num canto, {_s.StudioLogoPercent}% da tela.", logoPanel, "Editar", BuildChannel));
+        cards.Children.Add(SummaryCard("Logo", _s.StudioLogoOn, _s.StudioChannelLogo is null ? "Sua marca num canto da tela (escolha o logo em Identidade)." : $"{CurrentLogo().WidthPx} px · muda ao vivo, sem reiniciar", logoPanel, "Editar", BuildChannel));
         _tabChannel.Children.Add(cards);
         RefreshChannelPreview();
     }
@@ -2183,7 +2183,10 @@ public sealed partial class StudioPage : ToolPageBase
 
         // ---- identidade do canal e filtro de imagem
         List<OverlayLayer> layers;
-        try { layers = live is { } lp ? BuildLayers(write, lp.Intro, lp.Lower, lp.Logo) : BuildLayers(write); }
+        // logo pela camada do programa: não entra no FFmpeg como imagem (assim mudar o logo não reinicia nada)
+        // (só com o logo ligado: a camada custa um pouco de processamento em cada quadro)
+        bool overlayLogo = _s.StudioLiveOverlay && (live?.Logo ?? _s.StudioLogoOn);
+        try { layers = live is { } lp ? BuildLayers(write, lp.Intro, lp.Lower, lp.Logo && !overlayLogo) : BuildLayers(write, _s.StudioIntroOn, _s.StudioLowerOn, _s.StudioLogoOn && !overlayLogo); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { return (null, "Não foi possível preparar as camadas do canal: " + ex.Message); }
         var imageFilter = CurrentFilter();
 
@@ -2235,7 +2238,7 @@ public sealed partial class StudioPage : ToolPageBase
             live?.Captures, live?.Layouts(layers), live?.Active ?? 0, (SceneTransition)Math.Clamp(_s.StudioSceneTransition, 0, 1), _s.StudioProgramView,
             verticalCopy is not null ? verticalTarget : null, (VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3),
             vEncoder, _s.StudioVRecMbps, _s.StudioVRecQuality, vEffort, _s.StudioVRecFps, mainQuality,
-            _s.StudioVRecPostMp4 && (vertical is not null || verticalCopy is not null));
+            _s.StudioVRecPostMp4 && (vertical is not null || verticalCopy is not null), LiveOverlay: overlayLogo);
         // ensaio: tudo igual à live, mas sem gravar, transmitir, replay nem a cópia vertical
         if (_rehearsing) config = config with { Record = false, Stream = null, Replay = false, VerticalStream = null, VerticalCopy = null, PostMp4 = false, Rehearsal = true };
         return (config, null);

@@ -192,6 +192,17 @@ public sealed class AppSettings
     public bool StudioProgramView { get; set; } = true;
     /// <summary>Prévia econômica (30 quadros por segundo) em vez da fluida (no Hz do monitor, até 120).</summary>
     public bool StudioPreviewEconomy { get; set; }
+    /// <summary>Logo desenhado pelo programa numa camada própria: tamanho e posição mudam na hora, sem reiniciar a live.</summary>
+    public bool StudioLiveOverlay { get; set; } = true;
+    /// <summary>Ponto do logo (0 = em cima à esquerda ... 8 = embaixo à direita); -1 = ainda no modo antigo (canto + %).</summary>
+    public int StudioLogoAnchor { get; set; } = -1;
+    /// <summary>Largura do logo em pixels num vídeo de 1920 (cresce ou diminui junto com o vídeo).</summary>
+    public int StudioLogoWidthPx { get; set; } = 220;
+    public int StudioLogoMarginPx { get; set; } = 24;
+    public int StudioLogoOpacity { get; set; } = 100;
+    /// <summary>Logo arrastado na prévia: centro em fração do quadro (null = usa o ponto).</summary>
+    public double? StudioLogoCenterX { get; set; }
+    public double? StudioLogoCenterY { get; set; }
 
     /// <summary>Limite (minutos) dos comandos comuns do Reparo do Windows; DISM, SFC e CHKDSK nunca são cortados.</summary>
     public int RepairTimeoutMinutes { get; set; } = 15;

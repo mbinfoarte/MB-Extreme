@@ -220,11 +220,12 @@ public static class StudioCommand
             args.AddRange(new[] { "-loop", "1", "-framerate", "5", "-i", pixInput.ImagePath });
         foreach (var layer in r.Layers)
             args.AddRange(new[] { "-loop", "1", "-framerate", "25", "-i", layer.ImagePath });   // 25 quadros por segundo para o esmaecer ficar suave
+        if (r.LiveOverlay is { } liveOverlay) args.AddRange(liveOverlay.InputArgs());
 
         // ---- filtros
         string? filter = null;
         string? complex = null;
-        if (r.Cameras.Count > 0 || r.Pix is not null || r.Layers.Count > 0 || r.Filter is { IsNeutral: false } || r.Vertical is not null || r.Captions is not null || r.VerticalCopy is not null)
+        if (r.Cameras.Count > 0 || r.Pix is not null || r.Layers.Count > 0 || r.LiveOverlay is not null || r.Filter is { IsNeutral: false } || r.Vertical is not null || r.Captions is not null || r.VerticalCopy is not null)
         {
             complex = OverlayGraph(r, firstExtra, verticalFirst, copyFirst, gdi, sameSize);
         }
@@ -400,6 +401,8 @@ public static class StudioCommand
         }
         int layerBase = next;
         foreach (var layer in r.Layers) args.AddRange(new[] { "-loop", "1", "-framerate", "25", "-i", layer.ImagePath });
+        int overlayInput = layerBase + r.Layers.Count;
+        if (r.LiveOverlay is { } liveOverlay) args.AddRange(liveOverlay.InputArgs());
 
         var parts = new List<string>();
         int margin = Math.Max(8, w / 80);
@@ -497,6 +500,11 @@ public static class StudioCommand
         {
             parts.Add(CaptionFilter.Build(captions, "[sel]", "[selc]", w, h, 0.5));
             last = "[selc]";
+        }
+        if (r.LiveOverlay is not null)
+        {
+            parts.Add(LiveOverlayInput.Chain(overlayInput, last, "[selo]", w, h));
+            last = "[selo]";
         }
         parts.Add($"{last}format=nv12[v]");
         return string.Join(";", parts);
@@ -638,6 +646,12 @@ public static class StudioCommand
             width -= width % 2;
             parts.Add(LayerChain(item, layerInput + i, width, i));
             parts.Add($"[b{layer}][l{i}]overlay={LayerPlacement(item, margin)}:shortest=0[b{layer + 1}]");
+            layer++;
+        }
+
+        if (r.LiveOverlay is not null)
+        {
+            parts.Add(LiveOverlayInput.Chain(layerInput + r.Layers.Count, $"[b{layer}]", $"[b{layer + 1}]", baseWidth, baseHeight));
             layer++;
         }
 

@@ -160,6 +160,9 @@ public sealed record StudioRequest
     /// <summary>QR do Pix por cima do vídeo (sempre ou por alguns segundos a cada tantos minutos).</summary>
     public PixOverlay? Pix { get; init; }
 
+    /// <summary>Camada desenhada pelo programa (logo do canal), por cima de tudo: muda na hora, sem reiniciar.</summary>
+    public LiveOverlayInput? LiveOverlay { get; init; }
+
     /// <summary>Vídeo vertical (Shorts, Reels, TikTok): montagem em uma ou duas partes. Quando definido, OutputWidth/OutputHeight são o tamanho do quadro vertical.</summary>
     public VerticalLayout? Vertical { get; init; }
 

@@ -50,7 +50,8 @@ internal sealed record StudioConfig(
     int VerticalRecFps = 0,
     int QualityLevel = 0,
     bool PostMp4 = false,
-    bool Rehearsal = false)
+    bool Rehearsal = false,
+    bool LiveOverlay = false)
 {
     /// <summary>Várias cenas montadas juntas: trocar de cena não reinicia a captura.</summary>
     public bool LiveScenes => Scenes is { Count: > 1 } && Vertical is null && VerticalCopy is null;
@@ -199,6 +200,15 @@ internal sealed class StudioController
             CameraPreviews = true,
         };
 
+        // camada desenhada pelo programa (logo): muda tamanho e posição na hora, sem reiniciar
+        DisposeOverlay();
+        if (config.LiveOverlay)
+        {
+            _overlay = new LiveOverlayCanvas(width, height);
+            if (OverlayPainter?.Invoke(width, height) is { } firstFrame && firstFrame.Length == width * height * 4) _overlay.Update(firstFrame);
+            request = request with { LiveOverlay = _overlay.Input };
+        }
+
         // câmeras pelo relé (como o OBS): abertas uma vez, com o melhor modo (tamanho, quadros e formato), e a live recebe a última imagem
         // num ritmo fixo: um atraso da câmera não trava mais o vídeo inteiro. A prévia usa a mesma câmera aberta.
         var chains = request.Cameras.ToDictionary(c => c.DeviceName, c => c.Filter?.ToChain(), StringComparer.OrdinalIgnoreCase);
@@ -229,6 +239,7 @@ internal sealed class StudioController
         catch
         {
             DisposeCaptions();
+            DisposeOverlay();
             AppServices.Cameras.ReleaseAll(this);
             throw;
         }
@@ -291,6 +302,7 @@ internal sealed class StudioController
             foreach (var scene in c.Scenes!) parts.Add($"cena:{scene.Capture}:{string.Join(",", scene.Cameras)}:{scene.Pix}:{string.Join(",", scene.Layers)}");
         }
         parts.Add("no-ar:" + c.ProgramView);
+        parts.Add("camada-programa:" + c.LiveOverlay);
         if (c.VerticalStream is { } vt)
         {
             byte[] vhash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(vt.FullUrl));
@@ -498,9 +510,28 @@ internal sealed class StudioController
     /// <summary>Última legenda mostrada no vídeo (para a pré-visualização).</summary>
     public (string Line1, string Line2)? CaptionNow => _captions?.Shown;
 
+    private LiveOverlayCanvas? _overlay;
+
+    /// <summary>Quem desenha a camada do programa (a tela do estúdio): devolve a imagem BGRA do tamanho pedido, ou null.</summary>
+    public Func<int, int, byte[]?>? OverlayPainter { get; set; }
+
+    /// <summary>Redesenha a camada no ar (logo mudou de lugar ou tamanho): entra no vídeo na próxima volta, sem reiniciar.</summary>
+    public void RefreshOverlay()
+    {
+        if (_overlay is not { } canvas || OverlayPainter?.Invoke(canvas.Width, canvas.Height) is not { } frame || frame.Length != canvas.Width * canvas.Height * 4) return;
+        canvas.Update(frame);
+    }
+
+    private void DisposeOverlay()
+    {
+        _overlay?.Dispose();
+        _overlay = null;
+    }
+
     public string? Stop()
     {
         DisposeCaptions();
+        DisposeOverlay();
         var request = Session.Request;
         var config = Config;
         string? file = Session.Stop();   // o relógio dos lances se desliga sozinho no próximo tique (este método roda fora da interface)

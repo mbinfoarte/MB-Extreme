@@ -1,0 +1,262 @@
+[
+  {
+    "key": "eafc", "title": "EA SPORTS FC", "exe": ["FC27.exe", "FC26.exe", "FC25.exe", "FC24.exe"], "names": ["EA SPORTS FC", "EA FC"],
+    "profile": "competitive", "reflex": false, "antiCheat": "EA Javelin", "keepRunning": ["EADesktop", "EABackgroundService", "EAAntiCheat.GameService"],
+    "priority": true, "fso": false,
+    "low": ["Resolução 1080p (ou 900p) com Escala de renderização 100%", "Qualidade de renderização: Baixa; Grama: Baixa; Multidão: Baixa", "Motion blur e Profundidade de campo desligados", "Limite de FPS: 60"],
+    "mid": ["1080p, Qualidade de renderização: Média", "Grama e Multidão em Média, efeitos de tecido desligados", "Limite de FPS: 60 (o jogo trava a jogabilidade em 60 de qualquer jeito)"],
+    "high": ["1440p ou 4K em Ultra", "Ative o DLSS/FSR em Qualidade só se o FPS cair de 60", "Limite de FPS: 60; o resto do ganho vira estabilidade"],
+    "tips": ["A jogabilidade do FC roda a 60 quadros: mais FPS não deixa o jogo mais rápido, mas quedas abaixo de 60 atrasam o passe e o chute. Mire em 60 cravado.", "Use tela cheia (não janela sem borda) para o menor atraso entre o controle e a tela.", "Jogue com o controle no cabo (USB) no Ultimate Team e no Division Rivals: o Bluetooth soma alguns milissegundos."],
+    "warnings": ["O anti-cheat EA Javelin precisa do EA app aberto: o Modo Jogo nunca fecha o EA app nem o serviço do anti-cheat."]
+  },
+  {
+    "key": "cod", "title": "Call of Duty / Warzone", "exe": ["cod.exe", "cod24-cod.exe", "cod25-cod.exe", "codbo6.exe", "BlackOps6.exe"], "names": ["Call of Duty", "Warzone"],
+    "profile": "competitive", "reflex": true, "antiCheat": "Ricochet", "keepRunning": ["Battle.net", "Agent", "steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["Escala de renderização 100% com FSR/DLSS em Desempenho", "Texturas Baixas, Sombras Baixas, Oclusão de ambiente desligada", "Pré-carregar shaders antes de jogar (Instalação de shaders)", "Orçamento de memória de vídeo (VRAM): 80%"],
+    "mid": ["DLSS/FSR em Equilibrado", "Texturas Médias, Sombras Médias, Efeitos de tela desligados", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["DLSS em Qualidade ou nativo", "Texturas Altas, Sombras Médias (mais FPS sem perder visibilidade)", "NVIDIA Reflex: Ativado + Boost; limite de FPS 3 abaixo da taxa do monitor"],
+    "tips": ["Deixe o jogo terminar a Instalação de shaders no menu antes da primeira partida: é o que mais evita travadas.", "Use tela cheia exclusiva para o menor atraso."],
+    "warnings": ["Usar mouse e teclado fingindo ser controle (KB/M → controle) em Call of Duty é tratado como trapaça pelo Ricochet e pode banir a conta."]
+  },
+  {
+    "key": "valorant", "title": "Valorant", "exe": ["VALORANT-Win64-Shipping.exe"], "names": ["VALORANT"],
+    "profile": "competitive", "reflex": true, "antiCheat": "Riot Vanguard", "keepRunning": ["vgc", "vgtray", "RiotClientServices", "RiotClientUx"],
+    "priority": true, "fso": false,
+    "low": ["Qualidade de material, textura e detalhes: Baixa", "Anti-serrilhamento: Nenhum; Anisotrópico: 1x", "Vinheta, V-Sync e Bloom desligados", "Limite de FPS no menu: 60"],
+    "mid": ["Material e textura: Média; Detalhes: Baixa", "Anti-serrilhamento MSAA 2x; Anisotrópico 4x", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["Material e textura: Alta; Detalhes: Média", "MSAA 4x; Anisotrópico 8x", "NVIDIA Reflex: Ativado + Boost; FPS sem limite ou 3 abaixo do monitor com G-Sync"],
+    "tips": ["Valorant depende mais do processador que da placa: feche o navegador e o Discord com aceleração de hardware para ganhar FPS mínimo.", "Mantenha \"Limitar FPS no menu\" ligado para a placa esfriar entre as rodadas."],
+    "warnings": ["O Riot Vanguard precisa iniciar com o Windows: o Modo Jogo nunca fecha vgc nem vgtray, e desativar o serviço impede o jogo de abrir."]
+  },
+  {
+    "key": "cs2", "title": "Counter-Strike 2", "exe": ["cs2.exe"], "names": ["Counter-Strike 2"],
+    "profile": "competitive", "reflex": true, "antiCheat": "VAC", "keepRunning": ["steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["Resolução 1280x960 esticada ou 1080p", "Detalhes de sombra, modelo e textura: Baixo; Sombreamento: Baixo", "MSAA: Nenhum; FidelityFX Super Resolution: Desempenho", "Boost Player Contrast: Ligado"],
+    "mid": ["Sombras: Médio (ajuda a ver inimigos); Texturas: Médio", "MSAA 2x; FSR desligado", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["Sombras: Alto; Texturas: Alto; MSAA 4x", "Boost Player Contrast: Ligado", "NVIDIA Reflex: Ativado + Boost; fps_max 0"],
+    "tips": ["CS2 gosta de processador e memória rápidos: ative o XMP/EXPO na BIOS se ainda não ativou.", "Opção de inicialização útil na Steam: -novid -high não é necessária (a prioridade alta já é aplicada pelo MB Extreme)."],
+    "warnings": []
+  },
+  {
+    "key": "fortnite", "title": "Fortnite", "exe": ["FortniteClient-Win64-Shipping.exe"], "names": ["Fortnite"],
+    "profile": "competitive", "reflex": true, "antiCheat": "Easy Anti-Cheat / BattlEye", "keepRunning": ["EpicGamesLauncher", "EpicWebHelper", "EasyAntiCheat_EOS", "BEService"],
+    "priority": true, "fso": false,
+    "low": ["Modo de renderização: Desempenho (o mais leve, ideal para PC fraco)", "Distância de visão: Média; resto no mínimo", "Limite de FPS: 60 ou 144 conforme o monitor"],
+    "mid": ["Modo de renderização: Desempenho ou DirectX 11 com tudo em Baixo e Distância de visão Épica", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["DirectX 12, Texturas Altas, Sombras desligadas para competitivo", "DLSS/TSR em Qualidade", "NVIDIA Reflex: Ativado + Boost"],
+    "tips": ["Na primeira partida depois de atualizar, o DirectX 12 compila shaders e trava um pouco: jogue um modo criativo antes do competitivo.", "Desligue a Gravação de replays se o FPS cair."],
+    "warnings": ["Fortnite tem mira assistida para controle: usar mouse e teclado fingindo ser controle é contra as regras e pode banir."]
+  },
+  {
+    "key": "lol", "title": "League of Legends", "exe": ["League of Legends.exe"], "names": ["League of Legends"],
+    "profile": "competitive", "reflex": false, "antiCheat": "Riot Vanguard", "keepRunning": ["vgc", "vgtray", "RiotClientServices", "LeagueClient", "LeagueClientUx", "LeagueClientUxRender"],
+    "priority": true, "fso": true,
+    "low": ["Qualidade de personagem, ambiente e efeitos: Muito baixa", "Sombras desligadas; Anti-serrilhamento desligado", "Limite de quadros: 60 (ou 144 se aguentar estável)"],
+    "mid": ["Personagem e efeitos: Médio; Ambiente: Baixo", "Sombras: Baixo", "Limite de quadros: 144"],
+    "high": ["Tudo em Muito alto", "Limite de quadros: 240 ou a taxa do monitor"],
+    "tips": ["O cliente do LoL pesa mais que o jogo em PCs fracos: ative \"Fechar o cliente durante a partida\" nas configurações do cliente.", "Sem NVIDIA Reflex no LoL: o MB Extreme liga a baixa latência do driver (NVIDIA) para este jogo."],
+    "warnings": ["O Riot Vanguard precisa iniciar com o Windows: o Modo Jogo nunca o fecha."]
+  },
+  {
+    "key": "dota2", "title": "Dota 2", "exe": ["dota2.exe"], "names": ["Dota 2"],
+    "profile": "competitive", "reflex": false, "antiCheat": "VAC", "keepRunning": ["steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["API de renderização: Vulkan ou DirectX 11 (teste qual dá mais FPS)", "Escala de renderização 80%; tudo em Baixo", "Limite de FPS: 60"],
+    "mid": ["Escala 100%; Texturas Médias; Sombras Baixas", "Limite de FPS: 120 ou 144"],
+    "high": ["Tudo no máximo; Limite de FPS: taxa do monitor"],
+    "tips": ["Lutas grandes no fim da partida pesam no processador: o Modo Jogo pausa serviços de fundo para segurar o FPS mínimo."],
+    "warnings": []
+  },
+  {
+    "key": "apex", "title": "Apex Legends", "exe": ["r5apex.exe", "r5apex_dx12.exe"], "names": ["Apex Legends"],
+    "profile": "competitive", "reflex": true, "antiCheat": "Easy Anti-Cheat", "keepRunning": ["EADesktop", "EABackgroundService", "steam", "steamwebhelper", "EasyAntiCheat"],
+    "priority": true, "fso": false,
+    "low": ["Orçamento de streaming de textura: Nenhum ou 2 GB", "Sombras do sol e locais: Baixo; Oclusão de ambiente: Desligada", "Detalhe de modelo: Baixo; Efeitos: Baixo"],
+    "mid": ["Orçamento de textura conforme a VRAM da placa (metade da VRAM)", "Sombras: Baixo; Efeitos: Médio", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["Texturas: Insano se a placa tiver 8 GB ou mais", "Sombras: Médio; NVIDIA Reflex: Ativado + Boost"],
+    "tips": ["O Apex limita o FPS em 144 por padrão; para monitores mais rápidos, use a opção +fps_max 0 nas opções de inicialização (já disponível na aba Configurações do jogo)."],
+    "warnings": []
+  },
+  {
+    "key": "gtav", "title": "GTA V", "exe": ["GTA5.exe", "GTA5_Enhanced.exe"], "names": ["Grand Theft Auto V", "GTA V", "GTA5"],
+    "profile": "openworld", "reflex": false, "antiCheat": "BattlEye", "keepRunning": ["Launcher", "RockstarService", "SocialClubHelper", "steam", "steamwebhelper", "BEService"],
+    "priority": true, "fso": false,
+    "low": ["Versão Legacy (DirectX 11) se a placa tiver menos de 4 GB", "Qualidade de grama: Normal (a grama é o que mais pesa)", "MSAA desligado; FXAA ligado; Sombras: Normal"],
+    "mid": ["Versão Enhanced com DLSS/FSR em Qualidade", "Grama: Alta; Sombras: Alta; Reflexos: Alto"],
+    "high": ["Versão Enhanced com ray tracing em Alto", "Grama: Ultra; DLSS/FSR em Qualidade"],
+    "tips": ["No GTA Online, a grama e o MSAA são os maiores vilões do FPS; comece abaixando eles."],
+    "warnings": ["O GTA Online usa BattlEye: o Modo Jogo nunca fecha o serviço do BattlEye nem o Rockstar Launcher."]
+  },
+  {
+    "key": "minecraft", "title": "Minecraft (Bedrock)", "exe": ["Minecraft.Windows.exe"], "names": ["Minecraft"],
+    "profile": "light", "reflex": false, "antiCheat": "", "keepRunning": [],
+    "priority": true, "fso": false,
+    "low": ["Distância de renderização: 8 a 10 chunks", "Gráficos sofisticados e nuvens desligados", "Sem shaders/ray tracing"],
+    "mid": ["Distância de renderização: 16 chunks", "Gráficos sofisticados ligados"],
+    "high": ["Distância de renderização: 24+ chunks", "Ray tracing (RTX) ligado com DLSS"],
+    "tips": ["Na versão Java (javaw.exe), dê 4 a 6 GB de RAM no launcher e use o Sodium para dobrar o FPS."],
+    "warnings": []
+  },
+  {
+    "key": "roblox", "title": "Roblox", "exe": ["RobloxPlayerBeta.exe"], "names": ["Roblox"],
+    "profile": "light", "reflex": false, "antiCheat": "Hyperion", "keepRunning": [],
+    "priority": true, "fso": false,
+    "low": ["Qualidade gráfica manual: 1 a 3 barrinhas", "Feche outras abas do navegador e o Discord"],
+    "mid": ["Qualidade gráfica: 5 a 7 barrinhas"],
+    "high": ["Qualidade gráfica: 10 barrinhas"],
+    "tips": ["Roblox é limitado a 60 FPS por padrão; o próprio jogo tem a opção \"Limite de taxa de quadros\" nas configurações para subir."],
+    "warnings": ["Não use desbloqueadores de FPS de terceiros: o anti-cheat Hyperion pode punir a conta."]
+  },
+  {
+    "key": "pubg", "title": "PUBG: Battlegrounds", "exe": ["TslGame.exe"], "names": ["PUBG", "BATTLEGROUNDS"],
+    "profile": "competitive", "reflex": true, "antiCheat": "BattlEye", "keepRunning": ["steam", "steamwebhelper", "BEService", "zksvc"],
+    "priority": true, "fso": false,
+    "low": ["Escala de tela 100%; Anti-serrilhamento: Muito baixo", "Pós-processamento, Sombras, Efeitos, Folhagem: Muito baixo", "Distância de visão: Média; Texturas: Médio"],
+    "mid": ["Anti-serrilhamento: Ultra (ajuda a ver longe); Texturas: Alto", "Resto em Muito baixo; NVIDIA Reflex: Ativado + Boost"],
+    "high": ["Anti-serrilhamento e Texturas: Ultra; Distância de visão: Ultra", "Sombras e Folhagem: Muito baixo (vantagem competitiva)"],
+    "tips": [],
+    "warnings": []
+  },
+  {
+    "key": "r6", "title": "Rainbow Six Siege", "exe": ["RainbowSix.exe", "RainbowSix_Vulkan.exe", "RainbowSixSiege.exe"], "names": ["Rainbow Six"],
+    "profile": "competitive", "reflex": true, "antiCheat": "BattlEye", "keepRunning": ["upc", "UplayWebCore", "steam", "steamwebhelper", "BEService"],
+    "priority": true, "fso": false,
+    "low": ["Use a versão Vulkan (mais FPS na maioria das placas)", "Escala de renderização 75 a 100%; Sombras: Baixo; Reflexos: Baixo", "Texturas: Médio"],
+    "mid": ["Escala 100%; Texturas: Alto; Sombras: Médio", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["Texturas: Ultra; Sombras: Alto; Reflexos: Médio", "NVIDIA Reflex: Ativado + Boost"],
+    "tips": [],
+    "warnings": ["Usar mouse e teclado fingindo ser controle é proibido no Siege (o próprio jogo detecta e pune)."]
+  },
+  {
+    "key": "overwatch", "title": "Overwatch 2", "exe": ["Overwatch.exe"], "names": ["Overwatch"],
+    "profile": "competitive", "reflex": true, "antiCheat": "Defense Matrix", "keepRunning": ["Battle.net", "Agent", "steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["Escala de renderização: Automática ou 75%; Qualidade de textura: Baixa", "Sombras, Reflexos, Oclusão de ambiente: Baixo/Desligado", "Limite de FPS: taxa do monitor"],
+    "mid": ["Escala 100%; Texturas: Médio; Efeitos: Baixo", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["Texturas: Ultra; Efeitos: Médio (efeitos altos atrapalham a visão)", "NVIDIA Reflex: Ativado + Boost"],
+    "tips": ["\"Reduzir buffer\" ligado e \"Exibir estatísticas de desempenho\" ajudam a conferir a latência."],
+    "warnings": []
+  },
+  {
+    "key": "rivals", "title": "Marvel Rivals", "exe": ["Marvel-Win64-Shipping.exe"], "names": ["Marvel Rivals"],
+    "profile": "competitive", "reflex": true, "antiCheat": "NetEase", "keepRunning": ["steam", "steamwebhelper", "EpicGamesLauncher"],
+    "priority": true, "fso": false,
+    "low": ["DLSS/FSR/XeSS em Desempenho", "Iluminação global e Reflexos: Baixo; Sombras: Baixo", "Desligue o Lumen (iluminação global) se aparecer a opção"],
+    "mid": ["DLSS/FSR em Equilibrado; Sombras: Médio", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["DLSS em Qualidade; Texturas: Ultra", "NVIDIA Reflex: Ativado + Boost"],
+    "tips": ["Jogo em Unreal Engine 5: as primeiras partidas travam enquanto compila shaders. Jogue uma partida de treino antes da ranqueada."],
+    "warnings": []
+  },
+  {
+    "key": "rocketleague", "title": "Rocket League", "exe": ["RocketLeague.exe"], "names": ["Rocket League"],
+    "profile": "competitive", "reflex": false, "antiCheat": "Easy Anti-Cheat", "keepRunning": ["EpicGamesLauncher", "steam", "steamwebhelper"],
+    "priority": true, "fso": true,
+    "low": ["Qualidade de renderização: Alto desempenho", "Detalhes: Desempenho; efeitos desligados", "V-Sync desligado; FPS sem limite ou 120"],
+    "mid": ["Detalhes: Qualidade; Texturas: Alta", "FPS: 144 ou 240"],
+    "high": ["Detalhes: Alta qualidade; FPS: taxa do monitor (ou acima)"],
+    "tips": ["Rocket League prefere FPS alto e estável: mais quadros deixam o carro mais responsivo. Sem Reflex no jogo, o MB Extreme liga a baixa latência do driver (NVIDIA)."],
+    "warnings": []
+  },
+  {
+    "key": "efootball", "title": "eFootball", "exe": ["eFootball.exe"], "names": ["eFootball"],
+    "profile": "competitive", "reflex": false, "antiCheat": "", "keepRunning": ["steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["Qualidade: Baixa; Resolução 1080p", "Limite de FPS: 60"],
+    "mid": ["Qualidade: Média ou Alta; Limite de FPS: 60"],
+    "high": ["Qualidade: Alta; Limite de FPS: 60"],
+    "tips": ["Assim como no FC, a partida roda a 60 quadros: mire em 60 cravado e jogue com o controle no cabo."],
+    "warnings": []
+  },
+  {
+    "key": "forza5", "title": "Forza Horizon 5", "exe": ["ForzaHorizon5.exe"], "names": ["Forza Horizon 5"],
+    "profile": "racing", "reflex": false, "antiCheat": "", "keepRunning": ["steam", "steamwebhelper", "GamingServices"],
+    "priority": true, "fso": false,
+    "low": ["Predefinição: Baixo; DLSS/FSR em Desempenho", "Qualidade de textura: Média (se a placa tiver 4 GB)", "Limite de FPS: 60"],
+    "mid": ["Predefinição: Alto; DLSS/FSR em Qualidade", "Ray tracing desligado"],
+    "high": ["Predefinição: Extremo; DLSS em Qualidade", "Ray tracing no Forzavista; DLSS Frame Generation se a placa tiver"],
+    "tips": ["Mantenha o FPS travado (30, 60 ou 120): em jogos de corrida, a estabilidade conta mais que o máximo."],
+    "warnings": ["Na versão da Microsoft Store, os \"Serviços de Jogos\" precisam ficar abertos: o Modo Jogo não os fecha."]
+  },
+  {
+    "key": "f1", "title": "EA SPORTS F1", "exe": ["F1_25.exe", "F1_24.exe", "F1_23.exe"], "names": ["F1 25", "F1 24", "EA SPORTS F1"],
+    "profile": "racing", "reflex": false, "antiCheat": "EA Javelin", "keepRunning": ["EADesktop", "EABackgroundService", "EAAntiCheat.GameService", "steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["Predefinição: Baixo; DLSS/FSR em Desempenho", "Público e detalhes da pista: Baixo"],
+    "mid": ["Predefinição: Médio a Alto; DLSS/FSR em Qualidade"],
+    "high": ["Predefinição: Ultra Alto; ray tracing médio com DLSS"],
+    "tips": ["Volante e pedais: deixe o USB sem economia de energia (já vem no perfil de corrida)."],
+    "warnings": ["O anti-cheat EA Javelin precisa do EA app aberto: o Modo Jogo nunca o fecha."]
+  },
+  {
+    "key": "bf6", "title": "Battlefield 6", "exe": ["bf6.exe", "bf2042.exe"], "names": ["Battlefield"],
+    "profile": "competitive", "reflex": true, "antiCheat": "EA Javelin", "keepRunning": ["EADesktop", "EABackgroundService", "EAAntiCheat.GameService", "steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["DLSS/FSR em Desempenho; Texturas: Médio", "Sombras, Efeitos e Pós-processamento: Baixo", "Terreno e vegetação: Baixo"],
+    "mid": ["DLSS/FSR em Equilibrado; Texturas: Alto; Sombras: Médio", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["DLSS em Qualidade; Texturas: Ultra", "NVIDIA Reflex: Ativado + Boost; Frame Generation só fora do competitivo"],
+    "tips": ["Battlefield usa muitos núcleos: o perfil deixa o processador sem economia de energia durante a partida."],
+    "warnings": ["O anti-cheat EA Javelin precisa do EA app aberto: o Modo Jogo nunca o fecha."]
+  },
+  {
+    "key": "cyberpunk", "title": "Cyberpunk 2077", "exe": ["Cyberpunk2077.exe"], "names": ["Cyberpunk 2077"],
+    "profile": "openworld", "reflex": true, "antiCheat": "", "keepRunning": ["steam", "steamwebhelper", "GalaxyClient", "EpicGamesLauncher"],
+    "priority": true, "fso": false,
+    "low": ["Predefinição: Baixo; FSR/XeSS/DLSS em Desempenho", "Densidade de multidão: Baixa", "Sem ray tracing"],
+    "mid": ["Predefinição: Alto; DLSS/FSR em Qualidade", "Ray tracing desligado ou só reflexos"],
+    "high": ["Ray tracing: Ultra ou Overdrive (path tracing) com DLSS e Frame Generation", "Ray Reconstruction ligado (NVIDIA)"],
+    "tips": ["Instale o jogo num SSD: em HD, a cidade carrega com atraso e trava ao dirigir rápido."],
+    "warnings": []
+  },
+  {
+    "key": "rdr2", "title": "Red Dead Redemption 2", "exe": ["RDR2.exe"], "names": ["Red Dead Redemption 2"],
+    "profile": "openworld", "reflex": false, "antiCheat": "", "keepRunning": ["Launcher", "RockstarService", "SocialClubHelper", "steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["API gráfica: Vulkan", "Qualidade de água e volumétricos: Baixo (são os que mais pesam)", "Texturas: Médio; FSR em Desempenho"],
+    "mid": ["Vulkan; Texturas: Ultra (se tiver 6 GB+); Água e volumétricos: Médio", "DLSS/FSR em Qualidade"],
+    "high": ["Predefinição favorecendo qualidade; MSAA desligado (use TAA + DLSS)"],
+    "tips": ["Água (física) e Iluminação volumétrica são os ajustes com maior custo e menor diferença visual."],
+    "warnings": []
+  },
+  {
+    "key": "eldenring", "title": "Elden Ring", "exe": ["eldenring.exe", "nightreign.exe"], "names": ["ELDEN RING"],
+    "profile": "openworld", "reflex": false, "antiCheat": "Easy Anti-Cheat", "keepRunning": ["steam", "steamwebhelper", "start_protected_game"],
+    "priority": true, "fso": false,
+    "low": ["Qualidade de sombras e grama: Baixa", "Qualidade global de iluminação: Baixa; Ray tracing desligado"],
+    "mid": ["Predefinição: Alta; Ray tracing desligado"],
+    "high": ["Predefinição: Máxima; Ray tracing: Baixo ou Médio"],
+    "tips": ["O jogo trava em 60 FPS: a meta é segurar 60 sem quedas. As travadas ao entrar em áreas novas são compilação de shaders e diminuem com o tempo."],
+    "warnings": []
+  },
+  {
+    "key": "ets2", "title": "Euro Truck Simulator 2 / American Truck Simulator", "exe": ["eurotrucks2.exe", "amtrucks.exe"], "names": ["Euro Truck Simulator 2", "American Truck Simulator"],
+    "profile": "racing", "reflex": false, "antiCheat": "", "keepRunning": ["steam", "steamwebhelper"],
+    "priority": true, "fso": true,
+    "low": ["Escala de resolução 100%; Qualidade de sombras: Baixa", "Espelhos: Baixo (são renderizados de novo)", "Densidade de tráfego: 50%"],
+    "mid": ["Sombras: Média; Espelhos: Médio", "Escala de resolução 150% só se sobrar FPS"],
+    "high": ["Sombras: Alta; Escala 200% (o jogo fica muito mais nítido)"],
+    "tips": ["Os espelhos e a escala de resolução são os ajustes que mais pesam."],
+    "warnings": []
+  },
+  {
+    "key": "pointblank", "title": "Point Blank", "exe": ["PointBlank.exe"], "names": ["Point Blank"],
+    "profile": "competitive", "reflex": false, "antiCheat": "XIGNCODE / BattlEye", "keepRunning": [],
+    "priority": true, "fso": true,
+    "low": ["Tudo no mínimo; Sombras desligadas", "Limite de FPS: o máximo estável"],
+    "mid": ["Texturas: Alta; resto Baixo"],
+    "high": ["Tudo no máximo (o jogo é leve)"],
+    "tips": ["Jogo antigo em DirectX 9: o MB Extreme desliga as otimizações de tela cheia do Windows para ele."],
+    "warnings": []
+  },
+  {
+    "key": "thefinals", "title": "THE FINALS", "exe": ["Discovery.exe"], "names": ["THE FINALS"],
+    "profile": "competitive", "reflex": true, "antiCheat": "Easy Anti-Cheat", "keepRunning": ["steam", "steamwebhelper"],
+    "priority": true, "fso": false,
+    "low": ["DLSS/FSR em Desempenho; Iluminação global: Estática", "Efeitos e Sombras: Baixo"],
+    "mid": ["DLSS/FSR em Equilibrado; Iluminação global: Estática", "NVIDIA Reflex: Ativado + Boost"],
+    "high": ["DLSS em Qualidade; Iluminação global: Dinâmica (RTXGI) se o FPS aguentar"],
+    "tips": [],
+    "warnings": []
+  }
+]

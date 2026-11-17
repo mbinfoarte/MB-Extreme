@@ -1,0 +1,227 @@
+using System.Diagnostics;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
+
+namespace MBExtreme.Core.Recording;
+
+/// <summary>Uma fonte de áudio (som do PC ou microfone) conectada ao mixer.</summary>
+public sealed class AudioInput
+{
+    private readonly BufferedWaveProvider _buffer;
+    private readonly VoiceProcessor _voice;
+    private readonly AudioChainProcessor _chain;
+    private readonly VolumeSampleProvider _volume;
+    private readonly PeakSampleProvider _meter;
+
+    internal AudioInput(string name, WaveFormat format, float volume)
+    {
+        Name = name;
+        SourceFormat = format;
+        _buffer = new BufferedWaveProvider(format)
+        {
+            ReadFully = true,
+            DiscardOnBufferOverflow = true,
+            BufferDuration = TimeSpan.FromMilliseconds(600),
+        };
+
+        ISampleProvider samples = _buffer.ToSampleProvider();
+        if (samples.WaveFormat.Channels == 1) samples = new MonoToStereoSampleProvider(samples);
+        else if (samples.WaveFormat.Channels > 2) samples = new FirstTwoChannelsProvider(samples);
+        if (samples.WaveFormat.SampleRate != AudioMixer.SampleRate) samples = new WdlResamplingSampleProvider(samples, AudioMixer.SampleRate);
+        _voice = new VoiceProcessor(samples);
+        _chain = new AudioChainProcessor(_voice);
+        _volume = new VolumeSampleProvider(_chain) { Volume = volume };
+        _meter = new PeakSampleProvider(_volume);
+    }
+
+    /// <summary>Maior volume (0 a 1) desta fonte desde a última chamada. Serve para detectar lances sem misturar com a voz do microfone.</summary>
+    public float TakePeak() => _meter.TakePeak();
+
+    public string Name { get; }
+
+    /// <summary>Tratamento da voz (só faz sentido no microfone). Muda na hora.</summary>
+    public VoiceEffect Voice
+    {
+        get => _voice.Effect;
+        set => _voice.Effect = value;
+    }
+
+    /// <summary>Filtro de graves, porta de ruído e compressor desta fonte. Muda na hora.</summary>
+    public AudioProcessing Processing
+    {
+        get => _chain.Settings;
+        set => _chain.Settings = value;
+    }
+
+    /// <summary>Formato do áudio como chega da captura.</summary>
+    public WaveFormat SourceFormat { get; }
+
+    /// <summary>Avisa a cada trecho capturado (legendas ao vivo usam isto). Roda na thread da captura: seja rápido.</summary>
+    public event Action<byte[], int>? Captured;
+
+    public float Volume
+    {
+        get => _volume.Volume;
+        set => _volume.Volume = Math.Clamp(value, 0f, 2f);
+    }
+
+    internal ISampleProvider Output => _meter;
+
+    /// <summary>Entrega o áudio capturado (no formato informado ao criar a fonte).</summary>
+    public void Push(byte[] data, int count)
+    {
+        _buffer.AddSamples(data, 0, count);
+        Captured?.Invoke(data, count);
+    }
+}
+
+/// <summary>Mistura as fontes de áudio em um único fluxo PCM de 48 kHz, 16 bits, estéreo, no ritmo do relógio.</summary>
+public sealed class AudioMixer
+{
+    public const int SampleRate = 48000;
+    public const int BytesPerFrame = 4;
+
+    private readonly MixingSampleProvider _mix = new(WaveFormat.CreateIeeeFloatWaveFormat(SampleRate, 2)) { ReadFully = true };
+    private readonly List<AudioInput> _inputs = new();
+    private float[] _floats = new float[SampleRate / 2];
+    private volatile float _peak;
+    private readonly PeakLimiter _limiter = new(SampleRate);
+    private volatile AudioProcessing _master = AudioProcessing.Safe;
+
+    /// <summary>Volume do momento (0 a 1) para o medidor da tela.</summary>
+    public float Peak => _peak;
+
+    public IReadOnlyList<AudioInput> Inputs => _inputs;
+
+    /// <summary>Limitador de volume do som final (o que vai para a gravação e para a live). Muda na hora.</summary>
+    public AudioProcessing Master
+    {
+        get => _master;
+        set => _master = value.Clamped();
+    }
+
+    /// <summary>Quanto o limitador está abaixando agora, em dB (0 = sem limitar).</summary>
+    public double LimiterReductionDb => _limiter.ReductionDb;
+
+    public AudioInput AddInput(string name, WaveFormat format, float volume = 1f)
+    {
+        var input = new AudioInput(name, (format as WaveFormatExtensible)?.ToStandardWaveFormat() ?? format, volume);
+        lock (_mix)
+        {
+            _inputs.Add(input);
+            _mix.AddMixerInput(input.Output);
+        }
+        return input;
+    }
+
+    /// <summary>Lê <paramref name="frames"/> quadros estéreo de 16 bits. Sem fontes ou sem som, devolve silêncio.</summary>
+    public int Read(byte[] buffer, int frames)
+    {
+        frames = Math.Min(frames, buffer.Length / BytesPerFrame);
+        int samples = frames * 2;
+        if (_floats.Length < samples) _floats = new float[samples];
+
+        int read;
+        lock (_mix) read = _mix.Read(_floats, 0, samples);
+
+        var master = _master;
+        float ceiling = master.Limiter ? Db.ToLinear(master.CeilingDb) : 1f;
+        if (master.Limiter)
+            for (int i = 0; i + 1 < Math.Min(read, samples); i += 2) _limiter.Process(ref _floats[i], ref _floats[i + 1], ceiling);
+
+        float peak = 0;
+        for (int i = 0; i < samples; i++)
+        {
+            float s = i < read ? Math.Clamp(_floats[i], -1f, 1f) : 0f;
+            peak = Math.Max(peak, Math.Abs(s));
+            short v = (short)Math.Round(s * short.MaxValue);
+            buffer[i * 2] = (byte)(v & 0xFF);
+            buffer[i * 2 + 1] = (byte)((v >> 8) & 0xFF);
+        }
+        _peak = peak;
+        return frames;
+    }
+
+    /// <summary>Escreve áudio na saída em tempo real até cancelar. Mesmo sem som, escreve silêncio para o FFmpeg não esperar.</summary>
+    public async Task PumpAsync(Stream output, CancellationToken token)
+    {
+        var clock = Stopwatch.StartNew();
+        long written = 0;
+        var buffer = new byte[SampleRate * BytesPerFrame];
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                long due = (long)(clock.Elapsed.TotalSeconds * SampleRate) - written;
+                if (due < SampleRate / 100) // menos de 10 ms
+                {
+                    await Task.Delay(5, token).ConfigureAwait(false);
+                    continue;
+                }
+
+                int frames = (int)Math.Min(due, SampleRate);
+                Read(buffer, frames);
+                await output.WriteAsync(buffer.AsMemory(0, frames * BytesPerFrame), token).ConfigureAwait(false);
+                written += frames;
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { /* o FFmpeg fechou a leitura */ }
+        catch (ObjectDisposedException) { }
+    }
+}
+
+/// <summary>Repassa o áudio sem mexer e guarda o maior valor lido desde a última consulta.</summary>
+internal sealed class PeakSampleProvider : ISampleProvider
+{
+    private readonly ISampleProvider _source;
+    private volatile float _peak;
+
+    public PeakSampleProvider(ISampleProvider source) => _source = source;
+
+    public WaveFormat WaveFormat => _source.WaveFormat;
+
+    public int Read(float[] buffer, int offset, int count)
+    {
+        int read = _source.Read(buffer, offset, count);
+        float peak = _peak;
+        for (int i = 0; i < read; i++) peak = Math.Max(peak, Math.Abs(buffer[offset + i]));
+        _peak = peak;
+        return read;
+    }
+
+    public float TakePeak()
+    {
+        float peak = _peak;
+        _peak = 0;
+        return peak;
+    }
+}
+
+internal sealed class FirstTwoChannelsProvider : ISampleProvider
+{
+    private readonly ISampleProvider _source;
+    private float[] _scratch = Array.Empty<float>();
+
+    public FirstTwoChannelsProvider(ISampleProvider source)
+    {
+        _source = source;
+        WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(source.WaveFormat.SampleRate, 2);
+    }
+
+    public WaveFormat WaveFormat { get; }
+
+    public int Read(float[] buffer, int offset, int count)
+    {
+        int channels = _source.WaveFormat.Channels;
+        int frames = count / 2;
+        if (_scratch.Length < frames * channels) _scratch = new float[frames * channels];
+        int got = _source.Read(_scratch, 0, frames * channels) / channels;
+        for (int i = 0; i < got; i++)
+        {
+            buffer[offset + i * 2] = _scratch[i * channels];
+            buffer[offset + i * 2 + 1] = _scratch[i * channels + 1];
+        }
+        return got * 2;
+    }
+}

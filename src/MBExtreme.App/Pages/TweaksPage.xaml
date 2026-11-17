@@ -1,0 +1,52 @@
+<UserControl x:Class="MBExtreme.UI.Pages.TweaksPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:MBExtreme.UI.Controls">
+    <Grid>
+        <ScrollViewer x:Name="MainView" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="40,32">
+                <TextBlock x:Name="TitleText" FontSize="28" FontWeight="SemiBold" />
+                <TextBlock x:Name="SubtitleText" Margin="0,4,0,18" TextWrapping="Wrap"
+                           Foreground="{StaticResource MutedBrush}" />
+
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Aplicar alterações" Style="{StaticResource PrimaryButton}" Click="ApplyButton_Click" />
+                    <Button Content="Marcar recomendados" Style="{StaticResource GhostButton}" Margin="12,0,0,0"
+                            Click="RecommendedButton_Click" Tag="Recommended" />
+                    <Button Content="Seguros" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Safe"
+                            ToolTip="Marca os ajustes de risco baixo" />
+                    <Button Content="Moderados" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Moderate"
+                            ToolTip="Marca os ajustes de risco médio (leia os avisos)" />
+                    <Button Content="Avançados" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Advanced"
+                            ToolTip="Marca os ajustes de risco alto (só se souber o que está fazendo)" />
+                    <Button Content="Todos" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="All" />
+                    <Button Content="Nenhum" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="None" />
+                    <Button Content="Restaurar originais" Style="{StaticResource GhostButton}" Margin="12,0,0,0"
+                            Click="RestoreButton_Click" />
+                </StackPanel>
+                <TextBlock x:Name="StatusText" Margin="0,12,0,0" TextWrapping="Wrap" />
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <WrapPanel x:Name="FilterHost" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="CounterText" VerticalAlignment="Center" Margin="0,0,12,0" FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}" />
+                        <TextBox x:Name="SearchBox" Width="220" ToolTip="Procurar otimização pelo nome ou pelo que ela faz"
+                                 TextChanged="SearchBox_TextChanged" />
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel x:Name="RowsHost" Margin="0,18,0,0" />
+
+                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"
+                           Text="Marque os ajustes que quer e clique em Aplicar alterações. Antes de mudar qualquer coisa, o app guarda o valor original; Restaurar originais desfaz tudo o que foi aplicado por aqui." />
+            </StackPanel>
+        </ScrollViewer>
+
+        <ctl:ProgressPanel x:Name="ProgressView" Visibility="Collapsed" Background="{StaticResource OverlayBrush}" />
+    </Grid>
+</UserControl>

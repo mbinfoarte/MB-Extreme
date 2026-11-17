@@ -1,0 +1,137 @@
+using MBExtreme.Core.Gamepads;
+using Xunit;
+
+namespace MBExtreme.Core.Tests;
+
+public class KbmPresetTests
+{
+    [Fact]
+    public void CallOfDuty_UsesKnownKeysAndActions()
+    {
+        var actions = KbmMapper.Actions.Select(a => a.Id).ToHashSet();
+        foreach (var (key, action) in KbmPresets.CallOfDuty.Bindings)
+        {
+            Assert.True(KbmMapper.Keys.ContainsKey(key), key);
+            Assert.Contains(action, actions);
+        }
+    }
+
+    [Fact]
+    public void ApplyTo_CopiesAndMatches_KeepsToggleKey()
+    {
+        var s = new KbmSettings { ToggleKey = "F9" };
+        Assert.False(KbmPresets.CallOfDuty.Matches(s));
+        KbmPresets.CallOfDuty.ApplyTo(s);
+        Assert.True(KbmPresets.CallOfDuty.Matches(s));
+        Assert.Equal("F9", s.ToggleKey);
+        Assert.Equal(VirtualTarget.Xbox360, s.Target);
+        Assert.Equal(0, s.Acceleration);
+        s.Bindings["W"] = "Cross";
+        Assert.False(KbmPresets.CallOfDuty.Matches(s));
+    }
+
+    [Theory]
+    [InlineData(@"C:\Games\Black Ops III\BlackOps3.exe", true)]
+    [InlineData("t6sp", true)]
+    [InlineData("cod.exe", false)]
+    [InlineData("notepad", false)]
+    public void ForGame_OnlyOfflineCampaigns(string exe, bool expected) => Assert.Equal(expected, KbmPresets.ForGame(exe) is not null);
+
+    [Theory]
+    [InlineData("cod.exe", true)]
+    [InlineData(@"D:\Call of Duty\_retail_\cod24-cod.exe", true)]
+    [InlineData("BlackOps3.exe", false)]
+    public void IsProtected_RicochetGames(string exe, bool expected) => Assert.Equal(expected, KbmPresets.IsProtected(exe));
+
+    [Fact]
+    public void PadProfile_CallOfDuty_LinkedToSameGames()
+    {
+        var p = PadProfiles.ForGame(PadProfiles.Defaults, "iw4sp.exe");
+        Assert.NotNull(p);
+        Assert.Equal("Call of Duty (campanha)", p!.Name);
+    }
+}
+
+public class PadGameProfileTests
+{
+    [Theory]
+    [InlineData("cod.exe", "Call of Duty (2019 a 2026)")]
+    [InlineData("BlackOps3.exe", "Call of Duty (campanha)")]
+    [InlineData("GTA5_Enhanced.exe", "GTA V")]
+    [InlineData("FarCry6.exe", "Far Cry")]
+    [InlineData("re4.exe", "Resident Evil")]
+    public void GameOpensItsProfile(string exe, string profile) => Assert.Equal(profile, PadProfiles.ForGame(PadProfiles.Defaults, exe)?.Name);
+
+    [Fact]
+    public void NoExeInTwoProfiles()
+    {
+        var all = PadProfiles.Defaults.SelectMany(p => p.Games.Select(g => g.ToLowerInvariant())).ToList();
+        Assert.Equal(all.Count, all.Distinct().Count());
+    }
+}
+
+public class MouseAimTests
+{
+    [Fact]
+    public void Cs2_Sens2_800dpi_Is_About_26cm()
+        => Assert.InRange(MouseAim.CmPer360(0.022, 2, 800), 25.9, 26.1);
+
+    [Fact]
+    public void Convert_Cs2ToValorant_DividesBy318()
+    {
+        var cs = MouseAim.Games.First(g => g.Name.StartsWith("Counter"));
+        var val = MouseAim.Games.First(g => g.Name == "Valorant");
+        Assert.InRange(MouseAim.Convert(cs, 2, 800, val, 800), 0.627, 0.630);
+    }
+
+    [Fact]
+    public void SensitivityFor_RoundTrips()
+    {
+        double s = MouseAim.SensitivityFor(0.0066, 32, 1600);
+        Assert.InRange(MouseAim.CmPer360(0.0066, s, 1600), 31.99, 32.01);
+    }
+
+    [Theory]
+    [InlineData(1.0, 1000)]
+    [InlineData(8.0, 125)]
+    [InlineData(0.25, 4000)]
+    public void PollingRate_SnapsToStandard(double gapMs, int expected)
+    {
+        var times = Enumerable.Range(0, 300).Select(i => i * gapMs).ToList();
+        times.Add(times[^1] + 500); // uma pausa não atrapalha
+        Assert.Equal(expected, MouseAim.PollingRate(times)!.Value.Hz);
+    }
+
+    [Fact]
+    public void PollingRate_TooFewSamples_IsNull() => Assert.Null(MouseAim.PollingRate(new double[] { 0, 1, 2 }));
+}
+
+public class RefreshRatesTests
+{
+    [Fact]
+    public void Lista_so_as_taxas_da_resolucao_atual()
+    {
+        var modes = new[]
+        {
+            new MBExtreme.Core.Display.DisplayMode(3440, 1440, 60), new(3440, 1440, 100), new(3440, 1440, 144), new(3440, 1440, 165), new(3440, 1440, 165),
+            new(3440, 1440, 30), new(2560, 1080, 200), new(1920, 1080, 60),
+        };
+        Assert.Equal(new[] { 60, 100, 144, 165 }, MBExtreme.Core.Display.RefreshRates.For(modes, 3440, 1440));
+    }
+
+    [Fact]
+    public void Avisa_quando_esta_abaixo_do_maximo()
+    {
+        var m = new MBExtreme.Core.Display.MonitorRates("\\\\.\\DISPLAY2", "Monitor 2", false, 1080, 1920, 60, new[] { 60, 75 });
+        Assert.True(m.BelowMax);
+        Assert.True(m.Vertical);
+        Assert.Equal(75, m.MaxHz);
+    }
+
+    [Theory]
+    [InlineData(165, false, 120)]
+    [InlineData(60, false, 60)]
+    [InlineData(165, true, 30)]
+    [InlineData(0, false, 60)]
+    public void Fps_da_previa(int hz, bool eco, int expected) => Assert.Equal(expected, MBExtreme.Core.Display.RefreshRates.PreviewFps(hz, eco));
+}

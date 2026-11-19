@@ -84,7 +84,7 @@ public class DesinstaladorCompletoTests
 
     [Theory]
     [InlineData(@"C:\Program Files\CapCut", true)]
-    [InlineData(@"C:\Program Files\CapCut\bin", true)]
+    [InlineData(@"C:\Program Files\CapCut\bin", false)]   // nome genérico ("bin") nunca é apagado sozinho: só a pasta do programa
     [InlineData(@"C:\Program Files", false)]
     [InlineData(@"C:\Program Files\Common Files", false)]
     [InlineData(@"C:\Program Files\Microsoft", false)]

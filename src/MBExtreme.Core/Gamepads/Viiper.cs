@@ -126,15 +126,15 @@ public sealed class ViiperClient
         catch (Exception ex) when (ex is IOException or SocketException or AggregateException or InvalidOperationException or JsonException) { return null; }
     }
 
-    public int CreateBus()
+    public int CreateBus(int timeoutMs = 3000)
     {
-        var json = ViiperWire.Parse(Send("bus/create"));
+        var json = ViiperWire.Parse(Send("bus/create", null, timeoutMs));
         return json.GetProperty("busId").GetInt32();
     }
 
-    public string AddDevice(int bus, string type)
+    public string AddDevice(int bus, string type, int timeoutMs = 3000)
     {
-        var json = ViiperWire.Parse(Send($"bus/{bus}/add", JsonSerializer.Serialize(new { type })));
+        var json = ViiperWire.Parse(Send($"bus/{bus}/add", JsonSerializer.Serialize(new { type }), timeoutMs));
         var dev = json.GetProperty("devId");
         return dev.ValueKind == JsonValueKind.Number ? dev.GetInt32().ToString() : dev.GetString() ?? "1";
     }

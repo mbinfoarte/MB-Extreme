@@ -87,8 +87,8 @@ public class Ps5VirtualTests
         });
         var client = new ViiperClient("127.0.0.1", port);
         Assert.Equal("1.2.3", client.Ping(10_000));   // folga para a máquina de CI ocupada
-        Assert.Equal(4, client.CreateBus());
-        Assert.Equal("1", client.AddDevice(4, "dualsense"));
+        Assert.Equal(4, client.CreateBus(10_000));
+        Assert.Equal("1", client.AddDevice(4, "dualsense", 10_000));
         Assert.True(server.Wait(20_000));
         listener.Stop();
         Assert.Equal(new[] { "ping", "bus/create", "bus/4/add {\"type\":\"dualsense\"}" }, seen);

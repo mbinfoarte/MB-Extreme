@@ -34,12 +34,42 @@ public sealed class PostInstallPage : ToolPageBase
         AddButton("Restaurar drivers e Wi-Fi de um backup", (_, _) => MainWindow.Current?.Go("formatbackup"), false);
         Loaded += async (_, _) =>
         {
+            if (TakeFromIso() is { } iso)
+            {
+                SetStatus("Este Windows veio de uma ISO do MB Extreme que pediu a pós-formatação" + (iso.Profile == "gamer" ? " com perfil Gamer" : "") +
+                    ": revise os itens e clique em \"Preparar o computador\"." + (iso.Profile == "gamer" ? " Depois, aplique o perfil Gamer em Otimizar › Processos e inicialização." : ""), "OkBrush");
+                return;
+            }
+            if (await Task.Run(MBExtreme.Core.Install.Reinstall.HasSetupPartition))
+            {
+                SetStatus("A partição MB-SETUP da reinstalação ainda está no disco. Abra a aba \"Reinstalar sem pendrive\" para devolver os drivers e o espaço ao C:.", "WarnBrush");
+                return;
+            }
             // backup feito antes de formatar num pendrive conectado: avisa no topo
             var found = await Task.Run(() => MBExtreme.Core.Windows.FormatBackup.Find(MBExtreme.Core.Windows.FormatBackup.ReadyRoots()));
             if (found.Count > 0)
                 SetStatus($"Achamos um backup de drivers e Wi-Fi de {found[0].Computer} ({found[0].Created:dd/MM/yyyy}). Clique em \"Restaurar drivers e Wi-Fi de um backup\" para devolver tudo.", "OkBrush");
         };
         Loaded += async (_, _) => { if (_items.Count == 0) await LoadAsync(); };
+    }
+
+    /// <summary>Pedido gravado pelo primeiro login de uma ISO do MB Extreme (ou null).</summary>
+    public static MBExtreme.Core.Install.IsoBuilder.FirstRun? FromIso()
+    {
+        try
+        {
+            string file = MBExtreme.Core.Install.IsoBuilder.FirstRunMarker;
+            return System.IO.File.Exists(file) ? MBExtreme.Core.Install.IsoBuilder.ReadFirstRun(System.IO.File.ReadAllText(file)) : null;
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    private static MBExtreme.Core.Install.IsoBuilder.FirstRun? TakeFromIso()
+    {
+        var run = FromIso();
+        try { if (run is not null) System.IO.File.Delete(MBExtreme.Core.Install.IsoBuilder.FirstRunMarker); }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { }
+        return run;
     }
 
     private async Task LoadAsync()

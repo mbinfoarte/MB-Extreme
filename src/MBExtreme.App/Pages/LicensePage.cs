@@ -380,13 +380,13 @@ public sealed class LicensePage : ToolPageBase
             yield return "Essencial (R$ 24,90/mês): otimização completa, drivers e limpeza avançada";
             yield return "Gamer (R$ 39,90/mês): jogos, Modo Jogo 2.0, DLSS/FSR e benchmark 3D";
             yield return "Creator (R$ 69,90/mês): estúdio de live e gravação";
-            yield return "Técnico (R$ 99,90/mês): pós-formatação, backup e 5 PCs";
+            yield return "Técnico (R$ 99,90/mês): pós-formatação, backup, criar ISO e reinstalar sem pendrive";
             yield break;
         }
         yield return "Otimização completa, drivers, limpeza avançada e rede";
         if (rank >= 2) yield return "Jogos: Modo Jogo 2.0, biblioteca com DLSS/FSR, benchmark 3D e FPS";
         if (rank >= 3) yield return "Estúdio: live, gravação e cortes verticais";
-        if (rank >= 4) yield return "Técnico: pós-formatação, backup para formatar e até 5 PCs";
+        if (rank >= 4) yield return "Técnico: pós-formatação, backup para formatar, criar ISO e reinstalar sem pendrive";
         yield return "Atualizações automáticas";
     }
 
@@ -688,7 +688,7 @@ public sealed class UpgradePage : ToolPageBase
             AddButton("Criar conta grátis", (_, _) => OpenSite("/cadastro"));
             AddButton("Ver planos", (_, _) => OpenSite("/precos?produto=mb-extreme"));
         }
-        Body.Children.Add(Muted("Planos: Essencial (otimização), Gamer (jogos e benchmark), Creator (estúdio de live) e Técnico (assistências, 5 PCs). " +
+        Body.Children.Add(Muted("Planos: Essencial (otimização), Gamer (jogos e benchmark), Creator (estúdio de live) e Técnico (assistências). Cada assinatura vale para 1 computador. " +
                                 "Os recursos gratuitos continuam disponíveis no menu."));
     }
 

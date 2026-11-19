@@ -550,7 +550,11 @@ internal sealed class AnalyzerHero : UserControl
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
         g.ColumnDefinitions.Add(new ColumnDefinition());
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.Children.Add(new TextBlock { Text = glyph, FontFamily = glyph.Length == 1 && glyph[0] > '' ? new FontFamily("Segoe MDL2 Assets") : null, FontSize = 12, Foreground = glyphBrush, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) });
+        // Ícone da fonte de ícones só quando é um símbolo dela; senão (emoji, texto) fica a fonte normal.
+        // Nunca FontFamily = null: o WPF recusa ("'' não é um valor válido para a propriedade 'FontFamily'") e o programa fechava.
+        var icon = new TextBlock { Text = glyph, FontSize = 12, Foreground = glyphBrush, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) };
+        if (glyph.Length == 1 && glyph[0] > '') icon.FontFamily = new FontFamily("Segoe MDL2 Assets");
+        g.Children.Add(icon);
         var text = new StackPanel { ToolTip = tip };
         text.Children.Add(new TextBlock { Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold });
         text.Children.Add(new TextBlock { Text = detail, FontSize = 11.5, Foreground = detailBrush, TextWrapping = TextWrapping.Wrap });

@@ -96,6 +96,22 @@ public sealed class InviteClient
         using var r = await PostAsync("/v1/feedback", new { license, deviceId, feedback }, token);
     }
 
+    /// <summary>Suporte rápido: avisa o painel do administrador que este PC está online (ID de acesso, nunca a senha).</summary>
+    public async Task SupportHeartbeatAsync(string license, string deviceId, MBExtreme.Core.Remote.SupportBeat beat, CancellationToken token = default)
+    {
+        using var r = await PostAsync("/v1/support/heartbeat", new
+        {
+            license, deviceId,
+            support = new { rustdeskId = beat.RustDeskId, pcName = beat.PcName, os = beat.Os, cpu = beat.Cpu, gpu = beat.Gpu, help = beat.Help, inSession = beat.InSession },
+        }, token);
+    }
+
+    /// <summary>Tira este PC do painel de suporte (o cliente desligou o suporte rápido).</summary>
+    public async Task SupportOptOutAsync(string license, string deviceId, CancellationToken token = default)
+    {
+        using var r = await PostAsync("/v1/support/optout", new { license, deviceId }, token);
+    }
+
     /// <summary>Só letras e números, maiúsculas, até 12 (o mesmo que o site aceita).</summary>
     public static string NormalizeCode(string code)
     {

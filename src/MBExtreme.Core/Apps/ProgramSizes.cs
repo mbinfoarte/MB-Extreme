@@ -30,6 +30,27 @@ public static class ProgramSizes
         return null;
     }
 
+    /// <summary>Letra do disco de um caminho ("D:\Jogos\Steam" → 'D'), ou null (caminho de rede, vazio ou sem letra).</summary>
+    public static char? DriveLetter(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        string p = Environment.ExpandEnvironmentVariables(path.Trim().Trim('"'));
+        return p.Length >= 2 && p[1] == ':' && char.IsAsciiLetter(p[0]) ? char.ToUpperInvariant(p[0]) : null;
+    }
+
+    /// <summary>
+    /// Onde o programa está: a pasta medida (quando existe) ou, se o programa não deixou pasta acessível, o primeiro caminho que ele
+    /// informa (pasta de instalação, desinstalador ou ícone). Programas da Store ficam no disco da pasta deles. Null = local desconhecido.
+    /// </summary>
+    public static (char? Drive, string? Folder) LocationOf(InstalledProgram program, Func<InstalledProgram, string?>? folderOf = null)
+    {
+        string? folder = program.Source == ProgramSource.Store ? program.InstallLocation : (folderOf ?? FolderOf)(program);
+        if (folder is not null) return (DriveLetter(folder), folder);
+        foreach (string? candidate in new[] { program.InstallLocation, InstalledPrograms.SplitCommand(program.UninstallCommand)?.File, program.IconPath })
+            if (DriveLetter(candidate) is { } d) return (d, null);
+        return (null, null);
+    }
+
     /// <summary>Serve como pasta de um programa? Raiz de disco e pastas do sistema (Windows, Program Files, AppData...) não.</summary>
     public static bool IsProgramFolder(string path)
     {

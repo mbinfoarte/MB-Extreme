@@ -38,7 +38,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => _updates?.InstallPendingOnExit();   // atualização baixada: instala ao fechar
         AppServices.Videos.Start();   // vídeo novo do canal: aviso no canto e faixa no Painel
         Loaded += async (_, _) => await _updates.CheckAsync();
-        ContentRendered += (_, _) => { Pages.WhatsNew.ShowOnceAfterUpdate(this); TrialEnd.ShowIfNeeded(this); if (Pages.PostInstallPage.FromIso() is not null) Go("postinstall"); };
+        ContentRendered += (_, _) => { Pages.WhatsNew.ShowOnceAfterUpdate(this); TrialEnd.ShowIfNeeded(this); if (Pages.PostInstallPage.FromIso() is not null) Go("postinstall"); SupportPresence.Start(this); };
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
         Accessibility.ApplyScale(RootGrid, AppServices.Settings.UiScale);

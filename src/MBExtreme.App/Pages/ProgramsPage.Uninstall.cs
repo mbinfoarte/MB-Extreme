@@ -17,6 +17,10 @@ namespace MBExtreme.UI.Pages;
 public sealed partial class ProgramsPage
 {
     private IReadOnlyList<InstalledProgram>? _inventory;
+    // disco de cada programa (C:, D:...; null = local desconhecido) e o filtro por disco ('*' = todos, '?' = desconhecido)
+    private Dictionary<InstalledProgram, (char? Drive, string? Folder)> _locations = new();
+    private char _driveFilter = '*';
+    private readonly WrapPanel _driveChips = new() { Margin = new Thickness(0, 0, 0, 8) };
     private readonly Dictionary<InstalledProgram, CheckBox> _removes = new();
     private readonly Dictionary<string, StackPanel> _sizeBlocks = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, ProgramMeasure> _measures = new(StringComparer.OrdinalIgnoreCase);
@@ -44,6 +48,8 @@ public sealed partial class ProgramsPage
         if (!keepStatus) SetStatus("Lendo os programas instalados...");
         _measureCts?.Cancel();
         _inventory = await Task.Run(InstalledPrograms.List);
+        var programs = _inventory;
+        _locations = await Task.Run(() => programs.ToDictionary(p => p, p => ProgramSizes.LocationOf(p)));
         _measures = await Task.Run(() => ProgramSizes.Load());
         _removes.Clear();
         _sizeBlocks.Clear();
@@ -71,6 +77,7 @@ public sealed partial class ProgramsPage
         foreach (FrameworkElement b in new FrameworkElement[] { sort, remeasure }) { DockPanel.SetDock(b, Dock.Right); bar.Children.Add(b); }
         bar.Children.Add(UiTree.Free(_inventoryChips));
         Body.Children.Add(bar);
+        Body.Children.Add(UiTree.Free(_driveChips));
         BuildInventoryChips();
         Body.Children.Add(UiTree.Free(_inventoryGrid));
 
@@ -174,9 +181,52 @@ public sealed partial class ProgramsPage
     private bool IsBig(InstalledProgram p) => SizeOf(p) is >= 500L * 1024 * 1024;
     private bool IsRecent(InstalledProgram p) => DateOf(p) is { } d && d >= DateTime.Today.AddDays(-30);
 
+    private char? DriveOf(InstalledProgram p) => _locations.TryGetValue(p, out var l) ? l.Drive : null;
+
+    private static string DriveName(char d)
+    {
+        try
+        {
+            var info = new System.IO.DriveInfo(d + ":\\");
+            if (!info.IsReady) return $"{d}:";
+            string label = info.VolumeLabel.Trim();
+            string kind = info.DriveType == System.IO.DriveType.Removable ? "removível" : "";
+            return $"{d}: " + (label.Length > 0 ? label : kind.Length > 0 ? kind : d == 'C' ? "Windows" : "disco");
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or ArgumentException) { return $"{d}:"; }
+    }
+
+    /// <summary>Cartões dos discos: todos, cada letra (programas e espaço) e local desconhecido. Clicar filtra a lista.</summary>
+    private void BuildDriveChips()
+    {
+        _driveChips.Children.Clear();
+        if (_inventory is null) return;
+        var groups = new List<(char Key, string Title, List<InstalledProgram> List)> { ('*', "Todos os discos", _inventory.ToList()) };
+        foreach (var g in _inventory.Where(p => DriveOf(p) is not null).GroupBy(p => DriveOf(p)!.Value).OrderBy(g => g.Key))
+            groups.Add((g.Key, DriveName(g.Key), g.ToList()));
+        var unknown = _inventory.Where(p => DriveOf(p) is null).ToList();
+        if (unknown.Count > 0) groups.Add(('?', "Local desconhecido", unknown));
+        if (groups.Count <= 2 && unknown.Count == 0) return;   // tudo num disco só: não precisa dos cartões
+        foreach (var (key, title, list) in groups)
+        {
+            char k = key;
+            long bytes = list.Sum(p => SizeOf(p) ?? 0);
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, FontSize = 12.5 });
+            text.Children.Add(new TextBlock { Text = $"{list.Count} programa(s)" + (bytes > 0 ? " · " + DiagnosticRules.Size(bytes) : ""), FontSize = 11, Opacity = 0.8 });
+            var chip = new System.Windows.Controls.Primitives.ToggleButton
+            {
+                Content = text, Style = (Style)FindResource("ChipToggle"), Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 6, 12, 6), IsChecked = k == _driveFilter,
+            };
+            chip.Click += (_, _) => { _driveFilter = k; BuildDriveChips(); FillInventory(); };
+            _driveChips.Children.Add(chip);
+        }
+    }
+
     private void BuildInventoryChips()
     {
         if (_inventory is null) return;
+        BuildDriveChips();
         _inventoryChips.Children.Clear();
         var filters = new (string Name, Func<InstalledProgram, bool> Test)[]
         {
@@ -200,6 +250,8 @@ public sealed partial class ProgramsPage
         _inventoryGrid.Children.Clear();
         string query = _inventorySearch?.Text.Trim() ?? "";
         IEnumerable<InstalledProgram> list = _inventory.Where(p => query.Length == 0 || p.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || p.Publisher.Contains(query, StringComparison.CurrentCultureIgnoreCase));
+        if (_driveFilter == '?') list = list.Where(p => DriveOf(p) is null);
+        else if (_driveFilter != '*') list = list.Where(p => DriveOf(p) == _driveFilter);
         list = _inventoryFilter switch
         {
             "Grandes (+500 MB)" => list.Where(IsBig),
@@ -232,14 +284,15 @@ public sealed partial class ProgramsPage
                 _sizeBlocks[key] = block;
                 FillSize(block, program, measuring: _measuring > 0);
             }
-            string detail = program.Source == ProgramSource.Store ? "Microsoft Store" : program.Publisher;
+            var where = _locations.TryGetValue(program, out var loc) ? loc : (null, null);
+            string detail = (where.Drive is { } dl ? $"{dl}: · " : "? · ") + (program.Source == ProgramSource.Store ? "Microsoft Store" : program.Publisher);
             var card = CompactPick.Card(box, CompactPick.ProgramIcon(program.IconPath, program.Name), program.Name, detail, block);
             card.Height = 48;
             if (plan is { Silent: false } && card.Child is DockPanel row && row.Children.OfType<StackPanel>().LastOrDefault()?.Children[0] is TextBlock name)
             {
                 name.Inlines.Add(new System.Windows.Documents.Run("  ●") { Foreground = Orange, FontSize = 10 });
             }
-            card.ToolTip = $"{program.Name} {program.Version}".Trim() + "\n" + (plan is null ? "Este programa não informou como desinstalar. Use Configurações > Aplicativos." : "Remoção: " + plan.Label);
+            card.ToolTip = $"{program.Name} {program.Version}".Trim() + "\n" + (where.Folder is { } folder ? "Pasta: " + folder : where.Drive is { } d2 ? $"Disco {d2}: (a pasta não foi encontrada)" : "Local desconhecido (o programa não informou a pasta)") + "\n" + (plan is null ? "Este programa não informou como desinstalar. Use Configurações > Aplicativos." : "Remoção: " + plan.Label);
             _inventoryGrid.Children.Add(card);
         }
         if (shown.Count == 0) _inventoryGrid.Children.Add(Muted("Nenhum programa encontrado."));
@@ -250,7 +303,9 @@ public sealed partial class ProgramsPage
         if (_removeButton is null) return;
         var chosen = _removes.Where(p => p.Value.IsChecked == true).Select(p => p.Key).ToList();
         long bytes = chosen.Sum(p => SizeOf(p) ?? 0);
-        _removeButton.Content = chosen.Count == 0 ? "Desinstalar selecionados" : $"Desinstalar {chosen.Count}" + (bytes > 0 ? " · libera " + DiagnosticRules.Size(bytes) : "");
+        var drives = chosen.Select(DriveOf).Where(d => d is not null).Distinct().ToList();
+        string where = drives.Count == 1 ? $" no {drives[0]}:" : "";
+        _removeButton.Content = chosen.Count == 0 ? "Desinstalar selecionados" : $"Desinstalar {chosen.Count}" + (bytes > 0 ? " · libera " + DiagnosticRules.Size(bytes) + where : "");
         _removeButton.IsEnabled = chosen.Count > 0;
     }
 

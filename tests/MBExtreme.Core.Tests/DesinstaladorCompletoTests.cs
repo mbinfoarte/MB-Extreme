@@ -140,3 +140,30 @@ public class DesinstaladorCompletoTests
         Assert.False(RegistryCleaner.LooksLikeDriver("Nero 2016 Platinum", "Nero AG"));
     }
 }
+
+public class DiscoDoProgramaTests
+{
+    private static MBExtreme.Core.Apps.InstalledProgram P(string? loc, string? uninstall = null, string? icon = null, MBExtreme.Core.Apps.ProgramSource src = MBExtreme.Core.Apps.ProgramSource.Win32) =>
+        new("X", "1", "Y", src, null, null, loc, icon, uninstall, null, null);
+
+    [Theory]
+    [InlineData(@"D:\Jogos\Steam", 'D')]
+    [InlineData(@"""e:\Programas\obs-studio""", 'E')]
+    [InlineData(@"\\servidor\pasta", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void LetraDoDisco(string? path, char? expected) => Assert.Equal(expected, MBExtreme.Core.Apps.ProgramSizes.DriveLetter(path));
+
+    [Fact]
+    public void LocalDoPrograma()
+    {
+        // pasta encontrada: disco e pasta
+        Assert.Equal(('D', @"D:\Jogos\Steam"), MBExtreme.Core.Apps.ProgramSizes.LocationOf(P(@"D:\Jogos\Steam"), _ => @"D:\Jogos\Steam"));
+        // sem pasta acessível: o disco vem do desinstalador
+        Assert.Equal(((char?)'E', (string?)null), MBExtreme.Core.Apps.ProgramSizes.LocationOf(P(null, @"""E:\Apps\X\unins000.exe"" /SILENT"), _ => null));
+        // nada informado: local desconhecido
+        Assert.Equal(((char?)null, (string?)null), MBExtreme.Core.Apps.ProgramSizes.LocationOf(P(null), _ => null));
+        // Store: a pasta dela
+        Assert.Equal('C', MBExtreme.Core.Apps.ProgramSizes.LocationOf(P(@"C:\Program Files\WindowsApps\X", src: MBExtreme.Core.Apps.ProgramSource.Store)).Drive);
+    }
+}

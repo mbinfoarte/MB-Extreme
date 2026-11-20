@@ -4,6 +4,35 @@ using System.Text.RegularExpressions;
 
 namespace MBExtreme.Core.Remote;
 
+/// <summary>O que o programa manda ao painel "Suporte ao vivo" a cada 2 minutos (com a autorização do cliente). Nunca a senha.</summary>
+public sealed record SupportBeat(string RustDeskId, string PcName, string Os, string Cpu, string Gpu, bool Help, bool InSession);
+
+/// <summary>
+/// Preferências do suporte neste PC: acesso sem ninguém (Técnico), suporte rápido (null = ainda não perguntado) e "pedi ajuda" (quando).
+/// </summary>
+public sealed record SupportPrefs(bool Unattended = false, bool? QuickSupport = null, DateTime? HelpSince = null)
+{
+    public static string FileIn(string appData) => Path.Combine(appData, "MBExtreme", "suporte.json");
+
+    public static SupportPrefs Load(string file)
+    {
+        try { return File.Exists(file) ? JsonSerializer.Deserialize<SupportPrefs>(File.ReadAllText(file)) ?? new() : new(); }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { return new(); }
+    }
+
+    public void Save(string file)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, JsonSerializer.Serialize(this));
+    }
+
+    /// <summary>O pedido de ajuda vale por 1 hora (depois some do painel sozinho).</summary>
+    public bool HelpActive(DateTime now) => HelpSince is { } t && now - t < TimeSpan.FromHours(1);
+
+    /// <summary>Texto curto do PC para o painel: corta nomes muito longos.</summary>
+    public static string Clip(string? text, int max) => string.IsNullOrWhiteSpace(text) ? "" : text.Trim().Length <= max ? text.Trim() : text.Trim()[..max];
+}
+
 /// <summary>Um PC atendido pelo técnico (lista "Atendidos recentemente").</summary>
 public sealed record RustDeskPeer(string Id, string Name, DateTime LastAccess);
 

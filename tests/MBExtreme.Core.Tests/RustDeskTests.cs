@@ -73,3 +73,23 @@ public class RustDeskTests
         Assert.Contains("482 917 305", RustDesk.ShareText("482917305", "k7m4-2xqp"));
     }
 }
+
+public class SupportPrefsTests
+{
+    [Fact]
+    public void SavesAndExpiresHelp()
+    {
+        string file = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        Assert.Null(SupportPrefs.Load(file).QuickSupport);   // ainda não perguntado
+        var now = new DateTime(2026, 11, 20, 10, 0, 0);
+        new SupportPrefs(false, true, now).Save(file);
+        var p = SupportPrefs.Load(file);
+        Assert.True(p.QuickSupport);
+        Assert.True(p.HelpActive(now.AddMinutes(59)));
+        Assert.False(p.HelpActive(now.AddMinutes(61)));
+        Assert.False(new SupportPrefs().HelpActive(now));
+        File.Delete(file);
+        Assert.Equal("abc", SupportPrefs.Clip("  abcdef ", 3));
+        Assert.Equal("", SupportPrefs.Clip(null, 3));
+    }
+}

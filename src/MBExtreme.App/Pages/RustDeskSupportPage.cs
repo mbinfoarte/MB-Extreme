@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -17,8 +16,6 @@ namespace MBExtreme.UI.Pages;
 /// </summary>
 public sealed class RustDeskSupportPage : ToolPageBase
 {
-    private sealed record Prefs(bool Unattended);
-
     private readonly Border _live = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 0, 10), BorderThickness = new Thickness(1) };
     private readonly TextBlock _liveText = new() { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _state = new() { FontSize = 12, Margin = new Thickness(0, 10, 0, 4) };
@@ -35,7 +32,6 @@ public sealed class RustDeskSupportPage : ToolPageBase
     private string _sessionPassword = "";
     private bool _shown, _busy, _wasOpen;
     private DateTime _openSince;
-    private static string PrefsFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "suporte.json");
     private static string PeersFile => RustDesk.PeersFile(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
     private static bool Tech => AppServices.License.IsAllowed("remote-tech");
 
@@ -67,8 +63,13 @@ public sealed class RustDeskSupportPage : ToolPageBase
         var other = CardOf(BuildOther());
         Grid.SetColumn(other, 2);
         _ready.Children.Add(other);
+        var quick = CardOf(BuildQuick());
+        Grid.SetRow(quick, 1);
+        Grid.SetColumnSpan(quick, 3);
+        _ready.Children.Add(quick);
+        _ready.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var unattended = CardOf(BuildUnattended());
-        Grid.SetRow(unattended, 1);
+        Grid.SetRow(unattended, 2);
         Grid.SetColumnSpan(unattended, 3);
         _ready.Children.Add(unattended);
         Body.Children.Add(_ready);
@@ -153,10 +154,50 @@ public sealed class RustDeskSupportPage : ToolPageBase
         return p;
     }
 
+    private readonly CheckBox _quick = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+    private readonly Button _help = new();
+
+    private DockPanel BuildQuick()
+    {
+        var row = new DockPanel();
+        _quick.IsChecked = SupportPresence.Prefs.QuickSupport == true;
+        _quick.Checked += (_, _) => { SupportPresence.SetEnabled(true); PaintHelp(); SetStatus("Suporte rápido ligado.", "OkBrush"); };
+        _quick.Unchecked += (_, _) => { SupportPresence.SetEnabled(false); PaintHelp(); SetStatus("Suporte rápido desligado: este PC saiu do painel da MB InfoArt.", "OkBrush"); };
+        DockPanel.SetDock(_quick, Dock.Left);
+        row.Children.Add(_quick);
+        _help.Style = (Style)FindResource("PrimaryButton");
+        _help.Margin = new Thickness(12, 0, 0, 0);
+        _help.Click += async (_, _) =>
+        {
+            bool on = !SupportPresence.Prefs.HelpActive(DateTime.Now);
+            await SupportPresence.RequestHelpAsync(on);
+            PaintHelp();
+            SetStatus(on ? "Pedido enviado: o suporte da MB InfoArt vê o seu PC em destaque e pede acesso. Aceite na janela que aparecer." : "Pedido de ajuda cancelado.", "OkBrush");
+        };
+        DockPanel.SetDock(_help, Dock.Right);
+        row.Children.Add(_help);
+        var text = new StackPanel();
+        text.Children.Add(new TextBlock { Text = "Suporte rápido da MB InfoArt", FontSize = 14, FontWeight = FontWeights.SemiBold });
+        text.Children.Add(Muted("O suporte vê quando este PC está com o MB aberto e pede acesso sem você passar ID e senha. Você sempre aceita ou recusa na tela. Nunca enviamos a senha.", 11.5));
+        row.Children.Add(text);
+        PaintHelp();
+        return row;
+    }
+
+    private void PaintHelp()
+    {
+        var prefs = SupportPresence.Prefs;
+        _help.Visibility = prefs.QuickSupport == true && InviteUiReady ? Visibility.Visible : Visibility.Collapsed;
+        _help.Content = prefs.HelpActive(DateTime.Now) ? "Cancelar pedido de ajuda" : "Pedir ajuda";
+        if (!InviteUiReady) { _quick.IsEnabled = false; _quick.ToolTip = "Entre na sua conta para usar o suporte rápido."; }
+    }
+
+    private static bool InviteUiReady => MBExtreme.UI.Controls.InviteApi.Ready;
+
     private DockPanel BuildUnattended()
     {
         var row = new DockPanel();
-        _unattended.IsChecked = LoadPrefs().Unattended;
+        _unattended.IsChecked = SupportPresence.Prefs.Unattended;
         _unattended.Margin = new Thickness(0, 0, 12, 0);
         _unattended.Checked += async (_, _) => await SetUnattendedAsync(true);
         _unattended.Unchecked += async (_, _) => await SetUnattendedAsync(false);
@@ -213,7 +254,7 @@ public sealed class RustDeskSupportPage : ToolPageBase
         Paint(false, "Preparando...");
         try
         {
-            bool unattended = LoadPrefs().Unattended && Tech;
+            bool unattended = SupportPresence.Prefs.Unattended && Tech;
             await RustDeskHost.ApplyOptionsAsync(unattended, CancellationToken.None);
             _myId = await RustDeskHost.GetIdAsync(CancellationToken.None);
             _id.Text = _myId is null ? "— — —" : RustDesk.FormatId(_myId);
@@ -314,13 +355,13 @@ public sealed class RustDeskSupportPage : ToolPageBase
             {
                 // só liga de verdade se o técnico definir a senha fixa
                 if (!Tech || !await FixedPasswordAsync()) { _unattended.IsChecked = false; return; }
-                SavePrefs(new Prefs(true));
+                SavePrefs(true);
                 await RustDeskHost.ApplyOptionsAsync(true, CancellationToken.None);
                 SetStatus("Acesso sem ninguém ligado: use a senha fixa para entrar neste PC.", "OkBrush");
             }
             else
             {
-                SavePrefs(new Prefs(false));
+                SavePrefs(false);
                 await RustDeskHost.ApplyOptionsAsync(false, CancellationToken.None);
                 await NewPasswordAsync();
                 SetStatus("Acesso sem ninguém desligado: a senha volta a trocar a cada sessão.", "OkBrush");
@@ -361,19 +402,9 @@ public sealed class RustDeskSupportPage : ToolPageBase
         _wasOpen = open;
     }
 
-    private static Prefs LoadPrefs()
+    private static void SavePrefs(bool unattended)
     {
-        try { return File.Exists(PrefsFile) ? JsonSerializer.Deserialize<Prefs>(File.ReadAllText(PrefsFile)) ?? new Prefs(false) : new Prefs(false); }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { return new Prefs(false); }
-    }
-
-    private static void SavePrefs(Prefs prefs)
-    {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(PrefsFile)!);
-            File.WriteAllText(PrefsFile, JsonSerializer.Serialize(prefs));
-        }
+        try { (SupportPresence.Prefs with { Unattended = unattended }).Save(SupportPresence.PrefsFile); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }

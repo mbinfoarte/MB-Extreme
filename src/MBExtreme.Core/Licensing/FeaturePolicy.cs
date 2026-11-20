@@ -33,7 +33,7 @@ public static class FeaturePolicy
         // Creator: estúdio de live e gravação
         ["studio"] = Creator, ["record"] = Creator, ["shorts"] = Creator,
         // Técnico: ferramentas de assistência
-        ["postinstall"] = Tecnico, ["formatbackup"] = Tecnico, ["iso-create"] = Tecnico, ["reinstall"] = Tecnico,
+        ["postinstall"] = Tecnico, ["formatbackup"] = Tecnico, ["iso-create"] = Tecnico, ["reinstall"] = Tecnico, ["remote-tech"] = Tecnico,
     };
 
     /// <summary>Páginas pagas (qualquer plano).</summary>

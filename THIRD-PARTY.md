@@ -122,3 +122,8 @@ SOFTWARE.
 - Uso: a emulação "PS5 (DualSense)" e "PS5 Edge" conversa pela API TCP local com o servidor VIIPER, que a própria pessoa instala pelo site oficial (https://github.com/Alia5/VIIPER). O MB Extreme não distribui nem embute o VIIPER.
 - Licença do servidor: GPL-3.0 (Peter Repukat). As bibliotecas cliente oficiais são MIT; o cliente do MB Extreme é implementação própria a partir da documentação pública da API e do formato do dispositivo DualSense.
 - O VIIPER usa o driver usbip-win2 (assinado), instalado pelo próprio instalador do VIIPER.
+
+## RustDesk (suporte remoto) — programa à parte, baixado na primeira vez
+- Uso: a tela Suporte remoto baixa o instalador oficial do RustDesk 1.5.3 (https://github.com/rustdesk/rustdesk/releases/tag/1.5.3), confere o SHA-256 e instala sem modificar. O MB Extreme comanda o RustDesk só pela linha de comando pública dele (--get-id, --password, --option, --connect, --file-transfer) e usa a rede pública do RustDesk.
+- Licença: AGPL-3.0 (Purslane Ltd. e colaboradores). Código-fonte: https://github.com/rustdesk/rustdesk. O MB Extreme não embute nem altera o código do RustDesk.
+- "RustDesk" é marca dos seus autores; é citado só para informar a origem do módulo.

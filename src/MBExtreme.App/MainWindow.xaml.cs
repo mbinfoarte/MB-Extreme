@@ -666,7 +666,8 @@ public partial class MainWindow : Window
         "wallpaper" => new WallpaperPage(),
         "monitor-hz" => new MonitorPage(),
         "license" => new LicensePage(),
-        "support" or "remote" or "remote-console" => new RemoteAccessPage(),   // Suporte: uma tela só, estilo AnyDesk
+        "support" or "remote" => new RustDeskSupportPage(),   // Suporte remoto com o RustDesk (rede pública)
+        "remote-console" => new RemoteAccessPage(),           // acesso remoto próprio do MB: reserva, fora do menu
         "social" => new SocialPage(),
         "suggest" => new SuggestionsPage(),
         "news" => new NewsPage(),

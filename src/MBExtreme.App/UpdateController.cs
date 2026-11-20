@@ -89,7 +89,7 @@ internal sealed class UpdateController
         _host.Children.Add(_banner);
 
         _now.Click += async (_, _) => await InstallAsync(_bannerProgress);
-        _later.Click += (_, _) => { _banner.Visibility = Visibility.Collapsed; _content.Margin = _contentMargin; };   // baixada: continua instalando ao fechar
+        _later.Click += (_, _) => { _banner.Visibility = Visibility.Collapsed; _content.Margin = new Thickness(_content.Margin.Left, _contentMargin.Top, _content.Margin.Right, _content.Margin.Bottom); };   // baixada: continua instalando ao fechar
 
         // tela de atualização obrigatória
         _lock.Background = new SolidColorBrush(Color.FromArgb(245, 8, 8, 10));
@@ -162,7 +162,7 @@ internal sealed class UpdateController
         _bannerText.Text = text;
         _now.Content = button;
         if (_banner.Visibility != Visibility.Visible) { _banner.Visibility = Visibility.Visible; Motion.Enter(_banner, fromY: -24); }
-        _content.Margin = new Thickness(_contentMargin.Left, _contentMargin.Top + 56, _contentMargin.Right, _contentMargin.Bottom);
+        _content.Margin = new Thickness(_content.Margin.Left, _contentMargin.Top + 56, _content.Margin.Right, _content.Margin.Bottom);   // só o topo: a faixa da Black Friday usa o rodapé
     }
 
     /// <summary>"Atualizar sozinho": baixa em segundo plano (com conferência do SHA-256) e oferece reiniciar agora ou instalar ao fechar.</summary>

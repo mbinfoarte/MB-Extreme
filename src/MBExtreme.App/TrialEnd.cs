@@ -38,7 +38,10 @@ internal static class TrialEnd
             Title = "MB Extreme", Width = 600, SizeToContent = SizeToContent.Height, Owner = owner, WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize, Background = (Brush)Application.Current.FindResource("SurfaceBrush"), Content = root,
         };
-        choices.Children.Add(Choice("⭐ Assinar um plano", "Essencial, Gamer, Creator ou Técnico, a partir de R$ 24,90/mês. Depois de pagar, clique em Atualizar em Conta e licença.", true, () =>
+        var bf = MBExtreme.Core.Notices.BlackFriday.Active(DateTimeOffset.Now);
+        choices.Children.Add(Choice(bf is null ? "⭐ Assinar um plano" : $"🔥 {bf.Label}: {bf.Percent}% OFF no anual",
+            (bf is null ? "" : $"Só até {bf.End.ToOffset(TimeSpan.FromHours(-3)):dd/MM}: {bf.Percent}% de desconto no 1º ano do plano anual. ") +
+            "Essencial, Gamer, Creator ou Técnico, a partir de R$ 24,90/mês. Depois de pagar, clique em Atualizar em Conta e licença.", true, () =>
         {
             window.Close();
             try { Process.Start(new ProcessStartInfo(MBExtreme.Core.AppInfo.SiteUrl + "/precos?produto=mb-extreme") { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { }

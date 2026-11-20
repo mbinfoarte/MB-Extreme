@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         };
         Go("home");
         _updates = new UpdateController(RootGrid, ContentHost);
+        _ = new BlackFridayStrip(RootGrid, ContentHost);   // Black Friday: faixa no rodapé só nas datas da campanha
         Closed += (_, _) => _updates?.InstallPendingOnExit();   // atualização baixada: instala ao fechar
         AppServices.Videos.Start();   // vídeo novo do canal: aviso no canto e faixa no Painel
         Loaded += async (_, _) => await _updates.CheckAsync();

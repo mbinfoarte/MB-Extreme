@@ -119,7 +119,8 @@ public partial class MainWindow
         var status = AppServices.License.Status;
         if (status.Payload is { Status: "trialing", PeriodEnd: { } end } && end - DateTimeOffset.Now < TimeSpan.FromDays(1) && end > DateTimeOffset.Now)
             AppServices.Notices.Add(new Notice("trial-end-" + end.ToString("yyyyMMdd"), NoticeKind.Trial, "Seu teste grátis acaba hoje",
-                $"Os recursos do plano Gamer ficam liberados até {end.LocalDateTime:HH:mm}. Assine para continuar.", DateTime.Now, PageKey: "license"));
+                $"Os recursos do plano Gamer ficam liberados até {end.LocalDateTime:HH:mm}. Assine para continuar." +
+                (MBExtreme.Core.Notices.BlackFriday.Active(DateTimeOffset.Now) is { } bf ? $" {bf.Label}: {bf.Percent}% OFF no plano anual." : ""), DateTime.Now, PageKey: "license"));
 
         if (!App.StartInTray || status.Payload is null) return;
         if (s.LastStartupNotice is { } last && last.Date == DateTime.Today) return;

@@ -185,6 +185,39 @@ internal static class NavigationMap
         ["hub-fps"] = new[] { ("Gargalos", "bottleneck"), ("Medidor de FPS", "gamefps") },
     };
 
+    /// <summary>
+    /// Ícone (Segoe MDL2 Assets) e uma linha curta do que cada ferramenta das telas de abas faz, para a barra de ferramentas do módulo
+    /// e as abas internas. Toda aba de <see cref="Hubs"/> tem que estar aqui (o teste confere).
+    /// </summary>
+    public static IReadOnlyDictionary<string, (string Icon, string Hint)> TabInfo { get; } = new Dictionary<string, (string, string)>
+    {
+        ["programs-install"] = ("\uE896", "kits e programas"), ["programs-installed"] = ("\uE777", "versões novas"), ["uninstaller"] = ("\uE74D", "remover e limpar restos"), ["debloat"] = ("\uE71D", "apps que vêm no Windows"),
+        ["mbc-overview"] = ("\uE7FC", "bateria, firmware e perfil"), ["padcalib"] = ("\uE9D9", "analógicos e gatilhos"), ["mbc-emu"] = ("\uE7FC", "Xbox, PS4 e PS5 virtuais"), ["mbc-kbm"] = ("\uE765", "jogar no teclado e mouse"),
+        ["mouse-aim"] = ("\uE765", "sensibilidade e curva"), ["mbc-light"] = ("\uE945", "LED, gatilhos e rumble"), ["mbc-tune"] = ("\uE713", "zona morta e resposta"),
+        ["sysinfo"] = ("\uE7F8", "peças e Windows"), ["hardware"] = ("\uE950", "CPU, GPU, RAM e discos"), ["monitor-hz"] = ("\uE7F4", "taxa de atualização"), ["win11"] = ("\uE7F8", "versão e requisitos"),
+        ["periphtest"] = ("\uE765", "teclado, mouse, som e câmera"), ["ghosts"] = ("\uE88E", "registros de USB antigos"), ["devices"] = ("\uE88E", "tudo que está ligado"), ["removable"] = ("\uEDA2", "pendrives e HDs"), ["fakecheck"] = ("\uE9D9", "capacidade falsa?"),
+        ["wallpaper"] = ("\uE771", "temas em alta resolução"), ["rgb"] = ("\uE771", "cores e efeitos"), ["fans"] = ("\uE945", "curvas e rotação"),
+        ["hub-startup"] = ("\uE7E8", "inicialização e serviços"), ["hub-clean"] = ("\uE74D", "lixo, memória e registro"), ["tweaks-all"] = ("\uE713", "ajustes do Windows"), ["hub-disks"] = ("\uEDA2", "saúde e TRIM"),
+        ["drivers"] = ("\uE896", "atualizar e limpar"), ["bios-tune"] = ("\uE950", "ajustes e guia"), ["speedtest"] = ("\uE9D9", "velocidade e ping"), ["repair"] = ("\uE90F", "SFC, DISM e CHKDSK"),
+        ["proc-profiles"] = ("\uE945", "perfis de um clique"), ["startup"] = ("\uE7E8", "o que liga com o PC"), ["processes"] = ("\uE9D9", "o que está aberto"), ["services"] = ("\uE713", "serviços do Windows"),
+        ["cleanup"] = ("\uE74D", "lixo e temporários"), ["memory"] = ("\uE950", "RAM livre"), ["registry"] = ("\uE713", "chaves quebradas"), ["duplicates"] = ("\uE8B7", "arquivos repetidos"),
+        ["storage"] = ("\uEDA2", "saúde, desfragmentar e TRIM"), ["diskmap"] = ("\uE8B7", "o que ocupa espaço"),
+        ["security"] = ("\uE72E", "antivírus e firewall"), ["restorepoints"] = ("\uE81C", "voltar o Windows"), ["undo"] = ("\uE7A7", "desfazer ajustes"),
+        ["postinstall"] = ("\uE896", "Windows novo pronto"), ["iso-create"] = ("\uE958", "a sua ISO do Windows"), ["reinstall"] = ("\uE777", "instalar pelo próprio disco"), ["formatbackup"] = ("\uE74E", "drivers e Wi-Fi"),
+        ["support"] = ("\uE716", "acesso remoto"), ["suggest"] = ("\uE946", "ideias e pedidos"), ["about"] = ("\uE946", "versão e créditos"),
+        ["bottleneck"] = ("\uE9D9", "o que segura o FPS"), ["gamefps"] = ("\uE7FC", "FPS e 1% low"),
+    };
+
+    /// <summary>Título e ícone do módulo de uma tela de abas: o item do menu lateral ou, se for aba de outra tela, o nome dessa aba.</summary>
+    public static (string Title, string Icon) HubTitle(string hubKey)
+    {
+        var side = Sidebar.SelectMany(x => x.Items).FirstOrDefault(i => i.Key == hubKey);
+        if (side is not null) return (side.Title, side.Icon);
+        var parent = Hubs.Values.SelectMany(t => t).FirstOrDefault(t => t.Key == hubKey);
+        string title = parent.Title ?? hubKey;
+        return (title, TabInfo.TryGetValue(hubKey, out var info) ? info.Icon : "\uE8A9");
+    }
+
     /// <summary>Caminho de telas de abas até a ferramenta, da mais de fora para a mais de dentro (vazio se não estiver em nenhuma).</summary>
     public static IReadOnlyList<string> HubPath(string pageKey)
     {

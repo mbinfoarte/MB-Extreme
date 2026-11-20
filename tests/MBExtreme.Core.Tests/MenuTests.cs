@@ -76,3 +76,21 @@ public class MenuTests
         Assert.Equal(new[] { "opt", "games", "studio", "test", "win", "sup", "lic" }, NavigationMap.Modules.Select(m => m.Key));
     }
 }
+
+public class AbasDosModulosTests
+{
+    [Fact]
+    public void TodaAbaTemIconeEFrase()
+    {
+        foreach (var (hub, tabs) in MBExtreme.UI.NavigationMap.Hubs)
+            foreach (var (_, key) in tabs)
+            {
+                Assert.True(MBExtreme.UI.NavigationMap.TabInfo.ContainsKey(key), $"falta ícone/frase da aba {key} ({hub})");
+                var (icon, hint) = MBExtreme.UI.NavigationMap.TabInfo[key];
+                Assert.Single(icon);
+                Assert.InRange(hint.Length, 3, 32);
+            }
+        Assert.Equal("Otimizar", MBExtreme.UI.NavigationMap.HubTitle("hub-otimizar").Title);
+        Assert.Equal("Limpeza", MBExtreme.UI.NavigationMap.HubTitle("hub-clean").Title);
+    }
+}

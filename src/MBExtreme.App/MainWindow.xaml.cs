@@ -603,7 +603,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Tela de abas (Limpeza, Dispositivos e discos...): cada aba é a ferramenta de sempre.</summary>
-    private static TabsPage CreateHub(string key) => new(key == "hub-clean" ? TurboStrip.Build() : null, NavigationMap.HubOf(key) is not null,
+    private static TabsPage CreateHub(string key) => new(key == "hub-clean" ? TurboStrip.Build() : null, NavigationMap.HubOf(key) is not null, key,
         NavigationMap.Hubs[key].Select(t => (t.Title, t.Key, (Func<UserControl>)(() => CreateInner(t.Key, NavigationMap.TileOf(t.Key))))).ToArray());
 
     private static UserControl CreateInner(string key, Tile? tile) => NavigationMap.Hubs.ContainsKey(key) ? CreateHub(key) : key switch

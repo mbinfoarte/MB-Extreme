@@ -544,13 +544,13 @@
     <!-- Chip que liga e desliga (o que testar, resolução) -->
     <Style x:Key="ChipToggle" TargetType="ToggleButton">
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="Foreground" Value="#B4B4BC" />
+        <Setter Property="Foreground" Value="#D2D2D8" />
         <Setter Property="FontSize" Value="12.5" />
         <Setter Property="Margin" Value="0,0,8,8" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="Bd" Background="{StaticResource SurfaceBrush}" CornerRadius="16" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12,6">
+                    <Border x:Name="Bd" Background="#1C1C21" CornerRadius="16" BorderBrush="#34343C" BorderThickness="1" Padding="12,6">
                         <ContentPresenter VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -561,6 +561,12 @@
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource GlassSelectedBrush}" />
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentGradientBrush}" />
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="1.5" />
+                            <Setter TargetName="Bd" Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect Color="#FFC400" BlurRadius="10" ShadowDepth="0" Opacity="0.35" />
+                                </Setter.Value>
+                            </Setter>
                             <Setter Property="Foreground" Value="#FFC400" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
@@ -568,6 +574,104 @@
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="#FFC400" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Ferramenta do módulo (barra de cima das telas com abas): ícone fino esbranquiçado que acende dourado, nome e uma linha do que faz.
+         O ícone vem no Tag (glifo da Segoe MDL2 Assets); o conteúdo é o texto. Selecionada: vidro dourado, borda em degradê e barrinha à esquerda. -->
+    <Style x:Key="ToolTab" TargetType="RadioButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="#D6D6DC" />
+        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="Margin" Value="0,0,8,8" />
+        <Setter Property="MinWidth" Value="128" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Grid>
+                        <Border x:Name="Bd" Background="#1A1A1F" CornerRadius="12" BorderThickness="1" BorderBrush="#2A2A31" Padding="12,9,16,9">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="IcoBox" Width="28" Height="28" CornerRadius="8" Background="#24242B" Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="Ico" Text="{TemplateBinding Tag}" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="#E4E6EB"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="Bar" Width="4" CornerRadius="2" Margin="0,9" HorizontalAlignment="Left" Background="{StaticResource AccentGradientVertical}" Visibility="Hidden">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#FFC400" BlurRadius="10" ShadowDepth="0" Opacity="0.85" />
+                            </Border.Effect>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#4A4A55" />
+                            <Setter TargetName="Bd" Property="Background" Value="#202027" />
+                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource GlassSelectedBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentGradientBrush}" />
+                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Ico" Property="Foreground" Value="#FFC400" />
+                            <Setter TargetName="IcoBox" Property="Background" Value="#33FFC400" />
+                            <Setter TargetName="Ico" Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect Color="#FFC400" BlurRadius="12" ShadowDepth="0" Opacity="0.9" />
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#FFC400" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Aba interna (2º nível, ex.: Limpeza › Memória): ícone pequeno esbranquiçado, nome, sublinhado dourado com brilho na escolhida -->
+    <Style x:Key="InnerTab" TargetType="RadioButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="#C4C4CC" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Grid>
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="9" Padding="11,7,13,8">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="Ico" Text="{TemplateBinding Tag}" FontFamily="Segoe MDL2 Assets" FontSize="12.5" Foreground="#D8DADF" Margin="0,0,7,0" VerticalAlignment="Center" />
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="Line" Height="2.5" CornerRadius="1.5" Margin="10,0" VerticalAlignment="Bottom" Background="{StaticResource AccentGradientBrush}" Visibility="Hidden">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#FFC400" BlurRadius="8" ShadowDepth="0" Opacity="0.8" />
+                            </Border.Effect>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF" />
+                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource GlassSelectedBrush}" />
+                            <Setter TargetName="Line" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Ico" Property="Foreground" Value="#FFC400" />
+                            <Setter Property="Foreground" Value="#FFC400" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#FFC400" />
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="1" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

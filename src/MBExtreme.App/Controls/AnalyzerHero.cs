@@ -294,6 +294,7 @@ internal sealed class AnalyzerHero : UserControl
     private static string ActionGlyph(string text) => text switch
     {
         "Corrigir tudo" => "\uE90F",
+        "Criar conta grátis e corrigir" => "\uE8FA",
         "Analisar de novo" => "\uE72C",
         "Análise profunda" => "\uE9D9",
         "Ver histórico" => "\uE81C",
@@ -391,8 +392,11 @@ internal sealed class AnalyzerHero : UserControl
 
         var open = _report.Findings.Where(f => f.IsProblem && !ignored.Contains(f.Id)).ToList();
         _title.Text = _report.Cancelled ? "Análise parada antes do fim" : HealthScore.Headline(score);
+        bool visitor = AppServices.License.IsVisitor;
         _subtitle.Text = open.Count == 0
             ? $"Nada para resolver. Última análise: hoje às {_report.Finished.ToLocalTime():HH:mm}."
+            : visitor
+            ? $"Encontramos {open.Count} problema(s). Crie sua conta grátis para corrigir com um clique (e ganhe 3 dias do plano Gamer)."
             : $"{open.Count} item(ns) para resolver. Os que têm a caixa \"Corrigir\" o MB Extreme resolve sozinho no \"Corrigir tudo\"; os outros abrem a tela certa pelo botão Resolver. Última análise: hoje às {_report.Finished.ToLocalTime():HH:mm}.";
 
         ShowCleanup();
@@ -409,7 +413,8 @@ internal sealed class AnalyzerHero : UserControl
         Motion.Cascade(_rows, 30);
 
         _actions.Children.Clear();
-        if (_boxes.Count > 0) _actions.Children.Add(Action("Corrigir tudo", true, () => FixAsync(_boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Finding).ToList())));
+        if (visitor && open.Count > 0) _actions.Children.Add(Action("Criar conta grátis e corrigir", true, () => { VisitorStrip.SignIn(signUp: true); return Task.CompletedTask; }));
+        else if (_boxes.Count > 0) _actions.Children.Add(Action("Corrigir tudo", true, () => FixAsync(_boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Finding).ToList())));
         _actions.Children.Add(Action("Analisar de novo", false, AnalyzeAsync));
         _actions.Children.Add(Action("Análise profunda", false, () => { MainWindow.Current?.Go("diagnose", autoStart: true, deep: true); return Task.CompletedTask; },
             "Imagem do Windows, arquivos do sistema e disco, só lendo (10 a 40 minutos). Abre no Painel inteligente."));
@@ -609,6 +614,7 @@ internal sealed class AnalyzerHero : UserControl
     private async Task FixAsync(IReadOnlyList<Finding> chosen)
     {
         if (_busy) return;
+        if (AppServices.License.IsVisitor) { VisitorStrip.SignIn(signUp: true); return; }   // modo visitante: só analisa; corrigir pede a conta grátis
         if (chosen.Count == 0) { _subtitle.Text = "Marque \"Corrigir\" em pelo menos um item."; return; }
         var operations = chosen.SelectMany(f => f.Fix!.Operations!()).ToList();
         if (operations.Count == 0) { await AnalyzeAsync(); return; }

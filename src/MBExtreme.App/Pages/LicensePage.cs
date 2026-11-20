@@ -659,6 +659,7 @@ public sealed class UpgradePage : ToolPageBase
     public UpgradePage(string title, string key) : base(title, Subtitle(key))
     {
         var license = AppServices.License;
+        if (license.IsVisitor) { BuildVisitor(); return; }
         bool signedIn = license.Status.Payload is not null;
         string plan = FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer);
 
@@ -692,8 +693,37 @@ public sealed class UpgradePage : ToolPageBase
                                 "Os recursos gratuitos continuam disponíveis no menu."));
     }
 
-    private static string Subtitle(string key) =>
-        $"Este recurso faz parte do plano {FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer)}.";
+    /// <summary>Modo visitante (pulou o cadastro): cadeado com o convite para a conta grátis e os 3 dias do plano Gamer.</summary>
+    private void BuildVisitor()
+    {
+        var accent = (Brush)Application.Current.FindResource("AccentBrush");
+        var box = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+        box.Children.Add(new TextBlock { Text = "\uE72E", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 34, Foreground = accent, Margin = new Thickness(0, 0, 0, 8) });
+        box.Children.Add(new TextBlock { Text = "Crie sua conta grátis e ganhe 3 dias do plano Gamer", FontSize = 20, FontWeight = FontWeights.Bold, Foreground = accent, TextWrapping = TextWrapping.Wrap });
+        box.Children.Add(new TextBlock
+        {
+            Text = "Você está no modo visitante: dá para analisar o PC, ver as peças e falar com o suporte. Com a conta grátis você libera:",
+            FontSize = 14, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8),
+        });
+        foreach (var item in new[]
+        {
+            "Corrigir os problemas do Painel com um clique",
+            "Limpeza, memória e programas da inicialização",
+            "Instalar, atualizar e desinstalar programas",
+            "Segurança, pontos de restauração e Central Desfazer",
+            "3 dias do plano Gamer completo, sem cartão",
+        })
+            box.Children.Add(new TextBlock { Text = "✓  " + item, FontSize = 13.5, Margin = new Thickness(4, 2, 0, 2), TextWrapping = TextWrapping.Wrap });
+        box.Children.Add(new Border { Height = 12 });
+        Body.Children.Add(box);
+        AddButton("Criar conta grátis", (_, _) => VisitorStrip.SignIn(signUp: true));
+        AddButton("Já tenho conta: Entrar", (_, _) => VisitorStrip.SignIn(signUp: false));
+        Body.Children.Add(Muted("Leva menos de 1 minuto. Sem cartão de crédito. Depois do teste, o plano Grátis continua com o básico para sempre."));
+    }
+
+    private static string Subtitle(string key) => AppServices.License.IsVisitor
+        ? "Recurso para quem tem conta (grátis)."
+        : $"Este recurso faz parte do plano {FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer)}.";
 
     private static void OpenSite(string path)
     {

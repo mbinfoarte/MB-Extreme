@@ -37,7 +37,11 @@ internal sealed class LicenseManager
 
     private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MBExtreme", "license.dat");
 
-    public bool IsAllowed(string pageKey) => FeaturePolicy.IsAllowed(pageKey, Status, Config.Enforce, Trial.Active);
+    public bool IsAllowed(string pageKey) =>
+        FeaturePolicy.IsAllowed(pageKey, Status, Config.Enforce, Trial.Active, visitor: IsVisitor && !NavigationMap.Hubs.ContainsKey(pageKey) && !NavigationMap.Modules.Any(m => m.Key == pageKey && m.Tiles.Count > 1));
+
+    /// <summary>Sem conta neste PC (pulou o cadastro): modo visitante, só analisar e ver o PC.</summary>
+    public bool IsVisitor => Config.Enforce && Config.Configured && Status.Payload is null && !Trial.Active;
 
     /// <summary>Teste grátis do Pro deste PC (7 dias desde o primeiro uso).</summary>
     /// <summary>

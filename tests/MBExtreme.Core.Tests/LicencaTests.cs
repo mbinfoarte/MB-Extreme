@@ -138,6 +138,35 @@ public class LicencaTests
     }
 
     [Fact]
+    public void Visitante_sem_conta_so_analisa_e_ve_o_pc()
+    {
+        var (key, pub) = NewKey();
+        var none = LicenseVerifier.Evaluate(null, pub, "pc", Now);
+        var free = LicenseVerifier.Evaluate(LicenseToken.Sign(Payload("pc", 7, "free"), key), pub, "pc", Now);
+
+        foreach (var page in new[] { "home", "sysinfo", "win11", "support", "social", "about", "license" })
+            Assert.True(FeaturePolicy.IsAllowed(page, none, enforce: true, visitor: true), page);
+        foreach (var page in new[] { "cleanup", "memory", "startup", "programs-install", "uninstaller", "restorepoints", "undo", "bench" })
+            Assert.False(FeaturePolicy.IsAllowed(page, none, enforce: true, visitor: true), page);
+        // com conta (Grátis): o básico abre, o resto pede o plano
+        foreach (var page in new[] { "cleanup", "memory", "startup", "programs-install", "uninstaller", "security", "restorepoints", "undo" })
+            Assert.True(FeaturePolicy.IsAllowed(page, free, enforce: true, visitor: true), page);
+        foreach (var page in new[] { "registry", "drivers", "repair", "storage", "periphtest", "tweaks-all", "uninstall-leftovers" })
+            Assert.Equal("essencial", FeaturePolicy.RequiredPlan(page));
+        foreach (var page in new[] { "mbc-overview", "monitor-hz", "rgb", "fans", "bottleneck", "wallpaper", "gamelibrary" })
+            Assert.Equal("gamer", FeaturePolicy.RequiredPlan(page));
+        // no teste de 3 dias, tudo abre; com a aplicação desligada, nada é bloqueado
+        Assert.True(FeaturePolicy.IsAllowed("bench", none, enforce: true, trialActive: true, visitor: true));
+        Assert.True(FeaturePolicy.IsAllowed("cleanup", none, enforce: false, visitor: true));
+    }
+
+    [Fact]
+    public void Paginas_do_visitante_nunca_sao_pagas()
+    {
+        foreach (var page in FeaturePolicy.PagePlans.Keys) Assert.False(FeaturePolicy.VisitorPages.Contains(page), page);
+    }
+
+    [Fact]
     public void Recurso_avulso_na_licenca_libera_a_pagina()
     {
         var (key, pub) = NewKey();

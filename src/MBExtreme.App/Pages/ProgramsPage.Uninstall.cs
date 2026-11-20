@@ -385,6 +385,13 @@ public sealed partial class ProgramsPage
 
         _inventory = null;
         if (leftovers.Count == 0) { await ShowInventoryAsync(keepStatus: true); return; }
+        if (!AppServices.License.IsAllowed("uninstall-leftovers"))
+        {
+            // plano Grátis: desinstala normal; limpar os restos (pastas, atalhos e registro) é do plano Essencial
+            SetStatus($"{removed} removido(s). Sobraram {leftovers.Count} resto(s) ({DiagnosticRules.Size(leftovers.Sum(l => l.Bytes))}): a limpeza de restos faz parte do plano Essencial.", "WarnBrush");
+            await ShowInventoryAsync(keepStatus: true);
+            return;
+        }
         if (AppServices.Settings.UninstallAutoLeftovers)
         {
             var sure = leftovers.Where(l => l.Sure).ToList();

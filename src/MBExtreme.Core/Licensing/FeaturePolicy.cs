@@ -19,21 +19,43 @@ public static class FeaturePolicy
         Essencial => "Essencial", Gamer => "Gamer", Creator => "Creator", Tecnico => "Técnico", "pro" => "Pro", _ => "Grátis",
     };
 
-    /// <summary>Plano mínimo de cada página paga. Tudo que não está aqui é gratuito.</summary>
+    /// <summary>
+    /// Plano mínimo de cada página paga. Tudo que não está aqui é do plano Grátis (com conta): Painel com as correções básicas,
+    /// limpeza simples, memória, programas da inicialização, programas (instalar, atualizar, desinstalar), segurança, pontos de
+    /// restauração e Central Desfazer.
+    /// </summary>
     public static IReadOnlyDictionary<string, string> PagePlans { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        // Essencial: otimização e manutenção
-        ["hardware"] = Essencial, ["bios"] = Essencial, ["recipe"] = Essencial, ["bios-tune"] = Essencial, ["netanalyzer"] = Essencial, ["wifi"] = Essencial,
-        ["drivers"] = Essencial, ["proc-profiles"] = Essencial, ["tweaks-perf"] = Essencial, ["net-tweaks"] = Essencial, ["duplicates"] = Essencial,
-        ["largefiles"] = Essencial, ["shredder"] = Essencial,
-        // Gamer: jogos, desempenho e benchmark
-        ["gamefps"] = Gamer, ["bench"] = Gamer, ["compare"] = Gamer, ["stress"] = Gamer, ["latency"] = Gamer, ["gameboost"] = Gamer,
-        ["gameadvisor"] = Gamer, ["fps"] = Gamer, ["tweaks-game"] = Gamer, ["gamelibrary"] = Gamer, ["profiles"] = Gamer,
-        ["padcalib"] = Gamer, ["pad-info"] = Gamer, ["pad-profiles"] = Gamer, ["mbc-emu"] = Gamer, ["mbc-kbm"] = Gamer, ["mouse-aim"] = Gamer, ["mbc-light"] = Gamer, ["mbc-tune"] = Gamer, ["wallpaper"] = Gamer,
-        // Creator: estúdio de live e gravação
-        ["studio"] = Creator, ["record"] = Creator, ["shorts"] = Creator,
-        // Técnico: ferramentas de assistência
-        ["postinstall"] = Tecnico, ["formatbackup"] = Tecnico, ["iso-create"] = Tecnico, ["reinstall"] = Tecnico, ["remote-tech"] = Tecnico,
+        // Essencial: otimização completa e manutenção
+        ["bios"] = Essencial, ["bios-tune"] = Essencial, ["boot"] = Essencial, ["cleanextras"] = Essencial, ["debloat"] = Essencial,
+        ["devices"] = Essencial, ["diskmap"] = Essencial, ["diskmgr"] = Essencial, ["dns"] = Essencial, ["driver-removal"] = Essencial,
+        ["drivers"] = Essencial, ["duplicates"] = Essencial, ["fakecheck"] = Essencial, ["ghosts"] = Essencial, ["hardware"] = Essencial,
+        ["largefiles"] = Essencial, ["net-tweaks"] = Essencial, ["netanalyzer"] = Essencial, ["periph"] = Essencial, ["periphtest"] = Essencial,
+        ["privacy"] = Essencial, ["proc-profiles"] = Essencial, ["processes"] = Essencial, ["recipe"] = Essencial, ["registry"] = Essencial,
+        ["removable"] = Essencial, ["repair"] = Essencial, ["services"] = Essencial, ["shredder"] = Essencial, ["speedtest"] = Essencial,
+        ["storage"] = Essencial, ["tweaks-all"] = Essencial, ["tweaks-perf"] = Essencial, ["tweaks-storage"] = Essencial,
+        ["uninstall-leftovers"] = Essencial, ["visual"] = Essencial, ["weekly"] = Essencial, ["wifi"] = Essencial,
+        // Gamer: jogos, benchmark, controle, personalização e monitor
+        ["bench"] = Gamer, ["bottleneck"] = Gamer, ["compare"] = Gamer, ["fans"] = Gamer, ["fps"] = Gamer, ["gameadvisor"] = Gamer,
+        ["gameboost"] = Gamer, ["gamefps"] = Gamer, ["gamelibrary"] = Gamer, ["gamesettings"] = Gamer, ["latency"] = Gamer,
+        ["mbc-emu"] = Gamer, ["mbc-kbm"] = Gamer, ["mbc-light"] = Gamer, ["mbc-overview"] = Gamer, ["mbc-tune"] = Gamer,
+        ["monitor-hz"] = Gamer, ["mouse-aim"] = Gamer, ["overlay-setup"] = Gamer, ["pad-drivers"] = Gamer, ["pad-info"] = Gamer,
+        ["pad-profiles"] = Gamer, ["padcalib"] = Gamer, ["profiles"] = Gamer, ["rgb"] = Gamer, ["stress"] = Gamer,
+        ["tweaks-game"] = Gamer, ["wallpaper"] = Gamer,
+        // Creator: gravação, lives e editor de vídeos
+        ["record"] = Creator, ["shorts"] = Creator, ["studio"] = Creator,
+        // Técnico: tudo + ferramentas de assistência
+        ["formatbackup"] = Tecnico, ["iso-create"] = Tecnico, ["postinstall"] = Tecnico, ["reinstall"] = Tecnico, ["remote-tech"] = Tecnico,
+    };
+
+    /// <summary>
+    /// O que abre sem conta (modo visitante): Painel (só analisar), Meu PC (ver), Suporte, Nossas Redes e Sobre, além da própria tela
+    /// de conta. O resto mostra o cadeado "Crie sua conta grátis e ganhe 3 dias do plano Gamer".
+    /// </summary>
+    public static IReadOnlySet<string> VisitorPages { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "a11y", "about", "alltools", "cpu-detail", "diagnose", "disks", "gpu-detail", "home", "license", "monitor", "news", "ram-detail",
+        "remote", "social", "suggest", "support", "sysinfo", "win11",
     };
 
     /// <summary>Páginas pagas (qualquer plano).</summary>
@@ -47,10 +69,15 @@ public static class FeaturePolicy
     /// <summary>O plano dá acesso à página?</summary>
     public static bool PlanAllows(string? plan, string pageKey) => RequiredPlan(pageKey) is not { } need || Rank(plan) >= Rank(need);
 
-    /// <summary>A página pode abrir? Sem aplicação de licença, no teste grátis ou com o plano certo, sim.</summary>
-    public static bool IsAllowed(string pageKey, LicenseStatus status, bool enforce, bool trialActive = false)
+    /// <summary>
+    /// A página pode abrir? Sem aplicação de licença, no teste grátis ou com o plano certo, sim. Visitante (sem conta) só abre
+    /// <see cref="VisitorPages"/>.
+    /// </summary>
+    public static bool IsAllowed(string pageKey, LicenseStatus status, bool enforce, bool trialActive = false, bool visitor = false)
     {
-        if (!enforce || !RequiresPro(pageKey) || trialActive) return true;   // no teste grátis, tudo fica liberado
+        if (!enforce) return true;
+        if (visitor && !trialActive && status.Payload is null) return VisitorPages.Contains(pageKey);
+        if (!RequiresPro(pageKey) || trialActive) return true;   // no teste grátis, tudo fica liberado
         if (!status.IsValid || status.Payload is null) return false;
         return PlanAllows(status.Plan, pageKey) || status.Payload.Features.Contains(pageKey);
     }

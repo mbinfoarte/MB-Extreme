@@ -35,6 +35,7 @@ public partial class MainWindow : Window
         Go("home");
         _updates = new UpdateController(RootGrid, ContentHost);
         _ = new BlackFridayStrip(RootGrid, ContentHost);   // Black Friday: faixa no rodapé só nas datas da campanha
+        _ = new VisitorStrip(RootGrid, ContentHost);       // sem conta: faixa "Modo visitante · Criar conta grátis"
         Closed += (_, _) => _updates?.InstallPendingOnExit();   // atualização baixada: instala ao fechar
         AppServices.Videos.Start();   // vídeo novo do canal: aviso no canto e faixa no Painel
         Loaded += async (_, _) => await _updates.CheckAsync();
@@ -70,7 +71,8 @@ public partial class MainWindow : Window
         };
         PreviewMouseDown += (_, e) => { if (!Pages.PeripheralTestPage.Active && e.ChangedButton == System.Windows.Input.MouseButton.XButton1) { GoBack(); e.Handled = true; } };
         _ = Task.Run(() => MBExtreme.Core.Operations.OperationJournal.Shared.Prune(DateTimeOffset.Now));
-        AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(() => { UpdateFooter(); _ = AppServices.ProLock.CheckAsync(); }));
+        _wasVisitor = AppServices.License.IsVisitor;
+        AppServices.License.Changed += (_, _) => Dispatcher.BeginInvoke(new Action(() => { UpdateFooter(); ReopenIfAccountChanged(); _ = AppServices.ProLock.CheckAsync(); }));
         AppServices.License.Start();
         // backup das configurações na conta: uma vez por dia, em segundo plano (só quando algo mudou)
         _ = Task.Delay(TimeSpan.FromMinutes(2)).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(async () => await Controls.CloudBackupService.AutoAsync())));
@@ -502,6 +504,21 @@ public partial class MainWindow : Window
         _history.Count > 0 ? _history.Peek() : NavigationMap.ModuleOf(key)?.Key ?? "home";
 
     /// <summary>Atualiza o cartão do cliente: foto, nome, plano, dias restantes e o botão de ativar ou renovar.</summary>
+    private bool _wasVisitor;
+
+    /// <summary>Entrou (ou saiu) da conta: as telas com cadeado do modo visitante são refeitas e a tela atual abre de novo.</summary>
+    private void ReopenIfAccountChanged()
+    {
+        bool visitor = AppServices.License.IsVisitor;
+        if (visitor == _wasVisitor) return;
+        _wasVisitor = visitor;
+        _pages.Clear();
+        _inner.Clear();
+        _backing = true;
+        try { Go(_current ?? "home"); }
+        finally { _backing = false; }
+    }
+
     internal void UpdateFooter()
     {
         var license = AppServices.License;
@@ -517,7 +534,8 @@ public partial class MainWindow : Window
         FreeBadge.Visibility = MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status) ? Visibility.Collapsed : Visibility.Visible;
         // com a licença aplicada: durante o teste, a contagem; depois, "Grátis"
         license.RefreshTrial();
-        BadgeText.Text = license.Config.Enforce && !MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status) && license.Trial.Active
+        BadgeText.Text = license.IsVisitor ? " Modo visitante"
+            : license.Config.Enforce && !MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status) && license.Trial.Active
             ? $" Teste Pro: {license.Trial.LeftText}"
             : " Licença: Grátis";
         System.Windows.Automation.AutomationProperties.SetName(FreeBadge, BadgeText.Text.Trim());

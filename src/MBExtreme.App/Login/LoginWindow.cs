@@ -24,6 +24,9 @@ internal sealed class LoginWindow : Window
     /// <summary>Deu certo (a licença entrou).</summary>
     public bool Success { get; private set; }
 
+    /// <summary>Clicou em "Pular por enquanto": o programa abre em modo visitante (só analisar, sem corrigir).</summary>
+    public bool Skipped { get; private set; }
+
     private readonly bool _required;
 
     public LoginWindow(bool signUp = false, bool required = false)
@@ -70,7 +73,7 @@ internal sealed class LoginWindow : Window
     {
         var w = new LoginWindow(required: true) { ShowInTaskbar = true, Topmost = false };
         w.ShowDialog();
-        return w.Success;
+        return w.Success || w.Skipped;
     }
 
     public static bool Prompt(Window? owner, bool signUp = false)
@@ -170,6 +173,9 @@ internal sealed class LoginWindow : Window
         return g;
     }
 
+    /// <summary>"Pular por enquanto": abre o programa sem conta (modo visitante). Fechar no X continua fechando o MB na primeira vez.</summary>
+    private UIElement SkipLink() => Link("", "Pular por enquanto", () => { Skipped = true; Close(); });
+
     private UIElement Link(string before, string link, Action click)
     {
         var t = new TextBlock { FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Res("MutedBrush"), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center };
@@ -208,7 +214,7 @@ internal sealed class LoginWindow : Window
             await ActivateAsync();
         }));
         _body.Children.Add(Link("Não tem conta?", "Criar conta grátis", ShowSignUp));
-        if (!_required) _body.Children.Add(Link("", "Continuar sem conta (modo grátis)", Close));
+        _body.Children.Add(SkipLink());
         Loaded += (_, _) => (email.Text.Length == 0 ? (Control)email : pass).Focus();
     }
 
@@ -247,6 +253,7 @@ internal sealed class LoginWindow : Window
             await ActivateAsync();
         }));
         _body.Children.Add(Link("Já tem conta?", "Entrar", ShowSignIn));
+        _body.Children.Add(SkipLink());
     }
 
     private void ShowVerify()

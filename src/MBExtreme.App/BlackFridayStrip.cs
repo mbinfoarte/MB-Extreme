@@ -76,7 +76,7 @@ internal sealed class BlackFridayStrip
         var license = AppServices.License;
         var status = license.Status;
         bool paid = LicenseExpiry.IsPro(status) && status.Payload?.Status != "trialing" && !license.Trial.Active;
-        bool eligible = step is not null && BlackFriday.ShouldShow(paid, status.Payload?.PeriodEnd, status.NoEndDate, now);
+        bool eligible = step is not null && !license.IsVisitor && BlackFriday.ShouldShow(paid, status.Payload?.PeriodEnd, status.NoEndDate, now);
         if (eligible)
             AppServices.Notices.Add(new Notice(BlackFriday.NoticeId(step!), NoticeKind.News, $"{step!.Label}: {step.Percent}% OFF",
                 $"{step.Percent}% de desconto no plano anual do MB Extreme (1º ano). Clique em Aproveitar na faixa da janela ou veja os planos no site.", DateTime.Now, PageKey: "license"));

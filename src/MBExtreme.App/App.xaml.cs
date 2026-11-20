@@ -79,7 +79,7 @@ public partial class App : Application
         ApplyFirstRunOptions();
         SingleInstance.ListenForOthers(() => Dispatcher.BeginInvoke(new Action(() => (MainWindow as MainWindow)?.ActivateFromOther())));
 
-        // sem conta neste PC: primeiro só a janela de login (obrigatória); o programa abre depois de entrar ou criar a conta
+        // sem conta neste PC: primeiro a janela de login; o programa abre depois de entrar, criar a conta ou "Pular por enquanto" (modo visitante)
         if (!LoginGate())
         {
             Shutdown(0);
@@ -101,7 +101,7 @@ public partial class App : Application
 
     private System.Threading.Mutex? _instance;
 
-    /// <summary>Exige a conta antes de mostrar o programa. False = fechou sem entrar (ou abriu com o Windows sem conta).</summary>
+    /// <summary>Pede a conta antes de mostrar o programa. False = fechou no X sem entrar nem pular.</summary>
     private bool LoginGate()
     {
         var license = AppServices.License;

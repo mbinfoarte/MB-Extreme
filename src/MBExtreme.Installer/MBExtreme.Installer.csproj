@@ -18,6 +18,8 @@
   <ItemGroup>
     <!-- Compartilha o tema e o logotipo com o aplicativo. -->
     <Page Include="..\MBExtreme.App\Themes\Theme.xaml" Link="Themes\Theme.xaml" />
+    <!-- o tema usa o conversor dos ícones dos botões de filtro -->
+    <Compile Include="..\MBExtreme.App\Controls\ChipIcon.cs" Link="Controls\ChipIcon.cs" />
     <Resource Include="..\MBExtreme.App\Assets\logo.png" Link="Assets\logo.png" />
     <Resource Include="..\MBExtreme.App\Assets\app.ico" Link="Assets\app.ico" />
   </ItemGroup>

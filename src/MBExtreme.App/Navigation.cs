@@ -147,6 +147,7 @@ internal static class NavigationMap
         new("", new SideItem[]
         {
             new("social", "Nossas Redes", "\uE716"),
+            new("support", "Suporte", "\uE8F2"),
             new("hub-sobre", "Sobre", "\uE946"),
         }),
     };
@@ -181,7 +182,7 @@ internal static class NavigationMap
         ["hub-disks"] = new[] { ("Saúde, desfragmentar e TRIM", "storage"), ("Mapa do disco", "diskmap") },
         ["hub-seguranca"] = new[] { ("Proteção do Windows", "security"), ("Pontos de restauração", "restorepoints"), ("Central Desfazer", "undo") },
         ["hub-format"] = new[] { ("Pós-Formatação", "postinstall"), ("Criar ISO", "iso-create"), ("Reinstalar sem pendrive", "reinstall"), ("Backup para formatar", "formatbackup") },
-        ["hub-sobre"] = new[] { ("Suporte", "support"), ("Sugestões", "suggest"), ("Sobre", "about") },
+        ["hub-sobre"] = new[] { ("Sobre", "about"), ("Sugestões", "suggest") },
         ["hub-fps"] = new[] { ("Gargalos", "bottleneck"), ("Medidor de FPS", "gamefps") },
     };
 

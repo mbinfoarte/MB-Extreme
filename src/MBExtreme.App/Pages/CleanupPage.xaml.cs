@@ -6,6 +6,7 @@ using MBExtreme.Core.Cleanup;
 using MBExtreme.Core.Memory;
 using MBExtreme.Core.Progress;
 using MBExtreme.Core.Settings;
+using MBExtreme.UI.Controls;
 
 namespace MBExtreme.UI.Pages;
 
@@ -85,36 +86,49 @@ public partial class CleanupPage : UserControl
             return;
         }
 
+        // lista fina em colunas: cada categoria numa linha (a memória RAM primeiro), com o tamanho à direita e "Ver" nos arquivos
         var memory = MemoryService.GetStatus();
-        _ramBox = new CheckBox
-        {
-            IsChecked = true,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Content = RowContent("Memória RAM",
-                "Reduz o uso de memória dos programas abertos e esvazia o cache da RAM.",
-                $"{100 - memory.FreePercent:0}% em uso",
-                "Os programas abertos continuam funcionando."),
-        };
+        _ramBox = new CheckBox { IsChecked = true };
         _ramBox.Checked += (_, _) => UpdateSummary();
         _ramBox.Unchecked += (_, _) => UpdateSummary();
-        RowsHost.Children.Add(Card(_ramBox));
-
-        foreach (var item in _items)
+        var rows = new List<TableRow>
         {
-            var box = new CheckBox
+            new(_ramBox, CompactTable.Glyph("\uE950"), new object[]
             {
-                IsChecked = item.Files > 0 && item.Category.DefaultSelected,
-                IsEnabled = item.Files > 0,
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Content = RowContent(item.Category.Title, item.Category.Description,
-                    item.Files > 0 ? $"{Format(item.Bytes)} · {item.Files} arquivos" : "nada encontrado",
-                    item.Category.Note, item.Files > 0 ? () => ShowPreview(item.Category) : null),
-            };
+                "Memória RAM", "Esvazia o cache e a memória parada dos programas abertos (eles continuam funcionando).",
+                $"{100 - memory.FreePercent:0}% em uso", "",
+            }),
+        };
+        foreach (var item in _items.OrderByDescending(i => i.Bytes))
+        {
+            var box = new CheckBox { IsChecked = item.Files > 0 && item.Category.DefaultSelected, IsEnabled = item.Files > 0 };
             box.Checked += (_, _) => UpdateSummary();
             box.Unchecked += (_, _) => UpdateSummary();
             _boxes[item] = box;
-            RowsHost.Children.Add(Card(box));
+            object see = "";
+            if (item.Files > 0)
+            {
+                var button = new Button { Content = "Ver", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(8, 0, 8, 1), FontSize = 11.5 };
+                System.Windows.Automation.AutomationProperties.SetName(button, "Ver os arquivos de " + item.Category.Title);
+                button.Click += (_, ev) => { ev.Handled = true; ShowPreview(item.Category); };
+                see = button;
+            }
+            string glyph = ChipIconConverter.For(item.Category.Title) is { Length: > 0 } g ? g : "\uE74D";
+            rows.Add(new TableRow(box, CompactTable.Glyph(glyph, item.Files > 0 ? "AccentBrush" : "MutedBrush"), new object[]
+            {
+                item.Category.Title,
+                item.Category.Description,
+                item.Files > 0 ? $"{Format(item.Bytes)} · {item.Files} arq." : "limpo",
+                see,
+            }, ToolTip: item.Category.Description + (item.Category.Note.Length > 0 ? "\n" + item.Category.Note : "")));
         }
+        var table = new CompactTable(new[]
+        {
+            new TableColumn("O que limpar", 230), new TableColumn("Detalhe"), new TableColumn("Tamanho", 150, HorizontalAlignment.Right), new TableColumn("", 60, HorizontalAlignment.Right),
+        });
+        table.SetRows(rows);
+        RowsHost.Children.Add(table);
+        RowsHost.Children.Add(new Border { Height = 10 });
 
         RowsHost.Children.Add(UiTree.Free(_previousHost));
         _ = ShowPreviousWindowsAsync();

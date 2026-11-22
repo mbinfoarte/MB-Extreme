@@ -31,7 +31,55 @@ public sealed class RepairPage : ToolPageBase
     private readonly List<Button> _runButtons = new();
     private Button? _cancel;
     private readonly WrapPanel _driveChips = new() { Margin = new Thickness(0, 4, 0, 6) };
-    private readonly StackPanel _diskHost = new();
+    private readonly System.Windows.Controls.Primitives.UniformGrid _diskHost = TwoColumns();
+    private readonly StackPanel _scanHost = new();
+
+    private static System.Windows.Controls.Primitives.UniformGrid TwoColumns() =>
+        new() { Columns = 2, Margin = new Thickness(0, 0, -8, 0), VerticalAlignment = VerticalAlignment.Top };
+
+    /// <summary>Exame rápido (só lendo): mostra o que precisa ser feito e o reparo certo de cada problema, com Executar.</summary>
+    private async Task ScanAsync()
+    {
+        if (s_running) return;
+        _scanHost.Children.Clear();
+        _scanHost.Children.Add(Heading("Escaneando o Windows"));
+        var line = Muted("Começando...", 12);
+        _scanHost.Children.Add(line);
+        _scanHost.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 6, Margin = new Thickness(0, 6, 0, 8), Foreground = Brush("AccentBrush"), Background = Brush("Surface2Brush"), BorderThickness = new Thickness(0) });
+        IReadOnlyList<RepairFinding> found;
+        try { found = await RepairScan.RunAsync(new Progress<string>(t => line.Text = t), CancellationToken.None); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or System.IO.IOException)
+        {
+            _scanHost.Children.Clear();
+            SetStatus("Não foi possível escanear: " + ex.Message, "BadBrush");
+            return;
+        }
+        _scanHost.Children.Clear();
+        int problems = found.Count(f => f.Problem);
+        _scanHost.Children.Add(Heading(problems == 0 ? "Escaneamento: nada para reparar" : $"Escaneamento: {problems} coisa(s) para reparar"));
+        var all = RepairCatalog.All().Concat(RepairCatalog.DiskTasks(RepairCatalog.SystemDrive, true, System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName)).ToList();
+        var table = new MBExtreme.UI.Controls.CompactTable(new[]
+        {
+            new MBExtreme.UI.Controls.TableColumn("Verificação", 210), new MBExtreme.UI.Controls.TableColumn("Resultado"),
+            new MBExtreme.UI.Controls.TableColumn("Reparo indicado", 250), new MBExtreme.UI.Controls.TableColumn("", 100, HorizontalAlignment.Right),
+        }, checks: false);
+        table.SetRows(found.Select(f =>
+        {
+            var task = f.TaskId is { } id ? all.FirstOrDefault(t => t.Id == id) : null;
+            object action = "";
+            if (f.Problem && task is not null)
+            {
+                var run = new Button { Content = "Executar", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(10, 1, 10, 2), FontSize = 11.5 };
+                run.Click += async (_, _) => await RunAsync(task);
+                _runButtons.Add(run);
+                action = run;
+            }
+            return new MBExtreme.UI.Controls.TableRow(null, MBExtreme.UI.Controls.CompactTable.Glyph(f.Problem ? "\uE7BA" : "\uE73E", f.Problem ? "WarnBrush" : "OkBrush"),
+                new object[] { f.Title, f.Detail, f.Problem ? task?.Title ?? "—" : "Nada a fazer", action });
+        }).ToList());
+        _scanHost.Children.Add(table);
+        SetStatus(problems == 0 ? "O Windows está em ordem pelo exame rápido." : "Execute os reparos indicados na ordem da lista.", problems == 0 ? "OkBrush" : "WarnBrush");
+    }
     private readonly List<Button> _diskRunButtons = new();
     private IReadOnlyList<(string Name, string Text, bool IsSystem)> _drives = Array.Empty<(string, string, bool)>();
     private string _driveName = RepairCatalog.SystemDrive;
@@ -53,7 +101,9 @@ public sealed class RepairPage : ToolPageBase
         "Roda no próprio app os mesmos comandos que você digitaria no terminal (SFC, DISM, CHKDSK e outros) e mostra a saída ao vivo. Se não souber por onde começar, use o reparo completo recomendado.")
     {
         var full = RepairCatalog.All().First(t => t.Id == "full");
-        var fullButton = AddButton("Reparo completo recomendado", async (_, _) => await RunAsync(full));
+        var scanButton = AddButton("\uD83D\uDD0D  Escanear o Windows", async (_, _) => await ScanAsync());
+        _runButtons.Add(scanButton);
+        var fullButton = AddButton("Reparo completo recomendado", async (_, _) => await RunAsync(full), false);
         _runButtons.Add(fullButton);
         _cancel = AddButton("Cancelar", (_, _) => s_cts?.Cancel(), false);
         _cancel.Visibility = Visibility.Collapsed;
@@ -68,6 +118,7 @@ public sealed class RepairPage : ToolPageBase
             Margin = new Thickness(0, 4, 0, 0),
         };
         Body.Children.Add(_restorePoint);
+        Body.Children.Add(_scanHost);
 
         // reinício pendente: reparar antes de reiniciar costuma falhar ou repetir o trabalho
         Body.Children.Add(_rebootNote);
@@ -103,18 +154,14 @@ public sealed class RepairPage : ToolPageBase
         Body.Children.Add(_log);
         _log.Text = "A saída dos comandos aparece aqui.";
 
-        string? group = null;
-        foreach (var task in RepairCatalog.All())
+        // grupos em duas colunas; dentro de cada grupo, primeiro o que tem ordem recomendada (1º, 2º...) e depois o resto
+        foreach (var byGroup in RepairCatalog.All().GroupBy(t => t.Group))
         {
-            if (task.Group != group)
-            {
-                group = task.Group;
-                Body.Children.Add(Heading(group));
-                if (group == RepairCatalog.GroupDisk) BuildDiskSelector();
-            }
-
-            if (task.Group == RepairCatalog.GroupDisk) continue; // as tarefas de disco dependem da unidade escolhida
-            Body.Children.Add(TaskCard(task));
+            Body.Children.Add(Heading(byGroup.Key));
+            if (byGroup.Key == RepairCatalog.GroupDisk) { BuildDiskSelector(); continue; }   // as tarefas de disco dependem da unidade escolhida
+            var grid = TwoColumns();
+            foreach (var task in byGroup.OrderBy(t => RepairScan.Order(t.Id) is int o and > 0 ? o : 100)) grid.Children.Add(TaskCard(task));
+            Body.Children.Add(grid);
         }
 
         Body.Children.Add(Muted($"Relatórios de cada reparo ficam em {RepairRunner.LogDirectory}. O SFC e o DISM também gravam seus próprios registros: {RepairInterpreter.CbsLog} e {RepairInterpreter.DismLog}."));
@@ -204,22 +251,49 @@ public sealed class RepairPage : ToolPageBase
         foreach (var button in _diskRunButtons) button.IsEnabled = !s_running;
     }
 
+    /// <summary>Linha fina: número da ordem recomendada, título, duração e Executar à direita (descrição e comandos no balão).</summary>
     private UIElement TaskCard(RepairTask task)
     {
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        var run = SmallButton("Executar", async (_, _) => await RunAsync(task), true);
-        _runButtons.Add(run);
-        buttons.Children.Add(run);
-        buttons.Children.Add(SmallButton("Copiar comandos", (_, _) =>
+        var dock = new DockPanel();
+        int order = RepairScan.Order(task.Id);
+        var badge = new Border
         {
-            if (TryCopy(task.ManualCommands)) SetStatus("Comandos copiados. Cole em um terminal aberto como administrador.", "OkBrush");
-        }));
+            Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center,
+            BorderThickness = new Thickness(1.3), BorderBrush = Brush(order > 0 ? "AccentBrush" : "BorderBrush"),
+            Child = new TextBlock
+            {
+                Text = order > 0 ? order + "º" : "\uE90F", FontFamily = order > 0 ? new System.Windows.Media.FontFamily("Segoe UI") : new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                FontSize = order > 0 ? 10.5 : 10, FontWeight = FontWeights.Bold, Foreground = Brush(order > 0 ? "AccentBrush" : "MutedBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        DockPanel.SetDock(badge, Dock.Left);
+        dock.Children.Add(badge);
 
-        var extra = new List<string> { "Duração: " + task.Duration };
-        if (task.NeedsInternet) extra.Add("precisa de internet");
-        if (task.NeedsRestart) extra.Add("exige reiniciar o PC");
-        string detail = task.Description + "\n" + string.Join(" · ", extra) + "\nComando: " + task.ManualCommands.Replace(Environment.NewLine, "  |  ");
-        return Row(task.Title, detail, buttons);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var run = new Button { Content = "Executar", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(10, 1, 10, 2), FontSize = 11.5, Margin = new Thickness(6, 0, 0, 0) };
+        run.Click += async (_, _) => await RunAsync(task);
+        _runButtons.Add(run);
+        var copy = new Button { Content = "\uE8C8", FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"), Style = (Style)FindResource("GhostButton"), Padding = new Thickness(7, 2, 7, 2), FontSize = 11, Margin = new Thickness(6, 0, 0, 0), ToolTip = "Copiar os comandos" };
+        copy.Click += (_, _) => { if (TryCopy(task.ManualCommands)) SetStatus("Comandos copiados. Cole em um terminal aberto como administrador.", "OkBrush"); };
+        buttons.Children.Add(copy);
+        buttons.Children.Add(run);
+        DockPanel.SetDock(buttons, Dock.Right);
+        dock.Children.Add(buttons);
+
+        var extra = new List<string> { task.Duration };
+        if (task.NeedsInternet) extra.Add("internet");
+        if (task.NeedsRestart) extra.Add("reinicia");
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = task.Title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        text.Children.Add(new TextBlock { Text = string.Join(" · ", extra), FontSize = 11, Foreground = Brush("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
+        dock.Children.Add(text);
+        return new Border
+        {
+            Child = dock, MinHeight = 44, Padding = new Thickness(10, 5, 8, 5), Margin = new Thickness(0, 0, 8, 6), CornerRadius = new CornerRadius(9),
+            Background = Brush("SurfaceBrush"), BorderBrush = Brush(order > 0 ? "AccentBrush" : "BorderBrush"), BorderThickness = new Thickness(order > 0 ? 1 : 1),
+            ToolTip = task.Description + "\nComando: " + task.ManualCommands.Replace(Environment.NewLine, "  |  "),
+        };
     }
 
     private void Append(string text)

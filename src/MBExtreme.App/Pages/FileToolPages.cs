@@ -53,25 +53,32 @@ public abstract class FileSearchPageBase : ToolPageBase
     }
 
     /// <summary>Linha de resultado com caixa de seleção à esquerda, texto e botões à direita.</summary>
+    /// <summary>Linha fina (uma linha só): caixinha, nome em negrito, detalhe apagado ao lado e os botões à direita.</summary>
     protected Border CheckRow(CheckBox box, string title, string detail, params UIElement[] buttons)
     {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.Children.Add(box);
-
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-        text.Children.Add(new TextBlock { Text = detail, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Brush("MutedBrush") });
-        Grid.SetColumn(text, 1);
-        grid.Children.Add(text);
-
+        var dock = new DockPanel { LastChildFill = true };
+        box.VerticalAlignment = VerticalAlignment.Center;
+        box.Margin = new Thickness(0, 0, 8, 0);
+        box.LayoutTransform = new System.Windows.Media.ScaleTransform(0.85, 0.85);
+        DockPanel.SetDock(box, Dock.Left);
+        dock.Children.Add(box);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        foreach (var b in buttons) right.Children.Add(b);
-        Grid.SetColumn(right, 2);
-        grid.Children.Add(right);
-        return CardOf(grid);
+        foreach (var b in buttons)
+        {
+            if (b is Button button) { button.Padding = new Thickness(9, 1, 9, 2); button.FontSize = 11.5; button.Margin = new Thickness(6, 0, 0, 0); }
+            right.Children.Add(b);
+        }
+        DockPanel.SetDock(right, Dock.Right);
+        dock.Children.Add(right);
+        var line = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = title + "\n" + detail };
+        line.Inlines.Add(new System.Windows.Documents.Run(title) { FontSize = 12.5, FontWeight = FontWeights.SemiBold });
+        line.Inlines.Add(new System.Windows.Documents.Run("   " + detail) { FontSize = 11.5, Foreground = Brush("MutedBrush") });
+        dock.Children.Add(line);
+        return new Border
+        {
+            MinHeight = 32, Padding = new Thickness(10, 3, 8, 3), Margin = new Thickness(0, 0, 0, 3), CornerRadius = new CornerRadius(8),
+            Background = Brush("SurfaceBrush"), BorderBrush = Brush("BorderBrush"), BorderThickness = new Thickness(1), Child = dock,
+        };
     }
 
     protected static string Size(long bytes) => bytes switch
@@ -198,6 +205,9 @@ public sealed class DuplicatesPage : FileSearchPageBase
     private readonly Button _send;
     private int _place;
     private int _min;
+    private readonly (Border Card, TextBlock Value, TextBlock Detail) _groupsStat = MBExtreme.UI.Controls.OptimizeKit.Stat("Grupos de cópias", "—", "clique em Procurar");
+    private readonly (Border Card, TextBlock Value, TextBlock Detail) _wastedStat = MBExtreme.UI.Controls.OptimizeKit.Stat("Espaço recuperável", "—");
+    private readonly (Border Card, TextBlock Value, TextBlock Detail) _markedStat = MBExtreme.UI.Controls.OptimizeKit.Stat("Marcado para a Lixeira", "0", "sempre fica uma cópia");
 
     private static readonly (string Name, Environment.SpecialFolder[] Folders)[] Places =
     {
@@ -214,9 +224,11 @@ public sealed class DuplicatesPage : FileSearchPageBase
     {
         _send = AddButton("Enviar marcados para a Lixeira", (_, _) => SendMarked(), false);
         _send.IsEnabled = false;
-        AddButton("Marcar cópias extras", (_, _) => MarkExtras(), false);
+        AddButton("Manter a mais antiga", (_, _) => MarkExtras(keepNewest: false), false);
+        AddButton("Manter a mais nova", (_, _) => MarkExtras(keepNewest: true), false);
         AddButton("Desmarcar todos", (_, _) => { foreach (var g in _groups) foreach (var c in g.Copies) c.Box.IsChecked = false; }, false);
 
+        Body.Children.Add(MBExtreme.UI.Controls.OptimizeKit.StatRow(_groupsStat.Card, _wastedStat.Card, _markedStat.Card));
         Body.Children.Add(Heading("Onde procurar"));
         Body.Children.Add(Choice(Places.Select(p => p.Name).ToList(), _place, i => _place = i));
         Body.Children.Add(Heading("Tamanho mínimo"));
@@ -235,23 +247,34 @@ public sealed class DuplicatesPage : FileSearchPageBase
             _groups.Clear();
             long wasted = groups.Sum(g => g.WastedBytes);
             SetStatus(groups.Count == 0 ? "Nenhum arquivo duplicado." : $"{groups.Count} grupos de cópias, {Size(wasted)} recuperáveis.", groups.Count == 0 ? "MutedBrush" : "OkBrush");
-            foreach (var group in groups.Take(100)) Results.Children.Add(GroupCard(group));
+            _groupsStat.Value.Text = groups.Count.ToString();
+            _groupsStat.Detail.Text = groups.Count > 100 ? "mostrando os 100 maiores" : groups.Count == 0 ? "nenhuma cópia" : "do maior para o menor";
+            _wastedStat.Value.Text = Size(wasted);
+            foreach (var group in groups.OrderByDescending(g => g.WastedBytes).Take(100)) Results.Children.Add(GroupCard(group));
             _send.IsEnabled = _groups.Count > 0;
+            UpdateMarked();
         };
     }
 
     private UIElement GroupCard(DuplicateGroup source)
     {
         var panel = new StackPanel();
-        var title = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 14 };
-        panel.Children.Add(title);
+        var head = new DockPanel { Margin = new Thickness(2, 0, 0, 6) };
+        var icon = new TextBlock { Text = "\uE8C8", FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"), FontSize = 13, Foreground = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        DockPanel.SetDock(icon, Dock.Left);
+        head.Children.Add(icon);
+        var title = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        head.Children.Add(title);
+        panel.Children.Add(head);
         var group = new Group(source.Length, new List<Copy>(), title, panel);
 
         foreach (var file in source.Files)
         {
             var f = file;
             var box = new CheckBox { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-            var row = CheckRow(box, Path.GetFileName(f.Path), $"{Path.GetDirectoryName(f.Path)} · {f.Modified:dd/MM/yyyy}", SmallButton("Mostrar", (_, _) => Reveal(f.Path)));
+            box.Checked += (_, _) => UpdateMarked();
+            box.Unchecked += (_, _) => UpdateMarked();
+            var row = CheckRow(box, $"{f.Modified:dd/MM/yyyy HH:mm}", Path.GetDirectoryName(f.Path) ?? "", SmallButton("Mostrar", (_, _) => Reveal(f.Path)));
             group.Copies.Add(new Copy(f, box, row));
             panel.Children.Add(row);
         }
@@ -259,18 +282,29 @@ public sealed class DuplicatesPage : FileSearchPageBase
         _groups.Add(group);
         UpdateTitle(group);
         var card = CardOf(panel);
-        card.Margin = new Thickness(0, 0, 0, 12);
+        card.Margin = new Thickness(0, 0, 0, 8);
+        card.Padding = new Thickness(12, 8, 12, 6);
         return card;
     }
 
     private void UpdateTitle(Group g) =>
-        g.Title.Text = $"{Size(g.Length)} · {g.Copies.Count} {(g.Copies.Count == 1 ? "cópia" : "cópias")}";
+        g.Title.Text = $"{(g.Copies.Count > 0 ? Path.GetFileName(g.Copies[0].File.Path) : "")}   ·   {Size(g.Length)} cada · {g.Copies.Count} {(g.Copies.Count == 1 ? "cópia" : "cópias")}";
 
-    /// <summary>Marca todas as cópias de cada grupo, menos a mais antiga (a primeira da lista).</summary>
-    private void MarkExtras()
+    private void UpdateMarked()
+    {
+        var marked = _groups.SelectMany(g => g.Copies).Where(c => c.Box.IsChecked == true).ToList();
+        _markedStat.Value.Text = marked.Count.ToString();
+        _markedStat.Detail.Text = marked.Count > 0 ? Size(marked.Sum(c => c.File.Length)) + " · sempre fica uma cópia" : "sempre fica uma cópia";
+    }
+
+    /// <summary>Marca todas as cópias de cada grupo, menos a mais antiga (ou a mais nova).</summary>
+    private void MarkExtras(bool keepNewest)
     {
         foreach (var g in _groups)
-            for (int i = 0; i < g.Copies.Count; i++) g.Copies[i].Box.IsChecked = i > 0;
+        {
+            var keep = keepNewest ? g.Copies.MaxBy(c => c.File.Modified) : g.Copies.MinBy(c => c.File.Modified);
+            foreach (var c in g.Copies) c.Box.IsChecked = !ReferenceEquals(c, keep);
+        }
     }
 
     private void SendMarked()

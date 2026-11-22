@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using MBExtreme.Core.Progress;
 using MBExtreme.Core.Storage;
+using MBExtreme.UI.Controls;
 
 namespace MBExtreme.UI.Pages;
 
@@ -37,7 +38,7 @@ public sealed class StoragePage : ToolPageBase
             _protected = maintenance.Protected;
             _optimize = maintenance.Optimize;
             _trim = maintenance.Trim;
-            try { disks = await Task.Run(StorageService.PhysicalDisks); }
+            try { disks = await Task.Run(() => StorageService.WithSmart(StorageService.PhysicalDisks())); }
             catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException)
             {
                 diskProblem = ex.Message;
@@ -52,67 +53,121 @@ public sealed class StoragePage : ToolPageBase
         SetStatus("");
         var history = disks.Count > 0 ? await Task.Run(() => new DiskHistory().Record(disks, DateTimeOffset.Now)) : Array.Empty<DiskSnapshot>();
 
-        // manutenção feita pelo próprio Windows: TRIM e otimização agendada
-        Body.Children.Add(Heading("Manutenção automática"));
-        Body.Children.Add(Row("TRIM dos SSDs: " + (_trim switch { true => "ligado", false => "DESLIGADO", null => "não informado" }),
-            _trim == false ? "Ligue em Ajustes de armazenamento ou pelo Painel inteligente: sem ele o SSD fica mais lento com o tempo." : "O Windows avisa o SSD sobre o que foi apagado, mantendo a velocidade.",
-            null, _trim == false ? "BadBrush" : "MutedBrush"));
-        Body.Children.Add(Row("Otimização automática das unidades: " + (_optimize is null ? "não informada" : _optimize.Enabled ? "ligada" : "DESLIGADA"),
-            (_optimize?.LastRun is { } last ? $"Última vez: {last.ToLocalTime():dd/MM/yyyy HH:mm}. " : _optimize is null ? "" : "Ainda não rodou. ") +
-            "O Windows faz o TRIM nos SSDs e desfragmenta só os HDs (nunca desfragmenta SSD).", null, _optimize?.Enabled == false ? "WarnBrush" : "MutedBrush"));
+        // ---- números no topo
+        var grades = disks.Select(d => DiskHealth.Grade(d).Grade).ToList();
+        var worst = grades.Count == 0 ? DiskGrade.Unknown : grades.Contains(DiskGrade.Bad) ? DiskGrade.Bad : grades.Contains(DiskGrade.Caution) ? DiskGrade.Caution
+            : grades.All(g => g == DiskGrade.Unknown) ? DiskGrade.Unknown : DiskGrade.Good;
+        var health = OptimizeKit.Stat("Saúde dos discos", DiskHealth.GradeText(worst), $"{disks.Count} disco(s) físico(s)", DiskHealth.GradeBrush(worst));
+        health.Value.Foreground = Brush(DiskHealth.GradeBrush(worst));
+        var trim = OptimizeKit.Stat("TRIM dos SSDs", _trim switch { true => "Ligado", false => "Desligado", null => "—" },
+            _trim == false ? "ligue em Ajustes de armazenamento" : "mantém o SSD rápido", _trim == false ? "BadBrush" : "MutedBrush");
+        var auto = OptimizeKit.Stat("Otimização automática", _optimize is null ? "—" : _optimize.Enabled ? "Ligada" : "Desligada",
+            _optimize?.LastRun is { } last ? $"última: {last.ToLocalTime():dd/MM HH:mm}" : "TRIM no SSD, desfragmenta só HD", _optimize?.Enabled == false ? "WarnBrush" : "MutedBrush");
+        long free = volumes.Sum(v => v.FreeBytes), total = volumes.Sum(v => v.TotalBytes);
+        var space = OptimizeKit.Stat("Espaço livre", $"{free / 1e9:0} GB", $"de {total / 1e9:0} GB em {volumes.Count} unidade(s)");
+        Body.Children.Add(OptimizeKit.StatRow(health.Card, trim.Card, auto.Card, space.Card));
 
-        Body.Children.Add(Heading("Unidades"));
-        foreach (var v in volumes)
-        {
-            var content = new StackPanel();
-            content.Children.Add(new TextBlock
-            {
-                Text = $"{v.Name} {v.Label}".Trim(),
-                FontSize = 14,
-                FontWeight = FontWeights.SemiBold,
-            });
-            content.Children.Add(new ProgressBar
-            {
-                Minimum = 0, Maximum = 100, Value = v.UsedPercent, Height = 8, Margin = new Thickness(0, 6, 0, 6),
-                Foreground = Brush(v.UsedPercent > 90 ? "BadBrush" : "ButtonBrush"),
-                Background = Brush("BorderBrush"),
-                BorderThickness = new Thickness(0),
-            });
-            content.Children.Add(Muted($"{(v.TotalBytes - v.FreeBytes) / 1e9:0.0} GB usados de {v.TotalBytes / 1e9:0.0} GB · livre {v.FreeBytes / 1e9:0.0} GB · {v.Format}"));
-            bool protectedDrive = v.Name.Length > 0 && _protected.Contains(char.ToUpperInvariant(v.Name[0]));
-            content.Children.Add(new TextBlock
-            {
-                Text = protectedDrive ? "Proteção do Sistema: ligada (tem pontos de restauração)" : "Proteção do Sistema: desligada",
-                FontSize = 11.5, Foreground = Brush(protectedDrive || !v.Name.StartsWith(SystemDrive, StringComparison.OrdinalIgnoreCase) ? "MutedBrush" : "WarnBrush"),
-            });
-            string name = v.Name;
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition());
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.Children.Add(content);
-            var button = SmallButton("Otimizar", async (_, _) => await OptimizeAsync(name), true);
-            Grid.SetColumn(button, 1);
-            button.VerticalAlignment = VerticalAlignment.Center;
-            grid.Children.Add(button);
-            Body.Children.Add(CardOf(grid));
-        }
-
+        // ---- discos físicos (estilo CrystalDiskInfo)
         Body.Children.Add(Heading("Discos físicos"));
         if (diskProblem is not null) Body.Children.Add(Muted("Não foi possível ler a saúde dos discos: " + diskProblem));
-        foreach (var d in disks)
+        var diskTable = new CompactTable(new[]
         {
-            var parts = new List<string> { $"{d.Media} · {d.Bus} · {d.SizeBytes / 1e9:0} GB" };
-            if (d.Temperature is { } t && t > 0) parts.Add($"{t:0} °C");
-            if (d.WearPercent is { } w) parts.Add($"desgaste {w:0}%");
-            if (d.PowerOnHours is { } h) parts.Add($"{h:N0} h ligado");
-            if (d.ReadErrors is > 0 || d.WriteErrors is > 0) parts.Add($"erros: leitura {d.ReadErrors ?? 0}, gravação {d.WriteErrors ?? 0}");
-            bool healthy = d.Health.Equals("Healthy", StringComparison.OrdinalIgnoreCase);
-            if (DiskHistory.Trend(history, d.Name) is { } trend) parts.Add("evolução: " + trend);
-            Body.Children.Add(Row($"{d.Name} — {(healthy ? "Saudável" : d.Health)}", string.Join(" · ", parts), null,
-                healthy ? "MutedBrush" : "BadBrush"));
-        }
-
+            new TableColumn("Modelo"), new TableColumn("Tipo", 90), new TableColumn("Capacidade", 90, HorizontalAlignment.Right),
+            new TableColumn("Temp.", 64, HorizontalAlignment.Right), new TableColumn("Horas ligado", 96, HorizontalAlignment.Right),
+            new TableColumn("Desgaste", 76, HorizontalAlignment.Right), new TableColumn("Setores ruins", 104, HorizontalAlignment.Right), new TableColumn("Saúde", 96),
+        }, checks: false);
+        diskTable.SetRows(disks.Select(d =>
+        {
+            var (grade, reason) = DiskHealth.Grade(d);
+            string bad = d.Reallocated is null && d.Pending is null && d.Uncorrectable is null ? "—" : $"{d.Reallocated ?? 0} / {d.Pending ?? 0} / {d.Uncorrectable ?? 0}";
+            string tip = $"{d.Name}\nSérie: {(d.Serial.Length > 0 ? d.Serial : "—")} · Firmware: {(d.Firmware.Length > 0 ? d.Firmware : "—")}" +
+                         (d.PowerCycles is { } c ? $" · {c:N0} vezes ligado" : "") +
+                         "\nSetores ruins: realocados / pendentes / incorrigíveis" + $"\n{DiskHealth.GradeText(grade)}: {reason}" +
+                         (DiskHistory.Trend(history, d.Name) is { } trend ? "\nEvolução: " + trend : "");
+            return new TableRow(null, CompactTable.Glyph("\uEDA2", DiskHealth.GradeBrush(grade)), new object[]
+            {
+                d.Name, DiskHealth.Kind(d), $"{d.SizeBytes / 1e9:0} GB",
+                d.Temperature is { } t && t > 0 ? $"{t:0} °C" : "—",
+                d.PowerOnHours is { } h ? $"{h:N0} h" : "—",
+                d.WearPercent is { } w ? $"{w:0}%" : "—",
+                bad,
+                CompactTable.Badge(DiskHealth.GradeText(grade), DiskHealth.GradeBrush(grade)),
+            }, ToolTip: tip);
+        }).ToList());
+        Body.Children.Add(diskTable);
         if (disks.Count == 0 && diskProblem is null) Body.Children.Add(Muted("Nenhum disco físico informado pelo Windows."));
+
+        // ---- unidades (C:, D:...) com as ações de cada uma
+        Body.Children.Add(Heading("Unidades"));
+        var volumeTable = new CompactTable(new[]
+        {
+            new TableColumn("Unidade"), new TableColumn("Formato", 70), new TableColumn("Usado", 120, HorizontalAlignment.Right),
+            new TableColumn("Livre", 90, HorizontalAlignment.Right), new TableColumn("Proteção", 110), new TableColumn("Ações", 330, HorizontalAlignment.Right),
+        }, checks: false);
+        volumeTable.SetRows(volumes.Select(v =>
+        {
+            bool protectedDrive = v.Name.Length > 0 && _protected.Contains(char.ToUpperInvariant(v.Name[0]));
+            string name = v.Name;
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            actions.Children.Add(Mini("Otimizar", async () => await OptimizeAsync(name), "TRIM no SSD, desfragmentação no HD (o Windows escolhe)"));
+            actions.Children.Add(Mini("Verificar erros", async () => await CheckAsync(name), "Procura erros no sistema de arquivos sem desligar o PC (chkdsk /scan)"));
+            actions.Children.Add(Mini("Velocidade", async () => await BenchAsync(name), "Mede leitura e gravação com a ferramenta do Windows"));
+            return new TableRow(null, CompactTable.Glyph("\uE8B7"), new object[]
+            {
+                $"{v.Name} {v.Label}".Trim(), v.Format,
+                CompactTable.Meter($"{v.UsedPercent:0}%", v.UsedPercent / 100, v.UsedPercent > 90 ? "BadBrush" : v.UsedPercent > 75 ? "WarnBrush" : "AccentBrush"),
+                $"{v.FreeBytes / 1e9:0.0} GB",
+                CompactTable.Badge(protectedDrive ? "Restauração ligada" : "Sem restauração",
+                    protectedDrive ? "OkBrush" : v.Name.StartsWith(SystemDrive, StringComparison.OrdinalIgnoreCase) ? "WarnBrush" : "MutedBrush"),
+                actions,
+            });
+        }).ToList());
+        Body.Children.Add(volumeTable);
+        Body.Children.Add(UiTree.Free(_bench));
+    }
+
+    private readonly StackPanel _bench = new() { Margin = new Thickness(0, 10, 0, 0) };
+
+    private Button Mini(string text, Func<Task> click, string tip)
+    {
+        var b = new Button { Content = text, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(9, 1, 9, 2), FontSize = 11.5, Margin = new Thickness(6, 0, 0, 0), ToolTip = tip };
+        b.Click += async (_, _) => await click();
+        return b;
+    }
+
+    /// <summary>Verificação de erros sem desligar o PC (chkdsk /scan): o Windows lê o sistema de arquivos e só avisa.</summary>
+    private async Task CheckAsync(string drive)
+    {
+        if (!StorageService.IsValidDrive(drive)) return;
+        ShowProgress("Verificando erros em " + drive, "Verificação");
+        IProgress<ProgressEvent> progress = new Progress<ProgressEvent>(Progress.Report);
+        progress.Report(new ProgressEvent("Verificação", 10, "O Windows está lendo o sistema de arquivos (alguns minutos)"));
+        var (ok, tail) = await Task.Run(() => StorageService.ScanErrors(drive));
+        progress.Report(new ProgressEvent("Verificação", 100, "Concluído"));
+        Progress.Finish(ok ? "Nenhum erro encontrado" : "O Windows encontrou algo para corrigir", ok,
+            ok ? "O sistema de arquivos está em ordem." : "Abra Reparo do Windows › CHKDSK para corrigir no próximo reinício.\n" + tail);
+    }
+
+    /// <summary>Teste de velocidade com o WinSAT: leitura e gravação sequencial e aleatória 4K.</summary>
+    private async Task BenchAsync(string drive)
+    {
+        if (!StorageService.IsValidDrive(drive)) return;
+        var tests = DiskBench.Tests(drive[0]);
+        _bench.Children.Clear();
+        _bench.Children.Add(Heading($"Velocidade de {drive.TrimEnd('\\')}"));
+        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = tests.Count, Margin = new Thickness(0, 0, -10, 0) };
+        var cells = tests.Select(t => OptimizeKit.Stat(t.Title, "…", "medindo", "MutedBrush")).ToList();
+        foreach (var c in cells) grid.Children.Add(c.Card);
+        _bench.Children.Add(grid);
+        SetStatus("Medindo a velocidade (cerca de 1 minuto; evite usar o disco agora)...");
+        for (int i = 0; i < tests.Count; i++)
+        {
+            var args = tests[i].Args;
+            double? mbps = await Task.Run(() => DiskBench.Measure(args));
+            cells[i].Value.Text = mbps is { } m ? $"{m:0} MB/s" : "—";
+            cells[i].Detail.Text = mbps is null ? "o Windows não mediu" : "pelo WinSAT do Windows";
+        }
+        SetStatus("Velocidade medida. Em SSD NVMe a leitura sequencial passa de 2000 MB/s; em SSD SATA, perto de 500; em HD, 100 a 200.", "OkBrush");
     }
 
     private async Task OptimizeAsync(string drive)

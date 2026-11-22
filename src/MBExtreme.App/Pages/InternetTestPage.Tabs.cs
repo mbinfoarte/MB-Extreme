@@ -50,7 +50,15 @@ public sealed partial class InternetTestPage
         if (_dnsRunning) return;
         _dnsRunning = true;
         _dnsRows.Children.Clear();
-        _dnsRows.Children.Add(Muted("Testando (cada DNS responde a 5 sites, 2 vezes)...", 12));
+        // animação de busca: barra correndo e o texto pulsando enquanto cada DNS responde
+        var searching = new StackPanel { Margin = new Thickness(0, 10, 0, 6) };
+        var text = new TextBlock { Text = "Procurando o DNS mais rápido para você...", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Brush("AccentBrush") };
+        var pulse = new System.Windows.Media.Animation.DoubleAnimation(1, 0.45, TimeSpan.FromSeconds(0.8)) { AutoReverse = true, RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever };
+        text.BeginAnimation(OpacityProperty, pulse);
+        searching.Children.Add(text);
+        searching.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 6, Margin = new Thickness(0, 8, 0, 6), Foreground = Brush("AccentBrush"), Background = Brush("Surface2Brush"), BorderThickness = new Thickness(0) });
+        searching.Children.Add(Muted("Cada DNS responde a 5 sites, 2 vezes. Leva uns 10 segundos.", 11.5));
+        _dnsRows.Children.Add(searching);
         _adapter ??= await Task.Run(NetworkStatus.Active);
         var current = CurrentDns();
         var providers = new List<DnsProvider>();
@@ -73,54 +81,67 @@ public sealed partial class InternetTestPage
         var ranked = _dnsResults.OrderBy(r => r.AverageMs ?? double.MaxValue).ToList();
         var best = ranked.FirstOrDefault(r => r.AverageMs is not null);
         double worst = ranked.Where(r => r.AverageMs is not null).Select(r => r.AverageMs!.Value).DefaultIfEmpty(1).Max();
+        // resultados em 2 colunas: cada DNS num cartão com o tempo, a barra e para que ele é melhor
+        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(0, 8, -10, 0) };
         foreach (var r in ranked)
         {
-            var g = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
             bool inUse = r.Provider.Primary == current;
             bool isBest = ReferenceEquals(r, best);
-
-            var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            var line = new StackPanel { Orientation = Orientation.Horizontal };
-            line.Children.Add(new TextBlock { Text = $"{r.Provider.Name}  {r.Provider.Primary}", FontSize = 13 });
-            if (isBest) line.Children.Add(Pill("mais rápido", "#16301F", "#3DDC97"));
-            if (inUse) line.Children.Add(Pill("em uso", "#2A2410", "#FFC400"));
-            name.Children.Add(line);
-            if (r.Provider.Note.Length > 0 && r.Provider.Note != r.Provider.Primary)
-                name.Children.Add(new TextBlock { Text = r.Provider.Note + $" · respondeu {r.Successes} de {r.Attempts}", FontSize = 10.5, Foreground = Brush("MutedBrush") });
-            g.Children.Add(name);
-
             int level = r.AverageMs switch { null => 3, < 15 => 0, < 30 => 1, < 60 => 2, _ => 3 };
             double fraction = r.AverageMs is double ms ? Math.Clamp(ms / Math.Max(worst, 1), 0.04, 1) : 1;
-            var barHost = new Grid { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-            barHost.Children.Add(new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = Brush("Surface2Brush") });
-            var bar = new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = LevelBrush(level), HorizontalAlignment = HorizontalAlignment.Left };
+
+            var card = new StackPanel();
+            var top = new DockPanel();
+            var value = new TextBlock { Text = r.AverageMs is double v ? $"{v:0} ms" : "sem resposta", FontSize = 16, FontWeight = FontWeights.Bold, Foreground = LevelBrush(level), VerticalAlignment = VerticalAlignment.Center };
+            DockPanel.SetDock(value, Dock.Right);
+            top.Children.Add(value);
+            var line = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            line.Children.Add(new TextBlock { Text = r.Provider.Name, FontSize = 14, FontWeight = FontWeights.SemiBold });
+            line.Children.Add(new TextBlock { Text = "  " + r.Provider.Primary, FontSize = 11.5, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
+            if (isBest) line.Children.Add(Pill("mais rápido", "#16301F", "#3DDC97"));
+            if (inUse) line.Children.Add(Pill("em uso", "#2A2410", "#FFC400"));
+            top.Children.Add(line);
+            card.Children.Add(top);
+
+            var barHost = new Grid { Margin = new Thickness(0, 6, 0, 6) };
+            barHost.Children.Add(new Border { Height = 5, CornerRadius = new CornerRadius(3), Background = Brush("Surface2Brush") });
+            var bar = new Border { Height = 5, CornerRadius = new CornerRadius(3), Background = LevelBrush(level), HorizontalAlignment = HorizontalAlignment.Left };
             barHost.Children.Add(bar);
             barHost.SizeChanged += (_, e) => bar.Width = e.NewSize.Width * fraction;
-            Grid.SetColumn(barHost, 1);
-            g.Children.Add(barHost);
+            card.Children.Add(barHost);
 
-            var value = new TextBlock { Text = r.AverageMs is double v ? $"{v:0} ms" : "sem resposta", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = LevelBrush(level), VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(value, 2);
-            g.Children.Add(value);
-
-            UIElement action;
-            if (inUse) action = new TextBlock { Text = "em uso", FontSize = 12, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            else if (r.Provider.Secondary.Length == 0 || r.AverageMs is null) action = new TextBlock();
-            else
+            var bottom = new DockPanel();
+            if (!inUse && r.Provider.Secondary.Length > 0 && r.AverageMs is not null)
             {
                 var provider = r.Provider;
-                var use = new Button { Content = "Usar", Style = (Style)FindResource(isBest ? "PrimaryButton" : "GhostButton"), Padding = new Thickness(14, 4, 14, 4), FontSize = 12.5 };
+                var use = new Button { Content = "Usar", Style = (Style)FindResource(isBest ? "PrimaryButton" : "GhostButton"), Padding = new Thickness(14, 3, 14, 3), FontSize = 12 };
                 use.Click += async (_, _) => await ChangeDnsAsync(provider);
-                action = use;
+                DockPanel.SetDock(use, Dock.Right);
+                bottom.Children.Add(use);
             }
-            Grid.SetColumn(action, 3);
-            g.Children.Add(action);
-            _dnsRows.Children.Add(new Border { Child = g, Padding = new Thickness(2, 6, 2, 6), BorderThickness = new Thickness(0, 0, 0, 1), BorderBrush = Brush("Surface2Brush") });
+            var uses = DnsAdvice.Uses(r, ranked);
+            var tags = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+            if (uses.Count == 0)
+                tags.Children.Add(new TextBlock { Text = r.AverageMs is null ? "não respondeu daqui" : (r.Provider.Note.Length > 0 ? r.Provider.Note : "mais lento agora"), FontSize = 11, Foreground = Brush("MutedBrush") });
+            foreach (string u in uses)
+            {
+                var tag = Pill("Melhor para " + u.ToLowerInvariant(), u == "Jogos" ? "#2A2410" : "#1C1C22", u == "Jogos" ? "#FFC400" : "#D4D4D8");
+                tag.ToolTip = DnsAdvice.Explain(u);
+                tags.Children.Add(tag);
+            }
+            bottom.Children.Add(tags);
+            card.Children.Add(bottom);
+            if (r.Attempts > 0 && r.Successes < r.Attempts)
+                card.Children.Add(new TextBlock { Text = $"respondeu {r.Successes} de {r.Attempts}", FontSize = 10.5, Foreground = Brush("WarnBrush"), Margin = new Thickness(0, 4, 0, 0) });
+
+            grid.Children.Add(new Border
+            {
+                Child = card, Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 10, 10), CornerRadius = new CornerRadius(12),
+                Background = Brush("Surface2Brush"), BorderThickness = new Thickness(isBest ? 1.5 : 1), BorderBrush = Brush(isBest ? "OkBrush" : inUse ? "AccentBrush" : "BorderBrush"),
+            });
         }
+        _dnsRows.Children.Add(grid);
+        _dnsRows.Children.Add(Muted("Jogos: o que responde mais rápido. Navegação: rápido e sem falhas. Streaming: Google ou o do provedor indicam a sua região ao YouTube e à Netflix. Proteção: bloqueiam sites de golpe.", 11));
 
         var mine = ranked.FirstOrDefault(r => r.Provider.Primary == current);
         if (best is not null && mine?.AverageMs is double now && best.AverageMs is double fast)

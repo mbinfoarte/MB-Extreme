@@ -111,7 +111,7 @@ public sealed partial class InternetTestPage : ToolPageBase
         // abas
         var tabs = new WrapPanel { Margin = new Thickness(0, 12, 0, 12) };
         _tabs.Clear();
-        foreach (var (key, text) in new[] { ("speed", "Velocidade"), ("games", "Jogos e servidores"), ("dns", "DNS"), ("route", "Roteador e rota"), ("history", "Histórico") })
+        foreach (var (key, text) in new[] { ("speed", "Velocidade"), ("games", "Jogos e servidores"), ("dns", "DNS"), ("route", "Roteador e rota"), ("lan", "Rede local"), ("history", "Histórico") })
         {
             var tab = new ToggleButton { Style = (Style)FindResource("ChipToggle"), Content = text, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(14, 6, 14, 6), IsChecked = key == _tab };
             string k = key;
@@ -161,6 +161,7 @@ public sealed partial class InternetTestPage : ToolPageBase
             "games" => GamesTab(),
             "dns" => DnsTab(),
             "route" => RouteTab(),
+            "lan" => LanTab(),
             "history" => HistoryTab(),
             _ => SpeedTab(),
         };

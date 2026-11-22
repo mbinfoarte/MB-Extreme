@@ -14,7 +14,7 @@ public partial class TweaksPage : UserControl
     private readonly TweakCategory[] _categories;
     private readonly Dictionary<Tweak, CheckBox> _boxes = new();
     private CancellationTokenSource? _cts;
-    private readonly List<(Tweak Tweak, Border Row, TextBlock? Header)> _rows = new();
+    private List<(Tweak Tweak, bool? Applied)> _states = new();
     private readonly List<ToggleButton> _filterChips = new();
     private TweakGoal _goal = TweakGoal.None;
 
@@ -33,6 +33,44 @@ public partial class TweaksPage : UserControl
         };
         Loaded += (_, _) => BuildRows();
         BuildFilters();
+        BuildLevels();
+    }
+
+    /// <summary>Básico, Avançado e Extreme: botões grandes no visual das abas do módulo (ícone fino que acende dourado).</summary>
+    private void BuildLevels()
+    {
+        LevelHost.Children.Clear();
+        string group = "levels-" + Guid.NewGuid().ToString("N");
+        foreach (var (level, title, hint, glyph) in new[]
+        {
+            (TweakLevel.Basic, "Básico", "só risco baixo · seguro", "\uE73E"),
+            (TweakLevel.Advanced, "Avançado", "baixo e médio · mais desempenho", "\uE945"),
+            (TweakLevel.Extreme, "Extreme", "tudo, inclusive risco alto", "\uE7C1"),
+        })
+        {
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold });
+            text.Children.Add(new TextBlock { Text = hint, FontSize = 10.5, Opacity = 0.62, Margin = new Thickness(0, 1, 0, 0) });
+            var button = new RadioButton { Content = text, Tag = glyph, GroupName = group, Style = (Style)FindResource("ToolTab") };
+            var l = level;
+            button.Checked += (_, _) => MarkLevel(l);
+            LevelHost.Children.Add(button);
+        }
+    }
+
+    private void MarkLevel(TweakLevel level)
+    {
+        int marked = 0;
+        foreach (var (tweak, applied) in _states)
+        {
+            if (!_boxes.TryGetValue(tweak, out var box) || !box.IsEnabled) continue;
+            bool on = TweakTypes.InLevel(tweak.Risk, level) || applied == true;
+            box.IsChecked = on;
+            if (on) marked++;
+        }
+        string name = level switch { TweakLevel.Basic => "Básico", TweakLevel.Advanced => "Avançado", _ => "Extreme" };
+        StatusText.Text = $"Nível {name}: {marked} otimização(ões) marcada(s). Revise e clique em Aplicar.";
+        StatusText.Foreground = (Brush)FindResource(level == TweakLevel.Extreme ? "WarnBrush" : "MutedBrush");
     }
 
     /// <summary>Chips por objetivo (só na tela com várias categorias; nas telas de uma categoria fica só a busca).</summary>
@@ -61,21 +99,62 @@ public partial class TweaksPage : UserControl
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
 
-    /// <summary>Mostra só as linhas que passam no objetivo e na busca; esconde o título da categoria que ficou vazia.</summary>
+    /// <summary>Monta a lista agrupada por peça (CPU, GPU, Memória...), só com o que passa no objetivo e na busca.</summary>
     private void ApplyFilter()
     {
+        if (!IsLoaded && _states.Count == 0) return;
         string search = SearchBox.Text;
-        var visibleHeaders = new HashSet<TextBlock>();
-        int shown = 0;
-        foreach (var (tweak, row, header) in _rows)
+        var visible = _states.Where(x => TweakFilter.Matches(x.Tweak, _goal, search)).ToList();
+        var host = RowsHost.Children.OfType<FrameworkElement>().FirstOrDefault(e => Equals(e.Tag, "pro-note"));
+        RowsHost.Children.Clear();
+        if (host is not null) RowsHost.Children.Add(host);
+        var byType = visible.GroupBy(x => TweakTypes.Of(x.Tweak.Category, x.Tweak.Title + " " + x.Tweak.Description)).ToDictionary(g => g.Key, g => g.ToList());
+        foreach (var (type, title, glyph) in TweakTypes.All)
         {
-            bool visible = TweakFilter.Matches(tweak, _goal, search);
-            row.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-            if (visible) { shown++; if (header is not null) visibleHeaders.Add(header); }
+            if (!byType.TryGetValue(type, out var items)) continue;
+            var head = new DockPanel { Margin = new Thickness(2, 14, 0, 6) };
+            head.Children.Add(new TextBlock
+            {
+                Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 15, Foreground = (Brush)FindResource("AccentBrush"),
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0),
+            });
+            head.Children.Add(new TextBlock
+            {
+                Text = $"{title}   ·   {items.Count(i => i.Applied == true)} de {items.Count} aplicadas", FontSize = 14, FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            RowsHost.Children.Add(head);
+            var table = new MBExtreme.UI.Controls.CompactTable(new[]
+            {
+                new MBExtreme.UI.Controls.TableColumn("Otimização", 260), new MBExtreme.UI.Controls.TableColumn("O que faz"),
+                new MBExtreme.UI.Controls.TableColumn("Risco", 100), new MBExtreme.UI.Controls.TableColumn("Situação", 130),
+            });
+            table.SetRows(items.OrderBy(i => i.Tweak.Risk).ThenBy(i => i.Tweak.Title, StringComparer.CurrentCultureIgnoreCase).Select(i => Row(i.Tweak, i.Applied)).ToList());
+            RowsHost.Children.Add(table);
         }
-        foreach (var header in _rows.Select(r => r.Header).OfType<TextBlock>().Distinct())
-            header.Visibility = visibleHeaders.Contains(header) ? Visibility.Visible : Visibility.Collapsed;
-        EmptyText.Visibility = shown == 0 && _rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyText.Visibility = visible.Count == 0 && _states.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RowsHost.Children.Add(EmptyText);
+    }
+
+    private MBExtreme.UI.Controls.TableRow Row(Tweak tweak, bool? applied)
+    {
+        string tip = string.Join("\n", new[]
+        {
+            tweak.Description,
+            tweak.Effect.Length > 0 ? "Efeito: " + tweak.Effect : "",
+            tweak.Warning.Length > 0 ? "Atenção: " + tweak.Warning : "",
+            tweak.Details, tweak.CompatibilityText,
+        }.Where(x => x.Length > 0));
+        string status = applied switch { true => "Aplicada", false => "Não aplicada", _ => "Sem acesso" };
+        if (tweak.RequiresRestart) status += " · reinicia";
+        return new MBExtreme.UI.Controls.TableRow(_boxes[tweak], MBExtreme.UI.Controls.CompactTable.Glyph(applied == true ? "\uE73E" : "\uE713", applied == true ? "OkBrush" : "AccentBrush"),
+            new object[]
+            {
+                tweak.Badge.Length > 0 ? $"{tweak.Title}  ★" : tweak.Title,
+                tweak.Warning.Length > 0 ? "⚠ " + tweak.Description : tweak.Description,
+                MBExtreme.UI.Controls.CompactTable.Badge(RiskText(tweak.Risk), RiskBrush(tweak.Risk)),
+                MBExtreme.UI.Controls.CompactTable.Badge(status, applied == true ? "OkBrush" : "MutedBrush"),
+            }, ToolTip: tip);
     }
 
     private static bool? SafeIsApplied(Tweak tweak)
@@ -106,59 +185,23 @@ public partial class TweaksPage : UserControl
 
         RowsHost.Children.Clear();
         _boxes.Clear();
-        _rows.Clear();
+        _states = states;
         CounterText.Text = TweakFilter.Counter(states.Count(x => x.Applied == true), states.Count);
         CounterText.ToolTip = "Otimizações desta tela que já estão aplicadas no PC.";
         if (_categories.Length > 1 && source.Count < AppServices.Tweaks.Count)
             RowsHost.Children.Add(new TextBlock
             {
-                Text = "Os ajustes de desempenho, jogos e rede fazem parte do plano Pro e aparecem aqui quando você assina.",
+                Text = "Os ajustes de desempenho, jogos e rede fazem parte do plano Pro e aparecem aqui quando você assina.", Tag = "pro-note",
                 FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 0, 0, 8), Foreground = (Brush)FindResource("WarnBrush"),
             });
-
-        TweakCategory? lastCategory = null;
-        TextBlock? currentHeader = null;
-        foreach (var (tweak, applied) in states.OrderBy(x => Array.IndexOf(_categories, x.Tweak.Category)))
-        {
-            // tela "Otimizações" (todas as categorias): um título por assunto
-            if (_categories.Length > 1 && tweak.Category != lastCategory)
-            {
-                lastCategory = tweak.Category;
-                currentHeader = new TextBlock
-                {
-                    Text = CategoryTitle(tweak.Category), FontSize = 15, FontWeight = FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)), Margin = new Thickness(2, 14, 0, 8),
-                };
-                RowsHost.Children.Add(currentHeader);
-            }
-            var content = BuildContent(tweak);
-            content.Margin = new Thickness(8, 0, 0, 0);
-
-            var box = new CheckBox
-            {
-                IsChecked = applied == true,
-                Content = content,
-                VerticalContentAlignment = VerticalAlignment.Top,
-                Foreground = (Brush)FindResource("TextBrush"),
-            };
-
-            var row = new Border
-            {
-                Style = (Style)FindResource("Card"),
-                Margin = new Thickness(0, 0, 0, 10),
-                Child = box,
-            };
-            RowsHost.Children.Add(row);
-            _boxes[tweak] = box;
-            _rows.Add((tweak, row, currentHeader));
-        }
+        foreach (var (tweak, applied) in states)
+            _boxes[tweak] = new CheckBox { IsChecked = applied == true };
 
         EmptyText = new TextBlock
         {
             Text = "Nenhuma otimização com esse filtro ou essa busca.", FontSize = 13, Margin = new Thickness(2, 8, 0, 8),
             Foreground = (Brush)FindResource("MutedBrush"), Visibility = Visibility.Collapsed,
         };
-        RowsHost.Children.Add(EmptyText);
         ApplyFilter();
     }
 

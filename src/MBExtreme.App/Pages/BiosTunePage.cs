@@ -39,10 +39,117 @@ public sealed class BiosTunePage : ToolPageBase
         Render(BiosPlan.Build(_hw, maxTemp));
     }
 
+    private string _topic = "plan";
+    private IReadOnlyList<BiosStep> _steps = Array.Empty<BiosStep>();
+
+    /// <summary>Menu da BIOS no visual das abas do módulo: Plano, Undervolt, Overclock, TPM, Resizable BAR, XMP, Fans e Water cooler.</summary>
+    private WrapPanel TopicBar()
+    {
+        var bar = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
+        string group = "bios-" + Guid.NewGuid().ToString("N");
+        foreach (var (key, title, glyph) in BiosTopics.Menu)
+        {
+            var button = new RadioButton
+            {
+                Content = new TextBlock { Text = title, FontWeight = FontWeights.SemiBold }, Tag = glyph, GroupName = group,
+                Style = (Style)FindResource("ToolTab"), IsChecked = key == _topic,
+            };
+            string k = key;
+            button.Checked += (_, _) => { if (_topic == k) return; _topic = k; Render(_steps); };
+            bar.Children.Add(button);
+        }
+        return bar;
+    }
+
+    private void RenderTopic(BiosTopic topic)
+    {
+        var head = new DockPanel();
+        var badge = GlassFx.Badge(topic.Glyph, Color.FromRgb(0xFF, 0xC4, 0x00), 42, breathe: false);
+        badge.Margin = new Thickness(0, 0, 14, 0);
+        DockPanel.SetDock(badge, Dock.Left);
+        head.Children.Add(badge);
+        var status = new Border
+        {
+            CornerRadius = new CornerRadius(999), Padding = new Thickness(10, 3, 10, 4), Background = Brush("Surface2Brush"), VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = topic.Status, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush(topic.StatusBrush) },
+        };
+        DockPanel.SetDock(status, Dock.Right);
+        head.Children.Add(status);
+        var t = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        t.Children.Add(new TextBlock { Text = topic.Title, FontSize = 18, FontWeight = FontWeights.Bold });
+        t.Children.Add(Muted(topic.WhatIs, 12.5));
+        head.Children.Add(t);
+        var hc = CardOf(head);
+        hc.BorderBrush = Brush("AccentBrush");
+        Body.Children.Add(hc);
+
+        var facts = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 0, -10, 0) };
+        facts.Children.Add(OptimizeKit.Stat("Ganho", topic.Gain.Length > 0 ? "" : "—", topic.Gain, "OkBrush").Card);
+        facts.Children.Add(OptimizeKit.Stat("Risco", "", topic.Risk, "WarnBrush").Card);
+        facts.Children.Add(OptimizeKit.Stat("Onde fica na BIOS", "", topic.WhereInBios, "TextBrush").Card);
+        foreach (var card in facts.Children.OfType<Border>())
+            if (card.Child is StackPanel sp && sp.Children.Count > 1 && sp.Children[1] is TextBlock v && v.Text.Length == 0) v.Visibility = Visibility.Collapsed;
+        Body.Children.Add(facts);
+
+        var cols = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
+        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var steps = new StackPanel();
+        steps.Children.Add(new TextBlock { Text = "Passo a passo", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+        int n = 1;
+        foreach (string step in topic.Steps)
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 0, 0, 7) };
+            var num = new Border
+            {
+                Width = 22, Height = 22, CornerRadius = new CornerRadius(11), BorderBrush = Brush("AccentBrush"), BorderThickness = new Thickness(1.3), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Top,
+                Child = new TextBlock { Text = (n++).ToString(), FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Brush("AccentBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            };
+            DockPanel.SetDock(num, Dock.Left);
+            row.Children.Add(num);
+            row.Children.Add(new TextBlock { Text = step, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
+            steps.Children.Add(row);
+        }
+        cols.Children.Add(CardOf(steps));
+
+        var side = new StackPanel();
+        if (topic.Settings.Count > 0)
+        {
+            side.Children.Add(new TextBlock { Text = "Configuração para o seu PC", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+            var table = new CompactTable(new[] { new TableColumn("Opção na BIOS"), new TableColumn("Valor", 210) }, checks: false, icons: false);
+            table.SetRows(topic.Settings.Select(x => new TableRow(null, null, new object[] { x.Setting, new TextBlock { Text = x.Value, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("AccentBrush"), TextWrapping = TextWrapping.Wrap } })).ToList());
+            side.Children.Add(table);
+        }
+        var test = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+        test.Children.Add(new TextBlock { Text = "Como conferir", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+        test.Children.Add(Muted(topic.Test, 12));
+        if (topic.Page is { } page)
+        {
+            var go = SmallButton(page switch { "stress" => "Abrir o Teste de estresse", "win11" => "Conferir TPM e Secure Boot", "fans" => "Abrir Coolers e fans", _ => "Abrir" }, (_, _) => MainWindow.Current?.Go(page), true);
+            go.Margin = new Thickness(0, 8, 0, 0);
+            go.HorizontalAlignment = HorizontalAlignment.Left;
+            test.Children.Add(go);
+        }
+        side.Children.Add(CardOf(test));
+        side.Children.Add(CardOf(Muted("O MB nunca mexe na BIOS sozinho. Se o PC não ligar depois de um ajuste, limpe o CMOS (jumper ou bateria da placa) e use valores menores. Overclock pode afetar a garantia.", 11.5)));
+        Grid.SetColumn(side, 2);
+        cols.Children.Add(side);
+        Body.Children.Add(cols);
+    }
+
     private void Render(IReadOnlyList<BiosStep> steps)
     {
         var hw = _hw!;
+        _steps = steps;
         Body.Children.Clear();
+        Body.Children.Add(TopicBar());
+        if (_topic != "plan" && BiosTopics.Build(hw).FirstOrDefault(x => x.Key == _topic) is { } topic)
+        {
+            RenderTopic(topic);
+            return;
+        }
 
         // cabeçalho com o PC e quantos passos dão ganho
         var head = new DockPanel();

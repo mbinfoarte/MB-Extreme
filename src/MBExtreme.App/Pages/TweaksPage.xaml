@@ -9,20 +9,12 @@
                 <TextBlock x:Name="SubtitleText" Margin="0,4,0,18" TextWrapping="Wrap"
                            Foreground="{StaticResource MutedBrush}" />
 
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="Aplicar alterações" Style="{StaticResource PrimaryButton}" Click="ApplyButton_Click" />
-                    <Button Content="Marcar recomendados" Style="{StaticResource GhostButton}" Margin="12,0,0,0"
-                            Click="RecommendedButton_Click" Tag="Recommended" />
-                    <Button Content="Seguros" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Safe"
-                            ToolTip="Marca os ajustes de risco baixo" />
-                    <Button Content="Moderados" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Moderate"
-                            ToolTip="Marca os ajustes de risco médio (leia os avisos)" />
-                    <Button Content="Avançados" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="Advanced"
-                            ToolTip="Marca os ajustes de risco alto (só se souber o que está fazendo)" />
-                    <Button Content="Todos" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="All" />
-                    <Button Content="Nenhum" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="RecommendedButton_Click" Tag="None" />
-                    <Button Content="Restaurar originais" Style="{StaticResource GhostButton}" Margin="12,0,0,0"
-                            Click="RestoreButton_Click" />
+                <!-- níveis no mesmo visual das abas de cima: Básico, Avançado e Extreme marcam os ajustes; Aplicar confirma -->
+                <WrapPanel x:Name="LevelHost" />
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Button Content="Aplicar" Style="{StaticResource PrimaryButton}" Click="ApplyButton_Click" Padding="22,7" />
+                    <Button Content="Desmarcar tudo" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="RecommendedButton_Click" Tag="None" />
+                    <Button Content="Restaurar originais" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="RestoreButton_Click" />
                 </StackPanel>
                 <TextBlock x:Name="StatusText" Margin="0,12,0,0" TextWrapping="Wrap" />
 

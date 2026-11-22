@@ -19,16 +19,34 @@ public sealed class DriversPage : ToolPageBase
     public DriversPage() : base("Drivers",
         "Mostra a placa de vídeo e atualiza o driver sem você precisar abrir site nenhum. Também procura outros drivers pelo Windows Update.")
     {
-        AddButton("Procurar drivers no Windows Update", async (_, _) => await SearchAsync());
+        AddButton("\uD83D\uDD0D  Examinar atualizações", async (_, _) => await SearchAsync());
         AddButton("Instalar selecionados", async (_, _) => await InstallAsync());
-        AddSelectionButtons(() => _boxes.Values);
+        AddSelectionButtons(() => _boxes.Values.Where(b => b.IsEnabled));
         Loaded += (_, _) => ShowGpu();
+    }
+
+    private int _view;   // 0 = pendências (faltando e com atualização), 1 = instalados, 2 = tudo
+    private readonly (Border Card, TextBlock Value, TextBlock Detail) _missingStat = MBExtreme.UI.Controls.OptimizeKit.Stat("Faltando instalar", "…", "aparelhos sem driver");
+    private readonly (Border Card, TextBlock Value, TextBlock Detail) _updatesStat = MBExtreme.UI.Controls.OptimizeKit.Stat("Com atualização", "—", "clique em Examinar atualizações");
+    private readonly (Border Card, TextBlock Value, TextBlock Detail) _installedStat = MBExtreme.UI.Controls.OptimizeKit.Stat("Instalados", "…", "em dia (ficam ocultos)");
+    private readonly StackPanel _wuHost = new();
+
+    private void ApplyView()
+    {
+        bool pending = _view != 1, installed = _view != 0;
+        foreach (var e in Body.Children.OfType<FrameworkElement>().Where(e => e.Tag as string == "problem")) e.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
+        _wuHost.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
+        _installedHost.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ShowGpu()
     {
         Body.Children.Clear();
         _boxes.Clear();
+        _wuHost.Children.Clear();
+        Body.Children.Add(MBExtreme.UI.Controls.OptimizeKit.StatRow(_missingStat.Card, _updatesStat.Card, _installedStat.Card));
+        Body.Children.Add(MBExtreme.UI.Controls.OptimizeKit.Filters(new[] { "Pendências", "Instalados", "Tudo" }, _view, i => { _view = i; ApplyView(); }));
+        Body.Children.Add(UiTree.Free(_wuHost));
         Body.Children.Add(Heading("Placa de vídeo"));
 
         IReadOnlyList<GpuDriverInfo> gpus;
@@ -52,6 +70,14 @@ public sealed class DriversPage : ToolPageBase
     private readonly TextBox _driverSearch = new() { Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 4, 0, 6) };
     private readonly CheckBox _showGeneric = new() { Content = "Mostrar os genéricos do Windows", Margin = new Thickness(0, 0, 0, 6) };
     private readonly StackPanel _driverList = new();
+    private readonly StackPanel _installedHost = new();
+
+    private Button Tiny(string text, Func<Task> click, bool primary = false)
+    {
+        var b = new Button { Content = text, Style = (Style)FindResource(primary ? "PrimaryButton" : "GhostButton"), Padding = new Thickness(9, 1, 9, 2), FontSize = 11.5, Margin = new Thickness(6, 0, 0, 0) };
+        b.Click += async (_, _) => await click();
+        return b;
+    }
     private IReadOnlyList<MBExtreme.Core.Drivers.InstalledDriver> _drivers = Array.Empty<MBExtreme.Core.Drivers.InstalledDriver>();
 
     /// <summary>Aparelhos com problema (no alto), placa-mãe, backup e a lista de todos os drivers.</summary>
@@ -94,18 +120,28 @@ public sealed class DriversPage : ToolPageBase
             allButton.Margin = new Thickness(0, 4, 0, 8);
             Body.Children.Insert(at++, allButton);
 
-            foreach (var p in problems)
+            var table = new MBExtreme.UI.Controls.CompactTable(new[]
+            {
+                new MBExtreme.UI.Controls.TableColumn("Aparelho"), new MBExtreme.UI.Controls.TableColumn("Tipo", 150),
+                new MBExtreme.UI.Controls.TableColumn("Problema"), new MBExtreme.UI.Controls.TableColumn("", 250, HorizontalAlignment.Right),
+            }, checks: false) { Tag = "problem", Margin = new Thickness(0, 0, 0, 10) };
+            table.SetRows(problems.Select(p =>
             {
                 var device = p;
+                var kind = MBExtreme.Core.Drivers.DriverKinds.Of(p.Class + " " + p.Name);
                 var right = new StackPanel { Orientation = Orientation.Horizontal };
-                right.Children.Add(SmallButton("Baixar e instalar o driver", async (_, _) => await FetchDeviceAsync(device), true));
-                right.Children.Add(SmallButton("Copiar ID", (_, _) => { if (TryCopy(device.DeviceId)) SetStatus("ID copiado.", "OkBrush"); }));
-                right.Children.Add(SmallButton("Gerenciador de Dispositivos", (_, _) => StartTool("devmgmt.msc")));
-                var row = Row($"⚠  {p.Name}" + (p.Class.Length > 0 ? $"  ·  {p.Class}" : ""), $"{p.Explanation}  (código {p.Code})", right, "WarnBrush");
-                row.Tag = "problem";
-                Body.Children.Insert(at++, row);
-            }
+                right.Children.Add(Tiny("Baixar e instalar", async () => await FetchDeviceAsync(device), true));
+                right.Children.Add(Tiny("Copiar ID", () => { if (TryCopy(device.DeviceId)) SetStatus("ID copiado.", "OkBrush"); return Task.CompletedTask; }));
+                return new MBExtreme.UI.Controls.TableRow(null, MBExtreme.UI.Controls.CompactTable.Glyph(kind.Glyph, "WarnBrush"), new object[]
+                {
+                    p.Name, kind.Title, $"{p.Explanation} (código {p.Code})", right,
+                });
+            }).ToList());
+            Body.Children.Insert(at++, table);
         }
+        _missingStat.Value.Text = problems.Count.ToString();
+        _missingStat.Value.Foreground = Brush(problems.Count > 0 ? "WarnBrush" : "OkBrush");
+        _missingStat.Detail.Text = problems.Count > 0 ? "aparelhos sem driver ou com erro" : "nenhum aparelho sem driver";
 
         if (board is not null)
         {
@@ -127,17 +163,22 @@ public sealed class DriversPage : ToolPageBase
         backup.Children.Add(SmallButton("Abrir Backup para formatar", (_, _) => MainWindow.Current?.Go("formatbackup"), true));
         _more.Children.Add(CardOf(backup));
 
-        _more.Children.Add(Heading("Todos os drivers instalados"));
+        _installedHost.Children.Clear();
+        _more.Children.Add(UiTree.Free(_installedHost));
+        _installedHost.Children.Add(Heading("Drivers instalados"));
         System.Windows.Automation.AutomationProperties.SetName(_driverSearch, "Procurar driver por aparelho, fabricante ou versão");
         _driverSearch.TextChanged -= FilterChanged;
         _driverSearch.TextChanged += FilterChanged;
         _showGeneric.Foreground = Brush("TextBrush");
         _showGeneric.Click -= GenericChanged;
         _showGeneric.Click += GenericChanged;
-        _more.Children.Add(_driverSearch);
-        _more.Children.Add(_showGeneric);
-        _more.Children.Add(_driverList);
+        _installedHost.Children.Add(UiTree.Free(_driverSearch));
+        _installedHost.Children.Add(UiTree.Free(_showGeneric));
+        _installedHost.Children.Add(UiTree.Free(_driverList));
         FillDrivers();
+        _installedStat.Value.Text = _drivers.Count(d => !d.IsWindowsGeneric).ToString();
+        _installedStat.Detail.Text = $"+ {_drivers.Count(d => d.IsWindowsGeneric)} genéricos do Windows · ficam ocultos";
+        ApplyView();
     }
 
     private void FilterChanged(object sender, TextChangedEventArgs e) => FillDrivers();
@@ -151,9 +192,21 @@ public sealed class DriversPage : ToolPageBase
             .Where(d => q.Length == 0 || d.Device.Contains(q, StringComparison.CurrentCultureIgnoreCase) || d.Manufacturer.Contains(q, StringComparison.CurrentCultureIgnoreCase) || d.Version.Contains(q, StringComparison.OrdinalIgnoreCase))
             .ToList();
         _driverList.Children.Add(Muted($"{list.Count} de {_drivers.Count} drivers" + (_showGeneric.IsChecked == true ? "" : $" ({_drivers.Count(d => d.IsWindowsGeneric)} genéricos do Windows escondidos)"), 11.5));
-        foreach (var d in list.Take(300))
-            _driverList.Children.Add(Row(d.Device, $"{d.Manufacturer} · versão {d.Version}" + (d.Date is { } date ? $" · {date:dd/MM/yyyy}" : "") + (d.Signed ? " · assinado" : " · SEM assinatura")
-                , null, d.Signed ? "MutedBrush" : "WarnBrush"));
+        var table = new MBExtreme.UI.Controls.CompactTable(new[]
+        {
+            new MBExtreme.UI.Controls.TableColumn("Aparelho"), new MBExtreme.UI.Controls.TableColumn("Tipo", 150), new MBExtreme.UI.Controls.TableColumn("Fabricante", 170),
+            new MBExtreme.UI.Controls.TableColumn("Versão", 130), new MBExtreme.UI.Controls.TableColumn("Data", 90), new MBExtreme.UI.Controls.TableColumn("Assinatura", 100),
+        }, checks: false);
+        table.SetRows(list.OrderBy(d => MBExtreme.Core.Drivers.DriverKinds.Of(d.Class + " " + d.Device).Title).ThenBy(d => d.Device, StringComparer.CurrentCultureIgnoreCase).Take(400).Select(d =>
+        {
+            var kind = MBExtreme.Core.Drivers.DriverKinds.Of(d.Class + " " + d.Device);
+            return new MBExtreme.UI.Controls.TableRow(null, MBExtreme.UI.Controls.CompactTable.Glyph(kind.Glyph), new object[]
+            {
+                d.Device, kind.Title, d.Manufacturer, d.Version, d.Date is { } date ? date.ToString("dd/MM/yyyy") : "—",
+                MBExtreme.UI.Controls.CompactTable.Badge(d.Signed ? "Assinado" : "Sem assinatura", d.Signed ? "OkBrush" : "WarnBrush"),
+            }, ToolTip: d.Inf);
+        }).ToList());
+        _driverList.Children.Add(table);
     }
 
     private static void StartTool(string tool)
@@ -381,13 +434,30 @@ public sealed class DriversPage : ToolPageBase
         }
 
         SetStatus(found.Count == 0 ? "Nenhum driver pendente. Está em dia." : $"{found.Count} driver(s) disponível(is).", found.Count == 0 ? "OkBrush" : "MutedBrush");
-        if (found.Count > 0) Body.Children.Add(Heading("Disponíveis no Windows Update"));
-        foreach (var driver in found)
+        _updatesStat.Value.Text = found.Count.ToString();
+        _updatesStat.Value.Foreground = Brush(found.Count > 0 ? "WarnBrush" : "OkBrush");
+        _updatesStat.Detail.Text = found.Count > 0 ? "marque e clique em Instalar selecionados" : "tudo em dia";
+        _wuHost.Children.Clear();
+        if (found.Count == 0) return;
+        _wuHost.Children.Add(Heading($"Atualizações disponíveis ({found.Count})"));
+        var table = new MBExtreme.UI.Controls.CompactTable(new[]
         {
-            var box = Check(driver.Title, string.Join(" · ", new[] { driver.Manufacturer, driver.Model, driver.Date }.Where(s => !string.IsNullOrWhiteSpace(s))));
+            new MBExtreme.UI.Controls.TableColumn("Driver"), new MBExtreme.UI.Controls.TableColumn("Tipo", 150),
+            new MBExtreme.UI.Controls.TableColumn("Fabricante", 170), new MBExtreme.UI.Controls.TableColumn("Data", 100),
+        });
+        table.SetRows(found.Select(driver =>
+        {
+            var box = new CheckBox { IsChecked = true };
             _boxes[driver] = box;
-            Body.Children.Add(CardOf(box));
-        }
+            var kind = MBExtreme.Core.Drivers.DriverKinds.Of(driver.Title + " " + driver.Model);
+            return new MBExtreme.UI.Controls.TableRow(box, MBExtreme.UI.Controls.CompactTable.Glyph(kind.Glyph), new object[]
+            {
+                driver.Title, kind.Title, driver.Manufacturer, driver.Date,
+            }, ToolTip: string.Join(" · ", new[] { driver.Manufacturer, driver.Model, driver.HardwareId }.Where(x => !string.IsNullOrWhiteSpace(x))));
+        }).ToList());
+        _wuHost.Children.Add(table);
+        _view = 0;
+        ApplyView();
     }
 
     private async Task InstallAsync()

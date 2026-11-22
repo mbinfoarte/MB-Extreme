@@ -137,8 +137,8 @@ public sealed class FfmpegRecorder
         return w >= 160 && h >= 120 ? new CameraMode(w, h, fps, null, null) : null;
     }
 
-    /// <summary>Placa de captura como tela principal: pergunta os modos (uma vez) e guarda o maior tamanho com mais quadros em <see cref="CameraSource.CardModes"/>.</summary>
-    public static CameraMode? EnsureCardMode(string ffmpeg, string device, int maxHeight = 1080)
+    /// <summary>Placa de captura como tela principal: pergunta os modos (uma vez) e guarda a resolução própria da placa (até 4K) com mais quadros em <see cref="CameraSource.CardModes"/>.</summary>
+    public static CameraMode? EnsureCardMode(string ffmpeg, string device, int maxHeight = 2160)
     {
         if (!CameraOverlay.IsValidName(device) || CameraSource.IsStream(device)) return null;
         if (!KnownModes.TryGetValue(device, out var modes))

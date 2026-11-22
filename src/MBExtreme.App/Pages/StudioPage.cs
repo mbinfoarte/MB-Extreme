@@ -147,7 +147,7 @@ public sealed partial class StudioPage : ToolPageBase
     /// <summary>Placa de captura escolhida (tela principal), ou null.</summary>
     private string? CardName() => _s.StudioCaptureCard.Length > 0 && CameraOverlay.IsValidName(_s.StudioCaptureCard) ? _s.StudioCaptureCard : null;
 
-    /// <summary>Lista as placas (dispositivos de vídeo do Windows) e lê o melhor modo da escolhida (até 1080p60).</summary>
+    /// <summary>Lista as placas (dispositivos de vídeo do Windows) e lê a resolução própria da escolhida (até 4K, com o máximo de quadros).</summary>
     private async Task RefreshCardsAsync()
     {
         if (_ffmpegPath is null) { SetStatus("O motor de vídeo ainda está sendo preparado. Tente de novo em alguns segundos.", "WarnBrush"); return; }

@@ -77,7 +77,9 @@ public sealed partial class StudioPage
     private ModePlan? Plan(StudioMode mode, bool live)
     {
         if (_encoders.Count == 0) return null;
-        if (!live) return StudioModes.ForRecording(mode, _encoders, MBExtreme.UI.Recording.ScreenInfo.Primary.Height);
+        // com a placa de captura, a resolução de origem é a dela (ex.: 4K), não a do monitor
+        int sourceHeight = _sourceTab == 2 && CardSource() is { } card ? card.Area.Height : MBExtreme.UI.Recording.ScreenInfo.Primary.Height;
+        if (!live) return StudioModes.ForRecording(mode, _encoders, sourceHeight);
         var services = new List<StreamService> { CurrentService() };
         services.AddRange(_s.StudioExtraStreams.Select(e => (StreamService)Math.Clamp(e.Service, 0, 3)));
         bool youTubeOnly = services.All(s => s == StreamService.YouTube);

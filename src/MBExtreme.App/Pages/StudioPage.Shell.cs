@@ -176,7 +176,8 @@ public sealed partial class StudioPage
         _previewLabel.Inlines.Add(new System.Windows.Documents.Run("Prévia: "));
         _previewLabel.Inlines.Add(new System.Windows.Documents.Run(CurrentScene.Name) { FontWeight = FontWeights.SemiBold, Foreground = Brush("TextBrush") });
         _previewHost.Visibility = Vis(studio || PreviewLayout != 1);
-        _verticalWrap.Visibility = Vis(!studio && PreviewLayout != 0);
+        // modo estúdio com a cópia vertical ligada: 3 janelas (Prévia, No ar e Vertical)
+        _verticalWrap.Visibility = Vis(studio ? PreviewLayout == 2 : PreviewLayout != 0);
         _transition.IsEnabled = _studio.IsRunning && _airScene != CurrentScene;
     }
 

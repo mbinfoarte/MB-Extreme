@@ -10,7 +10,7 @@ namespace MBExtreme.UI.Controls;
 /// <summary>Mixer de áudio em colunas curtas, como numa mesa de som: som do PC, microfone e um canal por programa que está tocando (jogo, Discord, música...).</summary>
 internal sealed class AudioMixerPanel : StackPanel
 {
-    private const double StripHeight = 120;
+    private const double MeterWidth = 220;   // linhas finas: medidor deitado, como na maquete do Áudio
     private static readonly SolidColorBrush Yellow = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00)));
     private static readonly SolidColorBrush Hot = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x3D)));
 
@@ -34,7 +34,7 @@ internal sealed class AudioMixerPanel : StackPanel
     private readonly Action? _openFilters;
     private readonly AppAudioMixer _mixer = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(150) };
-    private readonly WrapPanel _strips = new();
+    private readonly StackPanel _strips = new();
     private readonly Dictionary<string, Strip> _appStrips = new(StringComparer.OrdinalIgnoreCase);
     private readonly TextBlock _empty = new() { FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
     private readonly Strip _system;
@@ -70,45 +70,48 @@ internal sealed class AudioMixerPanel : StackPanel
 
     private Strip MakeStrip(string label, string? tag, double max, double value, Action<double> changed, bool filters)
     {
-        var level = new Border { Background = Yellow, Height = 0, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(3) };
-        var meter = new Border { Width = 8, Height = StripHeight, CornerRadius = new CornerRadius(3), Background = Res("BorderBrush"), Child = level, Margin = new Thickness(0, 0, 6, 0) };
+        var level = new Border { Background = Yellow, Width = 0, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3) };
+        var meter = new Border { Width = MeterWidth, Height = 8, CornerRadius = new CornerRadius(3), Background = Res("BorderBrush"), Child = level, VerticalAlignment = VerticalAlignment.Center };
         var slider = new Slider
         {
-            Orientation = Orientation.Vertical, Height = StripHeight, Minimum = 0, Maximum = max, Value = Math.Min(max, value),
+            Orientation = Orientation.Horizontal, Width = 150, Minimum = 0, Maximum = max, Value = Math.Min(max, value), VerticalAlignment = VerticalAlignment.Center,
             SmallChange = 5, LargeChange = 10, ToolTip = "Volume de " + label,
         };
-        var percent = new TextBlock { FontSize = 11.5, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Res("MutedBrush"), Margin = new Thickness(0, 4, 0, 4) };
-        var mute = new Button { Padding = new Thickness(6, 2, 6, 2), FontSize = 11, Margin = new Thickness(0, 0, 0, 4), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var percent = new TextBlock { FontSize = 11.5, Width = 42, TextAlignment = TextAlignment.Right, Foreground = Res("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 8, 0) };
+        var mute = new Button { Padding = new Thickness(8, 1, 8, 2), FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
 
-        var name = new TextBlock
-        {
-            Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-            ToolTip = label, Margin = new Thickness(0, 0, 0, 2),
-        };
-        var column = new StackPanel();
-        column.Children.Add(name);
-        column.Children.Add(new TextBlock { Text = tag ?? " ", FontSize = 10.5, TextAlignment = TextAlignment.Center, Foreground = Yellow, Margin = new Thickness(0, 0, 0, 4) });
-        var bars = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        bars.Children.Add(meter);
-        bars.Children.Add(slider);
-        column.Children.Add(bars);
-        column.Children.Add(percent);
-        column.Children.Add(mute);
+        var row = new Grid();
+        foreach (var w in new[] { 190.0, MeterWidth + 14, 150, 56, -1 })
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = w < 0 ? GridLength.Auto : new GridLength(w) });
+        var name = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        name.Children.Add(new TextBlock { Text = label, FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = label, MaxWidth = 150 });
+        if (tag is { Length: > 0 }) name.Children.Add(new TextBlock { Text = "  " + tag, FontSize = 10.5, Foreground = Yellow, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(name);
+        Grid.SetColumn(meter, 1);
+        row.Children.Add(meter);
+        Grid.SetColumn(slider, 2);
+        row.Children.Add(slider);
+        Grid.SetColumn(percent, 3);
+        row.Children.Add(percent);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        buttons.Children.Add(mute);
         if (filters && _openFilters is not null)
         {
             var filter = new Button
             {
-                Content = "Filtro", Padding = new Thickness(6, 2, 6, 2), FontSize = 11, Style = (Style)Application.Current.FindResource("GhostButton"),
-                ToolTip = "Limitador, porta de ruído, compressor e filtro de graves. Muda na hora, sem parar.",
+                Content = "Filtros", Padding = new Thickness(8, 1, 8, 2), FontSize = 11, Margin = new Thickness(6, 0, 0, 0), Style = (Style)Application.Current.FindResource("GhostButton"),
+                ToolTip = "Remoção de ruído, limitador, porta de ruído, compressor e graves. Muda na hora, sem parar.",
             };
             filter.Click += (_, _) => _openFilters();
-            column.Children.Add(filter);
+            buttons.Children.Add(filter);
         }
+        Grid.SetColumn(buttons, 4);
+        row.Children.Add(buttons);
 
         var container = new Border
         {
-            Style = (Style)Application.Current.FindResource("Card"), Width = 92, Padding = new Thickness(6, 8, 6, 8),
-            Margin = new Thickness(0, 0, 8, 8), CornerRadius = new CornerRadius(10), Child = column,
+            Background = Res("SurfaceBrush"), BorderBrush = Res("BorderBrush"), BorderThickness = new Thickness(1), MinHeight = 38,
+            Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 0, 4), CornerRadius = new CornerRadius(9), Child = row,
         };
         var strip = new Strip { Level = level, Volume = slider, Percent = percent, Mute = mute, Container = container, Before = value > 0 ? value : 100 };
         percent.Text = $"{value:0}%";
@@ -140,7 +143,7 @@ internal sealed class AudioMixerPanel : StackPanel
     {
         strip.Mute.Content = strip.Muted ? "Mudo" : "Som";
         strip.Mute.Style = (Style)Application.Current.FindResource(strip.Muted ? "PrimaryButton" : "GhostButton");
-        strip.Mute.Padding = new Thickness(6, 2, 6, 2);
+        strip.Mute.Padding = new Thickness(8, 1, 8, 2);
         strip.Mute.FontSize = 11;
         strip.Mute.ToolTip = strip.Muted ? "Está mudo: clique para voltar o som." : "Clique para deixar mudo.";
     }
@@ -148,7 +151,7 @@ internal sealed class AudioMixerPanel : StackPanel
     private static void ShowLevel(Strip strip, double peak)
     {
         double value = Math.Clamp(peak, 0, 1);
-        strip.Level.Height = StripHeight * value;
+        strip.Level.Width = MeterWidth * value;
         strip.Level.Background = value > 0.85 ? Hot : Yellow;
     }
 

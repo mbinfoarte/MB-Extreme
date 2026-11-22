@@ -125,7 +125,13 @@ public sealed class FloatingWidget : Window
             }));
         }
         _extra.Children.Add(modes);
-        var acts = new System.Windows.Controls.Primitives.UniformGrid { Columns = 5, Margin = new Thickness(0, 6, 0, 0) };
+        var acts = new System.Windows.Controls.Primitives.UniformGrid { Columns = 6, Margin = new Thickness(0, 6, 0, 0) };
+        // salvar o lance sem sair do jogo (precisa do replay ligado no estúdio)
+        acts.Children.Add(ModeTile("\uE7C8", Color.FromRgb(0xFF, 0xC4, 0x00), "Lance", "", false, async () =>
+        {
+            if (!AppServices.Studio.IsRunning) { _openApp(); MainWindow.Current?.Go("record"); return; }
+            await AppServices.Studio.SaveReplayAsync();
+        }));
         foreach (var (glyph, text, key, auto) in new[]
         {
             ("\uE945", "Otimizar", "tweaks-all", false), ("\uE7C8", "Gravar", "record", false), ("\uE74D", "Limpar", "cleanup", true),

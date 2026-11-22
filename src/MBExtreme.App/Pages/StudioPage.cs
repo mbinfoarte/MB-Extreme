@@ -212,8 +212,8 @@ public sealed partial class StudioPage : ToolPageBase
         HideHeader();   // o topo é desenhado pela página, como na maquete: título, REC e AO VIVO
 
         _windows = new PickList(this, 130);
-        _mics = new PickList(this, 110);
-        _outputs = new PickList(this, 110);
+        _mics = new PickList(this, 62);
+        _outputs = new PickList(this, 62);
         _remember = new CheckBox { Content = "Lembrar a chave neste PC (protegida pelo Windows, só este usuário lê)", Foreground = Brush("TextBrush"), Margin = new Thickness(0, 8, 0, 0) };
 
         Body.Margin = new Thickness(0);
@@ -1297,27 +1297,36 @@ public sealed partial class StudioPage : ToolPageBase
     /// </summary>
     private UIElement OverlayList()
     {
-        var table = new CompactTable(new[] { new TableColumn("Overlay"), new TableColumn("O que mostra", 240), new TableColumn("Estado", 100), new TableColumn("", 90, HorizontalAlignment.Right) },
-            checks: false) { Margin = new Thickness(0, 0, 0, 12) };
-        TableRow Row(string title, string detail, bool on, string glyph, Action edit)
+        // camadas: a caixinha é o "olho" (mostrar/esconder na hora); Ajustar leva às opções daquele overlay
+        var table = new CompactTable(new[] { new TableColumn("Camada"), new TableColumn("O que mostra", 240), new TableColumn("Estado", 100), new TableColumn("", 90, HorizontalAlignment.Right) })
+            { Margin = new Thickness(0, 0, 0, 12) };
+        TableRow Row(string title, string detail, bool on, string glyph, Action<bool> set, Action edit)
         {
             var b = new Button { Content = "Ajustar", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(9, 1, 9, 2), FontSize = 11.5 };
             b.Click += (_, _) => edit();
-            return new TableRow(null, CompactTable.Glyph(glyph, on ? "AccentBrush" : "MutedBrush"), new object[]
+            var box = new CheckBox { IsChecked = on, ToolTip = "Mostrar ou esconder" };
+            box.Click += (_, _) =>
             {
-                title, detail, CompactTable.Badge(on ? "Ligado" : "Desligado", on ? "OkBrush" : "MutedBrush"), b,
+                set(box.IsChecked == true);
+                _s.Save();
+                UpdateGhosts();
+                Dispatcher.BeginInvoke(new Action(BuildChannel));
+            };
+            return new TableRow(box, CompactTable.Glyph(glyph, on ? "AccentBrush" : "MutedBrush"), new object[]
+            {
+                title, detail, CompactTable.Badge(on ? "Visível" : "Oculto", on ? "OkBrush" : "MutedBrush"), b,
             });
         }
         table.SetRows(new[]
         {
-            Row("Logo do canal", "marca d'água no canto", _s.StudioLogoOn, "\uE8B9", () => _logoPreview.BringIntoView()),
-            Row("Pix", "QR Code e chave para doações", _s.StudioPixOn, "\uE8C7", () => _selectTab?.Invoke(6)),
-            Row("Abertura", "vinheta no começo", _s.StudioIntroOn, "\uE768", () => _introPreview.BringIntoView()),
-            Row("Letreiro com o nome", "faixa com nome e chamada", _s.StudioLowerOn, "\uE8D2", () => _lowerPreview.BringIntoView()),
-            Row("Chat e extras", "chat na tela e alertas", _s.StudioChatAuto, "\uE8BD", () => _selectTab?.Invoke(12)),
+            Row("Logo do canal", "marca d'água no canto", _s.StudioLogoOn, "\uE8B9", v => _s.StudioLogoOn = v, () => _logoPreview.BringIntoView()),
+            Row("Letreiro com o nome", "faixa com nome e chamada", _s.StudioLowerOn, "\uE8D2", v => _s.StudioLowerOn = v, () => _lowerPreview.BringIntoView()),
+            Row("Pix", "QR Code e chave para doações", _s.StudioPixOn, "\uE8C7", v => { _s.StudioPixOn = v; BuildPixCard(); }, () => _selectTab?.Invoke(6)),
+            Row("Abertura", "vinheta no começo", _s.StudioIntroOn, "\uE768", v => _s.StudioIntroOn = v, () => _introPreview.BringIntoView()),
+            Row("Chat e extras", "chat na tela e alertas", _s.StudioChatAuto, "\uE8BD", v => _s.StudioChatAuto = v, () => _selectTab?.Invoke(12)),
         });
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = "Overlays desta transmissão", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+        panel.Children.Add(new TextBlock { Text = "Camadas · a de cima fica na frente", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
         panel.Children.Add(table);
         return panel;
     }
@@ -1837,6 +1846,9 @@ public sealed partial class StudioPage : ToolPageBase
 
     private void BuildReplaySettings()
     {
+        Detach(_replayGallery);
+        _tabReplay.Children.Add(_replayGallery);
+        BuildReplayGallery();
         _tabReplay.Children.Add(Field("Quanto tempo guardar", Chips(ReplayOptions.Select(r => r < 60 ? r + " s" : r / 60 + " min").ToList(),
             Math.Max(0, Array.IndexOf(ReplayOptions, _s.StudioReplaySeconds)), i => _s.StudioReplaySeconds = ReplayOptions[i])));
         var beep = new CheckBox { Content = "Tocar um aviso sonoro quando o clipe for salvo", IsChecked = _s.StudioReplayBeep, Foreground = Brush("TextBrush") };

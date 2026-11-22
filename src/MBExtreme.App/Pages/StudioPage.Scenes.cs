@@ -91,44 +91,101 @@ public sealed partial class StudioPage
         _studioMode.FontSize = 12.5;
 
         _sceneList.Children.Clear();
-        for (int i = 0; i < _s.StudioScenes.Count; i++)
+        // cenas em grupos (pastas) que abrem e fecham; sem grupo ficam no topo. Tudo pelo clique direito.
+        foreach (var group in _s.StudioScenes.Select(sc => sc.Group).Distinct().OrderBy(g => g.Length == 0 ? 0 : 1).ThenBy(g => g, StringComparer.CurrentCultureIgnoreCase).ToList())
         {
-            int index = i;
-            var scene = _s.StudioScenes[i];
-            bool selected = scene == current;
-            var row = new DockPanel();
-            int count = scene.Items.Count;
-            row.Children.Add(Right(new TextBlock { Text = count == 1 ? "1 fonte" : $"{count} fontes", FontSize = 11, Foreground = selected ? Ink : Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) }));
-            if (running && scene == _airScene)
-                row.Children.Add(Right(new Border
-                {
-                    Background = selected ? Ink : Yellow, CornerRadius = new CornerRadius(4), Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock { Text = "NO AR", FontSize = 10, FontWeight = FontWeights.Bold, Foreground = selected ? Yellow : Ink },
-                }));
-            row.Children.Add(new TextBlock { Text = scene.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = selected ? Ink : Brush("TextBrush"), VerticalAlignment = VerticalAlignment.Center });
-            var item = new Border
+            bool collapsed = group.Length > 0 && _s.StudioCollapsedGroups.Contains("cena:" + group);
+            if (group.Length > 0) _sceneList.Children.Add(GroupHeader(group, collapsed, "cena:" + group, RebuildScenesUi));
+            if (collapsed) continue;
+            for (int i = 0; i < _s.StudioScenes.Count; i++)
             {
-                Child = row, CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 4), Cursor = System.Windows.Input.Cursors.Hand,
-                Background = selected ? Yellow : Brush("Surface2Brush"), ToolTip = "Clique para escolher; botão direito para renomear, duplicar ou remover.",
-            };
-            item.MouseLeftButtonUp += async (_, _) => await SelectSceneAsync(index);
-            item.MouseRightButtonUp += (_, e) =>
-            {
-                e.Handled = true;
-                ShowMenu(item, new (string, Action, bool)[]
-                {
-                    ("Renomear", () => RenameScene(index), true),
-                    ("Duplicar", () => DuplicateScene(index), _s.StudioScenes.Count < StudioScenes.MaxScenes),
-                    ("Remover", () => { _s.StudioSceneIndex = index; RemoveScene(); }, _s.StudioScenes.Count > 1),
-                });
-            };
-            _sceneList.Children.Add(item);
+                if (_s.StudioScenes[i].Group != group) continue;
+                _sceneList.Children.Add(SceneRow(i, current, running, group.Length > 0));
+            }
         }
 
         RefreshStudioLayout();
 
         RebuildSources();
     }
+
+    private Border SceneRow(int index, StudioSceneSetting current, bool running, bool inGroup)
+    {
+        var scene = _s.StudioScenes[index];
+        bool selected = scene == current;
+        var row = new DockPanel();
+        int count = scene.Items.Count;
+        row.Children.Add(Right(new TextBlock { Text = count == 1 ? "1 fonte" : $"{count} fontes", FontSize = 11, Foreground = selected ? Ink : Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) }));
+        if (running && scene == _airScene)
+            row.Children.Add(Right(new Border
+            {
+                Background = selected ? Ink : Yellow, CornerRadius = new CornerRadius(4), Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock { Text = "NO AR", FontSize = 10, FontWeight = FontWeights.Bold, Foreground = selected ? Yellow : Ink },
+            }));
+        row.Children.Add(new TextBlock { Text = scene.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = selected ? Ink : Brush("TextBrush"), VerticalAlignment = VerticalAlignment.Center });
+        var item = new Border
+        {
+            Child = row, CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(inGroup ? 14 : 0, 0, 0, 4), Cursor = System.Windows.Input.Cursors.Hand,
+            Background = selected ? Yellow : Brush("Surface2Brush"), ToolTip = "Clique para escolher; botão direito para as opções.",
+        };
+        item.MouseLeftButtonUp += async (_, _) => await SelectSceneAsync(index);
+        item.MouseRightButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            var options = new List<(string, Action, bool)>
+            {
+                ("Renomear", () => RenameScene(index), true),
+                ("Duplicar", () => DuplicateScene(index), _s.StudioScenes.Count < StudioScenes.MaxScenes),
+                ("Novo grupo com esta cena...", () => AskGroup(scene), true),
+            };
+            foreach (var g in _s.StudioScenes.Select(sc => sc.Group).Where(g => g.Length > 0 && g != scene.Group).Distinct())
+            {
+                string target = g;
+                options.Add(($"Mover para o grupo \"{target}\"", () => { scene.Group = target; _s.Save(); RebuildScenesUi(); }, true));
+            }
+            if (scene.Group.Length > 0) options.Add(("Tirar do grupo", () => { scene.Group = ""; _s.Save(); RebuildScenesUi(); }, true));
+            options.Add(("Subir", () => { _s.StudioSceneIndex = index; MoveScene(-1); }, index > 0));
+            options.Add(("Descer", () => { _s.StudioSceneIndex = index; MoveScene(1); }, index < _s.StudioScenes.Count - 1));
+            options.Add(("Remover", () => { _s.StudioSceneIndex = index; RemoveScene(); }, _s.StudioScenes.Count > 1));
+            ShowMenu(item, options, atMouse: true);
+        };
+        return item;
+    }
+
+    /// <summary>Título de um grupo (cenas ou fontes): seta que abre e fecha, nome e quantos itens.</summary>
+    private Border GroupHeader(string name, bool collapsed, string key, Action rebuild)
+    {
+        var text = new TextBlock { Text = (collapsed ? "▸  " : "▾  ") + name, FontSize = 12, FontWeight = FontWeights.Bold, Foreground = Brush("TextBrush"), VerticalAlignment = VerticalAlignment.Center };
+        var header = new Border { Child = text, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 2, 0, 2), Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };
+        header.MouseLeftButtonUp += (_, _) =>
+        {
+            if (!_s.StudioCollapsedGroups.Remove(key)) _s.StudioCollapsedGroups.Add(key);
+            _s.Save();
+            rebuild();
+        };
+        return header;
+    }
+
+    private void AskGroup(StudioSceneSetting scene)
+    {
+        var box = new TextBox { Text = scene.Group.Length > 0 ? scene.Group : "Jogando", MaxLength = 30, Padding = new Thickness(6, 4, 6, 4), FontSize = 14 };
+        var panel = new StackPanel();
+        panel.Children.Add(Muted("Nome do grupo (ex.: Jogando, Conversa, Pausa):", 12));
+        panel.Children.Add(box);
+        box.Loaded += (_, _) => { box.Focus(); box.SelectAll(); };
+        ShowEditor("Grupo de cenas", panel, () =>
+        {
+            if (StudioScenes.CleanName(box.Text) is { } name) scene.Group = name;
+            _s.Save();
+            RebuildScenesUi();
+        }, 420);
+    }
+
+    private static string SourceGroup(StudioSceneItem item) => item.Kind switch
+    {
+        StudioSceneItemKind.Capture or StudioSceneItemKind.Camera => "Vídeo",
+        _ => "Overlays",
+    };
 
     private static UIElement Right(UIElement element)
     {
@@ -151,37 +208,41 @@ public sealed partial class StudioPage
             return;
         }
 
-        for (int i = 0; i < scene.Items.Count; i++)
+        // fontes em grupos (Vídeo e Overlays) que abrem e fecham; olho para mostrar/esconder e o resto pelo clique direito
+        foreach (var group in new[] { "Vídeo", "Overlays" })
         {
-            int index = i;
-            var item = scene.Items[i];
-            var row = new DockPanel();
-            var more = Glyph("", "Mais opções", () => { });
-            more.Click += (_, _) => ShowSourceMenu(more, index);
-            var lockButton = Glyph(item.Locked ? "" : "", item.Locked ? "Travada: não dá para ocultar nem remover. Clique para destravar." : "Travar (evita mudar sem querer)", () =>
+            var indexes = Enumerable.Range(0, scene.Items.Count).Where(i => SourceGroup(scene.Items[i]) == group).ToList();
+            if (indexes.Count == 0) continue;
+            bool collapsed = _s.StudioCollapsedGroups.Contains("fonte:" + group);
+            _sourceList.Children.Add(GroupHeader($"{group} ({indexes.Count})", collapsed, "fonte:" + group, RebuildSources));
+            if (collapsed) continue;
+            foreach (int i in indexes)
             {
-                item.Locked = !item.Locked;
-                _s.Save();
-                RebuildSources();
-            });
-            var eye = Glyph(item.Hidden ? "" : "", item.Hidden ? "Oculta nesta cena: clique para mostrar" : "Aparece nesta cena: clique para ocultar", () =>
-            {
-                item.Hidden = !item.Hidden;
-                SceneChanged();
-            });
-            eye.IsEnabled = !item.Locked && item.Kind != StudioSceneItemKind.Capture;
-            if (item.Kind == StudioSceneItemKind.Capture) eye.ToolTip = "A tela ou a janela é o fundo de toda cena.";
-            if (item.Hidden) eye.Opacity = 0.55;
-            if (!item.Locked) lockButton.Opacity = 0.55;
-            row.Children.Add(Right(more));
-            row.Children.Add(Right(lockButton));
-            row.Children.Add(Right(eye));
-            row.Children.Add(new TextBlock
-            {
-                Text = StudioScenes.Title(item, _s), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-                Foreground = Brush(item.Hidden ? "MutedBrush" : "TextBrush"),
-            });
-            _sourceList.Children.Add(new Border { Child = row, Background = Brush("Surface2Brush"), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 3, 4, 3), Margin = new Thickness(0, 0, 0, 4) });
+                int index = i;
+                var item = scene.Items[i];
+                var row = new DockPanel();
+                var eye = Glyph(item.Hidden ? "\uED1A" : "\uE7B3", item.Hidden ? "Oculta nesta cena: clique para mostrar" : "Aparece nesta cena: clique para ocultar", () =>
+                {
+                    item.Hidden = !item.Hidden;
+                    SceneChanged();
+                });
+                eye.IsEnabled = item.Kind != StudioSceneItemKind.Capture;
+                if (item.Kind == StudioSceneItemKind.Capture) eye.ToolTip = "A tela, a janela ou a placa de captura é o fundo de toda cena.";
+                if (item.Hidden) eye.Opacity = 0.55;
+                row.Children.Add(Right(eye));
+                row.Children.Add(new TextBlock
+                {
+                    Text = StudioScenes.Title(item, _s), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+                    Foreground = Brush(item.Hidden ? "MutedBrush" : "TextBrush"),
+                });
+                var line = new Border
+                {
+                    Child = row, Background = Brush("Surface2Brush"), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 3, 4, 3), Margin = new Thickness(14, 0, 0, 4),
+                    ToolTip = "Botão direito para as opções desta fonte.",
+                };
+                line.MouseRightButtonUp += (_, e) => { e.Handled = true; ShowSourceMenu(line, index); };
+                _sourceList.Children.Add(line);
+            }
         }
     }
 
@@ -321,8 +382,11 @@ public sealed partial class StudioPage
             options.Add(("Filtros", () => OpenSourceFilters(item), true));
         options.Add(("Subir", () => { StudioScenes.Move(scene.Items, index, -1); _s.Save(); RebuildSources(); }, index > 0));
         options.Add(("Descer", () => { StudioScenes.Move(scene.Items, index, 1); _s.Save(); RebuildSources(); }, index < scene.Items.Count - 1));
-        options.Add((item.Locked ? "Remover (destrave antes)" : "Remover desta cena", () => { scene.Items.RemoveAt(index); SceneChanged(); }, !item.Locked));
-        ShowMenu(anchor, options);
+        if (item.Kind != StudioSceneItemKind.Capture)
+            options.Add((item.Hidden ? "Mostrar" : "Esconder", () => { item.Hidden = !item.Hidden; SceneChanged(); }, true));
+        options.Add(("Adicionar fonte...", () => ShowAddSource(anchor), true));
+        options.Add(("Remover desta cena", () => { scene.Items.RemoveAt(index); SceneChanged(); }, item.Kind != StudioSceneItemKind.Capture));
+        ShowMenu(anchor, options, atMouse: true);
     }
 
     /// <summary>Abre onde a fonte é configurada (as configurações são as mesmas em todas as cenas).</summary>
@@ -377,10 +441,10 @@ public sealed partial class StudioPage
     }
 
     /// <summary>Menu pequeno no estilo do programa (preto), abaixo do botão.</summary>
-    private void ShowMenu(FrameworkElement anchor, IEnumerable<(string Label, Action Act, bool Enabled)> options)
+    private void ShowMenu(FrameworkElement anchor, IEnumerable<(string Label, Action Act, bool Enabled)> options, bool atMouse = false)
     {
         var list = new StackPanel { MinWidth = 200 };
-        var popup = new Popup { PlacementTarget = anchor, Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true };
+        var popup = new Popup { PlacementTarget = anchor, Placement = atMouse ? PlacementMode.MousePoint : PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true };
         foreach (var (label, act, enabled) in options)
         {
             var action = act;

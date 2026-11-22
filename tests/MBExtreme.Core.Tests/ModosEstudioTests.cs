@@ -33,3 +33,21 @@ public class ModosEstudioTests
         Assert.Equal(4, StudioModes.All.Count);
     }
 }
+
+public class GaleriaReplayTests
+{
+    [Fact]
+    public void Agrupa_os_lances_por_jogo()
+    {
+        Assert.Equal(("Valorant", new DateTime(2026, 11, 22, 21, 14, 0)), ReplayGallery.Parse("Replay_Valorant_20261122_211400.mp4") is var (g, a) ? (g, a!.Value) : default);
+        Assert.Equal("EA FC 26", ReplayGallery.Parse("Replay_EA_FC_26_20261121_220500.mp4").Game);
+        Assert.Equal("Outros", ReplayGallery.Parse("Replay_20261121_220500.mp4").Game);
+        Assert.Equal("Outros", ReplayGallery.Parse("qualquer.mp4").Game);
+        var t = new DateTime(2026, 11, 22, 20, 0, 0);
+        var clips = new[] { new ReplayClip("a", "EA FC 26", t.AddDays(-1), 1), new ReplayClip("b", "Valorant", t, 1), new ReplayClip("c", "Valorant", t.AddHours(-1), 1) };
+        var groups = ReplayGallery.ByGame(clips);
+        Assert.Equal(new[] { "Valorant", "EA FC 26" }, groups.Select(x => x.Game));
+        Assert.Equal("b", groups[0].Clips[0].Path);
+        Assert.EndsWith(".jpg", ReplayGallery.ThumbPath("/x/Clipes/Replay_V_20261122_211400.mp4"));
+    }
+}

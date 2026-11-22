@@ -31,12 +31,12 @@ public sealed partial class StudioPage
     private void BuildSettings()
     {
         var tabs = new[] { _tabVideo, _tabVertical, _tabImage, _tabAudio, _tabCamera, _tabChannel, _tabPixCard, _tabStream, _tabStats, _tabReplay, _tabShortcuts, _tabAdvanced, _tabExtras, _tabAccounts };
-        string[] names = { "Vídeo", "Vertical", "Imagem", "Áudio", "Câmeras", "Logo, abertura e faixa", "Pix", "Conexão e qualidade", "Estatísticas", "Replay", "Atalhos", "Avançado", "Chat e extras", "Contas e chaves" };
+        string[] names = { "Vídeo", "Vertical", "Imagem", "Áudio", "Câmeras", "Logo, abertura e faixa", "Pix", "Conexão e qualidade", "Estatísticas", "Replay", "Atalhos", "Formatos e avançado", "Chat e extras", "Contas e chaves" };
         // seções como na maquete aprovada: o que é da live, da gravação, do replay e o que aparece por cima do vídeo (vale para os três)
         var groups = new (string Label, string Icon, int[] Tabs)[]
         {
             ("Live", "stream", new[] { 7, 13, 8 }),
-            ("Gravação", "record", new[] { 0, 4, 3, 2, 1, 11 }),
+            ("Gravação", "record", new[] { 0, 3, 4, 2, 11 }),   // a Vertical fica dentro de Formatos e avançado
             ("Replay", "replay", new[] { 9, 10 }),
             ("Overlays", "gear", new[] { 5, 6, 12 }),
         };
@@ -50,10 +50,11 @@ public sealed partial class StudioPage
 
         void Show(int tab)
         {
+            if (tab == 1) tab = 11;   // Vertical e Avançado são uma aba só: Formatos e avançado
             _settingsTab = tab;
             int group = Math.Max(0, Array.FindIndex(groups, g => g.Tabs.Contains(tab)));
             lastTab[group] = tab;
-            for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == tab);
+            for (int t = 0; t < tabs.Length; t++) tabs[t].Visibility = Vis(t == tab || (tab == 11 && t == 1));
 
             for (int i = 0; i < bigs.Count; i++)
             {
@@ -81,6 +82,7 @@ public sealed partial class StudioPage
             if (tab == 3) RefreshLimiterNow();
             if (tab == 6) BuildPixCard();
             if (tab == 12) BuildExtras();
+            if (tab == 9) BuildReplayGallery();   // lances novos aparecem ao abrir a aba
         }
 
         for (int i = 0; i < groups.Length; i++)

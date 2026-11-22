@@ -159,6 +159,9 @@ public sealed class AppSettings
 
     public bool StudioRecordDetails { get; set; }
 
+    /// <summary>Grupos de cenas e de fontes fechados na lista do estúdio.</summary>
+    public List<string> StudioCollapsedGroups { get; set; } = new();
+
     /// <summary>Outras plataformas da live ao mesmo tempo (a principal continua em StudioStreamService).</summary>
     public List<StudioExtraStream> StudioExtraStreams { get; set; } = new();
 
@@ -722,6 +725,9 @@ public sealed class StudioSceneItem
 public sealed class StudioSceneSetting
 {
     public string Name { get; set; } = "Cena";
+
+    /// <summary>Grupo (pasta) da cena na lista; vazio = sem grupo.</summary>
+    public string Group { get; set; } = "";
 
     public List<StudioSceneItem> Items { get; set; } = new();
 }

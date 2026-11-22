@@ -586,7 +586,7 @@ internal sealed class StudioController
         _saving = true;
         try
         {
-            string clip = await Session.SaveReplayAsync(ClipsFolder, config.GameName);
+            string clip = await Session.SaveReplayAsync(ClipsFolder, config.GameName ?? ForegroundGame());
             Raise((automatic ? "Lance salvo automaticamente: " : "Replay salvo: ") + clip, true);
             if (config.Beep) System.Media.SystemSounds.Asterisk.Play();
             if (AppServices.Settings.StudioClipToast) ClipToast.Show(automatic ? "Lance salvo" : "Clipe salvo", Path.GetFileName(clip));
@@ -601,6 +601,25 @@ internal sealed class StudioController
         {
             _saving = false;
         }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+
+    /// <summary>Nome do programa em primeiro plano na hora do lance (o jogo), para o nome do clipe e a galeria por jogo.</summary>
+    private static string? ForegroundGame()
+    {
+        try
+        {
+            GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
+            if (pid == 0) return null;
+            using var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            string name = process.ProcessName;
+            if (name.Equals("explorer", StringComparison.OrdinalIgnoreCase) || name.StartsWith("MBExtreme", StringComparison.OrdinalIgnoreCase)) return null;
+            string title = process.MainWindowTitle;
+            return title.Length is > 0 and <= 40 ? title : name;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception) { return null; }
     }
 
     public void Shutdown()

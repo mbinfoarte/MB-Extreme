@@ -77,7 +77,7 @@ public sealed partial class StudioPage
     private ModePlan? Plan(StudioMode mode, bool live)
     {
         if (_encoders.Count == 0) return null;
-        if (!live) return StudioModes.ForRecording(mode, _encoders, ScreenInfo.Primary.Height);
+        if (!live) return StudioModes.ForRecording(mode, _encoders, MBExtreme.UI.Recording.ScreenInfo.Primary.Height);
         var services = new List<StreamService> { CurrentService() };
         services.AddRange(_s.StudioExtraStreams.Select(e => (StreamService)Math.Clamp(e.Service, 0, 3)));
         bool youTubeOnly = services.All(s => s == StreamService.YouTube);

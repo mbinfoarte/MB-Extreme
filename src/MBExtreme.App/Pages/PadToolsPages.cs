@@ -169,6 +169,7 @@ internal static class XInput
     /// <summary>Lê o controle a cada ~1 ms e anota quando chega pacote novo (mexa o analógico).</summary>
     public static IReadOnlyList<double> Capture(uint index, int durationMs, CancellationToken token)
     {
+        using var fine = PerfUi.FineTimer();   // relógio de 1 ms: sem ele a leitura acontece a cada ~15 ms e o cabo parece mais lento
         var times = new List<double>();
         uint last = uint.MaxValue;
         var watch = Stopwatch.StartNew();

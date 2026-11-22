@@ -210,5 +210,50 @@ public static class TweakCatalogExtra
             Details = "Grava MSISupported = 1 em Enum\\PCI\\...\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties. Se o dispositivo não suportar MSI, o Windows ignora o valor. Confira o efeito com o Diagnóstico de latência.",
             RequiresRestart = true, Badge = New,
         };
+
+        // ---------------------------------------------------------------- Controle competitivo
+        yield return new TargetedRegistryTweak(store, Gamepads.PadCompetitive.UsbPower, TweakCategory.Peripherals, TweakRisk.Low,
+            "USB e controle sem economia de energia",
+            "Impede o Windows de pôr para dormir os hubs USB e o controle (PlayStation e Xbox) ligado no cabo.",
+            Hklm, () => DeviceRegistry.UsbPowerTargets(DeviceRegistry.IsHubOrGamepad))
+        {
+            Effect = "Sem o atraso de \"acordar\" no primeiro toque e sem quedas curtas do controle no cabo.",
+            Warning = "Notebook na bateria gasta um pouco mais. Vale a partir da próxima vez que o aparelho for ligado (ou ao reiniciar).",
+            Details = "Grava EnhancedPowerManagementEnabled = 0, AllowIdleIrpInD3 = 0, SelectiveSuspendEnabled = 0 e WDF\\IdleInWorkingState = 0 em Enum\\USB\\...\\Device Parameters dos hubs e dos controles. É o mesmo que desmarcar \"Permitir que o computador desligue este dispositivo\" no Gerenciador de Dispositivos.",
+            RequiresRestart = true, Badge = New,
+        };
+
+        yield return new TargetedRegistryTweak(store, Gamepads.PadCompetitive.BluetoothPower, TweakCategory.Peripherals, TweakRisk.Low,
+            "Adaptador Bluetooth sem economia de energia",
+            "Impede o Windows de pôr o adaptador Bluetooth para dormir entre um comando e outro do controle.",
+            Hklm, () => DeviceRegistry.UsbPowerTargets(DeviceRegistry.IsBluetoothRadio))
+        {
+            Effect = "Menos picos de atraso e quedas do controle no Bluetooth.",
+            Warning = "Notebook na bateria gasta um pouco mais. Vale ao religar o adaptador ou reiniciar.",
+            Details = "Os mesmos valores de energia, só nos adaptadores Bluetooth (classe Bluetooth em Enum\\USB).",
+            RequiresRestart = true, Badge = New,
+        };
+
+        yield return new Gamepads.DisableDevicesTweak(store, Gamepads.PadCompetitive.InternalBluetoothOff, TweakCategory.Peripherals, TweakRisk.Low,
+            "Desligar o Bluetooth interno quando há adaptador USB",
+            "Com dois adaptadores Bluetooth, o Windows pode usar o interno (mais fraco). Desliga o interno e deixa só o adaptador USB.",
+            () => Gamepads.PadSystem.InternalRadiosWhenDongle(Hardware.WinUsbTopology.Read()))
+        {
+            Effect = "O controle conecta sempre pelo adaptador novo, com mais alcance e estabilidade.",
+            Warning = "Depois de desligar, pareie o controle de novo no adaptador USB. O Desfazer religa o interno.",
+            Details = "Usa pnputil /disable-device no Bluetooth que está numa porta interna da placa-mãe ou da placa Wi-Fi, só quando há outro adaptador Bluetooth numa porta USB.",
+            Badge = New,
+        };
+
+        yield return new TargetedRegistryTweak(store, Gamepads.PadCompetitive.UsbMsi, TweakCategory.Peripherals, TweakRisk.Medium,
+            "Modo MSI nos controladores USB",
+            "Liga as interrupções por mensagem nos controladores USB (onde ficam controle, mouse e teclado).",
+            Hklm, () => DeviceRegistry.MsiTargets(DeviceRegistry.UsbClass))
+        {
+            Effect = "Interrupções sem compartilhar linha: pode reduzir picos de atraso de controle, mouse e teclado.",
+            Warning = "A maioria dos controladores USB modernos já usa MSI. Se algum USB parar de funcionar, desfaça (pelo Modo de Segurança, se preciso). Crie um ponto de restauração antes.",
+            Details = "Grava MSISupported = 1 em Enum\\PCI\\...\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties dos controladores da classe USB.",
+            RequiresRestart = true, Badge = New,
+        };
     }
 }

@@ -39,9 +39,9 @@ public static class FeaturePolicy
         ["bench"] = Gamer, ["bottleneck"] = Gamer, ["compare"] = Gamer, ["fans"] = Gamer, ["fps"] = Gamer, ["gameadvisor"] = Gamer,
         ["gameboost"] = Gamer, ["gamefps"] = Gamer, ["gamelibrary"] = Gamer, ["gamesettings"] = Gamer, ["latency"] = Gamer,
         ["mbc-emu"] = Gamer, ["mbc-kbm"] = Gamer, ["mbc-light"] = Gamer, ["mbc-overview"] = Gamer, ["mbc-tune"] = Gamer,
-        ["monitor-hz"] = Gamer, ["mouse-aim"] = Gamer, ["overlay-setup"] = Gamer, ["pad-drivers"] = Gamer, ["pad-info"] = Gamer,
+        ["monitor-hz"] = Gamer, ["mouse-aim"] = Gamer, ["overlay-setup"] = Gamer, ["pad-analyzer"] = Gamer, ["pad-competitive"] = Gamer, ["pad-drivers"] = Gamer, ["pad-info"] = Gamer, ["pad-overclock"] = Gamer,
         ["pad-profiles"] = Gamer, ["padcalib"] = Gamer, ["profiles"] = Gamer, ["rgb"] = Gamer, ["stress"] = Gamer,
-        ["tweaks-game"] = Gamer, ["wallpaper"] = Gamer,
+        ["tweaks-game"] = Gamer, ["usb-ports"] = Gamer, ["wallpaper"] = Gamer,
         // Creator: gravação, lives e editor de vídeos
         ["record"] = Creator, ["shorts"] = Creator, ["studio"] = Creator,
         // Técnico: tudo + ferramentas de assistência

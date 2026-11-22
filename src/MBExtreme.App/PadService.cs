@@ -175,6 +175,10 @@ internal sealed class PadService
 
     private void Loop(CancellationToken token)
     {
+        // Controle competitivo: Avançado lê em prioridade alta; Extreme em prioridade máxima e com o relógio do Windows em 1 ms
+        var settings = AppServices.Settings;
+        Thread.CurrentThread.Priority = settings.PadTimerResolution ? ThreadPriority.Highest : settings.PadHighPriorityRead ? ThreadPriority.AboveNormal : ThreadPriority.Normal;
+        using var timer = settings.PadTimerResolution ? PerfUi.FineTimer() : null;
         while (!token.IsCancellationRequested)
         {
             var devices = Scan();
@@ -257,6 +261,7 @@ internal sealed class PadService
 
     private void ReadXInput(uint slot, CancellationToken token)
     {
+        using var fine = PerfUi.FineTimer();   // sem o relógio de 1 ms o Sleep(1) dura até 15 ms e o controle Xbox parece lento
         uint last = uint.MaxValue;
         int misses = 0;
         while (!token.IsCancellationRequested && !_reopen)

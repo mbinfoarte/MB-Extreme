@@ -30,6 +30,16 @@ public sealed class AppSettings
     public string PadActiveProfile { get; set; } = "";
     /// <summary>Troca o perfil do controle sozinho quando um jogo ligado a um perfil abre.</summary>
     public bool PadAutoSwitch { get; set; } = true;
+    /// <summary>Nível do Controle competitivo aplicado (null = nenhum).</summary>
+    public MBExtreme.Core.Gamepads.CompetitiveLevel? PadCompetitiveLevel { get; set; }
+    /// <summary>Leitura do controle em prioridade alta (Avançado) e com relógio de 1 ms e prioridade máxima (Extreme).</summary>
+    public bool PadHighPriorityRead { get; set; }
+    public bool PadTimerResolution { get; set; }
+    /// <summary>Overclock: taxa escolhida (já vem em 1000 Hz) e a última taxa medida no cabo por controle (chave: PID em hexa).</summary>
+    public int PadOverclockHz { get; set; } = MBExtreme.Core.Gamepads.PadOverclock.TargetHz;
+    public Dictionary<string, double> PadOverclockMeasured { get; set; } = new();
+    /// <summary>Medições do Analisador (chave: "PID|Usb" ou "PID|Bluetooth"), para comparar cabo e Bluetooth em dias diferentes.</summary>
+    public Dictionary<string, PadMeasureRecord> PadMeasurements { get; set; } = new();
     /// <summary>Avaliação do programa: primeiro uso com a conta, "agora não" até quando, e se já respondeu.</summary>
     public DateTime? RatingFirstUseUtc { get; set; }
     public DateTime? RatingSnoozeUtc { get; set; }
@@ -743,4 +753,17 @@ public sealed class StudioExtraStream
 
     /// <summary>"kick", "custom" ou o nome do serviço: o cartão marcado na tela.</summary>
     public string Card { get; set; } = "";
+}
+
+/// <summary>Uma medição guardada do Analisador do controle.</summary>
+public sealed class PadMeasureRecord
+{
+    public DateTime When { get; set; }
+    public double RateHz { get; set; }
+    public double AverageMs { get; set; }
+    public double JitterMs { get; set; }
+    public double WorstMs { get; set; }
+    public int Spikes { get; set; }
+    public int Lost { get; set; }
+    public List<double> Gaps { get; set; } = new();
 }

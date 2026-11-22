@@ -122,6 +122,59 @@ public static class DeviceRegistry
         return options?.GetValue("0") is not null ? "0" : null;
     }
 
+    public const string UsbClass = "{36fc9e60-c465-11cf-8056-444553540000}";
+    public const string BluetoothClass = "{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}";
+    private const string UsbEnumPath = @"SYSTEM\CurrentControlSet\Enum\USB";
+
+    /// <summary>
+    /// Valores que impedem o Windows de pôr um aparelho USB para dormir (economia de energia seletiva), nos aparelhos que
+    /// <paramref name="include"/> aceita (recebe o nome do aparelho em Enum\USB e a chave da instância). Só valores DWORD:
+    /// um SelectiveSuspendEnabled gravado em binário pelo driver fica como está.
+    /// </summary>
+    public static IReadOnlyList<RegistryTarget> UsbPowerTargets(Func<string, RegistryKey, bool> include)
+    {
+        var result = new List<RegistryTarget>();
+        using var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var usb = root.OpenSubKey(UsbEnumPath, false);
+        if (usb is null) return result;
+        foreach (string device in usb.GetSubKeyNames())
+        {
+            try
+            {
+                using var deviceKey = usb.OpenSubKey(device, false);
+                if (deviceKey is null) continue;
+                foreach (string instance in deviceKey.GetSubKeyNames())
+                {
+                    using var inst = deviceKey.OpenSubKey(instance, false);
+                    if (inst is null || !include(device, inst)) continue;
+                    using var parameters = inst.OpenSubKey("Device Parameters", false);
+                    if (parameters is null) continue;
+                    string path = $@"{UsbEnumPath}\{device}\{instance}\Device Parameters";
+                    result.Add(new RegistryTarget(path, "EnhancedPowerManagementEnabled", 0, RegistryValueKind.DWord));
+                    result.Add(new RegistryTarget(path, "AllowIdleIrpInD3", 0, RegistryValueKind.DWord));
+                    if (parameters.GetValue("SelectiveSuspendEnabled") is null or int)
+                        result.Add(new RegistryTarget(path, "SelectiveSuspendEnabled", 0, RegistryValueKind.DWord));
+                    using var wdf = parameters.OpenSubKey("WDF", false);
+                    if (wdf is not null) result.Add(new RegistryTarget(path + @"\WDF", "IdleInWorkingState", 0, RegistryValueKind.DWord));
+                }
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException) { /* protegido */ }
+        }
+        return result;
+    }
+
+    /// <summary>Hubs USB (o raiz de cada controlador e os hubs ligados) e controles de jogo PlayStation e Xbox.</summary>
+    public static bool IsHubOrGamepad(string device, RegistryKey instance)
+    {
+        string service = instance.GetValue("Service") as string ?? "";
+        if (service.StartsWith("USBHUB", StringComparison.OrdinalIgnoreCase) || device.StartsWith("ROOT_HUB", StringComparison.OrdinalIgnoreCase)) return true;
+        return device.StartsWith("VID_054C", StringComparison.OrdinalIgnoreCase) || device.StartsWith("VID_045E", StringComparison.OrdinalIgnoreCase)
+            && (instance.GetValue("ClassGUID") as string ?? "").Length > 0 && (service.Contains("xbox", StringComparison.OrdinalIgnoreCase) || service.Contains("xusb", StringComparison.OrdinalIgnoreCase) || service.Contains("gip", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsBluetoothRadio(string device, RegistryKey instance) =>
+        string.Equals(instance.GetValue("ClassGUID") as string, BluetoothClass, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Chaves do modo MSI dos dispositivos PCI das classes pedidas (placa de vídeo, placa de rede) que já passaram pela instalação do driver.</summary>
     public static IReadOnlyList<RegistryTarget> MsiTargets(params string[] classGuids)
     {

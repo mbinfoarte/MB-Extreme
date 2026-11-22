@@ -164,6 +164,11 @@ internal static class NavigationMap
         {
             ("Meu controle", "mbc-overview"), ("Calibrador", "padcalib"), ("Emulação", "mbc-emu"), ("Teclado e mouse", "mbc-kbm"),
             ("Mira do mouse", "mouse-aim"), ("Luz, gatilhos e vibração", "mbc-light"), ("Ajustes finos", "mbc-tune"),
+            ("Desempenho e latência", "mbc-perf"),
+        },
+        ["mbc-perf"] = new[]
+        {
+            ("Analisador", "pad-analyzer"), ("Portas USB", "usb-ports"), ("Controle competitivo", "pad-competitive"), ("Overclock 1000 Hz", "pad-overclock"),
         },
         ["hub-meupc"] = new[] { ("Resumo do PC", "sysinfo"), ("Componentes", "hardware"), ("Monitor e Hz", "monitor-hz"), ("Windows", "win11") },
         ["hub-perif"] = new[]
@@ -195,6 +200,8 @@ internal static class NavigationMap
         ["programs-install"] = ("\uE896", "kits e programas"), ["programs-installed"] = ("\uE777", "versões novas"), ["uninstaller"] = ("\uE74D", "remover e limpar restos"), ["debloat"] = ("\uE71D", "apps que vêm no Windows"),
         ["mbc-overview"] = ("\uE7FC", "bateria, firmware e perfil"), ["padcalib"] = ("\uE9D9", "analógicos e gatilhos"), ["mbc-emu"] = ("\uE7FC", "Xbox, PS4 e PS5 virtuais"), ["mbc-kbm"] = ("\uE765", "jogar no teclado e mouse"),
         ["mouse-aim"] = ("\uE765", "sensibilidade e curva"), ["mbc-light"] = ("\uE945", "LED, gatilhos e rumble"), ["mbc-tune"] = ("\uE713", "zona morta e resposta"),
+        ["mbc-perf"] = ("\uE9D9", "latência, USB e 1000 Hz"), ["pad-analyzer"] = ("\uE9D9", "cabo × Bluetooth"), ["usb-ports"] = ("\uE88E", "a melhor porta"),
+        ["pad-competitive"] = ("\uE945", "futebol e corrida"), ["pad-overclock"] = ("\uE7FC", "DualSense e DS4"),
         ["sysinfo"] = ("\uE7F8", "peças e Windows"), ["hardware"] = ("\uE950", "CPU, GPU, RAM e discos"), ["monitor-hz"] = ("\uE7F4", "taxa de atualização"), ["win11"] = ("\uE7F8", "versão e requisitos"),
         ["periphtest"] = ("\uE765", "teclado, mouse, som e câmera"), ["ghosts"] = ("\uE88E", "registros de USB antigos"), ["devices"] = ("\uE88E", "tudo que está ligado"), ["removable"] = ("\uEDA2", "pendrives e HDs"), ["fakecheck"] = ("\uE9D9", "capacidade falsa?"),
         ["wallpaper"] = ("\uE771", "temas em alta resolução"), ["rgb"] = ("\uE771", "cores e efeitos"), ["fans"] = ("\uE945", "curvas e rotação"),

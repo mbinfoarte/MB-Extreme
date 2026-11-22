@@ -1234,10 +1234,42 @@ public sealed partial class StudioPage : ToolPageBase
 
     private static string OverlayPath(string name) => System.IO.Path.Combine(OverlayFolder, name);
 
+    /// <summary>
+    /// Lista dos overlays (como na maquete): logo, Pix, abertura e letreiro com o nome, cada um com o estado e o atalho para ajustar.
+    /// Ligar e desligar fica no ajuste de cada um (logo abaixo, ou na aba Pix).
+    /// </summary>
+    private UIElement OverlayList()
+    {
+        var table = new CompactTable(new[] { new TableColumn("Overlay"), new TableColumn("O que mostra", 240), new TableColumn("Estado", 100), new TableColumn("", 90, HorizontalAlignment.Right) },
+            checks: false) { Margin = new Thickness(0, 0, 0, 12) };
+        TableRow Row(string title, string detail, bool on, string glyph, Action edit)
+        {
+            var b = new Button { Content = "Ajustar", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(9, 1, 9, 2), FontSize = 11.5 };
+            b.Click += (_, _) => edit();
+            return new TableRow(null, CompactTable.Glyph(glyph, on ? "AccentBrush" : "MutedBrush"), new object[]
+            {
+                title, detail, CompactTable.Badge(on ? "Ligado" : "Desligado", on ? "OkBrush" : "MutedBrush"), b,
+            });
+        }
+        table.SetRows(new[]
+        {
+            Row("Logo do canal", "marca d'água no canto", _s.StudioLogoOn, "\uE8B9", () => _logoPreview.BringIntoView()),
+            Row("Pix", "QR Code e chave para doações", _s.StudioPixOn, "\uE8C7", () => _selectTab?.Invoke(6)),
+            Row("Abertura", "vinheta no começo", _s.StudioIntroOn, "\uE768", () => _introPreview.BringIntoView()),
+            Row("Letreiro com o nome", "faixa com nome e chamada", _s.StudioLowerOn, "\uE8D2", () => _lowerPreview.BringIntoView()),
+            Row("Chat e extras", "chat na tela e alertas", _s.StudioChatAuto, "\uE8BD", () => _selectTab?.Invoke(12)),
+        });
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = "Overlays desta transmissão", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+        panel.Children.Add(table);
+        return panel;
+    }
+
     private void BuildChannel()
     {
         _tabChannel.Children.Clear();
         foreach (var box in new FrameworkElement[] { _chName, _chPresenter, _chTagline, _introPreview, _lowerPreview, _logoPreview }) Detach(box);
+        _tabChannel.Children.Add(OverlayList());
 
         // ---- identidade
         var identity = new StackPanel();
@@ -1540,6 +1572,62 @@ public sealed partial class StudioPage : ToolPageBase
 
     private StreamService CurrentService() => (StreamService)Math.Clamp(_s.StudioStreamService, 0, 3);
 
+    private const string KickUrl = "rtmps://fa723fc1b171.global-contribute.live-video.net/app";
+
+    /// <summary>
+    /// Plataformas em cartões (como na maquete da Live): YouTube, Twitch, Kick, TikTok, Facebook, Instagram e servidor próprio.
+    /// Kick usa o servidor próprio com o endereço da Kick; TikTok e Instagram vão na vertical.
+    /// </summary>
+    private System.Windows.Controls.Primitives.UniformGrid PlatformGrid(StreamService service)
+    {
+        bool kick = service == StreamService.Custom && _s.StudioStreamPreset == 0 && _s.StudioCustomUrl.Contains("live-video.net", StringComparison.OrdinalIgnoreCase);
+        string current = service switch
+        {
+            StreamService.YouTube => "youtube", StreamService.Twitch => "twitch", StreamService.Facebook => "facebook",
+            _ => _s.StudioStreamPreset == 1 ? "instagram" : _s.StudioStreamPreset == 2 ? "tiktok" : kick ? "kick" : "custom",
+        };
+        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 4, HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var (key, title, detail, color) in new[]
+        {
+            ("youtube", "YouTube", "horizontal e Shorts", "#FF0000"), ("twitch", "Twitch", "horizontal", "#9146FF"), ("kick", "Kick", "horizontal", "#53FC18"),
+            ("tiktok", "TikTok Live", "vertical", "#111111"), ("facebook", "Facebook", "horizontal", "#1877F2"), ("instagram", "Instagram", "vertical", "#E1306C"),
+            ("custom", "Personalizado", "qualquer RTMP", "#555555"),
+        })
+        {
+            var box = new CheckBox { IsChecked = key == current };
+            var icon = new Border
+            {
+                CornerRadius = new CornerRadius(6), Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)),
+                Child = new TextBlock { Text = title[..1], FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            };
+            var tag = key == current ? MBExtreme.UI.Controls.CompactPick.Tag("Escolhida", "OkBrush") : null;
+            var card = MBExtreme.UI.Controls.CompactPick.Card(box, icon, title, detail, tag);
+            string k = key;
+            box.Checked += (_, _) => Dispatcher.BeginInvoke(new Action(() => ChoosePlatform(k)));
+            box.Unchecked += (_, _) => { if (k == current) box.IsChecked = true; };   // uma sempre escolhida
+            grid.Children.Add(card);
+        }
+        return grid;
+    }
+
+    private void ChoosePlatform(string key)
+    {
+        switch (key)
+        {
+            case "instagram": ChooseVerticalPlatform(1); return;
+            case "tiktok": ChooseVerticalPlatform(2); return;
+        }
+        _s.StudioStreamPreset = 0;
+        var service = key switch { "youtube" => StreamService.YouTube, "twitch" => StreamService.Twitch, "facebook" => StreamService.Facebook, _ => StreamService.Custom };
+        _s.StudioStreamService = (int)service;
+        if (key == "kick") _s.StudioCustomUrl = KickUrl;
+        else if (key == "custom" && _s.StudioCustomUrl.Contains("live-video.net", StringComparison.OrdinalIgnoreCase)) _s.StudioCustomUrl = "rtmp://";
+        // o limite de banda escolhido pode ser maior que o máximo da nova plataforma
+        int max = PlatformSpecs.For(service).MaxVideoKbps / 1000;
+        if (_s.StudioStreamCapMbps > max) _s.StudioStreamCapMbps = 0;
+        BuildStream();
+    }
+
     private void BuildStream()
     {
         foreach (var element in new FrameworkElement[] { _specText, _netNow, _planText, _uploadResult, _chatId, _customUrl })
@@ -1547,23 +1635,7 @@ public sealed partial class StudioPage : ToolPageBase
         _tabStream.Children.Clear();
         _tabStream.Children.Add(BuildOptimizeCard());
         var service = CurrentService();
-        int selected = Math.Max(0, Array.IndexOf(ServiceOrder, service));
-        if (service == StreamService.Custom && _s.StudioStreamPreset is 1 or 2) selected = 3 + _s.StudioStreamPreset;
-        _tabStream.Children.Add(Field("Plataforma", Chips(new[] { "Twitch", "YouTube", "Facebook", "Outro servidor (RTMP)", "Instagram (vertical)", "TikTok (vertical)" }, selected, i =>
-        {
-            if (i >= 4)
-            {
-                // Instagram e TikTok: "outro servidor" com o endereço da plataforma e o vídeo principal na vertical
-                ChooseVerticalPlatform(i - 3);
-                return;
-            }
-            _s.StudioStreamPreset = 0;
-            _s.StudioStreamService = (int)ServiceOrder[i];
-            // o limite de banda escolhido pode ser maior que o máximo da nova plataforma
-            int max = PlatformSpecs.For(ServiceOrder[i]).MaxVideoKbps / 1000;
-            if (_s.StudioStreamCapMbps > max) _s.StudioStreamCapMbps = 0;
-            BuildStream();
-        })));
+        _tabStream.Children.Add(Field("Plataforma", PlatformGrid(service)));
 
         _tabStream.Children.Add(BuildVerticalLiveCard());
 

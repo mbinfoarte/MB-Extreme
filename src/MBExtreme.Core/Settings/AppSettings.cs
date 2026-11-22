@@ -146,6 +146,22 @@ public sealed class AppSettings
 
     public string StudioCustomUrl { get; set; } = "rtmp://";
 
+    /// <summary>Placa de captura usada como tela principal do estúdio (nome do dispositivo).</summary>
+    public string StudioCaptureCard { get; set; } = "";
+
+    /// <summary>Modo pronto da live e da gravação: 0 Leve, 1 Equilibrado, 2 Qualidade, 3 Ultra.</summary>
+    public int StudioLiveMode { get; set; } = 1;
+
+    public int StudioRecordMode { get; set; } = 1;
+
+    /// <summary>Mostrar os ajustes finos (botão Editar) da live e da gravação.</summary>
+    public bool StudioLiveDetails { get; set; }
+
+    public bool StudioRecordDetails { get; set; }
+
+    /// <summary>Outras plataformas da live ao mesmo tempo (a principal continua em StudioStreamService).</summary>
+    public List<StudioExtraStream> StudioExtraStreams { get; set; } = new();
+
     public bool StudioRememberKey { get; set; }
 
     /// <summary>Chave de transmissão protegida pelo Windows (DPAPI, só este usuário neste PC). Nunca em texto puro.</summary>
@@ -708,4 +724,17 @@ public sealed class StudioSceneSetting
     public string Name { get; set; } = "Cena";
 
     public List<StudioSceneItem> Items { get; set; } = new();
+}
+
+/// <summary>Uma plataforma a mais na live: serviço, endereço (servidor próprio ou Kick) e a chave protegida pelo Windows.</summary>
+public sealed class StudioExtraStream
+{
+    public int Service { get; set; }
+
+    public string Url { get; set; } = "";
+
+    public string? ProtectedKey { get; set; }
+
+    /// <summary>"kick", "custom" ou o nome do serviço: o cartão marcado na tela.</summary>
+    public string Card { get; set; } = "";
 }

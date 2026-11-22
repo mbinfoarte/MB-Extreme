@@ -391,6 +391,7 @@ public sealed class StudioSession : IDisposable
     {
         if (string.IsNullOrWhiteSpace(line)) return;
         string text = StudioCommand.MaskSecrets(line.Trim(), target, verticalTarget);
+        if (_request is { } current) text = StudioCommand.MaskSecrets(text, current.ExtraStreams.Cast<StreamTarget?>().ToArray());   // as outras plataformas também
         if (SceneSwitch.IsCommandEcho(text)) return;   // eco da troca de cena: não é erro
         LastMessage = text;
         if (text.Contains("Slave muxer", StringComparison.OrdinalIgnoreCase) && text.Contains("fail", StringComparison.OrdinalIgnoreCase))

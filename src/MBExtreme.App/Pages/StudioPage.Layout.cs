@@ -354,17 +354,12 @@ public sealed partial class StudioPage
         keyHead.Children.Add(Help("Twitch: painel do criador › Configurações › Transmissão. YouTube: Transmitir ao vivo › Chave. Facebook: Produtor de transmissões ao vivo. " +
             "Kick e outras: escolha \"Outro servidor\" em Live › Conexão e qualidade e use o endereço que a plataforma informa. A chave nunca aparece em mensagens nem em relatórios."));
         _tabAccounts.Children.Add(keyHead);
-        if (!_keyLoaded)
-        {
-            _keyLoaded = true;
-            if (SecretStore.Unprotect(_s.StudioProtectedKey) is { } saved)
-            {
-                _key.Password = saved;
-                _remember.IsChecked = true;
-            }
-        }
-        _tabAccounts.Children.Add(_key);
-        _tabAccounts.Children.Add(_remember);
+        EnsureKeyLoaded();
+        _tabAccounts.Children.Add(Muted("A chave de cada plataforma fica em Live, logo abaixo das plataformas marcadas.", 11.5));
+        var goLive = SmallButton("Ir para as plataformas", (_, _) => _selectTab?.Invoke(7));
+        goLive.HorizontalAlignment = HorizontalAlignment.Left;
+        goLive.Margin = new Thickness(0, 4, 0, 6);
+        _tabAccounts.Children.Add(goLive);
         _tabAccounts.Children.Add(Muted("Quem tem a chave transmite no seu canal: não mostre nem compartilhe.", 11));
 
         var statsHead = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };

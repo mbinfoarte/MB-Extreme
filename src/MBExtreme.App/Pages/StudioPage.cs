@@ -140,7 +140,62 @@ public sealed partial class StudioPage : ToolPageBase
     private string? _ffmpegPath;
 
     private bool _outRecord = true, _outStream, _outReplay;
-    private int _sourceTab;          // 0 = tela, 1 = janela
+    private int _sourceTab;          // 0 = tela, 1 = janela, 2 = placa de captura
+    private readonly StackPanel _cardPanel = new();
+    private IReadOnlyList<string> _cardList = Array.Empty<string>();
+
+    /// <summary>Placa de captura escolhida (tela principal), ou null.</summary>
+    private string? CardName() => _s.StudioCaptureCard.Length > 0 && CameraOverlay.IsValidName(_s.StudioCaptureCard) ? _s.StudioCaptureCard : null;
+
+    /// <summary>Lista as placas (dispositivos de vídeo do Windows) e lê o melhor modo da escolhida (até 1080p60).</summary>
+    private async Task RefreshCardsAsync()
+    {
+        if (_ffmpegPath is null) { SetStatus("O motor de vídeo ainda está sendo preparado. Tente de novo em alguns segundos.", "WarnBrush"); return; }
+        string ffmpeg = _ffmpegPath;
+        _cardPanel.Children.Clear();
+        _cardPanel.Children.Add(Muted("Procurando placas de captura...", 11.5));
+        _cardList = await Task.Run(() => FfmpegRecorder.ListCameras(ffmpeg));
+        if (CardName() is { } chosen && _cardList.Contains(chosen)) await Task.Run(() => FfmpegRecorder.EnsureCardMode(ffmpeg, chosen));
+        BuildCardPanel();
+    }
+
+    private void BuildCardPanel()
+    {
+        _cardPanel.Children.Clear();
+        if (_cardList.Count == 0)
+        {
+            _cardPanel.Children.Add(Muted("Nenhuma placa encontrada. Ligue a placa de captura (USB ou PCIe) e clique em Procurar de novo.", 11.5));
+        }
+        else
+        {
+            int selected = Math.Max(0, _cardList.ToList().FindIndex(c => c.Equals(_s.StudioCaptureCard, StringComparison.OrdinalIgnoreCase)));
+            if (CardName() is null) { _s.StudioCaptureCard = _cardList[0]; }
+            _cardPanel.Children.Add(Chips(_cardList, selected, i =>
+            {
+                _s.StudioCaptureCard = _cardList[i];
+                _s.Save();
+                _ = RefreshCardsAsync();
+                UpdatePlan();
+                RefreshCaptureButton();
+            }));
+            string mode = CardName() is { } c && CameraSource.CardModes.TryGetValue(c, out var m) ? m.CardTitle : "o melhor modo que a placa oferecer";
+            _cardPanel.Children.Add(Muted($"Imagem: {mode}. O som da placa aparece em Áudio como um dispositivo de entrada (escolha-o no microfone ou em Adicionar).", 11));
+        }
+        var again = SmallButton("Procurar de novo", async (_, _) => await RefreshCardsAsync());
+        again.Margin = new Thickness(0, 4, 0, 4);
+        again.Padding = new Thickness(10, 3, 10, 3);
+        again.FontSize = 12;
+        again.HorizontalAlignment = HorizontalAlignment.Left;
+        _cardPanel.Children.Add(again);
+    }
+
+    /// <summary>A placa como origem: tamanho pelo modo lido (padrão Full HD).</summary>
+    private CaptureSource? CardSource()
+    {
+        if (CardName() is not { } card) return null;
+        var size = CameraSource.CardModes.TryGetValue(card, out var m) ? new PixelRect(0, 0, m.Width, m.Height) : new PixelRect(0, 0, 1920, 1080);
+        return new CaptureSource(SourceKind.CaptureCard, 0, size, "Placa de captura: " + card, card);
+    }
     private int _windowMode;         // 0 = recorte da tela, 1 = conteúdo da janela (GDI)
     private int _encoderIndex;
     private int _aviRate = 1, _aviScale = 1;
@@ -499,12 +554,14 @@ public sealed partial class StudioPage : ToolPageBase
 
         // o que capturar fica numa janela pequena (botão na linha de baixo da prévia)
         var capture = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-        capture.Children.Add(Chips(new[] { "Tela inteira", "Janela de um programa" }, _sourceTab, i =>
+        capture.Children.Add(Chips(new[] { "Tela inteira", "Janela de um programa", "Placa de captura" }, _sourceTab, i =>
         {
             _sourceTab = i;
             _displayPanel.Visibility = Vis(i == 0);
             _windowPanel.Visibility = Vis(i == 1);
+            _cardPanel.Visibility = Vis(i == 2);
             if (i == 1) RefreshWindows();
+            if (i == 2) _ = RefreshCardsAsync();
             UpdatePlan();
             RefreshCaptureButton();
         }));
@@ -524,6 +581,8 @@ public sealed partial class StudioPage : ToolPageBase
         windowRow.Children.Add(Chips(new[] { "Recorte da tela (jogos)", "Conteúdo da janela" }, _windowMode, i => _windowMode = i));
         _windowPanel.Children.Add(windowRow);
         _capturePanel.Children.Add(_windowPanel);
+        _cardPanel.Visibility = Vis(_sourceTab == 2);
+        _capturePanel.Children.Add(_cardPanel);
         _capturePanel.Children.Add(Muted("Esta é a captura padrão. Cada cena pode ter a sua própria tela ou janela (Fontes › ⋯ › Propriedades).", 11));
         _windows.Picked += _ => RefreshCaptureButton();
 
@@ -592,6 +651,7 @@ public sealed partial class StudioPage : ToolPageBase
 
     private PixelRect CurrentArea()
     {
+        if (_sourceTab == 2) return CardSource()?.Area ?? new PixelRect(0, 0, 1920, 1080);
         if (_sourceTab == 0)
         {
             var displays = _displayList;
@@ -652,6 +712,14 @@ public sealed partial class StudioPage : ToolPageBase
             {
                 area = CurrentArea();
             }
+            else if (_sourceTab == 2)
+            {
+                // placa de captura: a prévia vem do próprio vídeo da placa (SyncScreenFeed)
+                _preview.Source = null;
+                _previewNote.Text = CardName() is null ? "Escolha a placa de captura." : "Abrindo a placa de captura...";
+                UpdateGhosts();
+                return;
+            }
             else
             {
                 if (_windows.Selected < 0 || _windows.Selected >= _windowList.Count)
@@ -706,20 +774,8 @@ public sealed partial class StudioPage : ToolPageBase
     {
         Detach(_qualityEncoder);
         _tabVideo.Children.Clear();
-        var suggested = StudioPresets.ForTier(_tier);
-        var names = StudioPresets.All.Select(p => p.Name + (p == suggested ? " (sugerida)" : "")).ToList();
-        int current = StudioPresets.All.ToList().FindIndex(p =>
-            Resolutions[Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1)].Height == p.ResolutionHeight && _s.StudioFps == p.Fps);
-        _tabVideo.Children.Add(Field("Predefinição", Chips(names, current, i =>
-        {
-            var preset = StudioPresets.All[i];
-            _s.StudioResolution = Math.Max(0, Array.FindIndex(Resolutions, r => r.Height == preset.ResolutionHeight));
-            _s.StudioFps = preset.Fps;
-            _s.StudioBitrateMbps = preset.BitrateMbps;
-            BuildVideo();
-            UpdatePlan();
-        })));
-        if (current >= 0) _tabVideo.Children.Add(Field("", Muted(StudioPresets.All[current].Description, 11)));
+        _tabVideo.Children.Add(ModeCards(live: false));
+        int keepVideo = _tabVideo.Children.Count;
 
         _tabVideo.Children.Add(Field("Resolução", Chips(Resolutions.Select(r => r.Name).ToList(), Math.Clamp(_s.StudioResolution, 0, Resolutions.Length - 1), i => { _s.StudioResolution = i; UpdatePlan(); })));
         _tabVideo.Children.Add(Field("Quadros por segundo", Chips(FpsOptions.Select(f => f + " fps").ToList(), Math.Max(0, Array.IndexOf(FpsOptions, _s.StudioFps)), i => { _s.StudioFps = FpsOptions[i]; UpdatePlan(); })));
@@ -730,6 +786,7 @@ public sealed partial class StudioPage : ToolPageBase
         _tabVideo.Children.Add(Field("Esforço do codificador", Chips(new[] { "Rápido (leve no jogo)", "Equilibrado", "Qualidade" }, Math.Clamp(_s.StudioEncoderQuality, 0, 2), i => _s.StudioEncoderQuality = i)));
         _tabVideo.Children.Add(Muted("Ao transmitir, a resolução, os quadros e a taxa seguem o padrão da plataforma (aba Transmissão); a gravação e o replay usam o mesmo vídeo.", 11));
         if (_encoders.Count > 0) BuildEncoderChoice();
+        FoldDetails(_tabVideo, keepVideo, live: false);
     }
 
     private void BuildAudio()
@@ -1580,31 +1637,26 @@ public sealed partial class StudioPage : ToolPageBase
     /// </summary>
     private System.Windows.Controls.Primitives.UniformGrid PlatformGrid(StreamService service)
     {
-        bool kick = service == StreamService.Custom && _s.StudioStreamPreset == 0 && _s.StudioCustomUrl.Contains("live-video.net", StringComparison.OrdinalIgnoreCase);
-        string current = service switch
-        {
-            StreamService.YouTube => "youtube", StreamService.Twitch => "twitch", StreamService.Facebook => "facebook",
-            _ => _s.StudioStreamPreset == 1 ? "instagram" : _s.StudioStreamPreset == 2 ? "tiktok" : kick ? "kick" : "custom",
-        };
-        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 4, HorizontalAlignment = HorizontalAlignment.Stretch };
+        string main = MainCard();
+        var marked = _s.StudioExtraStreams.Select(e => e.Card).Append(main).ToHashSet();
+        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 7, HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var (key, title, detail, color) in new[]
         {
-            ("youtube", "YouTube", "horizontal e Shorts", "#FF0000"), ("twitch", "Twitch", "horizontal", "#9146FF"), ("kick", "Kick", "horizontal", "#53FC18"),
-            ("tiktok", "TikTok Live", "vertical", "#111111"), ("facebook", "Facebook", "horizontal", "#1877F2"), ("instagram", "Instagram", "vertical", "#E1306C"),
-            ("custom", "Personalizado", "qualquer RTMP", "#555555"),
+            ("youtube", "YouTube", "horizontal", "#FF0000"), ("twitch", "Twitch", "horizontal", "#9146FF"), ("kick", "Kick", "horizontal", "#53FC18"),
+            ("instagram", "Instagram", "vertical", "#E1306C"), ("tiktok", "TikTok", "vertical", "#111111"), ("facebook", "Facebook", "horizontal", "#1877F2"),
+            ("custom", "Outro servidor", "qualquer RTMP", "#555555"),
         })
         {
-            var box = new CheckBox { IsChecked = key == current };
+            var box = new CheckBox { IsChecked = marked.Contains(key) };
             var icon = new Border
             {
                 CornerRadius = new CornerRadius(6), Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)),
                 Child = new TextBlock { Text = title[..1], FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
-            var tag = key == current ? MBExtreme.UI.Controls.CompactPick.Tag("Escolhida", "OkBrush") : null;
+            var tag = key == main ? MBExtreme.UI.Controls.CompactPick.Tag("Principal", "OkBrush") : null;
             var card = MBExtreme.UI.Controls.CompactPick.Card(box, icon, title, detail, tag);
             string k = key;
-            box.Checked += (_, _) => Dispatcher.BeginInvoke(new Action(() => ChoosePlatform(k)));
-            box.Unchecked += (_, _) => { if (k == current) box.IsChecked = true; };   // uma sempre escolhida
+            box.Click += (_, _) => Dispatcher.BeginInvoke(new Action(() => TogglePlatform(k)));
             grid.Children.Add(card);
         }
         return grid;
@@ -1633,9 +1685,12 @@ public sealed partial class StudioPage : ToolPageBase
         foreach (var element in new FrameworkElement[] { _specText, _netNow, _planText, _uploadResult, _chatId, _customUrl })
             Detach(element);
         _tabStream.Children.Clear();
-        _tabStream.Children.Add(BuildOptimizeCard());
         var service = CurrentService();
-        _tabStream.Children.Add(Field("Plataforma", PlatformGrid(service)));
+        _tabStream.Children.Add(Field("Plataformas", PlatformGrid(service)));
+        _tabStream.Children.Add(Muted("Marque uma ou mais: duas marcadas = a live vai para as duas ao mesmo tempo (o vídeo é codificado uma vez só).", 11));
+        _tabStream.Children.Add(KeyBlocks());
+        _tabStream.Children.Add(ModeCards(live: true));
+        int keepStream = _tabStream.Children.Count;
 
         _tabStream.Children.Add(BuildVerticalLiveCard());
 
@@ -1694,6 +1749,7 @@ public sealed partial class StudioPage : ToolPageBase
         _chatId.ToolTip = ChatLinks.Supports(service)
             ? ChatLinks.Prompt(service) + ". O chat abre numa janela própria, que você pode deixar ao lado do jogo ou em outro monitor."
             : ChatLinks.Prompt(service) + ".";
+        FoldDetails(_tabStream, keepStream, live: true);
         UpdatePlan();
         if (_tabAccounts.Children.Count > 0) BuildAccounts();   // o nome da plataforma aparece na chave
     }
@@ -2133,7 +2189,7 @@ public sealed partial class StudioPage : ToolPageBase
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Win32Exception)
         {
-            SetStatus("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, target, config.VerticalStream), "BadBrush");
+            SetStatus("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, (config.ExtraStreams ?? Array.Empty<StreamTarget>()).Cast<StreamTarget?>().Append(target).Append(config.VerticalStream).ToArray()), "BadBrush");
         }
 
         RefreshState();
@@ -2177,6 +2233,11 @@ public sealed partial class StudioPage : ToolPageBase
         {
             source = CaptureRules.ForDisplay(displays[Math.Clamp(_displayIndex, 0, displays.Count - 1)]);
         }
+        else if (_sourceTab == 2)
+        {
+            source = CardSource();
+            if (source is null) return (null, "Escolha a placa de captura em Captura › Placa de captura.");
+        }
         else
         {
             if (_windows.Selected < 0 || _windows.Selected >= _windowList.Count) return (null, "Escolha a janela que será capturada.");
@@ -2209,7 +2270,9 @@ public sealed partial class StudioPage : ToolPageBase
         {
             var service = (StreamService)Math.Clamp(_s.StudioStreamService, 0, 3);
             // a live usa o melhor codec que a plataforma recebe (AV1 no YouTube; H.264 na Twitch, Facebook e outras), do mesmo fabricante da placa
-            var forStream = EncoderChoice.ForStream(_encoders, encoder, service);
+            // com outras plataformas marcadas, vale o codec que todas aceitam (H.264 se alguma não for o YouTube)
+            var strictest = _s.StudioExtraStreams.Any(e => e.Service != (int)StreamService.YouTube) ? StreamService.Twitch : service;
+            var forStream = EncoderChoice.ForStream(_encoders, encoder, strictest);
             if (forStream is null) return (null, $"A {PlatformSpecs.For(service).Name} só recebe vídeo em H.264, e a sua placa não tem esse codificador funcionando. Atualize o driver da placa de vídeo.");
             encoder = forStream;
             if (!_rehearsing) target = new StreamTarget(service, _customUrl.Text, _key.Password);   // no ensaio: o mesmo codec da live, sem enviar
@@ -2310,7 +2373,8 @@ public sealed partial class StudioPage : ToolPageBase
             live?.Captures, live?.Layouts(layers), live?.Active ?? 0, (SceneTransition)Math.Clamp(_s.StudioSceneTransition, 0, 1), _s.StudioProgramView,
             verticalCopy is not null ? verticalTarget : null, (VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3),
             vEncoder, _s.StudioVRecMbps, _s.StudioVRecQuality, vEffort, _s.StudioVRecFps, mainQuality,
-            _s.StudioVRecPostMp4 && (vertical is not null || verticalCopy is not null), LiveOverlay: overlayLogo);
+            _s.StudioVRecPostMp4 && (vertical is not null || verticalCopy is not null), LiveOverlay: overlayLogo,
+            ExtraStreams: target is null ? null : ExtraTargets());
         // ensaio: tudo igual à live, mas sem gravar, transmitir, replay nem a cópia vertical
         if (_rehearsing) config = config with { Record = false, Stream = null, Replay = false, VerticalStream = null, VerticalCopy = null, PostMp4 = false, Rehearsal = true };
         return (config, null);
@@ -2397,7 +2461,7 @@ public sealed partial class StudioPage : ToolPageBase
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Win32Exception)
         {
-            SetStatus("Não foi possível aplicar (o estúdio parou): " + StudioCommand.MaskSecrets(ex.Message, config.Stream, config.VerticalStream), "BadBrush");
+            SetStatus("Não foi possível aplicar (o estúdio parou): " + StudioCommand.MaskSecrets(ex.Message, (config.ExtraStreams ?? Array.Empty<StreamTarget>()).Cast<StreamTarget?>().Append(config.Stream).Append(config.VerticalStream).ToArray()), "BadBrush");
         }
         finally
         {

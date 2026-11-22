@@ -50,7 +50,22 @@ public static class StudioCommand
                 return "O endereço do servidor precisa começar com rtmp:// ou rtmps://.";
             if (url.IndexOfAny(new[] { '|', '[', ']', '"', ' ', '\'' }) >= 0) return "O endereço do servidor tem caracteres inválidos.";
         }
+        if (r.ExtraStreams.Count > 0)
+        {
+            if (r.Stream is null) return "As outras plataformas precisam da plataforma principal ligada.";
+            if (r.ExtraStreams.Count > 4) return "Transmita para no máximo 5 plataformas ao mesmo tempo.";
+            foreach (var extra in r.ExtraStreams)
+            {
+                string name = extra.Service switch { StreamService.Twitch => "Twitch", StreamService.YouTube => "YouTube", StreamService.Facebook => "Facebook", _ => "outra plataforma" };
+                if (ValidateTarget(extra, name) is { } problem) return problem;
+            }
+            if (r.ExtraStreams.Select(e => e.FullUrl).Append(r.Stream.FullUrl).Distinct(StringComparer.OrdinalIgnoreCase).Count() != r.ExtraStreams.Count + 1)
+                return "A mesma plataforma e chave estão marcadas duas vezes.";
+        }
         if (r.Source.Kind == SourceKind.WindowGdi && string.IsNullOrWhiteSpace(r.Source.WindowTitle)) return "A janela escolhida não tem título.";
+        if (r.Source.Kind == SourceKind.CaptureCard && !CameraOverlay.IsValidName(r.Source.WindowTitle)) return "Escolha a placa de captura.";
+        if (r.Source.Kind == SourceKind.CaptureCard && r.Cameras.Any(c => c.DeviceName.Equals(r.Source.WindowTitle, StringComparison.OrdinalIgnoreCase)))
+            return "A placa de captura também está ligada como câmera. Desligue-a na aba Câmeras.";
         if (r.Cameras.Count > MaxCameras) return $"Use no máximo {MaxCameras} câmeras ao mesmo tempo.";
         foreach (var cam in r.Cameras)
             if (!CameraOverlay.IsValidName(cam.DeviceName)) return "O nome da câmera tem caracteres que não são aceitos. Escolha outra câmera da lista.";
@@ -108,7 +123,10 @@ public static class StudioCommand
         if (r.SceneCaptures.Count == 0) return "As cenas não têm tela nem janela para capturar.";
         if (r.ActiveScene < 0 || r.ActiveScene >= r.Scenes.Count) return "A cena inicial não existe.";
         foreach (var capture in r.SceneCaptures)
+        {
             if (capture.Kind == SourceKind.WindowGdi && string.IsNullOrWhiteSpace(capture.WindowTitle)) return "Uma janela usada numa cena não tem título.";
+            if (capture.Kind == SourceKind.CaptureCard && !CameraOverlay.IsValidName(capture.WindowTitle)) return "Uma cena usa uma placa de captura sem nome.";
+        }
         foreach (var scene in r.Scenes)
         {
             if (scene.Capture < 0 || scene.Capture >= r.SceneCaptures.Count) return $"A cena \"{scene.Name}\" não tem tela ou janela válida.";
@@ -177,12 +195,16 @@ public static class StudioCommand
     private static (string? Filter, string? Complex) SingleSceneInputs(List<string> args, StudioRequest r, int fps)
     {
         var src = r.Source;
-        bool gdi = src.Kind == SourceKind.WindowGdi;
+        bool gdi = SoftFrames(src);   // janela pelo GDI ou placa de captura: os quadros já chegam na memória
         bool sameSize = !gdi && r.OutputWidth == src.Area.Width && r.OutputHeight == src.Area.Height;
         bool hwFrames = !gdi && sameSize && r.Encoder.Kind != EncoderKind.Qsv;
 
         // ---- vídeo
-        if (gdi)
+        if (src.Kind == SourceKind.CaptureCard)
+        {
+            args.AddRange(CameraSource.CardInputArgs(src.WindowTitle!));
+        }
+        else if (gdi)
         {
             args.AddRange(new[] { "-f", "gdigrab", "-framerate", fps.ToString(), "-draw_mouse", "1", "-i", "title=" + src.WindowTitle });
         }
@@ -291,6 +313,9 @@ public static class StudioCommand
         }
         if (r.Stream is { } stream)
             outputs.Add("[f=flv:flvflags=no_duration_filesize:onfail=ignore]" + stream.FullUrl);
+        if (r.Stream is not null)
+            foreach (var extra in r.ExtraStreams)
+                outputs.Add("[f=flv:flvflags=no_duration_filesize:onfail=ignore]" + extra.FullUrl);   // várias plataformas: cai uma, as outras seguem
         if (r.ReplayFolder is { } folder)
         {
             outputs.Add($"[f=segment:segment_time={SegmentSeconds}:segment_wrap={ReplaySegmentCount(r.ReplaySeconds)}:reset_timestamps=1:segment_format=matroska:onfail=ignore]{folder}/seg%03d.mkv");
@@ -355,7 +380,15 @@ public static class StudioCommand
     // ---------------------------------------------------------------- cenas ao vivo
 
     /// <summary>Telas pela placa (ddagrab) abrem uma vez por monitor; uma janela "recortada" é um corte da tela dela. Janelas pelo GDI abrem cada uma.</summary>
-    public static string CaptureGroupKey(CaptureSource c) => c.Kind == SourceKind.WindowGdi ? "gdi:" + c.WindowTitle : "tela:" + c.DisplayIndex;
+    public static string CaptureGroupKey(CaptureSource c) => c.Kind switch
+    {
+        SourceKind.WindowGdi => "gdi:" + c.WindowTitle,
+        SourceKind.CaptureCard => "card:" + c.WindowTitle,
+        _ => "tela:" + c.DisplayIndex,
+    };
+
+    /// <summary>Quadros que chegam na memória (janela pelo GDI ou placa de captura), e não na placa de vídeo como na captura da tela.</summary>
+    public static bool SoftFrames(CaptureSource c) => c.Kind is SourceKind.WindowGdi or SourceKind.CaptureCard;
 
     private static string Fan(IReadOnlyList<string> labels) => labels.Count == 1 ? labels[0] : $",split={labels.Count}{string.Concat(labels)}";
 
@@ -383,7 +416,9 @@ public static class StudioCommand
         for (int g = 0; g < groupKeys.Count; g++)
         {
             var first = r.SceneCaptures[Array.IndexOf(captureGroup, g)];
-            if (first.Kind == SourceKind.WindowGdi)
+            if (first.Kind == SourceKind.CaptureCard)
+                args.AddRange(CameraSource.CardInputArgs(first.WindowTitle!));
+            else if (first.Kind == SourceKind.WindowGdi)
                 args.AddRange(new[] { "-f", "gdigrab", "-framerate", fps.ToString(), "-draw_mouse", "1", "-i", "title=" + first.WindowTitle });
             else
                 args.AddRange(new[] { "-f", "lavfi", "-i", $"ddagrab=output_idx={first.DisplayIndex}:framerate={fps}:draw_mouse=1" });
@@ -416,7 +451,7 @@ public static class StudioCommand
         {
             var captures = used.Where(ci => captureGroup[ci] == g).ToList();
             if (captures.Count == 0) { parts.Add($"[{groupInput[g]}:v]nullsink"); continue; }
-            bool gdi = r.SceneCaptures[captures[0]].Kind == SourceKind.WindowGdi;
+            bool gdi = SoftFrames(r.SceneCaptures[captures[0]]);
             string download = $"[{groupInput[g]}:v]" + (gdi ? "format=bgra" : "hwdownload,format=bgra");
             parts.Add(download + Fan(captures.Select(c => $"[cap{c}]").ToList()));
         }
@@ -722,6 +757,6 @@ public static class StudioCommand
     public static string Describe(StudioRequest r, string ffmpeg = "ffmpeg")
     {
         string text = ffmpeg + " " + string.Join(" ", Build(r).Select(a => a.Contains(' ') ? "\"" + a + "\"" : a));
-        return MaskSecrets(text, r.Stream, r.VerticalStream);
+        return MaskSecrets(text, r.ExtraStreams.Cast<StreamTarget?>().Append(r.Stream).Append(r.VerticalStream).ToArray());
     }
 }

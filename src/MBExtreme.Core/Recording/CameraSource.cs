@@ -37,6 +37,18 @@ public static class CameraSource
     /// <summary>Modo escolhido para cada câmera do Windows (pelo nome). Preenchido pelo programa depois de perguntar os modos à câmera.</summary>
     public static System.Collections.Concurrent.ConcurrentDictionary<string, CameraMode> Modes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Modo de cada placa de captura usada como tela principal (pelo nome), escolhido em <see cref="CameraModes.PickCard"/>.</summary>
+    public static System.Collections.Concurrent.ConcurrentDictionary<string, CameraMode> CardModes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Entrada do FFmpeg da placa de captura como tela principal: buffer maior (1080p60 cru) e até 60 quadros.</summary>
+    public static string[] CardInputArgs(string device)
+    {
+        var args = new List<string> { "-f", "dshow", "-rtbufsize", "512M", "-thread_queue_size", "1024" };
+        if (CardModes.TryGetValue(device, out var mode)) args.AddRange(mode.InputArgs(mode.CardFps));
+        args.AddRange(new[] { "-use_wallclock_as_timestamps", "1", "-i", "video=" + device });
+        return args.ToArray();
+    }
+
     /// <summary>Argumentos que perguntam à câmera quais tamanhos, quadros e formatos ela entrega.</summary>
     public static string[] ListModesArgs(string device) => new[] { "-hide_banner", "-f", "dshow", "-list_options", "true", "-i", "video=" + device };
 

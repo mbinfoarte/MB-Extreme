@@ -60,6 +60,16 @@ public static class ScreenPreview
         };
     }
 
+    /// <summary>Prévia da placa de captura (tela principal): o mesmo vídeo cru que a gravação usa, reduzido para o tamanho da prévia.</summary>
+    public static IReadOnlyList<string> CardArgs(string device, string? chain, int width, int height)
+    {
+        var args = new List<string> { "-hide_banner", "-loglevel", "error", "-nostats", "-fflags", "nobuffer", "-flags", "low_delay" };
+        args.AddRange(CameraSource.CardInputArgs(device));
+        string filters = $"scale={width}:{height}:flags=bilinear," + (string.IsNullOrEmpty(chain) ? "" : chain + ",") + "format=bgra";
+        args.AddRange(new[] { "-an", "-vf", filters, "-f", "rawvideo", "-pix_fmt", "bgra", "pipe:1" });
+        return args;
+    }
+
     /// <summary>
     /// Prévia de uma janela pelo Windows.Graphics.Capture (filtro gfxcapture do FFmpeg 8.1+): pega o conteúdo da janela mesmo atrás de outras,
     /// já reduzido na placa de vídeo para o tamanho da prévia. Bem mais nítida e fluida que copiar a janela pelo GDI (PrintWindow).

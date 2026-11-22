@@ -51,7 +51,8 @@ internal sealed record StudioConfig(
     int QualityLevel = 0,
     bool PostMp4 = false,
     bool Rehearsal = false,
-    bool LiveOverlay = false)
+    bool LiveOverlay = false,
+    IReadOnlyList<StreamTarget>? ExtraStreams = null)
 {
     /// <summary>Várias cenas montadas juntas: trocar de cena não reinicia a captura.</summary>
     public bool LiveScenes => Scenes is { Count: > 1 } && Vertical is null && VerticalCopy is null;
@@ -126,7 +127,10 @@ internal sealed class StudioController
         {
             // a transmissão segue o padrão da plataforma: resolução, quadros e taxa máximos, e o limite de banda escolhido
             // (no vertical, o "tamanho" da plataforma vale para o lado menor, a largura)
-            var plan = StreamPlan.Build(target.Service, vertical is null ? height : width, fps, config.BitrateMbps, config.StreamCapMbps, config.AudioKbps);
+            // várias plataformas: vale o limite da mais restrita (ex.: Twitch 6 Mbps junto com o YouTube)
+            var services = (config.ExtraStreams ?? Array.Empty<StreamTarget>()).Select(e => e.Service).Prepend(target.Service).Distinct();
+            var plan = services.Select(service => StreamPlan.Build(service, vertical is null ? height : width, fps, config.BitrateMbps, config.StreamCapMbps, config.AudioKbps))
+                               .MinBy(p => p.VideoKbps)!;
             if (vertical is null)
             {
                 if (plan.Height < height) (width, height) = StudioCommand.FitOutput(config.Source.Area.Width, config.Source.Area.Height, plan.Height);
@@ -189,6 +193,7 @@ internal sealed class StudioController
             RecordFile = config.Record ? "gravacao-" + stamp + FfmpegCommand.ExtensionFor(config.Mp4) : null,
             RecordMp4 = config.Mp4,
             Stream = config.Stream,
+            ExtraStreams = config.Stream is null ? Array.Empty<StreamTarget>() : config.ExtraStreams ?? Array.Empty<StreamTarget>(),
             ReplayFolder = config.Replay ? ReplayFolder : null,
             ReplaySeconds = config.ReplaySeconds,
             SceneCaptures = config.SceneCaptures ?? Array.Empty<CaptureSource>(),
@@ -451,7 +456,7 @@ internal sealed class StudioController
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or Win32Exception)
         {
-            Raise("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, LastConfig?.Stream), false);
+            Raise("Não foi possível iniciar: " + StudioCommand.MaskSecrets(ex.Message, (LastConfig?.ExtraStreams ?? Array.Empty<StreamTarget>()).Cast<StreamTarget?>().Append(LastConfig?.Stream).ToArray()), false);
         }
         finally
         {

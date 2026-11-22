@@ -137,6 +137,25 @@ public sealed class FfmpegRecorder
         return w >= 160 && h >= 120 ? new CameraMode(w, h, fps, null, null) : null;
     }
 
+    /// <summary>Placa de captura como tela principal: pergunta os modos (uma vez) e guarda o maior tamanho com mais quadros em <see cref="CameraSource.CardModes"/>.</summary>
+    public static CameraMode? EnsureCardMode(string ffmpeg, string device, int maxHeight = 1080)
+    {
+        if (!CameraOverlay.IsValidName(device) || CameraSource.IsStream(device)) return null;
+        if (!KnownModes.TryGetValue(device, out var modes))
+        {
+            try
+            {
+                var listed = Shell.Run(ffmpeg, CameraSource.ListModesArgs(device));
+                modes = CameraModes.Parse(listed.Error + "\n" + listed.Output);
+            }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException) { modes = Array.Empty<CameraMode>(); }
+            if (modes.Count > 0) KnownModes[device] = modes;
+        }
+        var best = CameraModes.PickCard(modes, maxHeight);
+        if (best is not null) CameraSource.CardModes[device] = best;
+        return best;
+    }
+
     /// <summary>Nomes das câmeras (dispositivos de vídeo do DirectShow) que o FFmpeg enxerga.</summary>
     public static IReadOnlyList<string> ListCameras(string ffmpeg)
     {

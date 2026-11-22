@@ -10,6 +10,9 @@ public enum SourceKind
 
     /// <summary>Conteúdo da janela pelo GDI: funciona com a janela coberta, mas jogos em DirectX costumam sair pretos.</summary>
     WindowGdi,
+
+    /// <summary>Placa de captura (HDMI de outro PC ou console) como tela principal. O nome do dispositivo fica em WindowTitle.</summary>
+    CaptureCard,
 }
 
 public sealed record PixelRect(int X, int Y, int Width, int Height)
@@ -123,6 +126,9 @@ public sealed record StudioRequest
     public bool RecordMp4 { get; init; }
 
     public StreamTarget? Stream { get; init; }
+
+    /// <summary>Outras plataformas ao mesmo tempo (o mesmo vídeo codificado uma vez só, enviado para cada uma).</summary>
+    public IReadOnlyList<StreamTarget> ExtraStreams { get; init; } = Array.Empty<StreamTarget>();
 
     /// <summary>Pasta (relativa à de trabalho) onde ficam os pedaços do replay; nulo = replay desligado.</summary>
     public string? ReplayFolder { get; init; }

@@ -13,9 +13,16 @@ public sealed record CameraMode(int Width, int Height, double MaxFps, string? Co
 
     public string Title => $"{Width}×{Height} · {RequestFps} fps · {(IsMjpeg ? "MJPEG" : PixelFormat ?? Codec ?? "?")}";
 
-    public string[] InputArgs()
+    public string[] InputArgs() => InputArgs(RequestFps);
+
+    /// <summary>Placa de captura como tela principal: até 60 quadros (jogo do outro PC).</summary>
+    public int CardFps => (int)Math.Clamp(Math.Floor(MaxFps + 0.01), 5, 60);
+
+    public string CardTitle => $"{Width}×{Height} · {CardFps} fps";
+
+    public string[] InputArgs(int fps)
     {
-        var args = new List<string> { "-video_size", $"{Width}x{Height}", "-framerate", RequestFps.ToString(CultureInfo.InvariantCulture) };
+        var args = new List<string> { "-video_size", $"{Width}x{Height}", "-framerate", fps.ToString(CultureInfo.InvariantCulture) };
         if (Codec is { Length: > 0 }) args.AddRange(new[] { "-vcodec", Codec });
         else if (PixelFormat is { Length: > 0 }) args.AddRange(new[] { "-pixel_format", PixelFormat });
         return args.ToArray();
@@ -66,4 +73,15 @@ public static class CameraModes
             .ThenBy(m => Math.Abs(Math.Min(m.MaxFps, 30) - 30))
             .FirstOrDefault();
     }
+
+    /// <summary>
+    /// Melhor modo de uma placa de captura usada como tela principal: o maior tamanho até <paramref name="maxHeight"/>, depois o maior
+    /// número de quadros (até 60), imagem crua antes de MJPEG.
+    /// </summary>
+    public static CameraMode? PickCard(IReadOnlyList<CameraMode> modes, int maxHeight = 1080) =>
+        modes.Where(m => m.Height <= Math.Clamp(maxHeight, 480, 2160))
+             .OrderByDescending(m => m.Height)
+             .ThenByDescending(m => Math.Min(m.MaxFps, 60.5))
+             .ThenBy(m => m.Codec is null ? 0 : m.IsMjpeg ? 1 : 2)
+             .FirstOrDefault();
 }

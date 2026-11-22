@@ -88,7 +88,7 @@ public sealed partial class StudioPage
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Win32Exception)
         {
-            SetStatus("Não foi possível entrar no ar (o estúdio parou): " + StudioCommand.MaskSecrets(ex.Message, config.Stream, config.VerticalStream), "BadBrush");
+            SetStatus("Não foi possível entrar no ar (o estúdio parou): " + StudioCommand.MaskSecrets(ex.Message, (config.ExtraStreams ?? Array.Empty<StreamTarget>()).Cast<StreamTarget?>().Append(config.Stream).Append(config.VerticalStream).ToArray()), "BadBrush");
         }
         finally
         {

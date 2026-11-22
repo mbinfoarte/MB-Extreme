@@ -38,6 +38,15 @@ public sealed partial class StudioPage
             args = ScreenPreview.RawArgs(target.Output, target.Crop, CurrentFilter().ToChain(), size.W, size.H, fps);
             signature = string.Join(" ", args);
         }
+        else if (allowed && _sourceTab == 2 && SceneGrabTarget() is null && CardName() is { } card)
+        {
+            // placa de captura como tela principal: a prévia vem do vídeo da própria placa
+            var area = CardSource()!.Area;
+            double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
+            size = ScreenPreview.Size(live ? Math.Min(shown, 1280) : shown, area.Width, area.Height);
+            args = live ? null : ScreenPreview.CardArgs(card, CurrentFilter().ToChain(), size.W, size.H);   // no ar, a placa está com a gravação
+            signature = args is null ? null : string.Join(" ", args);
+        }
         else if (allowed && WindowFeedTarget() is { } window)
         {
             // "conteúdo da janela": pelo Windows.Graphics.Capture, na placa de vídeo (se o FFmpeg não tiver, volta para a cópia pelo GDI)
@@ -107,7 +116,7 @@ public sealed partial class StudioPage
     {
         if (SceneGrabTarget() is { } own)
             return own.Problem is null && own.Gdi is { } handle && handle != IntPtr.Zero ? (handle, own.Area) : null;
-        if (_sourceTab != 0 && _windowMode == 1 && _windows.Selected >= 0 && _windows.Selected < _windowList.Count)
+        if (_sourceTab == 1 && _windowMode == 1 && _windows.Selected >= 0 && _windows.Selected < _windowList.Count)
         {
             var w = _windowList[_windows.Selected];
             return w.Handle != IntPtr.Zero ? (w.Handle, w.Bounds) : null;
@@ -125,6 +134,7 @@ public sealed partial class StudioPage
             area = own.Area;
         }
         else if (_sourceTab == 0) area = CurrentArea();
+        else if (_sourceTab == 2) return null;   // placa de captura: a prévia vem dela (veja SyncScreenFeed)
         else if (_windowMode == 0 && _windows.Selected >= 0 && _windows.Selected < _windowList.Count) area = _windowList[_windows.Selected].Bounds;
         else return null;
 

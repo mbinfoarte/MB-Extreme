@@ -182,7 +182,8 @@ public sealed partial class StudioPage
 
     private void RefreshCaptureButton()
     {
-        string what = _sourceTab == 0
+        string what = _sourceTab == 2 ? (CardName() is { } card ? "Placa · " + card : "escolha a placa")
+            : _sourceTab == 0
             ? (_displayList.Count > 0 ? _displayList[Math.Clamp(_displayIndex, 0, _displayList.Count - 1)].Title : "Tela principal")
             : _windows.Selected >= 0 && _windows.Selected < _windowList.Count ? _windowList[_windows.Selected].Title : "escolha a janela";
         if (what.Length > 40) what = what[..40] + "…";

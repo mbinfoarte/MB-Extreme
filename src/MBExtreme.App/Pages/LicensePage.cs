@@ -680,6 +680,8 @@ public sealed class UpgradePage : ToolPageBase
         Body.Children.Add(box);
         if (signedIn)
         {
+            // Criar ISO também se compra sozinha: o Kit MB para ISO (R$ 29,90)
+            if (key == "iso-create") AddButton("Comprar só o Kit MB para ISO (R$ 29,90)", (_, _) => OpenSite("/kit-iso"));
             AddButton("Ver planos e preços", (_, _) => OpenSite("/precos?produto=mb-extreme"));
             AddButton("Conta e licença", (_, _) => MainWindow.Current?.Go("license"));
         }
@@ -723,7 +725,9 @@ public sealed class UpgradePage : ToolPageBase
 
     private static string Subtitle(string key) => AppServices.License.IsVisitor
         ? "Recurso para quem tem conta (grátis)."
-        : $"Este recurso faz parte do plano {FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer)}.";
+        : key == "iso-create"
+            ? "O Criador de ISO faz parte do plano Técnico, ou compre só o Kit MB para ISO por R$ 29,90 (pagamento único). Depois de comprar, clique em Atualizar em Conta e licença."
+            : $"Este recurso faz parte do plano {FeaturePolicy.Title(FeaturePolicy.RequiredPlan(key) ?? FeaturePolicy.Gamer)}.";
 
     private static void OpenSite(string path)
     {

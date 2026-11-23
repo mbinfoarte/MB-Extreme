@@ -30,6 +30,8 @@ public sealed class AppSettings
     public string PadActiveProfile { get; set; } = "";
     /// <summary>Troca o perfil do controle sozinho quando um jogo ligado a um perfil abre.</summary>
     public bool PadAutoSwitch { get; set; } = true;
+    /// <summary>Atendimento técnico em andamento neste PC (conta de administrador); null = nenhum.</summary>
+    public MBExtreme.Core.Licensing.ServiceVisitState? ServiceVisit { get; set; }
     /// <summary>Nível do Controle competitivo aplicado (null = nenhum).</summary>
     public MBExtreme.Core.Gamepads.CompetitiveLevel? PadCompetitiveLevel { get; set; }
     /// <summary>Leitura do controle em prioridade alta (Avançado) e com relógio de 1 ms e prioridade máxima (Extreme).</summary>

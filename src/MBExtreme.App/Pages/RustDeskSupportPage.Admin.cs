@@ -33,6 +33,11 @@ public sealed partial class RustDeskSupportPage
         var refresh = SmallButton("Atualizar", async (_, _) => await LoadAdminAsync(), false);
         DockPanel.SetDock(refresh, Dock.Right);
         head.Children.Add(refresh);
+        var service = SmallButton("Atendimento técnico", (_, _) => MainWindow.Current?.Go("service"), true);
+        service.Margin = new Thickness(0, 0, 6, 0);
+        service.ToolTip = "Empresas, visitas e o atendimento deste PC (otimizar sem assinatura)";
+        DockPanel.SetDock(service, Dock.Right);
+        head.Children.Add(service);
         var title = new StackPanel { Orientation = Orientation.Horizontal };
         title.Children.Add(new TextBlock { Text = "Suporte ao vivo", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         title.Children.Add(Tag("ADMINISTRADOR"));

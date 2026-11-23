@@ -36,6 +36,8 @@ public partial class MainWindow : Window
         _updates = new UpdateController(RootGrid, ContentHost);
         _ = new BlackFridayStrip(RootGrid, ContentHost);   // Black Friday: faixa no rodapé só nas datas da campanha
         _ = new VisitorStrip(RootGrid, ContentHost);       // sem conta: faixa "Modo visitante · Criar conta grátis"
+        _ = new ServiceStrip(RootGrid, ContentHost);       // atendimento técnico aberto neste PC: faixa com o Finalizar
+        ServiceMode.Hook();
         Closed += (_, _) => _updates?.InstallPendingOnExit();   // atualização baixada: instala ao fechar
         AppServices.Videos.Start();   // vídeo novo do canal: aviso no canto e faixa no Painel
         Loaded += async (_, _) => await _updates.CheckAsync();
@@ -656,6 +658,7 @@ public partial class MainWindow : Window
         "mbc-tune" => new MbTunePage(),
         "pad-info" => new PadInfoPage(),
         "pad-analyzer" => new PadAnalyzerPage(),
+        "service" => new ServicePage(),
         "usb-ports" => new UsbPortsPage(),
         "pad-competitive" => new PadCompetitivePage(),
         "pad-overclock" => new PadOverclockPage(),

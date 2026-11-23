@@ -20,6 +20,8 @@ internal sealed class ProLock
         license.RefreshTrial();
         // só desfaz o que foi otimizado com teste/plano de uma conta; quem nunca entrou (beta antigo) não perde nada de repente
         if (!license.EverSignedIn) return;
+        // atendimento técnico: o PC tem o selo do técnico, então o que foi otimizado fica (mesmo sem assinatura)
+        if (ServiceMode.Sealed) return;
         if (_running || !LicenseExpiry.ShouldRevert(license.Config.Enforce, license.Config.Configured, license.Status, license.Trial.Active)) return;
 
         var tweaks = AppServices.Tweaks.Where(t => t.HasBackup && LicenseExpiry.ProTweakCategories.Contains(t.Category)).ToList();

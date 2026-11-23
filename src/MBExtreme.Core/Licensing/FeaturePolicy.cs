@@ -45,7 +45,7 @@ public static class FeaturePolicy
         // Creator: gravação, lives e editor de vídeos
         ["record"] = Creator, ["shorts"] = Creator, ["studio"] = Creator,
         // Técnico: tudo + ferramentas de assistência
-        ["formatbackup"] = Tecnico, ["iso-create"] = Tecnico, ["postinstall"] = Tecnico, ["reinstall"] = Tecnico, ["remote-tech"] = Tecnico,
+        ["formatbackup"] = Tecnico, ["iso-create"] = Tecnico, ["postinstall"] = Tecnico, ["reinstall"] = Tecnico, ["remote-tech"] = Tecnico, ["service"] = Tecnico,
     };
 
     /// <summary>

@@ -317,3 +317,51 @@ public class SuporteAoVivoTests
         Assert.Equal(10, list.Now);
     }
 }
+
+public class SeloAtendimentoTests
+{
+    private static (System.Security.Cryptography.ECDsa Key, string Public) NewKey()
+    {
+        var k = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        return (k, Convert.ToBase64String(k.ExportSubjectPublicKeyInfo()));
+    }
+
+    private static string Seal(System.Security.Cryptography.ECDsa key, string device, string plan = "service", string status = "service", int years = 10) =>
+        MBExtreme.Core.Licensing.LicenseToken.Sign(new MBExtreme.Core.Licensing.LicensePayload
+        {
+            Subject = "empresa1", Name = "Padaria", Plan = plan, Status = status, Device = device,
+            IssuedAt = DateTimeOffset.UtcNow, ExpiresAt = DateTimeOffset.UtcNow.AddYears(years),
+        }, key);
+
+    [Fact]
+    public void Selo_valido_so_neste_pc()
+    {
+        var (key, pub) = NewKey();
+        string t = Seal(key, "pc-a");
+        Assert.True(MBExtreme.Core.Licensing.ServiceSeal.IsValid(t, pub, "pc-a"));
+        Assert.False(MBExtreme.Core.Licensing.ServiceSeal.IsValid(t, pub, "pc-b"));
+    }
+
+    [Fact]
+    public void Licenca_comum_nao_vira_selo_e_chave_errada_nao_vale()
+    {
+        var (key, pub) = NewKey();
+        Assert.False(MBExtreme.Core.Licensing.ServiceSeal.IsValid(Seal(key, "pc-a", plan: "gamer", status: "active"), pub, "pc-a"));
+        var (other, _) = NewKey();
+        Assert.False(MBExtreme.Core.Licensing.ServiceSeal.IsValid(Seal(other, "pc-a"), pub, "pc-a"));
+        Assert.False(MBExtreme.Core.Licensing.ServiceSeal.IsValid(Seal(key, "pc-a", years: -1), pub, "pc-a"));
+        Assert.False(MBExtreme.Core.Licensing.ServiceSeal.IsValid("", pub, "pc-a"));
+    }
+
+    [Fact]
+    public void Resumo_para_o_whatsapp()
+    {
+        var v = new MBExtreme.Core.Licensing.ServiceVisitState { CompanyName = "Padaria", PcName = "Caixa", Price = 150, StartedAt = new DateTime(2026, 11, 23, 14, 5, 0), Items = { "Limpeza", "Drivers" }, Notes = "Pasta térmica" };
+        string s = MBExtreme.Core.Licensing.ServiceClient.Summary(v, new DateTime(2026, 11, 23, 14, 48, 0));
+        Assert.Contains("Padaria", s);
+        Assert.Contains("• Limpeza", s);
+        Assert.Contains("14:05 às 14:48", s);
+        Assert.Contains("Pasta térmica", s);
+        Assert.Contains("150", s);
+    }
+}

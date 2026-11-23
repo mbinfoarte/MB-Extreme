@@ -19,12 +19,14 @@ namespace MBExtreme.Bootstrap
     }
 
     /// <summary>
-    /// Escolhe a Release mais nova (maior número no fim da tag: beta-53 → 53) que tenha o MBExtreme-Beta-Setup.exe.
+    /// Escolhe a Release mais nova (maior número no fim da tag: beta-53 → 53) que tenha o MBExtreme-Setup.exe (ou o nome antigo).
     /// Recebe o JSON do /releases já convertido em dicionários, para o mesmo código rodar no .NET Framework e nos testes.
     /// </summary>
     public static class ReleasePicker
     {
-        public const string SetupAsset = "MBExtreme-Beta-Setup.exe";
+        public const string SetupAsset = "MBExtreme-Setup.exe";
+        /// <summary>Nome antigo do instalador (Releases de antes da troca do nome): ainda aceito.</summary>
+        public const string LegacySetupAsset = "MBExtreme-Beta-Setup.exe";
         private static readonly Regex TrailingNumber = new Regex(@"(\d+)\s*$");
         private static readonly Regex Hex64 = new Regex(@"\b([0-9a-fA-F]{64})\b");
 
@@ -64,14 +66,14 @@ namespace MBExtreme.Bootstrap
                 {
                     if (!(a is IDictionary<string, object> asset)) continue;
                     string name = Str(asset, "name");
-                    if (name.Equals(SetupAsset, StringComparison.OrdinalIgnoreCase))
+                    if (name.Equals(SetupAsset, StringComparison.OrdinalIgnoreCase) || (string.IsNullOrEmpty(choice.Url) && name.Equals(LegacySetupAsset, StringComparison.OrdinalIgnoreCase)))
                     {
                         choice.Url = Str(asset, "browser_download_url");
                         choice.Size = Get(asset, "size") is IConvertible c ? Convert.ToInt64(c) : 0;
                         string digest = Str(asset, "digest");
                         if (digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) choice.Sha256 = digest.Substring(7).ToLowerInvariant();
                     }
-                    else if (name.Equals(SetupAsset + ".sha256", StringComparison.OrdinalIgnoreCase))
+                    else if (name.Equals(SetupAsset + ".sha256", StringComparison.OrdinalIgnoreCase) || (string.IsNullOrEmpty(choice.Sha256Url) && name.Equals(LegacySetupAsset + ".sha256", StringComparison.OrdinalIgnoreCase)))
                         choice.Sha256Url = Str(asset, "browser_download_url");
                 }
                 // sem instalador ou sem como conferir o arquivo: essa Release não serve

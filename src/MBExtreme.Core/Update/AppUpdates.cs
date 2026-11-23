@@ -74,7 +74,7 @@ public static class AppUpdates
     {
         if (!IsSafeUrl(manifest.Url)) throw new InvalidDataException("Endereço de download inseguro.");
         Directory.CreateDirectory(folder);
-        string path = Path.Combine(folder, $"MBExtreme-Beta-Setup-{manifest.Build}.exe");
+        string path = Path.Combine(folder, $"MBExtreme-Setup-{manifest.Build}.exe");
         using var response = await http.GetAsync(manifest.Url, HttpCompletionOption.ResponseHeadersRead, stop);
         response.EnsureSuccessStatusCode();
         long total = response.Content.Headers.ContentLength ?? manifest.Size;

@@ -6,13 +6,15 @@ namespace MBExtreme.Core.Update;
 
 /// <summary>
 /// Atualização pelas Releases públicas do GitHub (sem servidor): a compilação vem do número no fim da tag (beta-49, v1.0.49),
-/// o instalador é o arquivo MBExtreme-Beta-Setup.exe da Release e a impressão digital (SHA-256) vem do "digest" que o GitHub informa
+/// o instalador é o arquivo MBExtreme-Setup.exe (ou o nome antigo, MBExtreme-Beta-Setup.exe) da Release e a impressão digital (SHA-256) vem do "digest" que o GitHub informa
 /// (ou de um arquivo .sha256 publicado junto). O texto da Release vira o "O que há de novo".
 /// Para obrigar a atualização, escreva [obrigatória] no texto da Release (ou "Compilação mínima: N").
 /// </summary>
 public static class GitHubReleases
 {
-    public const string SetupAsset = "MBExtreme-Beta-Setup.exe";
+    public const string SetupAsset = "MBExtreme-Setup.exe";
+    /// <summary>Nome antigo do instalador (Releases de antes da troca do nome): ainda aceito.</summary>
+    public const string LegacySetupAsset = "MBExtreme-Beta-Setup.exe";
 
     private static readonly Regex TrailingNumber = new(@"(\d+)\s*$");
     private static readonly Regex Minimum = new(@"compila[cç][aã]o\s+m[ií]nima\s*:\s*(\d+)", RegexOptions.IgnoreCase);
@@ -47,14 +49,14 @@ public static class GitHubReleases
         foreach (var asset in assets.EnumerateArray())
         {
             string name = Str(asset, "name");
-            if (name.Equals(SetupAsset, StringComparison.OrdinalIgnoreCase))
+            if (name.Equals(SetupAsset, StringComparison.OrdinalIgnoreCase) || (url.Length == 0 && name.Equals(LegacySetupAsset, StringComparison.OrdinalIgnoreCase)))
             {
                 url = Str(asset, "browser_download_url");
                 size = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out long n) ? n : 0;
                 string digest = Str(asset, "digest");
                 if (digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) sha = digest[7..].ToLowerInvariant();
             }
-            else if (name.Equals(SetupAsset + ".sha256", StringComparison.OrdinalIgnoreCase)) shaUrl = Str(asset, "browser_download_url");
+            else if (name.Equals(SetupAsset + ".sha256", StringComparison.OrdinalIgnoreCase) || (shaUrl.Length == 0 && name.Equals(LegacySetupAsset + ".sha256", StringComparison.OrdinalIgnoreCase))) shaUrl = Str(asset, "browser_download_url");
         }
         if (!AppUpdates.IsSafeUrl(url)) return null;
         int minimum = Minimum.Match(body) is { Success: true } m ? int.Parse(m.Groups[1].Value) : Required.IsMatch(body) ? build : 0;

@@ -139,7 +139,7 @@ internal sealed class UpdateController
         switch (state)
         {
             case UpdateState.Required:
-                _lockText.Text = $"Esta versão ({AppInfo.DisplayVersion}, compilação {AppUpdates.CurrentBuild()}) não é mais aceita. Atualize para a compilação {manifest.Build} para continuar usando o MB Extreme." + news;
+                _lockText.Text = $"Esta versão (compilação {AppUpdates.CurrentBuild()}) não é mais aceita. Atualize para a compilação {manifest.Build} para continuar usando o MB Extreme." + news;
                 if (_lock.Visibility != Visibility.Visible) { _lock.Visibility = Visibility.Visible; Motion.Enter(_lock, fromY: 0); }
                 break;
             case UpdateState.Available when AppServices.Settings.AutoUpdate:
@@ -173,7 +173,7 @@ internal sealed class UpdateController
         try
         {
             string folder = Path.Combine(Path.GetTempPath(), "MBExtreme-update");
-            string cached = Path.Combine(folder, $"MBExtreme-Beta-Setup-{manifest.Build}.exe");
+            string cached = Path.Combine(folder, $"MBExtreme-Setup-{manifest.Build}.exe");
             _ready = File.Exists(cached) && AppUpdates.Sha256Of(cached) == manifest.Sha256
                 ? cached
                 : await AppUpdates.DownloadAsync(Http, manifest, folder, null, CancellationToken.None);
@@ -230,7 +230,7 @@ internal sealed class UpdateController
     /// <summary>Janela de resultado da verificação, no tema do programa (igual ao "O que há de novo"), no lugar da caixa cinza do Windows.</summary>
     public void ShowCheckResult(Window owner, UpdateCheckResult result)
     {
-        string current = $"Você está na versão {AppInfo.Version} ({AppInfo.DisplayVersion}), compilação {AppUpdates.CurrentBuild()}.";
+        string current = $"Você está na versão {AppInfo.Version}, compilação {AppUpdates.CurrentBuild()}.";
         var (glyph, title, message) = result.Outcome switch
         {
             CheckOutcome.Available => ("⬆", "Atualização disponível",

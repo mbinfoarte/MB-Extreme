@@ -46,7 +46,7 @@ public sealed record IsoStep(string Title, string File, IReadOnlyList<string> Ar
 /// </summary>
 public static class IsoBuilder
 {
-    public const string SetupUrl = "https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Beta-Setup.exe";
+    public const string SetupUrl = "https://github.com/mbinfoarte/MB-Extreme-Download/releases/latest/download/MBExtreme-Setup.exe";
     public const string MicrosoftDownloadPage = "https://www.microsoft.com/pt-br/software-download/windows11";
     public const long Fat32MaxFile = 4L * 1024 * 1024 * 1024 - 1;
     public const string FirstRunMarker = @"C:\ProgramData\MBExtreme\primeira-execucao.json";

@@ -670,9 +670,10 @@ public class SensorFormatTests
 public class AppIdentityTests
 {
     [Fact]
-    public void ProductIsCalledBeta()
+    public void ProductNoLongerSaysBeta()
     {
-        Assert.Equal("MB Extreme (Beta 01)", AppInfo.Name);
-        Assert.Contains("Beta", AppInfo.DisplayVersion);
+        Assert.Equal("MB Extreme", AppInfo.Name);
+        Assert.DoesNotContain("Beta", AppInfo.DisplayVersion);
+        Assert.Equal("MBExtreme-Setup.exe", MBExtreme.Core.Update.GitHubReleases.SetupAsset);
     }
 }

@@ -35,7 +35,7 @@ internal sealed class ProLock
             string text = $"O seu teste grátis ou plano pago terminou, então o MB Extreme desfez as otimizações: {result.Tweaks} ajuste(s) do Windows e {result.Games} jogo(s) voltaram ao original.";
             if (result.Failed.Count > 0) text += $"\n\nNão foi possível desfazer {result.Failed.Count} item(ns) (execute como administrador):\n" + string.Join("\n", result.Failed.Take(5));
             text += "\n\nAssine um plano (Essencial, Gamer, Creator ou Técnico) para usar de novo.";
-            MessageBox.Show(text, "MB Extreme (Beta 01)", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(text, "MB Extreme", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         finally
         {

@@ -1,7 +1,7 @@
 <Window x:Class="MBExtreme.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MB Extreme (Beta 01)" Width="1240" Height="740" MinWidth="1000" MinHeight="600"
+        Title="MB Extreme" Width="1240" Height="740" MinWidth="1000" MinHeight="600"
         WindowStartupLocation="CenterScreen"
         Icon="Assets/app.ico" WindowStyle="None" ResizeMode="CanResize" AllowsTransparency="True"
         Background="Transparent" Foreground="{StaticResource TextBrush}"

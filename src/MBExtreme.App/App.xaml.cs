@@ -177,17 +177,17 @@ public partial class App : Application
         string directory = exe is null ? "" : Path.GetDirectoryName(exe) ?? "";
 
         var answer = MessageBox.Show(
-            "Remover o MB Extreme (Beta 01) deste computador?\n\n" +
+            "Remover o MB Extreme deste computador?\n\n" +
             "Os ajustes do Windows que você aplicou NÃO são desfeitos ao desinstalar. " +
             "Para desfazê-los, cancele, abra o programa e use \"Restaurar originais\" em cada página.\n\n" +
             "Os backups dos valores originais ficam em %AppData%\\MBExtreme.",
-            "Desinstalar MB Extreme (Beta 01)", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            "Desinstalar MB Extreme", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
         MBExtreme.Core.Setup.StartupTask.Disable();
 
         if (!InstallInfo.IsSafeInstallDirectory(directory))
         {
-            MessageBox.Show("Não foi possível confirmar a pasta de instalação. Nada foi removido.", "Desinstalar MB Extreme (Beta 01)",
+            MessageBox.Show("Não foi possível confirmar a pasta de instalação. Nada foi removido.", "Desinstalar MB Extreme",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -209,12 +209,12 @@ public partial class App : Application
             cleanup.ArgumentList.Add($"ping 127.0.0.1 -n 3 > nul & rmdir /s /q \"{directory}\"");
             Process.Start(cleanup);
 
-            MessageBox.Show("MB Extreme (Beta 01) removido.", "Desinstalar MB Extreme (Beta 01)", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("MB Extreme removido.", "Desinstalar MB Extreme", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException
                                        or System.ComponentModel.Win32Exception)
         {
-            MessageBox.Show("Não foi possível concluir a remoção: " + ex.Message, "Desinstalar MB Extreme (Beta 01)",
+            MessageBox.Show("Não foi possível concluir a remoção: " + ex.Message, "Desinstalar MB Extreme",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -228,7 +228,7 @@ public partial class App : Application
             LogOnly(e.Exception);
             MessageBox.Show("Uma ação não teve permissão do Windows e foi ignorada:\n\n" + e.Exception.Message +
                 "\n\nSe precisar dela, feche e abra o MB Extreme como administrador. O detalhe foi gravado em erro.log.",
-                "MB Extreme (Beta 01)", MessageBoxButton.OK, MessageBoxImage.Warning);
+                "MB Extreme", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -266,7 +266,7 @@ public partial class App : Application
         }
 
         MessageBox.Show(
-            "O MB Extreme (Beta 01) encontrou um erro e precisa fechar.\n\n" + (exception?.Message ?? "Erro desconhecido") + where,
-            "MB Extreme (Beta 01)", MessageBoxButton.OK, MessageBoxImage.Error);
+            "O MB Extreme encontrou um erro e precisa fechar.\n\n" + (exception?.Message ?? "Erro desconhecido") + where,
+            "MB Extreme", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 }

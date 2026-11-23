@@ -108,7 +108,14 @@ public sealed class RustDeskSupportPage : ToolPageBase
         p.Children.Add(Muted("Passe o ID e a senha para o técnico. Ele só entra com a senha ou se você aceitar.", 12));
         p.Children.Add(_state);
         p.Children.Add(Muted("Seu ID", 11.5));
-        p.Children.Add(_id);
+        var idRow = new StackPanel { Orientation = Orientation.Horizontal };
+        idRow.Children.Add(_id);
+        var refresh = SmallButton("Atualizar ID", async (_, _) => await RefreshIdAsync(), false);
+        refresh.VerticalAlignment = VerticalAlignment.Center;
+        refresh.Margin = new Thickness(12, 0, 0, 0);
+        refresh.ToolTip = "Busca o ID de novo e, se ele não vier, reinicia o serviço do acesso remoto. Não precisa fechar o programa.";
+        idRow.Children.Add(refresh);
+        p.Children.Add(idRow);
         p.Children.Add(Muted("Senha (troca a cada sessão; no acesso sem ninguém, vale a senha fixa)", 11.5));
         var pw = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
         pw.Children.Add(_password);
@@ -260,12 +267,34 @@ public sealed class RustDeskSupportPage : ToolPageBase
             _id.Text = _myId is null ? "— — —" : RustDesk.FormatId(_myId);
             if (!unattended) await NewPasswordAsync();
             else { _sessionPassword = ""; _password.Text = "senha fixa"; }
-            Paint(_myId is not null, _myId is null ? "Sem ID ainda: confira a internet e abra esta tela de novo." : "Pronto para receber conexões");
+            Paint(_myId is not null, _myId is null ? "Sem ID ainda: confira a internet e clique em Atualizar ID." : "Pronto para receber conexões");
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             Paint(false, "Erro: " + ex.Message);
         }
+    }
+
+    /// <summary>Botão "Atualizar ID": lê o ID de novo (reiniciando o serviço se preciso) e gera uma senha nova para a sessão.</summary>
+    private async Task RefreshIdAsync()
+    {
+        if (_busy || !RustDeskHost.IsInstalled) return;
+        _busy = true;
+        try
+        {
+            Paint(false, "Atualizando o ID...");
+            _myId = await RustDeskHost.RefreshIdAsync(UiProgress.Text(t => Paint(false, t)), CancellationToken.None);
+            _id.Text = _myId is null ? "— — —" : RustDesk.FormatId(_myId);
+            if (_myId is not null && _unattended.IsChecked != true) await NewPasswordAsync();
+            Paint(_myId is not null, _myId is null
+                ? "Ainda sem ID: confira a internet e se o antivírus ou o firewall não está bloqueando o RustDesk, e clique em Atualizar ID de novo."
+                : "Pronto para receber conexões");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Paint(false, "Erro: " + ex.Message);
+        }
+        finally { _busy = false; }
     }
 
     private void Paint(bool ok, string text)

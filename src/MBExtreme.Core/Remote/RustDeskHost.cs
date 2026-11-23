@@ -55,6 +55,27 @@ public static class RustDeskHost
         return null;
     }
 
+    /// <summary>
+    /// Busca o ID de novo sem fechar o programa: primeiro só lê; se não vier, reinicia o serviço do RustDesk (é ele que conversa com a
+    /// rede e gera o ID) e lê outra vez. Devolve null se mesmo assim não houver ID (sem internet, firewall ou antivírus bloqueando).
+    /// </summary>
+    public static async Task<string?> RefreshIdAsync(IProgress<string>? progress, CancellationToken ct)
+    {
+        progress?.Report("Buscando o ID...");
+        var (_, output) = await RunAsync(Exe, RustDesk.GetIdArgs(), TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+        if (RustDesk.ParseId(output) is { } id) return id;
+        progress?.Report("Reiniciando o serviço do acesso remoto...");
+        await RunAsync("sc.exe", new[] { "stop", ServiceName }, TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+        await Task.Delay(2000, ct).ConfigureAwait(false);
+        await RunAsync("sc.exe", new[] { "start", ServiceName }, TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
+        await Task.Delay(3000, ct).ConfigureAwait(false);   // o serviço precisa de alguns segundos para falar com a rede
+        progress?.Report("Buscando o ID...");
+        return await GetIdAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Nome do serviço do Windows que o instalador do RustDesk cria.</summary>
+    public const string ServiceName = "RustDesk";
+
     public static async Task SetPasswordAsync(string password, CancellationToken ct)
     {
         var (_, output) = await RunAsync(Exe, RustDesk.PasswordArgs(password), TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);

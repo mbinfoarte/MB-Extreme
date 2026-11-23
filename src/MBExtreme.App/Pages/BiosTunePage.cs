@@ -20,6 +20,7 @@ public sealed class BiosTunePage : ToolPageBase
         AddButton("Testar agora (estresse)", (_, _) => MainWindow.Current?.Go("stress"), true);
         AddButton("Copiar plano", (_, _) => { if (_hw is not null && TryCopy(BiosGuide.RecipeToText(_hw))) SetStatus("Plano copiado.", "OkBrush"); }, false);
         AddButton("Conferir de novo", async (_, _) => { _hw = null; await LoadAsync(true); }, false);
+        AddButton("Fazer com um especialista", (_, _) => Specialist.Open(), false);
         Loaded += async (_, _) => { if (_hw is null) await LoadAsync(); };
     }
 

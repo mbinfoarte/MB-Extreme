@@ -390,4 +390,7 @@ public partial class TweaksPage : UserControl
             ProgressView.Finish("Não foi possível concluir.", false, ex.Message);
         }
     }
+
+    /// <summary>"Otimize com um especialista": abre a página dos pacotes no site.</summary>
+    private void SpecialistButton_Click(object sender, RoutedEventArgs e) => Specialist.Open();
 }

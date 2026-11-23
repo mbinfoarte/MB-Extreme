@@ -15,6 +15,8 @@
                     <Button Content="Aplicar" Style="{StaticResource PrimaryButton}" Click="ApplyButton_Click" Padding="22,7" />
                     <Button Content="Desmarcar tudo" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="RecommendedButton_Click" Tag="None" />
                     <Button Content="Restaurar originais" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="RestoreButton_Click" />
+                    <Button Content="Fazer com um especialista" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="SpecialistButton_Click"
+                            ToolTip="Um técnico da MB InfoArt otimiza o seu PC pelo acesso remoto (incluso nos planos anuais)" />
                 </StackPanel>
                 <TextBlock x:Name="StatusText" Margin="0,12,0,0" TextWrapping="Wrap" />
 

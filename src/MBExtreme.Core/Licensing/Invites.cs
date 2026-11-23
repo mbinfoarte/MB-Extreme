@@ -16,6 +16,12 @@ public sealed record AccountDevice(string Id, string Name, string Spec, long? La
 public sealed record AccountSubscription(string Status, long? NextChargeMs, double? AmountBrl, string? Interval, bool CancelAtPeriodEnd);
 public sealed record AccountOverview(long? MemberSinceMs, bool EmailVerified, string Provider, AccountSubscription? Subscription, int MaxDevices, List<AccountDevice> Devices, int DaysEarned);
 
+/// <summary>Um PC no painel "Suporte ao vivo" (só a conta de administrador vê). Nunca traz senha.</summary>
+public sealed record SupportListItem(string DeviceId, string Name, string Email, string RustdeskId, string PcName, string Os, string Cpu, string Gpu,
+    string Plan, string PlanStatus, long LastSeen, long OnlineSince, bool Online, long? HelpAt, bool InSession, bool SessionToday);
+
+public sealed record SupportList(List<SupportListItem> Items, long Now);
+
 public sealed record FeedbackData(int Stars, List<string> Likes, List<string> Issues, string Comment, string Version, string Plan);
 
 /// <summary>"Indique um amigo" e a avaliação do programa (servidor de licenças, autenticado pela licença deste PC).</summary>
@@ -110,6 +116,36 @@ public sealed class InviteClient
     public async Task SupportOptOutAsync(string license, string deviceId, CancellationToken token = default)
     {
         using var r = await PostAsync("/v1/support/optout", new { license, deviceId }, token);
+    }
+
+    /// <summary>
+    /// Lista do "Suporte ao vivo" (a mesma do painel do site). Devolve null quando a conta não é de administrador, para a tela
+    /// simplesmente não mostrar o painel.
+    /// </summary>
+    public async Task<SupportList?> AdminSupportListAsync(string license, string deviceId, CancellationToken token = default)
+    {
+        HttpResponseMessage r;
+        try { r = await _http.PostAsJsonAsync(_baseUrl + "/v1/admin/support-list", new { license, deviceId }, Json, token).ConfigureAwait(false); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !token.IsCancellationRequested)
+        {
+            throw new LicenseNetworkException("Sem conexão com o servidor.", ex);
+        }
+        using (r)
+        {
+            if (r.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound) return null;
+            if (!r.IsSuccessStatusCode) throw new LicenseNetworkException(await MessageOf(r, token));
+            return await r.Content.ReadFromJsonAsync<SupportList>(Json, token);
+        }
+    }
+
+    /// <summary>"há 5 min", "há 2 h", "agora" (igual ao painel do site).</summary>
+    public static string Ago(long ms, long now)
+    {
+        long m = Math.Max(0, (long)Math.Round((now - ms) / 60000.0));
+        if (m < 1) return "agora";
+        if (m < 60) return $"há {m} min";
+        long h = m / 60;
+        return h < 24 ? $"há {h} h" : $"há {h / 24} d";
     }
 
     /// <summary>Só letras e números, maiúsculas, até 12 (o mesmo que o site aceita).</summary>

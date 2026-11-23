@@ -14,7 +14,7 @@ namespace MBExtreme.UI.Pages;
 /// ninguém no PC (senha fixa). Uma faixa avisa sempre que alguém está conectado, com Encerrar. A senha da sessão troca sozinha
 /// quando a conexão acaba (menos no acesso sem ninguém).
 /// </summary>
-public sealed class RustDeskSupportPage : ToolPageBase
+public sealed partial class RustDeskSupportPage : ToolPageBase
 {
     private readonly Border _live = new() { Visibility = Visibility.Collapsed, CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 0, 10), BorderThickness = new Thickness(1) };
     private readonly TextBlock _liveText = new() { FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
@@ -46,6 +46,10 @@ public sealed class RustDeskSupportPage : ToolPageBase
         _live.Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x1D, 0x00));
         _live.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
         Body.Children.Add(_live);
+
+        // conta de administrador: a lista de quem pediu suporte (igual ao painel do site), para atender direto daqui
+        BuildAdmin();
+        Body.Children.Add(_adminCard);
 
         // antes de instalar: um cartão explicando e o botão
         _setup.Children.Add(new TextBlock { Text = "Ativar o acesso remoto", FontSize = 16, FontWeight = FontWeights.SemiBold });
@@ -79,8 +83,13 @@ public sealed class RustDeskSupportPage : ToolPageBase
         Body.Children.Add(foot);
 
         _watch.Tick += (_, _) => Watch();
-        Loaded += async (_, _) => { _watch.Start(); if (!_shown) { _shown = true; await PrepareAsync(); } };
-        Unloaded += (_, _) => _watch.Stop();
+        Loaded += async (_, _) =>
+        {
+            _watch.Start();
+            _ = LoadAdminAsync();
+            if (!_shown) { _shown = true; await PrepareAsync(); }
+        };
+        Unloaded += (_, _) => { _watch.Stop(); _adminTimer.Stop(); };
     }
 
     // ---------- montagem ----------
@@ -110,7 +119,12 @@ public sealed class RustDeskSupportPage : ToolPageBase
         p.Children.Add(Muted("Seu ID", 11.5));
         var idRow = new StackPanel { Orientation = Orientation.Horizontal };
         idRow.Children.Add(_id);
-        var refresh = SmallButton("Atualizar ID", async (_, _) => await RefreshIdAsync(), false);
+        var refresh = SmallButton("", async (_, _) => await RefreshIdAsync(), false);
+        var refreshContent = new StackPanel { Orientation = Orientation.Horizontal };
+        refreshContent.Children.Add(new TextBlock { Text = "\uE72C", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        refreshContent.Children.Add(new TextBlock { Text = "Atualizar", VerticalAlignment = VerticalAlignment.Center });
+        refresh.Content = refreshContent;
+        System.Windows.Automation.AutomationProperties.SetName(refresh, "Atualizar o ID");
         refresh.VerticalAlignment = VerticalAlignment.Center;
         refresh.Margin = new Thickness(12, 0, 0, 0);
         refresh.ToolTip = "Busca o ID de novo e, se ele não vier, reinicia o serviço do acesso remoto. Não precisa fechar o programa.";
@@ -258,6 +272,7 @@ public sealed class RustDeskSupportPage : ToolPageBase
         ((Border)_setup.Parent).Visibility = installed ? Visibility.Collapsed : Visibility.Visible;
         _ready.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
         if (!installed) return;
+        _lastIdTry = DateTime.Now.AddSeconds(30);   // a primeira leitura já está tentando; a nova tentativa sozinha espera
         Paint(false, "Preparando...");
         try
         {
@@ -267,7 +282,7 @@ public sealed class RustDeskSupportPage : ToolPageBase
             _id.Text = _myId is null ? "— — —" : RustDesk.FormatId(_myId);
             if (!unattended) await NewPasswordAsync();
             else { _sessionPassword = ""; _password.Text = "senha fixa"; }
-            Paint(_myId is not null, _myId is null ? "Sem ID ainda: confira a internet e clique em Atualizar ID." : "Pronto para receber conexões");
+            Paint(_myId is not null, _myId is null ? "Sem ID ainda: tentando de novo sozinho. Se demorar, clique na setinha de atualizar." : "Pronto para receber conexões");
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -420,9 +435,17 @@ public sealed class RustDeskSupportPage : ToolPageBase
 
     // ---------- conexão ativa ----------
 
+    private DateTime _lastIdTry = DateTime.MinValue;
+
     private void Watch()
     {
         if (!RustDeskHost.IsInstalled) return;
+        // sem ID ainda: tenta de novo sozinho a cada 15 s (o botão de atualizar faz o mesmo na hora)
+        if (_shown && _myId is null && !_busy && DateTime.Now - _lastIdTry > TimeSpan.FromSeconds(15))
+        {
+            _lastIdTry = DateTime.Now;
+            _ = RefreshIdAsync();
+        }
         bool open = RustDeskHost.SessionOpen();
         if (open && !_wasOpen) _openSince = DateTime.Now;
         if (open) _liveText.Text = $"Alguém está vendo e controlando este PC há {(DateTime.Now - _openSince):mm\\:ss}. Se não foi você que pediu, encerre agora.";

@@ -295,3 +295,25 @@ public class ControleCompetitivoTests
         Assert.Contains(checks, c => !c.Ok && c.Text.Contains("não instalado"));
     }
 }
+
+public class SuporteAoVivoTests
+{
+    [Theory]
+    [InlineData(0, "agora")]
+    [InlineData(5 * 60_000, "há 5 min")]
+    [InlineData(2 * 3_600_000, "há 2 h")]
+    [InlineData(3 * 86_400_000L, "há 3 d")]
+    public void Tempo_igual_ao_painel_do_site(long diff, string esperado) =>
+        Assert.Equal(esperado, MBExtreme.Core.Licensing.InviteClient.Ago(1_000_000_000_000 - diff, 1_000_000_000_000));
+
+    [Fact]
+    public void Lista_do_servidor_e_lida()
+    {
+        string json = """{"items":[{"deviceId":"d1","uid":"u","name":"Ana","email":"a@b.com","rustdeskId":"123456789","pcName":"PC-ANA","os":"Windows 11","cpu":"i5","gpu":"RTX","plan":"gamer","planStatus":"active","lastSeen":1,"onlineSince":1,"online":true,"helpAt":5,"inSession":false,"sessionToday":true}],"now":10}""";
+        var list = System.Text.Json.JsonSerializer.Deserialize<MBExtreme.Core.Licensing.SupportList>(json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        Assert.Single(list.Items);
+        Assert.Equal(5, list.Items[0].HelpAt);
+        Assert.True(list.Items[0].Online);
+        Assert.Equal(10, list.Now);
+    }
+}

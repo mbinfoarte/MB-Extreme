@@ -93,4 +93,14 @@ public class AbasDosModulosTests
         Assert.Equal("Otimizar", MBExtreme.UI.NavigationMap.HubTitle("hub-otimizar").Title);
         Assert.Equal("Limpeza", MBExtreme.UI.NavigationMap.HubTitle("hub-clean").Title);
     }
+
+    [Fact]
+    public void Administrador_tem_as_abas_em_ordem_alfabetica_e_fica_fora_do_suporte()
+    {
+        var tabs = MBExtreme.UI.NavigationMap.Hubs["admin"];
+        Assert.Equal(new[] { "service", "admin-site", "admin-live" }, tabs.Select(t => t.Key));
+        Assert.Equal(tabs.Select(t => t.Title).OrderBy(t => t, StringComparer.Create(new System.Globalization.CultureInfo("pt-BR"), true)), tabs.Select(t => t.Title));
+        Assert.Equal("admin", MBExtreme.UI.NavigationMap.HubOf("service"));
+        Assert.Contains(MBExtreme.UI.NavigationMap.Sidebar.SelectMany(s => s.Items), i => i.Key == "admin");
+    }
 }

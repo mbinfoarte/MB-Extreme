@@ -26,7 +26,6 @@ public sealed partial class RustDeskSupportPage : ToolPageBase
     private readonly StackPanel _peers = new() { Margin = new Thickness(0, 8, 0, 0) };
     private readonly CheckBox _unattended = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel _setup = new();
-    private readonly Grid _columns = new();
     private readonly StackPanel _main = new();
     private readonly Grid _ready = new() { Visibility = Visibility.Collapsed };
     private readonly DispatcherTimer _watch = new() { Interval = TimeSpan.FromSeconds(2) };
@@ -49,16 +48,8 @@ public sealed partial class RustDeskSupportPage : ToolPageBase
         _live.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
         Body.Children.Add(_live);
 
-        // conta de administrador: a lista de quem pediu suporte (igual ao painel do site) numa coluna ao lado, para atender direto daqui
-        BuildAdmin();
-        _columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0) });
-        _columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0) });
-        _columns.Children.Add(_main);
-        _adminCard.VerticalAlignment = VerticalAlignment.Top;
-        Grid.SetColumn(_adminCard, 2);
-        _columns.Children.Add(_adminCard);
-        Body.Children.Add(_columns);
+        // a lista de quem pediu suporte (para o administrador) fica em Administrador › Suporte ao vivo
+        Body.Children.Add(_main);
 
         // antes de instalar: um cartão explicando e o botão
         _setup.Children.Add(new TextBlock { Text = "Ativar o acesso remoto", FontSize = 16, FontWeight = FontWeights.SemiBold });
@@ -95,10 +86,9 @@ public sealed partial class RustDeskSupportPage : ToolPageBase
         Loaded += async (_, _) =>
         {
             _watch.Start();
-            _ = LoadAdminAsync();
             if (!_shown) { _shown = true; await PrepareAsync(); }
         };
-        Unloaded += (_, _) => { _watch.Stop(); _adminTimer.Stop(); };
+        Unloaded += (_, _) => _watch.Stop();
     }
 
     // ---------- montagem ----------

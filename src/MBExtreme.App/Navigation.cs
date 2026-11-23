@@ -146,6 +146,7 @@ internal static class NavigationMap
         // informação (não são módulos do sistema): sempre no fim, separados por uma linha
         new("", new SideItem[]
         {
+            new("admin", "Administrador", "\uE7EF"),   // só aparece para a conta de administrador (AdminGate)
             new("social", "Nossas Redes", "\uE716"),
             new("support", "Suporte", "\uE8F2"),
             new("hub-sobre", "Sobre", "\uE946"),
@@ -159,6 +160,8 @@ internal static class NavigationMap
     /// </summary>
     public static IReadOnlyDictionary<string, (string Title, string Key)[]> Hubs { get; } = new Dictionary<string, (string, string)[]>
     {
+        // Administrador: só a conta de administrador vê no menu (o servidor confere a conta em cada chamada)
+        ["admin"] = new[] { ("Atendimento técnico", "service"), ("Site", "admin-site"), ("Suporte ao vivo", "admin-live") },
         ["programs"] = new[] { ("Instalar", "programs-install"), ("Atualizar", "programs-installed"), ("Desinstalador", "uninstaller"), ("Aplicativos do Windows", "debloat") },
         ["hub-control"] = new[]
         {
@@ -212,7 +215,7 @@ internal static class NavigationMap
         ["storage"] = ("\uEDA2", "saúde, desfragmentar e TRIM"), ["diskmap"] = ("\uE8B7", "o que ocupa espaço"),
         ["security"] = ("\uE72E", "antivírus e firewall"), ["restorepoints"] = ("\uE81C", "voltar o Windows"), ["undo"] = ("\uE7A7", "desfazer ajustes"),
         ["postinstall"] = ("\uE896", "Windows novo pronto"), ["iso-create"] = ("\uE958", "a sua ISO do Windows"), ["reinstall"] = ("\uE777", "instalar pelo próprio disco"), ["formatbackup"] = ("\uE74E", "drivers e Wi-Fi"),
-        ["support"] = ("\uE716", "acesso remoto"), ["suggest"] = ("\uE946", "ideias e pedidos"), ["about"] = ("\uE946", "versão e créditos"),
+        ["support"] = ("\uE716", "acesso remoto"), ["service"] = ("\uE90F", "empresas e visitas"), ["admin-site"] = ("\uE774", "painel do site"), ["admin-live"] = ("\uE8F2", "quem pediu ajuda"), ["suggest"] = ("\uE946", "ideias e pedidos"), ["about"] = ("\uE946", "versão e créditos"),
         ["bottleneck"] = ("\uE9D9", "o que segura o FPS"), ["gamefps"] = ("\uE7FC", "FPS e 1% low"),
     };
 

@@ -9,14 +9,13 @@ using MBExtreme.UI.Controls;
 namespace MBExtreme.UI.Pages;
 
 /// <summary>
-/// Painel "Suporte ao vivo" dentro do programa, só para a conta de administrador (o servidor confere): a mesma lista do painel do site,
+/// Administrador › Suporte ao vivo (só a conta de administrador; o servidor confere): a mesma lista do painel do site,
 /// com quem está online, quem pediu ajuda, o plano, o PC e os botões Conectar e Arquivos. Conectar abre o RustDesk no ID do cliente
 /// sem senha, então o cliente precisa aceitar na tela dele. Atualiza sozinho a cada 30 segundos.
 /// </summary>
-public sealed partial class RustDeskSupportPage
+public sealed class AdminLivePage : ToolPageBase
 {
     private static readonly Color Yellow = Color.FromRgb(0xFF, 0xC4, 0x00), Green = Color.FromRgb(0x3D, 0xDC, 0x97), Red = Color.FromRgb(0xE5, 0x48, 0x4D);
-    private readonly Border _adminCard = new() { Visibility = Visibility.Collapsed };
     private readonly StackPanel _adminList = new();
     private readonly WrapPanel _adminFilters = new() { Margin = new Thickness(0, 0, 0, 8) };
     private readonly TextBlock _adminKpis = new() { FontSize = 12.5, Margin = new Thickness(0, 6, 0, 8), TextWrapping = TextWrapping.Wrap };
@@ -26,21 +25,24 @@ public sealed partial class RustDeskSupportPage
     private string _adminFilter = "online";
     private bool _adminLoading;
 
-    private void BuildAdmin()
+    public AdminLivePage() : base("Suporte ao vivo", "Quem está com o MB Extreme aberto, quem pediu ajuda e o botão para conectar. É a mesma lista do painel do site.")
+    {
+        HideHeader();
+        Body.Children.Add(CardOf(BuildAdmin()));
+        Loaded += async (_, _) => await LoadAdminAsync();
+        Unloaded += (_, _) => _adminTimer.Stop();
+    }
+
+    private StackPanel BuildAdmin()
     {
         var root = new StackPanel();
         var head = new DockPanel();
         var refresh = SmallButton("Atualizar", async (_, _) => await LoadAdminAsync(), false);
         DockPanel.SetDock(refresh, Dock.Right);
         head.Children.Add(refresh);
-        var service = SmallButton("Atendimento técnico", (_, _) => MainWindow.Current?.Go("service"), true);
-        service.Margin = new Thickness(0, 0, 6, 0);
-        service.ToolTip = "Empresas, visitas e o atendimento deste PC (otimizar sem assinatura)";
-        DockPanel.SetDock(service, Dock.Right);
-        head.Children.Add(service);
         var title = new StackPanel { Orientation = Orientation.Horizontal };
         title.Children.Add(new TextBlock { Text = "Suporte ao vivo", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        title.Children.Add(Tag("ADMINISTRADOR"));
+        title.Children.Add(AdminTag("ADMINISTRADOR"));
         title.Children.Add(new TextBlock { Text = "atualiza sozinho a cada 30 s", FontSize = 11.5, Foreground = Brush("MutedBrush"), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         head.Children.Add(title);
         root.Children.Add(head);
@@ -61,14 +63,11 @@ public sealed partial class RustDeskSupportPage
         root.Children.Add(bar);
         root.Children.Add(_adminList);
         root.Children.Add(Muted("Conectar abre o acesso remoto deste PC no ID do cliente e ele vê o pedido na tela: sem o aceite dele, nada acontece. Só aparecem PCs que ligaram o suporte rápido.", 11));
-        _adminCard.Child = root;
-        _adminCard.Style = (Style)FindResource("Card");
-        _adminCard.Padding = new Thickness(16, 12, 16, 12);
-        _adminCard.Margin = new Thickness(0, 0, 0, 12);
         _adminTimer.Tick += async (_, _) => await LoadAdminAsync();
+        return root;
     }
 
-    /// <summary>Pede a lista ao servidor. Conta que não é de administrador: o painel fica escondido e o relógio para.</summary>
+    /// <summary>Pede a lista ao servidor. Conta que não é de administrador: avisa e para o relógio.</summary>
     private async Task LoadAdminAsync()
     {
         if (_adminLoading || !InviteApi.Ready) return;
@@ -78,27 +77,19 @@ public sealed partial class RustDeskSupportPage
             _adminData = await InviteApi.Client.AdminSupportListAsync(InviteApi.License, InviteApi.Device);
             if (_adminData is null)
             {
-                ShowAdminColumn(false);
+                _adminKpis.Text = "Esta conta não é de administrador.";
+                _adminList.Children.Clear();
                 _adminTimer.Stop();
                 return;
             }
-            ShowAdminColumn(true);
             if (!_adminTimer.IsEnabled) _adminTimer.Start();
             RenderAdmin();
         }
         catch (LicenseNetworkException ex)
         {
-            if (_adminCard.Visibility == Visibility.Visible) _adminKpis.Text = "Não foi possível atualizar: " + ex.Message;
+            _adminKpis.Text = "Não foi possível atualizar: " + ex.Message;
         }
         finally { _adminLoading = false; }
-    }
-
-    /// <summary>Conta de administrador: a tela vira duas colunas (o suporte deste PC à esquerda, a lista do Suporte ao vivo à direita).</summary>
-    private void ShowAdminColumn(bool show)
-    {
-        _adminCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        _columns.ColumnDefinitions[1].Width = new GridLength(show ? 14 : 0);
-        _columns.ColumnDefinitions[2].Width = show ? new GridLength(1.1, GridUnitType.Star) : new GridLength(0);
     }
 
     private void RenderAdmin()
@@ -201,6 +192,13 @@ public sealed partial class RustDeskSupportPage
         };
     }
 
+    private static Border AdminTag(string text) => new()
+    {
+        Background = new SolidColorBrush(Yellow), CornerRadius = new CornerRadius(8), Padding = new Thickness(7, 1, 7, 1),
+        Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock { Text = text, FontSize = 10, FontWeight = FontWeights.Bold, Foreground = Brushes.Black },
+    };
+
     private static Border PlanTag(SupportListItem p)
     {
         string text = p.PlanStatus == "trialing" ? "Teste 3 dias" : p.Plan switch
@@ -219,7 +217,7 @@ public sealed partial class RustDeskSupportPage
     /// <summary>Abre o acesso no ID do cliente sem senha: o cliente aceita na tela dele.</summary>
     private void AdminConnect(SupportListItem p, bool files)
     {
-        if (!RustDeskHost.IsInstalled) { SetStatus("Ative o acesso remoto neste PC primeiro (botão Ativar acesso remoto).", "WarnBrush"); return; }
+        if (!RustDeskHost.IsInstalled) { SetStatus("Ative o acesso remoto neste PC primeiro, em Suporte › Ativar acesso remoto.", "WarnBrush"); return; }
         try
         {
             RustDeskHost.Connect(p.RustdeskId, null, files);

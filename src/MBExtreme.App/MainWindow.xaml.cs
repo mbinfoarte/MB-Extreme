@@ -44,7 +44,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => _updates?.InstallPendingOnExit();   // atualização baixada: instala ao fechar
         AppServices.Videos.Start();   // vídeo novo do canal: aviso no canto e faixa no Painel
         Loaded += async (_, _) => await _updates.CheckAsync();
-        ContentRendered += (_, _) => { Pages.WhatsNew.ShowOnceAfterUpdate(this); TrialEnd.ShowIfNeeded(this); if (Pages.PostInstallPage.FromIso() is not null) Go("postinstall"); SupportPresence.Start(this); };
+        ContentRendered += (_, _) => { Pages.WhatsNew.ShowOnceAfterUpdate(this); TrialEnd.ShowIfNeeded(this); if (Pages.PostInstallPage.FromIso() is not null) Go("postinstall"); SupportPresence.Start(this); CheckAdminAsync(); };
         if (AppServices.Boost.Settings.BoostAuto) AppServices.Boost.SetAuto(true);
         AppServices.AutoMemory.StartIfEnabled();
         Accessibility.ApplyScale(RootGrid, AppServices.Settings.UiScale);
@@ -439,7 +439,25 @@ public partial class MainWindow : Window
         radio.Checked += (_, _) => { icon.Foreground = IconActive; Motion.Pop(icon); };
         radio.Unchecked += (_, _) => icon.Foreground = IconIdle;
         radio.Checked += Nav_Checked;
+        if (key == "admin") { radio.Visibility = Visibility.Collapsed; _adminNav = radio; }   // aparece só depois que o servidor confirma
         host.Children.Add(radio);
+    }
+
+    private RadioButton? _adminNav;
+
+    /// <summary>
+    /// Mostra "Administrador" no menu só para a conta de administrador. Quem decide é o servidor (a mesma chamada da lista do
+    /// Suporte ao vivo responde vazio para as outras contas). Sem internet ou sem conta: o item continua escondido.
+    /// </summary>
+    internal async void CheckAdminAsync()
+    {
+        if (_adminNav is null || !Controls.InviteApi.Ready) return;
+        try
+        {
+            var list = await Controls.InviteApi.Client.AdminSupportListAsync(Controls.InviteApi.License, Controls.InviteApi.Device);
+            _adminNav.Visibility = list is null ? Visibility.Collapsed : Visibility.Visible;
+        }
+        catch (MBExtreme.Core.Licensing.LicenseNetworkException) { /* sem internet: tenta de novo na próxima abertura */ }
     }
 
     private void FontSize_Click(object sender, RoutedEventArgs e) => Go("a11y");
@@ -662,6 +680,8 @@ public partial class MainWindow : Window
         "pad-info" => new PadInfoPage(),
         "pad-analyzer" => new PadAnalyzerPage(),
         "service" => new ServicePage(),
+        "admin-live" => new AdminLivePage(),
+        "admin-site" => new AdminSitePage(),
         "usb-ports" => new UsbPortsPage(),
         "pad-competitive" => new PadCompetitivePage(),
         "pad-overclock" => new PadOverclockPage(),

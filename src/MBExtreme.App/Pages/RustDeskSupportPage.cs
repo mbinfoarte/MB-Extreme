@@ -26,6 +26,8 @@ public sealed partial class RustDeskSupportPage : ToolPageBase
     private readonly StackPanel _peers = new() { Margin = new Thickness(0, 8, 0, 0) };
     private readonly CheckBox _unattended = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel _setup = new();
+    private readonly Grid _columns = new();
+    private readonly StackPanel _main = new();
     private readonly Grid _ready = new() { Visibility = Visibility.Collapsed };
     private readonly DispatcherTimer _watch = new() { Interval = TimeSpan.FromSeconds(2) };
     private string? _myId;
@@ -47,15 +49,22 @@ public sealed partial class RustDeskSupportPage : ToolPageBase
         _live.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xC4, 0x00));
         Body.Children.Add(_live);
 
-        // conta de administrador: a lista de quem pediu suporte (igual ao painel do site), para atender direto daqui
+        // conta de administrador: a lista de quem pediu suporte (igual ao painel do site) numa coluna ao lado, para atender direto daqui
         BuildAdmin();
-        Body.Children.Add(_adminCard);
+        _columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0) });
+        _columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0) });
+        _columns.Children.Add(_main);
+        _adminCard.VerticalAlignment = VerticalAlignment.Top;
+        Grid.SetColumn(_adminCard, 2);
+        _columns.Children.Add(_adminCard);
+        Body.Children.Add(_columns);
 
         // antes de instalar: um cartão explicando e o botão
         _setup.Children.Add(new TextBlock { Text = "Ativar o acesso remoto", FontSize = 16, FontWeight = FontWeights.SemiBold });
         _setup.Children.Add(Muted("Na primeira vez, o MB Extreme baixa e instala o módulo de acesso remoto (RustDesk, código aberto, 25 MB). Ele fica rodando discreto e só aceita conexões com o ID e a senha que aparecem aqui.", 12));
         _setup.Children.Add(Wrap(Btn("Ativar acesso remoto", async () => await InstallAsync(), true)));
-        Body.Children.Add(CardOf(_setup));
+        _main.Children.Add(CardOf(_setup));
 
         _ready.ColumnDefinitions.Add(new ColumnDefinition());
         _ready.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
@@ -76,11 +85,11 @@ public sealed partial class RustDeskSupportPage : ToolPageBase
         Grid.SetRow(unattended, 2);
         Grid.SetColumnSpan(unattended, 3);
         _ready.Children.Add(unattended);
-        Body.Children.Add(_ready);
+        _main.Children.Add(_ready);
 
         var foot = Muted($"Conexão pela rede pública do RustDesk ({RustDesk.SourceUrl}, código aberto, licença {RustDesk.License}). A imagem da tela não passa pelos servidores da MB InfoArt.", 11);
         foot.Margin = new Thickness(0, 6, 0, 0);
-        Body.Children.Add(foot);
+        _main.Children.Add(foot);
 
         _watch.Tick += (_, _) => Watch();
         Loaded += async (_, _) =>

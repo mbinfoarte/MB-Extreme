@@ -73,11 +73,11 @@ public sealed partial class RustDeskSupportPage
             _adminData = await InviteApi.Client.AdminSupportListAsync(InviteApi.License, InviteApi.Device);
             if (_adminData is null)
             {
-                _adminCard.Visibility = Visibility.Collapsed;
+                ShowAdminColumn(false);
                 _adminTimer.Stop();
                 return;
             }
-            _adminCard.Visibility = Visibility.Visible;
+            ShowAdminColumn(true);
             if (!_adminTimer.IsEnabled) _adminTimer.Start();
             RenderAdmin();
         }
@@ -86,6 +86,14 @@ public sealed partial class RustDeskSupportPage
             if (_adminCard.Visibility == Visibility.Visible) _adminKpis.Text = "Não foi possível atualizar: " + ex.Message;
         }
         finally { _adminLoading = false; }
+    }
+
+    /// <summary>Conta de administrador: a tela vira duas colunas (o suporte deste PC à esquerda, a lista do Suporte ao vivo à direita).</summary>
+    private void ShowAdminColumn(bool show)
+    {
+        _adminCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        _columns.ColumnDefinitions[1].Width = new GridLength(show ? 14 : 0);
+        _columns.ColumnDefinitions[2].Width = show ? new GridLength(1.1, GridUnitType.Star) : new GridLength(0);
     }
 
     private void RenderAdmin()
@@ -110,7 +118,11 @@ public sealed partial class RustDeskSupportPage
         if (q.Length > 0)
             list = list.Where(p => new string((p.Name + p.Email + p.PcName + p.RustdeskId).Where(c => !char.IsWhiteSpace(c)).ToArray()).ToLowerInvariant().Contains(q)).ToList();
         // quem pediu ajuda primeiro, depois quem está online, depois o mais recente
-        list = list.OrderByDescending(p => p.Online && p.HelpAt is not null).ThenByDescending(p => p.Online).ThenByDescending(p => p.LastSeen).ToList();
+        // quem pediu ajuda primeiro, na ordem do pedido (o mais antigo antes); os outros em ordem alfabética
+        var pt = StringComparer.Create(new System.Globalization.CultureInfo("pt-BR"), ignoreCase: true);
+        list = list.OrderByDescending(p => p.Online && p.HelpAt is not null)
+            .ThenBy(p => p.Online && p.HelpAt is not null ? p.HelpAt!.Value : 0)
+            .ThenBy(p => p.Name.Length > 0 ? p.Name : p.Email.Length > 0 ? p.Email : p.PcName, pt).ToList();
 
         _adminList.Children.Clear();
         if (list.Count == 0)
@@ -159,14 +171,22 @@ public sealed partial class RustDeskSupportPage
         connect.IsEnabled = files.IsEnabled = p.Online;
         if (!p.Online) connect.ToolTip = files.ToolTip = "O cliente está offline: o MB Extreme dele está fechado.";
 
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        UIElement[] cells = { dot, who, pc, idCol, buttons };
-        for (int i = 0; i < cells.Length; i++) { Grid.SetColumn(cells[i], i); grid.Children.Add(cells[i]); }
+        // duas linhas, para caber na coluna: em cima quem é e o ID; embaixo o PC e os botões
+        var top = new DockPanel();
+        DockPanel.SetDock(dot, Dock.Left);
+        DockPanel.SetDock(idCol, Dock.Right);
+        idCol.Margin = new Thickness(8, 0, 0, 0);
+        top.Children.Add(dot);
+        top.Children.Add(idCol);
+        top.Children.Add(who);
+        var bottom = new DockPanel { Margin = new Thickness(20, 6, 0, 0) };
+        DockPanel.SetDock(buttons, Dock.Right);
+        pc.Margin = new Thickness(0, 0, 8, 0);
+        bottom.Children.Add(buttons);
+        bottom.Children.Add(pc);
+        var grid = new StackPanel();
+        grid.Children.Add(top);
+        grid.Children.Add(bottom);
 
         return new Border
         {

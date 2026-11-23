@@ -142,6 +142,7 @@
         <ContentControl x:Name="ContentHost" Grid.Column="1" Margin="0,30,6,0" />
 
         <StackPanel x:Name="CaptionButtons" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="10">
+            <Button Style="{StaticResource CaptionButton}" Content="&#xE897;" ToolTip="Tutorial desta tela" AutomationProperties.Name="Tutorial desta tela" Click="Help_Click" />
             <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimizar" Click="Minimize_Click" />
             <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximizar" Click="Maximize_Click" />
             <Button Style="{StaticResource CloseCaptionButton}" Content="&#xE8BB;" ToolTip="Fechar" Click="Close_Click" />

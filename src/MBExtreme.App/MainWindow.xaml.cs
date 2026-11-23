@@ -14,6 +14,9 @@ public partial class MainWindow : Window
     private bool _suppressNav;
     private UpdateController? _updates;
     private string? _current;
+
+    /// <summary>Botão "?" do topo: abre no site o tutorial da tela que está aberta.</summary>
+    private void Help_Click(object sender, RoutedEventArgs e) => Tutorials.Open(_current);
     private bool _backing;
     private Stack<string> _history = new();
 

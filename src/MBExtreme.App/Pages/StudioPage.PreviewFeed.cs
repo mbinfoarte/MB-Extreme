@@ -1,0 +1,147 @@
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using MBExtreme.Core.Recording;
+
+namespace MBExtreme.UI.Pages;
+
+/// <summary>
+/// Prévia da tela pela placa de vídeo: um FFmpeg leve (ddagrab, 60 quadros por segundo, até Full HD) no lugar de copiar a tela pelo GDI.
+/// Vale para a tela inteira e para o recorte de uma janela de jogo; o modo "conteúdo da janela" usa o Windows.Graphics.Capture
+/// (gfxcapture) e só cai na cópia pelo GDI se o FFmpeg não tiver esse filtro.
+/// </summary>
+public sealed partial class StudioPage
+{
+    private MBExtreme.UI.Recording.RawFrameFeed? _screenFeed;
+    private string? _screenFeedFailed;
+    private bool _screenFeedShowing;
+    private int _screenFeedTick;
+
+    /// <summary>True quando a prévia da tela está vindo do FFmpeg (então não precisa copiar a tela).</summary>
+    private bool SyncScreenFeed()
+    {
+        if (++_screenFeedTick % 5 != 1 && _screenFeed is not null) return _screenFeedShowing;   // confere a origem a cada meio segundo
+
+        string? signature = null;
+        IReadOnlyList<string>? args = null;
+        (int W, int H) size = default;
+        // no ar: a prévia fluida continua pela placa de vídeo (uma captura pequena e separada, não pesa no envio);
+        // no modo estúdio (prévia de outra cena) quem mostra é a imagem "No ar"
+        bool live = _studio.IsRunning;
+        bool rehearsal = live && _studio.Session.Request is { Rehearsal: true };
+        bool allowed = IsLoaded && _ffmpegPath is not null && !AppServices.Recorder.IsRecording && (!live || !_s.StudioSceneStudioMode && !rehearsal && !_s.StudioPreviewEconomy);
+        int fps = MBExtreme.Core.Display.RefreshRates.PreviewFps(MonitorHz(), _s.StudioPreviewEconomy);
+        if (allowed && ScreenFeedTarget() is { } target)
+        {
+            var source = target.Crop ?? _displayList.First(d => d.Index == target.Output).Bounds;
+            double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
+            size = ScreenPreview.Size(live ? Math.Min(shown, 1280) : shown, source.Width, source.Height);
+            args = ScreenPreview.RawArgs(target.Output, target.Crop, CurrentFilter().ToChain(), size.W, size.H, fps);
+            signature = string.Join(" ", args);
+        }
+        else if (allowed && _sourceTab == 2 && SceneGrabTarget() is null && CardName() is { } card)
+        {
+            // placa de captura como tela principal: a prévia vem do vídeo da própria placa
+            var area = CardSource()!.Area;
+            double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
+            size = ScreenPreview.Size(live ? Math.Min(shown, 1280) : shown, area.Width, area.Height);
+            args = live ? null : ScreenPreview.CardArgs(card, CurrentFilter().ToChain(), size.W, size.H);   // no ar, a placa está com a gravação
+            signature = args is null ? null : string.Join(" ", args);
+        }
+        else if (allowed && WindowFeedTarget() is { } window)
+        {
+            // "conteúdo da janela": pelo Windows.Graphics.Capture, na placa de vídeo (se o FFmpeg não tiver, volta para a cópia pelo GDI)
+            double shown = Math.Max(_preview.ActualWidth, 320) * VisualTreeHelper.GetDpi(_preview).DpiScaleX;
+            size = ScreenPreview.Size(live ? Math.Min(shown, 1280) : shown, Math.Max(2, window.Area.Width), Math.Max(2, window.Area.Height));
+            args = ScreenPreview.WindowArgs(window.Handle.ToInt64(), CurrentFilter().ToChain(), size.W, size.H, fps);
+            signature = string.Join(" ", args);
+        }
+
+        if (signature is null || signature == _screenFeedFailed)
+        {
+            StopScreenFeed();
+            return false;
+        }
+        if (_screenFeed?.Signature == signature) return _screenFeedShowing;
+
+        StopScreenFeed();
+        var feed = new MBExtreme.UI.Recording.RawFrameFeed(signature, size.W, size.H);
+        feed.Frame += () => ShowScreenFrame(feed);
+        feed.Failed += _ =>
+        {
+            if (!ReferenceEquals(_screenFeed, feed)) return;
+            _screenFeedFailed = signature;   // esta placa/versão não deu: volta para a cópia pelo GDI
+            StopScreenFeed();
+        };
+        _screenFeed = feed;
+        feed.Start(_ffmpegPath!, args!);
+        return _screenFeedShowing;
+    }
+
+    private void ShowScreenFrame(MBExtreme.UI.Recording.RawFrameFeed feed)
+    {
+        if (!ReferenceEquals(_screenFeed, feed) || _studio.IsRunning && _s.StudioSceneStudioMode) return;
+        var image = feed.Bitmap;
+        bool first = !_screenFeedShowing || !ReferenceEquals(_preview.Source, image);
+        _screenFeedShowing = true;
+        if (first)
+        {
+            _preview.Source = image;
+            _previewNote.Text = _studio.IsRunning ? "No ar: prévia fluida pela placa de vídeo (logo, Pix e câmeras aparecem marcados por cima)." : "É assim que o vídeo vai sair (ao vivo, pela placa de vídeo).";
+            _previewNote.Foreground = Brush("MutedBrush");
+            UpdateGhosts();
+        }
+        _lastFrame = image;
+        UpdateVerticalLive();
+    }
+
+    private int _monitorHz;
+    private DateTime _monitorHzRead;
+
+    /// <summary>Hz do monitor principal (lido a cada 30 s: muda se a pessoa trocar na tela Monitor).</summary>
+    private int MonitorHz()
+    {
+        if (DateTime.Now - _monitorHzRead > TimeSpan.FromSeconds(30)) { _monitorHz = NativeDisplay.PrimaryHz(); _monitorHzRead = DateTime.Now; }
+        return _monitorHz;
+    }
+
+    private void StopScreenFeed()
+    {
+        _screenFeed?.Dispose();
+        _screenFeed = null;
+        _screenFeedShowing = false;
+    }
+
+    /// <summary>Janela capturada pelo conteúdo (modo GDI na gravação): a prévia vem dela pelo Windows.Graphics.Capture.</summary>
+    private (IntPtr Handle, PixelRect Area)? WindowFeedTarget()
+    {
+        if (SceneGrabTarget() is { } own)
+            return own.Problem is null && own.Gdi is { } handle && handle != IntPtr.Zero ? (handle, own.Area) : null;
+        if (_sourceTab == 1 && _windowMode == 1 && _windows.Selected >= 0 && _windows.Selected < _windowList.Count)
+        {
+            var w = _windowList[_windows.Selected];
+            return w.Handle != IntPtr.Zero ? (w.Handle, w.Bounds) : null;
+        }
+        return null;
+    }
+
+    /// <summary>A tela (saída da placa) e o recorte que a prévia deve mostrar; null quando a origem é o conteúdo de uma janela (GDI) ou não existe.</summary>
+    private (int Output, PixelRect? Crop)? ScreenFeedTarget()
+    {
+        PixelRect area;
+        if (SceneGrabTarget() is { } own)
+        {
+            if (own.Problem is not null || own.Gdi is not null) return null;
+            area = own.Area;
+        }
+        else if (_sourceTab == 0) area = CurrentArea();
+        else if (_sourceTab == 2) return null;   // placa de captura: a prévia vem dela (veja SyncScreenFeed)
+        else if (_windowMode == 0 && _windows.Selected >= 0 && _windows.Selected < _windowList.Count) area = _windowList[_windows.Selected].Bounds;
+        else return null;
+
+        if (_displayList.Count == 0) return null;
+        int output = ScreenPreview.DisplayFor(_displayList, area);
+        if (output < 0) return null;
+        var display = _displayList.First(d => d.Index == output);
+        return (output, ScreenPreview.CropWithin(display.Bounds, area));
+    }
+}

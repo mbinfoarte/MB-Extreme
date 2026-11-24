@@ -1,0 +1,654 @@
+using System.Diagnostics;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Threading;
+using MBExtreme.Core.Memory;
+using MBExtreme.Core.Network;
+using MBExtreme.Core.Sensors;
+using MBExtreme.Core.Startup;
+using MBExtreme.Core.Windows;
+using MBExtreme.UI.Controls;
+
+namespace MBExtreme.UI.Pages;
+
+/// <summary>Painel: sensores, memória, internet e ping em tempo real, com atalho para a limpeza.</summary>
+public partial class DashboardPage : UserControl
+{
+    private const int HistoryLength = 60;
+    private const double BytesPerGb = 1024.0 * 1024 * 1024;
+
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly List<double> _downHistory = new();
+    private readonly List<double> _upHistory = new();
+    private readonly LiveChart _netChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0x34, 0xD1, 0x7A));
+    private readonly LiveChart _powerChart = new(HistoryLength, Color.FromRgb(0xFF, 0xC4, 0x00), Color.FromRgb(0xFF, 0x5A, 0x5F), Color.FromRgb(0x34, 0xD1, 0x7A));
+    private readonly List<double> _powerTotalHistory = new();
+    private readonly List<double> _powerCpuHistory = new();
+    private readonly List<double> _powerGpuHistory = new();
+    private readonly PingWindow _pings = new(20);
+    private ActiveAdapter? _adapter;
+    private double? _localPing;
+    private int _securityProblems;
+    private SecurityStatus? _securityStatus;
+    private int _startupCount;
+    private double? _cpuTemperature;
+    private bool _securityLoading;
+    private double _memoryUsed;
+    private string _attentionKey = "";
+    private readonly List<double> _cpuHistory = new();
+    private readonly List<double> _gpuHistory = new();
+    private readonly List<double> _ramHistory = new();
+    private readonly List<double> _pingHistory = new();
+    private int _tick;
+    private bool _busy;
+    private double? _lastPing;
+
+    /// <summary>Um aviso curto do Painel: etiqueta colorida, título e uma linha, um botão e (se der) o × para dispensar.</summary>
+    private sealed record Notice(string Tag, Color Color, string Glyph, string Title, string Sub, string Button, bool Primary, Action Click,
+        Action? Dismiss = null, string? DismissTip = null, string? Second = null, Action? SecondClick = null, string Border = "BorderBrush");
+
+    private static readonly Color Yellow = Color.FromRgb(0xFF, 0xC4, 0x00);
+    private Notice? _betaNotice, _videoNotice;
+    private IReadOnlyList<AttentionItem> _items = Array.Empty<AttentionItem>();
+    private readonly TextBlock HealthText = new() { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private AnalyzerHero _hero = null!;
+
+    /// <summary>Aviso do teste grátis / planos (some quando a pessoa assina; pode fechar, e volta numa versão nova).</summary>
+    private void ShowBetaNotice()
+    {
+        var license = AppServices.License;
+        bool isPro = MBExtreme.Core.Licensing.LicenseExpiry.IsPro(license.Status);
+        if (isPro || AppServices.Settings.BetaNoticeHiddenBuild == MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString())
+        {
+            _betaNotice = null;
+            RenderNotices();
+            return;
+        }
+        bool signedIn = license.Status.Payload is not null;
+        _betaNotice = new Notice(signedIn ? "ESCOLHA SEU PLANO" : "TESTE GRÁTIS DE 3 DIAS", Yellow, "\uE734",
+            signedIn ? "Seu teste grátis terminou" : "Plano Gamer liberado por 3 dias, sem cartão",
+            signedIn ? "Assine para liberar otimizações, jogos, benchmark e estúdio" : "Crie a conta grátis em mbinfoarte.com.br e entre por aqui",
+            signedIn ? "Ver planos" : "Ativar", false, LicensePage.StartTrialOrPlans,
+            () =>
+            {
+                AppServices.Settings.BetaNoticeHiddenBuild = MBExtreme.Core.Update.AppUpdates.CurrentBuild().ToString();
+                AppServices.Settings.Save();
+                _betaNotice = null;
+                RenderNotices();
+            }, "Esconder até a próxima versão");
+        RenderNotices();
+    }
+
+    public DashboardPage()
+    {
+        InitializeComponent();
+        var hero = new AnalyzerHero();
+        _hero = hero;
+        HeroHost.Content = hero;
+        hero.CollapsedChanged += _ => RenderNotices();
+        ShowBetaNotice();
+        ShowVideo(AppServices.Videos.Latest);
+        AppServices.Videos.Found += v => Dispatcher.BeginInvoke(new Action(() => ShowVideo(v)));
+        // a análise completa começa sozinha na primeira vez que o Painel aparece (uma vez por abertura do programa)
+        Loaded += async (_, _) =>
+        {
+            if (_autoAnalyzed) return;
+            _autoAnalyzed = true;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await hero.AnalyzeAsync();
+        };
+        // ícones das funções nos cartões ao vivo (pulsam devagar) e o efeito de vidro do menu ao passar o mouse
+        BuildLiveCards();
+        DecorateCard(CpuCard, "\uE950", Color.FromRgb(0xFF, 0xA9, 0x4D));
+        DecorateCard(GpuCard, "\uE7F4", Color.FromRgb(0x6C, 0xB6, 0xFF));
+        DecorateCard(RamCard, "\uE950", Color.FromRgb(0xC0, 0x84, 0xFC));
+        DecorateCard(NetBigCard, "\uE774", Color.FromRgb(0x3D, 0xDC, 0x97));
+        DecorateCard(PowerCard, "\uE945", Color.FromRgb(0xFF, 0xC4, 0x00));
+        CpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("cpu-detail");
+        GpuCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("gpu-detail");
+        RamCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("ram-detail");
+        NetCard.MouseLeftButtonUp += (_, _) => MainWindow.Current?.Go("netanalyzer");
+        UpdateRamAuto();
+        _netChart.SetDashed(1);
+        _powerChart.SetDashed(2);
+        _netChart.FormatMax = v => Rate(v * 125_000);
+        NetChartHost.Child = _netChart;
+        _powerChart.FormatMax = v => $"{v:0} W";
+        PowerChartHost.Child = _powerChart;
+        _timer.Tick += async (_, _) => await UpdateAsync();
+        Loaded += async (_, _) =>
+        {
+            _timer.Start();
+            await UpdateAsync();
+        };
+        Unloaded += (_, _) => _timer.Stop();
+    }
+
+    private static bool _autoAnalyzed;
+    private static bool _ratingClosed;
+    private bool _analyzed;
+    private RatingCard? _ratingCard;
+
+    /// <summary>Põe o ícone da função antes do título do cartão (o primeiro texto de 15 pt) e liga o efeito de vidro ao passar o mouse.</summary>
+    private static void DecorateCard(Border card, string glyph, Color color)
+    {
+        var badge = GlassFx.Badge(glyph, color, 30, breathe: true);
+        var title = Find(card.Child);
+        if (title?.Parent is Panel panel)
+        {
+            int at = panel.Children.IndexOf(title);
+            panel.Children.RemoveAt(at);
+            var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            badge.Margin = new Thickness(0, 0, 10, 0);
+            row.Children.Add(badge);
+            title.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(title);
+            panel.Children.Insert(at, row);
+        }
+        GlassFx.Attach(card, badge);
+
+        static TextBlock? Find(DependencyObject? node)
+        {
+            if (node is TextBlock t && t.FontSize >= 15 && t.FontWeight == FontWeights.SemiBold) return t;
+            if (node is null) return null;
+            foreach (object child in LogicalTreeHelper.GetChildren(node))
+                if (child is DependencyObject d && Find(d) is { } found) return found;
+            return null;
+        }
+    }
+
+    /// <summary>Faixa "Vídeo novo no canal" (some quando a pessoa fecha aquele vídeo).</summary>
+    private void ShowVideo(MBExtreme.Core.Social.YouTubeVideo? video)
+    {
+        if (video is null || !AppServices.Settings.NotifyNewVideos || AppServices.Settings.DismissedVideoId == video.Id)
+        {
+            _videoNotice = null;
+            RenderNotices();
+            return;
+        }
+        _videoNotice = new Notice("VÍDEO NOVO NO CANAL", Yellow, "\uE714", video.Title, MBExtreme.Core.Social.YouTubeFeed.Ago(video.Published, DateTimeOffset.Now),
+            "Assistir", false, () => { try { Process.Start(new ProcessStartInfo(video.Url) { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { } },
+            () =>
+            {
+                AppServices.Settings.DismissedVideoId = video.Id;
+                AppServices.Settings.Save();
+                _videoNotice = null;
+                RenderNotices();
+            }, "Esconder este vídeo");
+        RenderNotices();
+    }
+
+    /// <summary>
+    /// Avisos ao lado da saúde: com a análise aberta, uma coluna de cartões curtos à direita; com ela recolhida, uma grade de até
+    /// 3 colunas ao lado do anel. Sem nenhum aviso, a saúde ocupa a largura toda.
+    /// </summary>
+    private void RenderNotices()
+    {
+        if (_hero is null) return;
+        var list = new List<Notice>();
+        foreach (var item in _items)
+        {
+            var current = item;
+            bool fixable = item.FixKind.Length > 0;
+            string glyph = item.TargetPage switch
+            {
+                "security" => "\uE72E", "disks" => "\uEDA2", "ram-detail" => "\uE950", "cpu-detail" => "\uE9CA", "startup" => "\uE7E8", _ => "\uE7BA",
+            };
+            list.Add(new Notice(item.Urgent ? "ATENÇÃO" : "AVISO", item.Urgent ? Color.FromRgb(0xFF, 0x8A, 0x8E) : Color.FromRgb(0xFF, 0xA9, 0x4D),
+                glyph, item.Title, item.Detail,
+                fixable ? item.FixText : item.ActionText, fixable,
+                fixable ? () => _ = FixAsync(current) : () => MainWindow.Current?.Go(current.TargetPage),
+                Second: fixable ? "Ver" : null, SecondClick: fixable ? () => MainWindow.Current?.Go(current.TargetPage) : null,
+                Border: item.Urgent ? "BadBrush" : "WarnBrush"));
+        }
+        if (_betaNotice is not null) list.Add(_betaNotice);
+        if (_videoNotice is not null) list.Add(_videoNotice);
+        // avaliação: depois que a análise terminou (um momento bom), uma vez, a partir do 2º dia com a conta
+        bool rating = _analyzed && !_ratingClosed && RatingCard.ShouldShow();
+
+        NoticeColumn.Children.Clear();
+        bool collapsed = _hero.Collapsed;
+        if (list.Count == 0 && !rating)
+        {
+            NoticeColumn.Visibility = Visibility.Collapsed;
+            HeroColumn.Width = new GridLength(1, GridUnitType.Star);
+            NoticeColumnDef.MinWidth = 0;
+            NoticeColumnDef.Width = new GridLength(0);
+            return;
+        }
+        NoticeColumn.Visibility = Visibility.Visible;
+        HeroColumn.Width = collapsed ? GridLength.Auto : new GridLength(2, GridUnitType.Star);
+        NoticeColumnDef.Width = new GridLength(1, GridUnitType.Star);
+        NoticeColumnDef.MinWidth = collapsed ? 0 : 340;
+
+        // cabeçalho: "Avisos · resumo" e o Corrigir tudo
+        var head = new DockPanel { Margin = new Thickness(2, collapsed ? 2 : 0, 0, 8), LastChildFill = true };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        if (_items.Any(i => i.FixKind is "security" or "memory"))
+        {
+            var all = new Button { Content = "Corrigir tudo", Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(14, 5, 14, 5), FontSize = 12 };
+            var items = _items;
+            all.Click += async (_, _) => await FixAllAsync(items);
+            actions.Children.Add(all);
+        }
+        if (_items.Count > 0)
+        {
+            var repair = new Button { Content = "Reparar o Windows", Style = (Style)FindResource("GhostButton"), Padding = new Thickness(12, 5, 12, 5), FontSize = 12, Margin = new Thickness(6, 0, 0, 0),
+                ToolTip = "Verifica e repara os arquivos do Windows (SFC e DISM)." };
+            repair.Click += (_, _) => MainWindow.Current?.Go("repair");
+            actions.Children.Add(repair);
+        }
+        DockPanel.SetDock(actions, Dock.Right);
+        head.Children.Add(actions);
+        var title = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        title.Children.Add(new TextBlock { Text = "Avisos", FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        if (HealthText.Parent is Panel old) old.Children.Remove(HealthText);   // o texto passa para o cabeçalho novo
+        if (_items.Count > 0) title.Children.Add(HealthText);
+        head.Children.Add(title);
+        NoticeColumn.Children.Add(head);
+        if (rating) NoticeColumn.Children.Add(_ratingCard ??= new RatingCard(() => { _ratingClosed = true; _ratingCard = null; RenderNotices(); }));
+
+        Panel cards = collapsed
+            ? new System.Windows.Controls.Primitives.UniformGrid { Columns = Math.Min(3, list.Count) }
+            : new StackPanel();
+        foreach (var n in list) cards.Children.Add(NoticeCard(n, collapsed));
+        NoticeColumn.Children.Add(cards);
+        Motion.Cascade(cards, 40);
+    }
+
+    private Border NoticeCard(Notice n, bool compact)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var accent = new SolidColorBrush(n.Color);
+        var icon = GlassFx.Badge(n.Glyph, n.Color, 32);
+        grid.Children.Add(icon);
+
+        var text = new StackPanel { Margin = new Thickness(10, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = n.Title + "\n" + n.Sub };
+        text.Children.Add(new TextBlock { Text = n.Tag, FontSize = 10, FontWeight = FontWeights.Bold, Foreground = accent });
+        text.Children.Add(new TextBlock { Text = n.Title, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        if (!compact) text.Children.Add(new TextBlock { Text = n.Sub, FontSize = 11.5, Foreground = (Brush)FindResource("MutedBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var main = new Button { Content = n.Button, Style = (Style)FindResource(n.Primary ? "PrimaryButton" : "GhostButton"), Padding = new Thickness(11, 4, 11, 4), FontSize = 12 };
+        main.Click += (_, _) => n.Click();
+        buttons.Children.Add(main);
+        if (n.Second is { } second && n.SecondClick is { } secondClick)
+        {
+            var b = new Button { Content = second, Style = (Style)FindResource("GhostButton"), Padding = new Thickness(10, 4, 10, 4), FontSize = 12, Margin = new Thickness(6, 0, 0, 0) };
+            b.Click += (_, _) => secondClick();
+            buttons.Children.Add(b);
+        }
+        if (n.Dismiss is { } dismiss)
+        {
+            var close = new Button { Content = "✕", Style = (Style)FindResource("SideFooterButton"), Margin = new Thickness(6, 0, 0, 0), ToolTip = n.DismissTip };
+            System.Windows.Automation.AutomationProperties.SetName(close, "Dispensar o aviso: " + n.Title);
+            close.Click += (_, _) => dismiss();
+            buttons.Children.Add(close);
+        }
+        Grid.SetColumn(buttons, 2);
+        grid.Children.Add(buttons);
+
+        var card = new Border
+        {
+            Background = (Brush)FindResource("Surface2Brush"), BorderBrush = (Brush)FindResource(n.Border), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 0, compact ? 8 : 0, 8), Child = grid,
+        };
+        GlassFx.Attach(card, icon);
+        return card;
+    }
+
+    private static string Rate(double bytesPerSecond)
+    {
+        double bits = bytesPerSecond * 8;
+        return bits >= 1_000_000 ? $"{bits / 1_000_000:0.0} Mb/s" : $"{bits / 1_000:0} kb/s";
+    }
+
+    private async Task UpdateAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var memory = MemoryService.GetStatus();
+            UpdateMemory(memory);
+
+            var network = AppServices.Network.Sample();
+            UpdateNetwork(network);
+
+            if (_tick % 15 == 0) _adapter = await Task.Run(NetworkStatus.Active);
+            if (_tick % 3 == 0)
+            {
+                _lastPing = await NetworkMonitor.PingAsync();
+                _pings.Add(_lastPing);
+                _localPing = _adapter?.Gateway is { } gateway ? await NetAnalyzer.PingAsync(gateway, 1000) : null;
+            }
+            _tick++;
+            UpdatePing(_lastPing);
+            UpdateNetworkInfo();
+            if (_tick % 10 == 1) await RefreshAttentionAsync();
+
+            var sensors = await AppServices.Sensors;
+            var snapshot = await Task.Run(sensors.Read);
+            UpdateSensors(snapshot);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or AggregateException)
+        {
+            HealthText.Text = "Não foi possível ler todos os sensores: " + ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void UpdateMemory(MemoryStatus memory)
+    {
+        double used = 100 - memory.FreePercent;
+        RamGauge.Value = memory.TotalBytes > 0 ? used : null;
+        UpdateRamTiles(memory);
+        _memoryUsed = used;
+        if (memory.TotalBytes > 0)
+        {
+            Push(_ramHistory, used);
+            RamChart.Values = _ramHistory.ToList();
+        }
+    }
+
+    private async Task RefreshAttentionAsync()
+    {
+        try
+        {
+            _startupCount = await Task.Run(() => StartupService.List().Count(e => e.Enabled));
+            var drives = await Task.Run(() => DriveInfo.GetDrives()
+                .Where(d => d.DriveType == DriveType.Fixed && d.IsReady && d.TotalSize > 0)
+                .Select(d => (Name: d.Name.TrimEnd('\\'), Used: 100.0 * (d.TotalSize - d.AvailableFreeSpace) / d.TotalSize)).ToList());
+            var worst = drives.OrderByDescending(d => d.Used).FirstOrDefault();
+
+            if (_securityProblems < 0 || (_tick % 300 == 1 && !_securityLoading) || !_securityChecked)
+            {
+                _securityChecked = true;
+                _securityLoading = true;
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        var status = SecurityService.Read();
+                        _securityStatus = status;
+                        _securityProblems = SecurityService.Evaluate(status, DateTime.Now).Count(i => i.Level == SecurityLevel.Bad);
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException) { }
+                    finally { _securityLoading = false; }
+                });
+            }
+
+            var items = AttentionAdvisor.Evaluate(new AttentionFacts(_memoryUsed, _startupCount, worst.Name is null ? null : worst.Used, worst.Name,
+                _securityProblems, _cpuTemperature, AppServices.AutoMemory.Enabled));
+            ShowAttention(items);
+            UpdateRamAuto();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or AggregateException or IOException)
+        {
+            // sem resumo desta vez
+        }
+    }
+
+    private bool _securityChecked;
+
+    private void ShowAttention(IReadOnlyList<AttentionItem> items)
+    {
+        HealthText.Text = "· " + AttentionAdvisor.Headline(items);
+        HealthText.Foreground = (Brush)FindResource(items.Count == 0 ? "OkBrush" : items.Any(i => i.Urgent) ? "BadBrush" : "WarnBrush");
+
+        bool first = !_analyzed;
+        _analyzed = true;
+        string key = string.Join("|", items.Select(i => i.Title + i.Detail));
+        if (key == _attentionKey && !first) return;
+        _attentionKey = key;
+        _items = items;
+        RenderNotices();
+    }
+
+    private async Task FixAsync(AttentionItem item)
+    {
+        switch (item.FixKind)
+        {
+            case "security":
+                await FixSecurityAsync(confirm: true);
+                break;
+            case "memory":
+                AppServices.AutoMemory.SetEnabled(true);
+                UpdateRamAuto();
+                _attentionKey = "";
+                await RefreshAttentionAsync();
+                MessageBox.Show("Limpeza automática da memória ligada. Ela libera memória de programas em segundo plano quando o uso passar do limite, sem mexer no programa em uso nem nos jogos da sua lista.",
+                    "Memória", MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+            case "cleanup":
+                MainWindow.Current?.Go("cleanup", autoStart: true);
+                break;
+        }
+    }
+
+    private async Task FixAllAsync(IReadOnlyList<AttentionItem> items)
+    {
+        var plan = _securityStatus is null ? Array.Empty<SecurityFix>() : SecurityFixer.Plan(_securityStatus);
+        bool memory = items.Any(i => i.FixKind == "memory");
+        var lines = plan.Select(p => "• " + p.Title).ToList();
+        if (memory) lines.Add("• Ligar a limpeza automática da memória");
+        if (lines.Count == 0) { MainWindow.Current?.Go("security"); return; }
+
+        if (MessageBox.Show("O MB Extreme vai fazer o seguinte:\n\n" + string.Join("\n", lines) + "\n\nContinuar?", "Corrigir tudo",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+        if (memory) AppServices.AutoMemory.SetEnabled(true);
+        if (plan.Count > 0) await FixSecurityAsync(confirm: false);
+        else await RefreshAfterFixAsync();
+    }
+
+    private async Task FixSecurityAsync(bool confirm)
+    {
+        var plan = _securityStatus is null ? Array.Empty<SecurityFix>() : SecurityFixer.Plan(_securityStatus);
+        if (plan.Count == 0) { MainWindow.Current?.Go("security"); return; }
+
+        if (confirm && MessageBox.Show("O MB Extreme vai fazer o seguinte:\n\n" + string.Join("\n", plan.Select(p => $"• {p.Title}\n   {p.Detail}")) + "\n\nContinuar?",
+                "Corrigir segurança", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+        HealthText.Text = "Corrigindo...";
+        var results = await Task.Run(() => SecurityFixer.Apply(plan));
+        await RefreshAfterFixAsync();
+
+        string summary = string.Join("\n", results.Select(r => $"{(r.Ok ? "✔" : "✖")} {r.Fix.Title}: {r.Message}"));
+        MessageBox.Show(summary, "Resultado", MessageBoxButton.OK, results.All(r => r.Ok) ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    private async Task RefreshAfterFixAsync()
+    {
+        try
+        {
+            var status = await Task.Run(SecurityService.Read);
+            _securityStatus = status;
+            _securityProblems = SecurityService.Evaluate(status, DateTime.Now).Count(i => i.Level == SecurityLevel.Bad);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception) { }
+
+        _attentionKey = "";
+        await RefreshAttentionAsync();
+        UpdateRamAuto();
+    }
+
+    // ---- limpeza automática da memória, direto no cartão
+
+    private void RamAuto_Click(object sender, RoutedEventArgs e)
+    {
+        AppServices.AutoMemory.SetEnabled(!AppServices.AutoMemory.Enabled);
+        UpdateRamAuto();
+        _attentionKey = "";
+        _ = RefreshAttentionAsync();
+    }
+
+    private void UpdateRamAuto()
+    {
+        bool on = AppServices.AutoMemory.Enabled;
+        RamAutoButton.Style = (Style)FindResource(on ? "PrimaryButton" : "GhostButton");
+        RamAutoButton.ToolTip = on
+            ? $"Limpeza automática ligada (acima de {AppServices.Settings.MemoryAutoCleanThreshold}%). Clique para desligar."
+            : "Clique para ligar a limpeza automática da memória.";
+    }
+
+    private void UpdateNetwork(NetworkSample sample)
+    {
+        DownloadText.Text = Rate(sample.DownloadBytesPerSecond);
+        UploadText.Text = Rate(sample.UploadBytesPerSecond);
+        Push(_downHistory, sample.DownloadBytesPerSecond * 8 / 1_000_000);
+        Push(_upHistory, sample.UploadBytesPerSecond * 8 / 1_000_000);
+        _netChart.Update(_downHistory.ToList(), _upHistory.ToList());
+    }
+
+    private void UpdatePing(double? ping)
+    {
+        PingGauge.Value = ping;
+        if (ping is double ms)
+        {
+            Push(_pingHistory, ms);
+        }
+        PingDetail.Text = ping is null ? "Sem resposta de 1.1.1.1" : "até 1.1.1.1";
+    }
+
+    private void UpdateNetworkInfo()
+    {
+        JitterStat.Text = _pings.Average is double avg
+            ? $"média {avg:0} ms · oscilação {_pings.Jitter ?? 0:0.0} ms · perda {_pings.LossPercent:0}%"
+            : "—";
+        LocalPingStat.Text = _adapter?.Gateway is null
+            ? "roteador não identificado"
+            : _localPing is double lp ? $"{lp:0} ms ({_adapter.Gateway})" : $"sem resposta ({_adapter.Gateway})";
+        DnsStat.Text = _adapter is null ? "—" : NetworkStatus.DescribeDns(_adapter.Dns, _adapter.Gateway);
+    }
+
+    private async void AnalyzeRoute_Click(object sender, RoutedEventArgs e)
+    {
+        RouteButton.IsEnabled = false;
+        RouteStat.Text = "Analisando a rota (cerca de 10 segundos)...";
+        using var cts = new CancellationTokenSource();
+        IReadOnlyList<HopStats>? last = null;
+        int rounds = 0;
+        try
+        {
+            await NetAnalyzer.TraceAsync("1.1.1.1", 20, hops =>
+            {
+                last = hops;
+                if (++rounds >= 4) cts.Cancel();
+            }, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // as rodadas pedidas terminaram
+        }
+        catch (Exception ex) when (ex is System.Net.NetworkInformation.PingException or InvalidOperationException)
+        {
+            RouteStat.Text = "Não foi possível analisar: " + ex.Message;
+            RouteButton.IsEnabled = true;
+            return;
+        }
+
+        var report = last is null ? null : RouteSummary.Summarize(last);
+        RouteStat.Text = report?.Text ?? "Sem resultado.";
+        RouteStat.Foreground = (Brush)FindResource(report is { Healthy: true } ? "OkBrush" : "WarnBrush");
+        RouteButton.IsEnabled = true;
+    }
+
+    private void UpdateSensors(SensorSnapshot s)
+    {
+        SensorHint.Visibility = s.Message is null ? Visibility.Collapsed : Visibility.Visible;
+        SensorHintText.Text = s.Message ?? "";
+
+        _cpuTemperature = s.CpuTemperature;
+        CpuGauge.Value = s.CpuTemperature;
+        GpuGauge.Value = s.GpuTemperature;
+        UpdateLive(s);
+
+        if (s.CpuLoad is double value)
+        {
+            Push(_cpuHistory, value);
+            CpuUseChart.Values = _cpuHistory.ToList();
+        }
+        if (s.GpuLoad is double gpuValue)
+        {
+            Push(_gpuHistory, gpuValue);
+            GpuUseChart.Values = _gpuHistory.ToList();
+        }
+
+
+        double? total = s.CpuPowerWatts is null && s.GpuPowerWatts is null
+            ? null
+            : (s.CpuPowerWatts ?? 0) + (s.GpuPowerWatts ?? 0);
+        PowerTotalText.Text = total is double w ? $"{w:0} W" : "—";
+        PowerDetail.Text = Join(
+            s.CpuPowerWatts is double a ? $"CPU {a:0} W" : null,
+            s.GpuPowerWatts is double b ? $"GPU {b:0} W" : null);
+        if (total is double sum)
+        {
+            Push(_powerTotalHistory, sum);
+            Push(_powerCpuHistory, s.CpuPowerWatts ?? 0);
+            Push(_powerGpuHistory, s.GpuPowerWatts ?? 0);
+            _powerChart.Update(_powerTotalHistory.ToList(), _powerCpuHistory.ToList(), _powerGpuHistory.ToList());
+        }
+    }
+
+    private static string Join(params string?[] parts) =>
+        string.Join("  ·  ", parts.Where(p => !string.IsNullOrEmpty(p)));
+
+    private static void Push(List<double> history, double value)
+    {
+        history.Add(value);
+        if (history.Count > HistoryLength) history.RemoveAt(0);
+    }
+
+    private async void CopySensorDiagnosis_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var sensors = await AppServices.Sensors;
+            string text = await Task.Run(sensors.Diagnose);
+            Clipboard.SetText(text);
+            MessageBox.Show("O diagnóstico dos sensores foi copiado. Cole numa mensagem para o suporte da MB InfoArt.", "MB Extreme", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException)
+        {
+            MessageBox.Show("Não foi possível copiar o diagnóstico: " + ex.Message, "MB Extreme", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void ScanButton_Click(object sender, RoutedEventArgs e) => MainWindow.Current?.Go("cleanup", autoStart: true);
+
+    private void AnalyzeButton_Click(object sender, RoutedEventArgs e) => MainWindow.Current?.Go("diagnose", autoStart: true);
+
+    private void InstallSensorDriver_Click(object sender, RoutedEventArgs e)
+    {
+        var answer = MessageBox.Show(
+            "Para ler a temperatura da CPU, o MB Extreme precisa do driver PawnIO. Vou instalá-lo pelo winget (instalador oficial do Windows). Continuar?\n\nDepois de instalar, feche e abra o MB Extreme de novo.",
+            "Ativar sensores da CPU", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo("winget.exe",
+                "install --id namazso.PawnIO -e --accept-source-agreements --accept-package-agreements")
+            { UseShellExecute = true });
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            MessageBox.Show("Não encontrei o winget neste Windows. Instale o PawnIO manualmente: github.com/namazso/PawnIO.Setup",
+                "Ativar sensores da CPU", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+}

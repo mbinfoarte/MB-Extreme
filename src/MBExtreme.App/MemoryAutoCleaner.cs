@@ -8,7 +8,7 @@ namespace MBExtreme.UI;
 internal sealed class MemoryAutoCleaner
 {
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(5) };
-    private DateTime? _lastCleanUtc;
+    private DateTime? _lastCleanUtc, _lastWarnUtc;
     private bool _cleaning;
     private TimeSpan _cooldown = MemoryAutoPolicy.DefaultCooldown;
 
@@ -71,6 +71,12 @@ internal sealed class MemoryAutoCleaner
 
             // se a limpeza liberou pouco e o uso continua alto, o que ocupa a memória são programas em uso: espera cada vez mais para tentar de novo
             double after = 100 - MemoryService.GetStatus().FreePercent;
+            // a limpeza comum não resolveu: o que ocupa são programas e serviços rodando. Avisa (no máximo a cada 30 minutos).
+            if (XrayRules.ShouldWarn(used, after) && (_lastWarnUtc is null || DateTime.UtcNow - _lastWarnUtc > TimeSpan.FromMinutes(30)))
+            {
+                _lastWarnUtc = DateTime.UtcNow;
+                Overlay.ClipToast.Show($"Memória em {after:0}%", "Programas e serviços em segundo plano estão ocupando a RAM. Abra Limpeza › Memória e use \"Liberar marcados\".");
+            }
             bool useless = result.FreedBytes < status.TotalBytes * 0.03 && after >= AppServices.Settings.MemoryAutoCleanThreshold;
             _cooldown = useless ? TimeSpan.FromTicks(Math.Min(_cooldown.Ticks * 2, TimeSpan.FromMinutes(30).Ticks)) : MemoryAutoPolicy.DefaultCooldown;
         }

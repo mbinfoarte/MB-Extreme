@@ -650,7 +650,7 @@ public partial class MainWindow : Window
     private static UserControl CreateInner(string key, Tile? tile) => NavigationMap.Hubs.ContainsKey(key) ? CreateHub(key) : key switch
     {
         "cleanup" => new CleanupPage(),
-        "memory" => new MemoryPage(),
+        "memory" => new MemoryXrayPage(),   // Raio-X da memória (a limpeza de cache antiga ficou dentro dele)
         "dns" => new DnsPage(),
         "debloat" => new DebloatPage(),
         "sysinfo" => new SystemInfoPage(),

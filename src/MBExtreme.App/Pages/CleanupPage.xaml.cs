@@ -360,14 +360,18 @@ public partial class CleanupPage : UserControl
                 }
 
                 CleanResult? memory = null;
+                XrayResult? background = null;
                 if (ram)
                 {
-                    progress.Report(new ProgressEvent("Memória", 88, "Liberando memória RAM"));
+                    progress.Report(new ProgressEvent("Memória", 84, "Fechando o que roda à toa em segundo plano"));
+                    try { background = MemoryXrayProbe.QuickFree(allowlist, token); }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or UnauthorizedAccessException) { }
+                    progress.Report(new ProgressEvent("Memória", 92, "Liberando memória RAM"));
                     memory = MemoryService.Clean(allowlist, null, token);
                 }
 
                 progress.Report(new ProgressEvent("Memória", 100, "Concluído"));
-                return (freed, deleted, skipped, memory);
+                return (freed, deleted, skipped, memory, background);
             });
 
             long total = result.freed + (result.memory?.FreedBytes ?? 0);
@@ -375,6 +379,8 @@ public partial class CleanupPage : UserControl
             AppServices.Settings.Save();
             var lines = new List<string> { $"{result.deleted} arquivos apagados." };
             if (result.skipped > 0) lines.Add($"{result.skipped} arquivos estavam em uso e foram mantidos.");
+            if (result.background is { } bg && bg.Closed + bg.ServicesStopped > 0)
+                lines.Add($"Segundo plano: {bg.Closed} programa(s) fechados e {bg.ServicesStopped} serviço(s) parados. Para ver tudo o que ocupa a RAM: Limpeza › Memória.");
             if (result.memory is { } m)
                 lines.Add(m.StandbyPurged
                     ? $"Memória: {Format(m.FreedBytes)} liberados e cache esvaziado."
@@ -398,8 +404,15 @@ public partial class CleanupPage : UserControl
         try
         {
             var allowlist = AppServices.Settings.MemoryAllowlist.ToList();
-            var result = await Task.Run(() => MBExtreme.Core.Memory.MemoryService.Clean(allowlist));
-            FreeRamButton.Content = $"Memória: {result.FreedBytes / (1024.0 * 1024):0} MB liberados";
+            double before = 100 - MemoryService.GetStatus().FreePercent;
+            var result = await Task.Run(() =>
+            {
+                try { MemoryXrayProbe.QuickFree(allowlist); }   // fecha os ajudantes de fundo e para serviços seguros
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or UnauthorizedAccessException) { }
+                return MemoryService.Clean(allowlist);
+            });
+            double after = 100 - MemoryService.GetStatus().FreePercent;
+            FreeRamButton.Content = $"Memória: {before:0}% → {after:0}%";
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
         {

@@ -429,8 +429,10 @@ public partial class DashboardPage : UserControl
                 UpdateRamAuto();
                 _attentionKey = "";
                 await RefreshAttentionAsync();
-                MessageBox.Show("Limpeza automática da memória ligada. Ela libera memória de programas em segundo plano quando o uso passar do limite, sem mexer no programa em uso nem nos jogos da sua lista.",
+                MessageBox.Show("Limpeza automática da memória ligada. Ela libera memória de programas em segundo plano quando o uso passar do limite, sem mexer no programa em uso nem nos jogos da sua lista.\n\n" +
+                    "Agora abre o Raio-X da memória: ele mostra quem está ocupando a RAM e libera o que roda à toa em segundo plano.",
                     "Memória", MessageBoxButton.OK, MessageBoxImage.Information);
+                MainWindow.Current?.Go("memory");
                 break;
             case "cleanup":
                 MainWindow.Current?.Go("cleanup", autoStart: true);

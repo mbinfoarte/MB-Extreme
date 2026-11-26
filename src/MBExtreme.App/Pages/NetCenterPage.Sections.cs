@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using MBExtreme.Core.Licensing;
 using MBExtreme.Core.NetDiag;
 using MBExtreme.Core.Network;
 
@@ -17,6 +18,7 @@ public sealed partial class NetCenterPage
     private string _routeHost = "www.google.com";
     private string _wifiBand = WifiRules.B24;
     private string _repairResult = "";
+    private Border? _dnsChange;
 
     private static TextBlock Head(string title) => new() { Text = title, FontSize = 19, FontWeight = FontWeights.Bold };
 
@@ -74,8 +76,9 @@ public sealed partial class NetCenterPage
         var page = PageTop("DNS e resolução", "Tempo de resposta dos servidores, cache do PC e se nomes inexistentes estão sendo desviados. Só leitura.",
             Btn(_dns is null ? "Testar DNS" : "Testar de novo", async () => await RunDnsAsync(), true),
             Btn("Limpar cache DNS", async () => await RepairAsync(RepairKind.FlushDns)),
-            Btn("Trocar DNS", () => { MainWindow.Current?.Go("dns"); return Task.CompletedTask; }));
-        if (_dns is not { } d) { page.Children.Add(Panel("Ainda sem teste", Muted("Clique em \"Testar DNS\". Leva uns 10 segundos.", 12.5), "")); return page; }
+            Btn("Trocar DNS", () => { _dnsChange?.BringIntoView(); return Task.CompletedTask; }));
+        _dnsChange = Panel("Trocar o DNS do PC", Embedded("dns"), "\uE774");
+        if (_dns is not { } d) { page.Children.Add(Panel("Ainda sem teste", Muted("Clique em \"Testar DNS\". Leva uns 10 segundos.", 12.5), "")); page.Children.Add(_dnsChange); return page; }
         double max = Math.Max(1, d.Resolvers.Where(r => r.Ok).Select(r => r.Ms ?? 0).DefaultIfEmpty(1).Max());
         var bars = new StackPanel();
         foreach (var r in d.Resolvers.OrderBy(r => r.Ok ? r.Ms ?? 9999 : 99999))
@@ -105,6 +108,7 @@ public sealed partial class NetCenterPage
         var fs = new StackPanel();
         foreach (var x in d.Findings) fs.Children.Add(FindingRow(x));
         page.Children.Add(Panel("Resultado", fs, ""));
+        page.Children.Add(_dnsChange);
         return page;
     }
 
@@ -114,6 +118,7 @@ public sealed partial class NetCenterPage
         var nic = NetDiagRunner.PickPrimary(probe.Interfaces())?.Dns ?? (IReadOnlyList<string>)Array.Empty<string>();
         int? cache = await Task.Run(NetCenterProbe.DnsCacheEntries, ct);
         _dns = await Task.Run(() => DnsSuite.RunAsync(probe, nic, cache, ct), ct);
+        if (_dns.Fastest is { Ms: { } fms } f) _events.Add(DateTimeOffset.Now, $"DNS mais rápido: {ConnectionMapRules.TargetName(f.Resolver)} {fms:0} ms");
     });
 
     // ================================================================= Rede local e conflitos
@@ -153,6 +158,8 @@ public sealed partial class NetCenterPage
     {
         var (devices, conflicts, multi) = await Task.Run(() => NetCenterProbe.ScanLanAsync(null, ct), ct);
         _lan = devices; _conflicts = conflicts; _multiIp = multi;
+        _events.Add(DateTimeOffset.Now, $"Rede local varrida · {devices.Count} aparelhos");
+        foreach (var c in conflicts) _events.Add(DateTimeOffset.Now, $"IP {c.Ip} com {c.Macs.Count} MACs", FindingSeverity.Problema);
     });
 
     // ================================================================= Rotas
@@ -412,6 +419,7 @@ public sealed partial class NetCenterPage
                 _diag = check; UpdateLast();
             }
             _repairResult = (ok ? "✔ " : "✖ ") + msg + after + (snap is null ? "" : " Foto de antes guardada.");
+            _events.Add(DateTimeOffset.Now, a.Title + (ok ? " · feito" : " · falhou"), ok ? FindingSeverity.Info : FindingSeverity.Problema);
             SetStatus(_repairResult, ok ? "OkBrush" : "BadBrush");
         });
     }

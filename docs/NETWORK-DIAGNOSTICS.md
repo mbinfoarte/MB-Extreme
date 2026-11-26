@@ -42,8 +42,10 @@ App (WPF)  →  NetDiagRunner (casos de uso)  →  INetProbe (contrato)  →  Sy
 
 ## Situação dos recursos
 
-Tudo fica na tela **Central de Rede** (menu lateral do MB Extreme), com menu próprio: Visão geral, DNS, Rede local e conflitos,
-Relatórios e histórico, Reparação, Rotas e Wi-Fi.
+Tudo de rede do programa fica na tela **Central de Rede** (menu lateral do MB Extreme), com menu próprio: Visão geral (painel
+ao vivo) e, em ordem alfabética, Analisador, DNS, Otimizações de rede, Ping dos jogos, Rede local e conflitos, Relatórios e
+histórico, Reparação, Rotas, Teste de internet e Wi-Fi. As telas antigas de rede (Teste de internet, Analisador, DNS, Wi-Fi e
+Otimizações de rede) abrem dentro dela (`NavigationMap.NetCenterSections`). O que cada plano libera: `NetCenterAccess`.
 
 | Recurso | Situação |
 |---|---|
@@ -61,7 +63,11 @@ Relatórios e histórico, Reparação, Rotas e Wi-Fi.
 | RF-08 iPerf3 | **Dependente de licença** |
 | RF-13 reparação: limpar DNS, renovar IP, Winsock, TCP/IP, com confirmação, foto de antes, diário e novo teste | **Implementado** (`NetCenterProbe.Repair`) |
 | RF-14 regras (DR-001… e Wi-Fi/DNS/conflitos) | **Implementado** |
-| RF-15 histórico de diagnósticos e gráfico de qualidade | **Implementado** (`NetHistory`); monitoramento contínuo **Proposto** |
+| RF-15 histórico de diagnósticos e gráfico de qualidade | **Implementado** (`NetHistory`) |
+| Painel ao vivo: mapa da conexão (PC → roteador → provedor → internet, aparelhos e destinos) | **Implementado** (`ConnectionMapRules`; só com dados medidos, o que não foi testado fica cinza) |
+| Ping contínuo a cada segundo, picos, quedas e registro de eventos | **Implementado** (`PingSeries`, `PingWatch`, `NetEventLog`; eventos só na memória) |
+| Monitorar 1 hora (resumo com mediana, perda e picos) | **Implementado**; salvar o monitoramento no histórico **Proposto** |
+| Tráfego: total baixado/enviado da placa e conexões abertas por programa | **Implementado** (`TrafficRules`); bytes por programa **Proposto** (precisa do monitor de rede do Windows com administrador) |
 | RF-16 relatório JSON (esquema 1) e HTML com dados escondidos | **Implementado**; PDF **Proposto** |
 | RF-03, RF-09, RF-10, RF-11 (captura, SNMP) | **Proposto**; captura **dependente de licença/hardware** |
 

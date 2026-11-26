@@ -92,17 +92,19 @@ public static class FeaturePolicy
 }
 
 /// <summary>
-/// O que cada plano libera dentro da Central de Rede. Grátis: Visão geral (diagnóstico) e Teste de internet. Essencial, Gamer e
-/// Creator: também DNS, Wi-Fi (sinal e canal da sua rede) e a reparação básica (limpar cache DNS e renovar IP). Técnico: tudo
-/// (rotas, rede local e conflitos, Wi-Fi completo com as redes vizinhas, Winsock, TCP/IP, relatórios e histórico).
+/// O que cada plano libera dentro da Central de Rede. Grátis: Visão geral (painel ao vivo e diagnóstico) e Teste de internet.
+/// Essencial, Gamer e Creator: também DNS, Otimizações de rede, Wi-Fi (sinal e canal da sua rede) e a reparação básica (limpar cache
+/// DNS e renovar IP); Ping dos jogos a partir do Gamer. Técnico: tudo (Analisador, rotas, rede local e conflitos, Wi-Fi completo com
+/// as redes vizinhas, Winsock, TCP/IP, relatórios e histórico).
 /// </summary>
 public static class NetCenterAccess
 {
     /// <summary>Plano mínimo de cada seção, ou null se for do Grátis.</summary>
     public static string? SectionPlan(string section) => section switch
     {
-        "dns" or "repair" or "wifi" => FeaturePolicy.Essencial,
-        "lan" or "reports" or "route" => FeaturePolicy.Tecnico,
+        "dns" or "net-tweaks" or "repair" or "wifi" => FeaturePolicy.Essencial,
+        "games" => FeaturePolicy.Gamer,
+        "lan" or "netanalyzer" or "reports" or "route" => FeaturePolicy.Tecnico,
         _ => null,
     };
 

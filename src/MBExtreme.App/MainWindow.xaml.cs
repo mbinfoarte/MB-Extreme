@@ -264,6 +264,14 @@ public partial class MainWindow : Window
         if (sideKey is not null) RevealInMenu(sideKey);
         _suppressNav = false;
 
+        // ferramenta de rede: abre a Central de Rede na seção dela
+        if (NavigationMap.NetCenterSections.TryGetValue(key, out string? netSection))
+        {
+            ShowPage("netcenter");
+            if (_inner.TryGetValue("netcenter", out var net) && net is NetCenterPage center) center.Open(netSection);
+            return;
+        }
+
         // ferramenta que fica numa tela de abas: abre a tela e escolhe a aba
         UserControl? inner = null;
         var path = NavigationMap.HubPath(key);
@@ -647,7 +655,7 @@ public partial class MainWindow : Window
     private static TabsPage CreateHub(string key) => new(key == "hub-clean" ? TurboStrip.Build() : null, NavigationMap.HubOf(key) is not null, key,
         NavigationMap.Hubs[key].Select(t => (t.Title, t.Key, (Func<UserControl>)(() => CreateInner(t.Key, NavigationMap.TileOf(t.Key))))).ToArray());
 
-    private static UserControl CreateInner(string key, Tile? tile) => NavigationMap.Hubs.ContainsKey(key) ? CreateHub(key) : key switch
+    internal static UserControl CreateInner(string key, Tile? tile) => NavigationMap.Hubs.ContainsKey(key) ? CreateHub(key) : key switch
     {
         "cleanup" => new CleanupPage(),
         "memory" => new MemoryXrayPage(),   // Raio-X da memória (a limpeza de cache antiga ficou dentro dele)

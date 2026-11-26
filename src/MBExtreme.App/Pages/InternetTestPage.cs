@@ -46,6 +46,11 @@ public sealed partial class InternetTestPage : ToolPageBase
     private readonly Dictionary<string, ToggleButton> _tabs = new();
     private readonly ContentControl _tabHost = new();
 
+    /// <summary>Abas mostradas (vazio = todas). Na Central de Rede: "Teste de internet" mostra Velocidade e Histórico; "Ping dos jogos", só Jogos e servidores.</summary>
+    private readonly string[] _only = Array.Empty<string>();
+
+    public InternetTestPage(params string[] only) : this() { _only = only; if (only.Length > 0) _tab = only[0]; }
+
     public InternetTestPage() : base("Internet", "")
     {
         HideHeader();
@@ -113,13 +118,14 @@ public sealed partial class InternetTestPage : ToolPageBase
         _tabs.Clear();
         foreach (var (key, text) in new[] { ("speed", "Velocidade"), ("games", "Jogos e servidores"), ("dns", "DNS"), ("route", "Roteador e rota"), ("lan", "Rede local"), ("diag", "Diagnóstico"), ("history", "Histórico") })
         {
+            if (_only is { Length: > 0 } && !_only.Contains(key)) continue;
             var tab = new ToggleButton { Style = (Style)FindResource("ChipToggle"), Content = text, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(14, 6, 14, 6), IsChecked = key == _tab };
             string k = key;
             tab.Click += (_, _) => SelectTab(k);
             _tabs[key] = tab;
             tabs.Children.Add(tab);
         }
-        Body.Children.Add(tabs);
+        if (_only is not { Length: 1 }) Body.Children.Add(tabs);
         Body.Children.Add(Free(_tabHost));
         SelectTab(_tab);
     }

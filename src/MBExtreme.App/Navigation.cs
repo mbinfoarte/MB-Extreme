@@ -135,8 +135,11 @@ internal static class NavigationMap
             new("gamelibrary", "Biblioteca de Jogos", "\uE7FC"),
             new("netcenter", "Central de Rede", "\uE968"),
             new("hub-control", "Controle", "\uE7FC"),
+            new("hub-disks", "Discos", "\uEDA2"),
+            new("hub-drivers", "Drivers e BIOS", "\uE896"),
             new("shorts", "Editor de Vídeos", "\uE8B2"),
             new("record", "Gravação e Lives", "\uE714"),
+            new("hub-memoria", "Memória", "\uE950"),
             new("hub-meupc", "Meu PC", "\uE7F8"),
             new("hub-otimizar", "Otimizar", "\uE945"),
             new("hub-perif", "Periféricos", "\uE765"),
@@ -184,12 +187,22 @@ internal static class NavigationMap
         ["hub-personal"] = new[] { ("Papel de parede", "wallpaper"), ("Iluminação RGB", "rgb"), ("Coolers, fans e controladora", "fans") },
         ["hub-otimizar"] = new[]
         {
-            ("Processos e inicialização", "hub-startup"), ("Limpeza", "hub-clean"), ("Otimizações", "tweaks-all"), ("Discos", "hub-disks"),
-            ("Drivers", "drivers"), ("BIOS", "bios-tune"), ("Rede", "speedtest"), ("Reparo do Windows", "repair"),
+            // Discos, Drivers e BIOS, Memória e Rede viraram módulos próprios no menu (a Rede é a Central de Rede)
+            ("Processos e inicialização", "hub-startup"), ("Limpeza", "hub-clean"), ("Otimizações", "tweaks-all"), ("Reparo do Windows", "repair"),
         },
         ["hub-startup"] = new[] { ("Otimizar", "proc-profiles"), ("Programas da inicialização", "startup"), ("Processos abertos", "processes"), ("Serviços", "services") },
-        ["hub-clean"] = new[] { ("Limpeza", "cleanup"), ("Memória", "memory"), ("Registro", "registry"), ("Arquivos duplicados", "duplicates") },
-        ["hub-disks"] = new[] { ("Saúde, desfragmentar e TRIM", "storage"), ("Mapa do disco", "diskmap") },
+        ["hub-clean"] = new[] { ("Limpeza", "cleanup"), ("Registro", "registry"), ("Arquivos duplicados", "duplicates") },
+        // Discos: visão geral primeiro e o resto em ordem alfabética
+        ["hub-disks"] = new[]
+        {
+            ("Visão geral", "disks"), ("Ajustes de armazenamento", "tweaks-storage"), ("Arquivos grandes", "largefiles"), ("Mapa do disco", "diskmap"),
+            ("Partições", "diskmgr"), ("Saúde, desfragmentar e TRIM", "storage"),
+        },
+        ["hub-drivers"] = new[]
+        {
+            ("Atualizar drivers", "drivers"), ("BIOS e atualizações", "bios"), ("Otimização da BIOS", "bios-tune"), ("Receita de BIOS", "recipe"), ("Remover drivers", "driver-removal"),
+        },
+        ["hub-memoria"] = new[] { ("Raio-X da memória", "memory"), ("Pentes e uso", "ram-detail") },
         ["hub-seguranca"] = new[] { ("Proteção do Windows", "security"), ("Pontos de restauração", "restorepoints"), ("Central Desfazer", "undo") },
         ["hub-format"] = new[] { ("Pós-Formatação", "postinstall"), ("Criar ISO", "iso-create"), ("Reinstalar sem pendrive", "reinstall"), ("Backup para formatar", "formatbackup") },
         ["hub-sobre"] = new[] { ("Sobre", "about"), ("Sugestões", "suggest") },
@@ -215,10 +228,22 @@ internal static class NavigationMap
         ["proc-profiles"] = ("\uE945", "perfis de um clique"), ["startup"] = ("\uE7E8", "o que liga com o PC"), ["processes"] = ("\uE9D9", "o que está aberto"), ["services"] = ("\uE713", "serviços do Windows"),
         ["cleanup"] = ("\uE74D", "lixo e temporários"), ["memory"] = ("\uE950", "RAM livre"), ["registry"] = ("\uE713", "chaves quebradas"), ["duplicates"] = ("\uE8B7", "arquivos repetidos"),
         ["storage"] = ("\uEDA2", "saúde, desfragmentar e TRIM"), ["diskmap"] = ("\uE8B7", "o que ocupa espaço"),
+        ["disks"] = ("\uEDA2", "discos, espaço e velocidade"), ["tweaks-storage"] = ("\uE713", "TRIM, hibernação e 8.3"), ["largefiles"] = ("\uE8B7", "o que ocupa espaço"),
+        ["diskmgr"] = ("\uEDA2", "criar, formatar e letras"), ["bios"] = ("\uE896", "versão e atualização"), ["recipe"] = ("\uE713", "passo a passo da placa"),
+        ["driver-removal"] = ("\uE74D", "limpar driver antigo"), ["ram-detail"] = ("\uE950", "pentes e uso ao vivo"),
         ["security"] = ("\uE72E", "antivírus e firewall"), ["restorepoints"] = ("\uE81C", "voltar o Windows"), ["undo"] = ("\uE7A7", "desfazer ajustes"),
         ["postinstall"] = ("\uE896", "Windows novo pronto"), ["iso-create"] = ("\uE958", "a sua ISO do Windows"), ["reinstall"] = ("\uE777", "instalar pelo próprio disco"), ["formatbackup"] = ("\uE74E", "drivers e Wi-Fi"),
         ["support"] = ("\uE716", "acesso remoto"), ["service"] = ("\uE90F", "empresas e visitas"), ["admin-site"] = ("\uE774", "painel do site"), ["admin-live"] = ("\uE8F2", "quem pediu ajuda"), ["suggest"] = ("\uE946", "ideias e pedidos"), ["about"] = ("\uE946", "versão e créditos"),
         ["bottleneck"] = ("\uE9D9", "o que segura o FPS"), ["gamefps"] = ("\uE7FC", "FPS e 1% low"),
+    };
+
+    /// <summary>
+    /// Ferramentas de rede que abrem dentro da Central de Rede (chave da ferramenta → seção do menu lateral dela). Abrir qualquer uma
+    /// (busca, Painel, atalho) abre a Central de Rede na seção certa.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> NetCenterSections { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["dns"] = "dns", ["net-tweaks"] = "net-tweaks", ["netanalyzer"] = "netanalyzer", ["speedtest"] = "speedtest", ["wifi"] = "wifi",
     };
 
     /// <summary>Título e ícone do módulo de uma tela de abas: o item do menu lateral ou, se for aba de outra tela, o nome dessa aba.</summary>
@@ -253,6 +278,7 @@ internal static class NavigationMap
     {
         var items = Sidebar.SelectMany(s => s.Items).Select(i => i.Key).ToHashSet();
         if (items.Contains(pageKey)) return pageKey;
+        if (NetCenterSections.ContainsKey(pageKey)) return "netcenter";
         return HubPath(pageKey).FirstOrDefault(items.Contains);
     }
 

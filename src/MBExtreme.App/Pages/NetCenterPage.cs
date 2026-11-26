@@ -21,12 +21,17 @@ public sealed partial class NetCenterPage : ToolPageBase
 
     private static readonly (string Key, string Title, string Glyph)[] Sections =
     {
+        // Visão geral primeiro; o resto em ordem alfabética. Tudo de rede do programa fica aqui dentro.
         ("overview", "Visão geral", ""),
+        ("netanalyzer", "Analisador (ping e MTR)", "\uE9D9"),
         ("dns", "DNS", ""),
+        ("net-tweaks", "Otimizações de rede", "\uE713"),
+        ("games", "Ping dos jogos", "\uE7FC"),
         ("lan", "Rede local e conflitos", ""),
         ("reports", "Relatórios e histórico", ""),
         ("repair", "Reparação", ""),
         ("route", "Rotas (traceroute)", ""),
+        ("speedtest", "Teste de internet", "\uEC4A"),
         ("wifi", "Wi-Fi", ""),
     };
 
@@ -44,16 +49,34 @@ public sealed partial class NetCenterPage : ToolPageBase
     public NetCenterPage() : base("Central de Rede", "Diagnóstico, rotas, Wi-Fi, DNS, rede local e reparação, numa tela só.")
     {
         HideHeader();
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        actions.Children.Add(Btn("Executar diagnóstico completo", async () => await RunFullAsync(), true));
+        // topo como na prévia: logo MB, "Central de Rede" com "Rede" em amarelo, linha AO VIVO e os quatro botões
+        var head = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+        var brand = new StackPanel { Orientation = Orientation.Horizontal };
+        brand.Children.Add(new Border
+        {
+            Width = 44, Height = 44, CornerRadius = new CornerRadius(10), Background = new SolidColorBrush(Yellow), Margin = new Thickness(0, 0, 12, 0),
+            Child = new TextBlock { Text = "MB", FontSize = 17, FontWeight = FontWeights.Black, Foreground = Brushes.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        });
+        var title = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var t1 = new TextBlock { FontSize = 25, FontWeight = FontWeights.Bold };
+        t1.Inlines.Add(new System.Windows.Documents.Run("Central de "));
+        t1.Inlines.Add(new System.Windows.Documents.Run("Rede") { Foreground = new SolidColorBrush(Yellow) });
+        title.Children.Add(t1);
+        _liveLine.FontFamily = new FontFamily("Consolas");
+        _liveLine.FontSize = 11.5;
+        _liveLine.FontWeight = FontWeights.Bold;
+        title.Children.Add(_liveLine);
+        brand.Children.Add(title);
+        head.Children.Add(brand);
+        var actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+        actions.Children.Add(Btn("Diagnosticar agora", async () => await RunFullAsync(), true));
+        _monitorBtn = Btn("Monitorar 1 hora", () => { ToggleMonitor(); return Task.CompletedTask; });
+        actions.Children.Add(_monitorBtn);
+        actions.Children.Add(Btn("Corrigir com segurança", () => { Show("repair"); return Task.CompletedTask; }));
+        actions.Children.Add(Btn("Relatório", () => { Show("reports"); return Task.CompletedTask; }));
+        _last.Margin = new Thickness(4, 0, 0, 0);
         actions.Children.Add(_last);
-        DockPanel.SetDock(actions, Dock.Right);
         head.Children.Add(actions);
-        var title = new StackPanel();
-        title.Children.Add(new TextBlock { Text = "Central de Rede", FontSize = 24, FontWeight = FontWeights.Bold });
-        title.Children.Add(Muted("Diagnóstico · Análise · Correção de rede. Só lê a sua rede; correção só quando você confirmar.", 12.5));
-        head.Children.Add(title);
         Body.Children.Add(head);
 
         var grid = new Grid();
@@ -67,10 +90,11 @@ public sealed partial class NetCenterPage : ToolPageBase
         BuildNav();
         Loaded += (_, _) =>
         {
+            if (_diag is null) { _diag = NetHistory.List(1).Select(x => x.Report).FirstOrDefault(); UpdateLast(); }
             Show(_section);
-            if (_diag is null) { _diag = NetHistory.List(1).Select(x => x.Report).FirstOrDefault(); UpdateLast(); Show(_section); }
+            StartLive();
         };
-        Unloaded += (_, _) => _cts?.Cancel();
+        Unloaded += (_, _) => { _cts?.Cancel(); if (!Monitoring) StopLive(); };
     }
 
     // ---------------------------------------------------------------- navegação
@@ -113,6 +137,31 @@ public sealed partial class NetCenterPage : ToolPageBase
         _nav.Children.Add(foot);
     }
 
+    /// <summary>Abre uma seção (usado quando outra tela pede uma ferramenta de rede: DNS, Teste de internet, Wi-Fi...).</summary>
+    internal void Open(string key)
+    {
+        if (Sections.Any(x => x.Key == key)) Show(key);
+    }
+
+    /// <summary>Ferramentas que já existiam no programa e agora abrem aqui dentro (criadas uma vez só).</summary>
+    private readonly Dictionary<string, UIElement> _embedded = new();
+
+    private UIElement Embedded(string key)
+    {
+        if (!_embedded.TryGetValue(key, out var page))
+        {
+            page = key switch
+            {
+                "speedtest" => new InternetTestPage("speed", "history"),
+                "games" => new InternetTestPage("games"),
+                _ => MainWindow.CreateInner(key, NavigationMap.TileOf(key)),
+            };
+            _embedded[key] = page;
+        }
+        if (page is FrameworkElement { Parent: ContentControl old }) old.Content = null;
+        return new ContentControl { Content = page };
+    }
+
     private void Show(string key)
     {
         _section = key;
@@ -126,12 +175,13 @@ public sealed partial class NetCenterPage : ToolPageBase
         page.Children.Add(NetCenterAccess.SectionPlan(key) is { } need && !Has(need) ? LockedSection(Sections.First(x => x.Key == key).Title, need) : key switch
         {
             "dns" => DnsSection(),
+            "games" or "net-tweaks" or "netanalyzer" or "speedtest" => Embedded(key),
             "lan" => LanSection(),
             "reports" => ReportsSection(),
             "repair" => RepairSection(),
             "route" => RouteSection(),
             "wifi" => WifiSection(),
-            _ => OverviewSection(),
+            _ => LiveSection(),
         });
         _content.Content = page;
     }
@@ -191,7 +241,9 @@ public sealed partial class NetCenterPage : ToolPageBase
         _diag = await Task.Run(() => new NetDiagRunner(new SystemNetProbe()).RunAsync(new NetDiagOptions(), progress, ct), ct);
         if (_diag.Evidence.Primary is { IsWifi: true }) await LoadWifiAsync();
         NetHistory.Save(_diag);
+        LogDiag(_diag);
         UpdateLast();
+        UpdateLiveLine();
     });
 
     // ---------------------------------------------------------------- peças visuais
@@ -324,113 +376,6 @@ public sealed partial class NetCenterPage : ToolPageBase
         {
             SetStatus("Não foi possível salvar o relatório: " + ex.Message, "BadBrush");
         }
-    }
-
-    // ---------------------------------------------------------------- Visão geral
-
-    private UIElement OverviewSection()
-    {
-        var page = new StackPanel();
-        page.Children.Add(new TextBlock { Text = "Visão geral da rede", FontSize = 19, FontWeight = FontWeights.Bold });
-        page.Children.Add(Muted("Status da conexão, informações da placa e diagnóstico resumido.", 12.5));
-        page.Children.Add(new Border { Height = 10 });
-        if (_diag is not { } r)
-        {
-            page.Children.Add(Panel("Ainda sem diagnóstico", new StackPanel
-            {
-                Children = { Muted("Clique em \"Executar diagnóstico completo\". Leva uns 30 a 60 segundos e não muda nada na rede.", 12.5), Wrap(Btn("Executar agora", async () => await RunFullAsync(), true)) },
-            }, ""));
-            return page;
-        }
-        var o = NetOverviewRules.From(r, _wifiA);
-        var e = r.Evidence;
-        Color main = SevColor(o.Level);
-
-        // faixa de status
-        var banner = new Grid();
-        banner.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        banner.ColumnDefinitions.Add(new ColumnDefinition());
-        banner.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        banner.Children.Add(new Border
-        {
-            Width = 54, Height = 54, CornerRadius = new CornerRadius(27), Background = new SolidColorBrush(main), Margin = new Thickness(0, 0, 14, 0),
-            Child = new TextBlock { Text = o.Level == FindingSeverity.Info ? "" : "", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 24, Foreground = Brushes.Black,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-        });
-        var bt = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        bt.Children.Add(new TextBlock { Text = o.Headline, FontSize = 22, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(main) });
-        bt.Children.Add(new TextBlock { Text = o.Sub, FontSize = 13, TextWrapping = TextWrapping.Wrap });
-        Grid.SetColumn(bt, 1); banner.Children.Add(bt);
-        var q = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
-        q.Children.Add(Muted("Qualidade da conexão", 12));
-        q.Children.Add(new TextBlock { Text = $"{o.QualityText} ({o.Quality}%)", FontSize = 20, FontWeight = FontWeights.Bold });
-        Grid.SetColumn(q, 2); banner.Children.Add(q);
-        page.Children.Add(new Border
-        {
-            Child = banner, Padding = new Thickness(18, 14, 18, 14), Margin = new Thickness(0, 0, 0, 12), CornerRadius = new CornerRadius(14),
-            Background = new SolidColorBrush(Color.FromArgb(0x22, main.R, main.G, main.B)), BorderBrush = new SolidColorBrush(main), BorderThickness = new Thickness(1.5),
-        });
-
-        // placa, IP, roteador e DNS
-        var p = e.Primary;
-        page.Children.Add(Wrap(
-            Tile("Placa de rede", p?.Kind ?? "—", p is null ? "sem placa ativa" : (p.Up ? "Conectada" : "Desligada") + (p.SpeedBps > 0 ? $" · {p.SpeedBps / 1_000_000} Mbps" : ""), p is { Up: true } ? Green : Red, ""),
-            Tile("Endereço IP", p?.Ipv4.FirstOrDefault() ?? "—", p is null ? "" : "IPv4 · " + (p.Dhcp ? "DHCP" : "IP fixo"), Brush2(), ""),
-            Tile("Roteador (gateway)", e.GatewayAddress ?? "—", e.Gateway is { } g ? (g.AllLost ? "sem resposta" : $"{g.Median:0.#} ms") : "não testado", e.Gateway is { AllLost: false } ? Green : Orange, ""),
-            Tile("Servidores DNS", string.Join(" · ", p?.Dns.Take(2) ?? Array.Empty<string>()), e.DnsSystem.All(d => d.Ok) ? "respondendo" : "com falha", e.DnsSystem.All(d => d.Ok) ? Green : Red, "")));
-
-        // latência, perda, variação e velocidade
-        var ext = e.External.Values.Where(v => !v.AllLost).ToList();
-        page.Children.Add(Wrap(
-            Tile("Latência (ping)", ext.Count > 0 ? $"{ext.Min(v => v.Median):0} ms" : "—", ext.Count > 0 ? $"mediana de {ext.Sum(v => v.Sent)} testes" : "sem resposta", ext.Count > 0 && ext.Min(v => v.Median) < 60 ? Green : Orange, ""),
-            Tile("Perda de pacotes", ext.Count > 0 ? $"{ext.Max(v => v.LossPct):0.#} %" : "—", ext.Count > 0 ? $"({ext.Sum(v => v.Sent - v.Received)} de {ext.Sum(v => v.Sent)})" : "", ext.Count > 0 && ext.Max(v => v.LossPct) < 1 ? Green : Orange, ""),
-            Tile("Variação (jitter)", ext.Count > 0 ? $"{ext.Max(v => v.Jitter ?? 0):0.#} ms" : "—", "variação da latência", ext.Count > 0 && ext.Max(v => v.Jitter ?? 0) < 15 ? Green : Orange, ""),
-            Tile("Velocidade", "Testar", "download e upload no Teste de internet", Blue, "")));
-
-        // resumo + conclusão
-        var rows = new StackPanel();
-        foreach (var row in o.Rows)
-        {
-            var line = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
-            Color c = row.State is "Não aplicável" or "Não testado" ? Color.FromRgb(0x8E, 0x95, 0xA1) : SevColor(row.Level);
-            var icon = new TextBlock { Text = row.Level == FindingSeverity.Info ? "" : "", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 13, Width = 24, Foreground = new SolidColorBrush(c), VerticalAlignment = VerticalAlignment.Center };
-            DockPanel.SetDock(icon, Dock.Left);
-            line.Children.Add(icon);
-            var area = new TextBlock { Text = row.Area + ":", Width = 170, FontSize = 13, FontWeight = FontWeights.SemiBold };
-            DockPanel.SetDock(area, Dock.Left);
-            line.Children.Add(area);
-            var txt = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap };
-            txt.Inlines.Add(new System.Windows.Documents.Run(row.State) { Foreground = new SolidColorBrush(c), FontWeight = FontWeights.Bold });
-            txt.Inlines.Add(new System.Windows.Documents.Run(" – " + row.Text));
-            line.Children.Add(txt);
-            rows.Children.Add(line);
-        }
-        var concl = new StackPanel();
-        concl.Children.Add(new Border
-        {
-            Padding = new Thickness(12, 8, 12, 8), CornerRadius = new CornerRadius(10), BorderBrush = new SolidColorBrush(main), BorderThickness = new Thickness(1),
-            Background = new SolidColorBrush(Color.FromArgb(0x18, main.R, main.G, main.B)),
-            Child = new TextBlock { Text = o.Level == FindingSeverity.Info ? "Nenhum problema crítico detectado." : r.Findings.OrderByDescending(f => f.Severity).First().Title, FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(main), TextWrapping = TextWrapping.Wrap },
-        });
-        concl.Children.Add(new TextBlock { Text = "Recomendações", FontSize = 13.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 4) });
-        foreach (string rec in o.Recommendations) concl.Children.Add(new TextBlock { Text = "• " + rec, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 1, 0, 1) });
-        var two = new Grid();
-        two.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
-        two.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
-        two.ColumnDefinitions.Add(new ColumnDefinition());
-        two.Children.Add(Panel("Resumo do diagnóstico", rows, ""));
-        var cp = Panel("Conclusão", concl, "");
-        Grid.SetColumn(cp, 2); two.Children.Add(cp);
-        page.Children.Add(two);
-
-        // ações rápidas
-        page.Children.Add(Panel("Ações rápidas", Wrap(
-            Btn("Teste de velocidade", () => { MainWindow.Current?.Go("speedtest"); return Task.CompletedTask; }),
-            Btn("Traçar rota", () => { Show("route"); return Task.CompletedTask; }),
-            Btn("Ver dispositivos da rede", () => { Show("lan"); return Task.CompletedTask; }),
-            Btn("Limpar cache DNS", async () => { if (Has(NetCenterAccess.RepairPlan(RepairKind.FlushDns))) await RepairAsync(RepairKind.FlushDns); else Show("repair"); }),
-            Btn("Reparar rede", () => { Show("repair"); return Task.CompletedTask; })), ""));
-        return page;
     }
 
     private static Color Brush2() => Color.FromRgb(0x8E, 0x95, 0xA1);

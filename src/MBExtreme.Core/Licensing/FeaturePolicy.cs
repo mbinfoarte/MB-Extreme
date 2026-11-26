@@ -30,7 +30,7 @@ public static class FeaturePolicy
         ["bios"] = Essencial, ["bios-tune"] = Essencial, ["boot"] = Essencial, ["cleanextras"] = Essencial, ["debloat"] = Essencial,
         ["devices"] = Essencial, ["diskmap"] = Essencial, ["diskmgr"] = Essencial, ["dns"] = Essencial, ["driver-removal"] = Essencial,
         ["drivers"] = Essencial, ["duplicates"] = Essencial, ["fakecheck"] = Essencial, ["ghosts"] = Essencial, ["hardware"] = Essencial,
-        ["largefiles"] = Essencial, ["net-tweaks"] = Essencial, ["netanalyzer"] = Essencial, ["periph"] = Essencial, ["periphtest"] = Essencial,
+        ["largefiles"] = Essencial, ["net-tweaks"] = Essencial, ["netanalyzer"] = Essencial, ["netcenter"] = Essencial, ["periph"] = Essencial, ["periphtest"] = Essencial,
         ["privacy"] = Essencial, ["proc-profiles"] = Essencial, ["processes"] = Essencial, ["recipe"] = Essencial, ["registry"] = Essencial,
         ["removable"] = Essencial, ["repair"] = Essencial, ["services"] = Essencial, ["shredder"] = Essencial, ["speedtest"] = Essencial,
         ["storage"] = Essencial, ["tweaks-all"] = Essencial, ["tweaks-perf"] = Essencial, ["tweaks-storage"] = Essencial,

@@ -10,7 +10,7 @@ internal static class Tutorials
     {
         ["home"] = "painel", ["hub-otimizar"] = "otimizar", ["hub-control"] = "controle", ["record"] = "gravacao", ["shorts"] = "gravacao",
         ["bench"] = "jogos", ["gamelibrary"] = "jogos", ["hub-fps"] = "jogos", ["hub-meupc"] = "meu-pc", ["programs"] = "programas",
-        ["hub-format"] = "formatacao", ["hub-seguranca"] = "seguranca", ["support"] = "suporte", ["remote"] = "suporte", ["service"] = "suporte", ["admin"] = "suporte", ["admin-live"] = "suporte", ["admin-site"] = "suporte",
+        ["hub-format"] = "formatacao", ["hub-seguranca"] = "seguranca", ["support"] = "suporte", ["remote"] = "suporte", ["service"] = "suporte", ["admin"] = "suporte", ["admin-live"] = "suporte", ["admin-site"] = "suporte", ["netcenter"] = "otimizar",
         ["hub-perif"] = "perifericos", ["hub-personal"] = "personalizacao", ["license"] = "conta",
     };
 

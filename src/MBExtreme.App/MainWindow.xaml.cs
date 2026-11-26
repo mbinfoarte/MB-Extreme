@@ -681,6 +681,7 @@ public partial class MainWindow : Window
         "pad-analyzer" => new PadAnalyzerPage(),
         "service" => new ServicePage(),
         "admin-live" => new AdminLivePage(),
+        "netcenter" => new NetCenterPage(),
         "admin-site" => new AdminSitePage(),
         "usb-ports" => new UsbPortsPage(),
         "pad-competitive" => new PadCompetitivePage(),

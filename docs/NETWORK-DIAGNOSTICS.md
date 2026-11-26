@@ -42,19 +42,28 @@ App (WPF)  →  NetDiagRunner (casos de uso)  →  INetProbe (contrato)  →  Sy
 
 ## Situação dos recursos
 
+Tudo fica na tela **Central de Rede** (menu lateral do MB Extreme), com menu próprio: Visão geral, DNS, Rede local e conflitos,
+Relatórios e histórico, Reparação, Rotas e Wi-Fi.
+
 | Recurso | Situação |
 |---|---|
 | RF-01 placas, IP, gateway, DNS, DHCP, MTU, velocidade | **Implementado** (leitura) |
+| RF-02 inventário da rede local (IP, MAC, fabricante, nome, ping) | **Implementado** (2 varreduras, só rede privada até /22) |
+| RF-02 conflito de IP (mesmo IP com MACs diferentes; evento 4199 do Windows) | **Implementado** (`IpConflictRules`) |
+| RF-02 servidor DHCP estranho | **Proposto** (precisa capturar pacotes DHCP) |
 | RF-04 pilha → roteador → internet → DNS → página, mediana/p95/variação/perda | **Implementado** |
 | RF-04 portal cativo (página de teste redirecionada) | **Implementado** |
-| RF-05 traceroute básico (ping com TTL, 3 amostras por salto) | **Implementado** |
-| RF-06 DNS do PC × DNS alternativo, tempo e erros | **Implementado** (benchmark completo já existe na aba DNS) |
-| RF-14 regras DR-001, DR-002, DR-003, DR-005 e mais 6 | **Implementado** |
+| RF-05 rastreio de rotas (MTR: 3 voltas, média, variação e perda por salto, gráficos) | **Implementado** (`RouteProbe` + `RouteLabels`) |
+| RF-06 DNS: servidor da placa × Cloudflare/Google/Quad9, cache do PC, desvio de nome inexistente | **Implementado** (`DnsSuite`) |
+| RF-07 Wi-Fi: rede conectada, redes próximas, canais 2,4/5/6 GHz, melhor canal, nota | **Implementado** (WLAN API, `WifiRules`) |
+| RF-07 mapa de calor por planta | **Dependente de hardware/medição no local** (não é inventado) |
+| RF-07 ruído/interferência de Bluetooth e micro-ondas | **Proposto** (a placa não informa ruído pela API do Windows) |
+| RF-08 iPerf3 | **Dependente de licença** |
+| RF-13 reparação: limpar DNS, renovar IP, Winsock, TCP/IP, com confirmação, foto de antes, diário e novo teste | **Implementado** (`NetCenterProbe.Repair`) |
+| RF-14 regras (DR-001… e Wi-Fi/DNS/conflitos) | **Implementado** |
+| RF-15 histórico de diagnósticos e gráfico de qualidade | **Implementado** (`NetHistory`); monitoramento contínuo **Proposto** |
 | RF-16 relatório JSON (esquema 1) e HTML com dados escondidos | **Implementado**; PDF **Proposto** |
-| RF-02 inventário da rede local | **Parcial** (aba Rede local existente; a política `NetScope` vale para as próximas varreduras) |
-| RF-13 correção assistida (A/B) e RF-15 monitoramento | **Proposto** (Fase 2) |
-| RF-07 Wi-Fi detalhado, RF-08 iPerf3 | **Proposto** (Fase 3); iPerf3 **dependente de licença** |
-| RF-03, RF-09, RF-10, RF-11 | **Proposto** (Fase 4); captura **dependente de licença/hardware** |
+| RF-03, RF-09, RF-10, RF-11 (captura, SNMP) | **Proposto**; captura **dependente de licença/hardware** |
 
 ## Como testar
 

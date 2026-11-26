@@ -61,6 +61,9 @@ internal sealed class LicenseManager
     /// <summary>Recalcula os dias do teste (o relógio anda).</summary>
     public void RefreshTrial() => _trial = LocalTrial();
 
+    /// <summary>Plano que vale agora para os recursos dentro das telas (Técnico no beta aberto e no teste grátis; null = Grátis).</summary>
+    public string? EffectivePlan => FeaturePolicy.EffectivePlan(Status, Config.Enforce, Trial.Active);
+
     /// <summary>Pro de verdade (assinatura) ou durante o teste grátis.</summary>
     public bool HasProFeatures => !Config.Enforce || LicenseExpiry.IsPro(Status) || Trial.Active;
 

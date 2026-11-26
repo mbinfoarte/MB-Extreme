@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using MBExtreme.Core.Licensing;
 using MBExtreme.Core.NetDiag;
 using MBExtreme.Core.Network;
 
@@ -84,6 +85,9 @@ public sealed partial class NetCenterPage : ToolPageBase
             row.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 14, Width = 24, VerticalAlignment = VerticalAlignment.Center,
                 Foreground = on ? Brushes.Black : new SolidColorBrush(Yellow) });
             row.Children.Add(new TextBlock { Text = text, FontSize = 13.5, FontWeight = on ? FontWeights.Bold : FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            if (!Has(NetCenterAccess.SectionPlan(key)))
+                row.Children.Add(new TextBlock { Text = "\uE72E", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 11, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = on ? Brushes.Black : new SolidColorBrush(Yellow), ToolTip = "Plano " + FeaturePolicy.Title(NetCenterAccess.SectionPlan(key)) });
             var b = new Button
             {
                 Content = row, Style = (Style)FindResource(on ? "PrimaryButton" : "GhostButton"), HorizontalContentAlignment = HorizontalAlignment.Left,
@@ -119,7 +123,7 @@ public sealed partial class NetCenterPage : ToolPageBase
             page.Children.Add(new TextBlock { Text = _busyText, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Yellow), Margin = new Thickness(0, 0, 0, 4) });
             page.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 5, Margin = new Thickness(0, 0, 0, 12), Foreground = new SolidColorBrush(Yellow), Background = Brush("Surface2Brush"), BorderThickness = new Thickness(0) });
         }
-        page.Children.Add(key switch
+        page.Children.Add(NetCenterAccess.SectionPlan(key) is { } need && !Has(need) ? LockedSection(Sections.First(x => x.Key == key).Title, need) : key switch
         {
             "dns" => DnsSection(),
             "lan" => LanSection(),
@@ -130,6 +134,34 @@ public sealed partial class NetCenterPage : ToolPageBase
             _ => OverviewSection(),
         });
         _content.Content = page;
+    }
+
+    // ---------------------------------------------------------------- planos
+
+    /// <summary>O plano de agora libera o recurso? (no beta aberto e no teste grátis, tudo.)</summary>
+    private static bool Has(string? need) => NetCenterAccess.Allows(AppServices.License.EffectivePlan, need);
+
+    private static string PlanText(string need) => need == FeaturePolicy.Tecnico ? "do plano Técnico" : "dos planos pagos (Essencial, Gamer, Creator e Técnico)";
+
+    /// <summary>Aviso de recurso de outro plano, com o botão para ver os planos.</summary>
+    private Border Locked(string title, string need, string what) => Panel(title, new StackPanel
+    {
+        Children =
+        {
+            new TextBlock { Text = "Recurso " + PlanText(need) + ".", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Yellow), TextWrapping = TextWrapping.Wrap },
+            Muted(what, 12.5),
+            Wrap(Btn("Ver planos", () => { MainWindow.Current?.Go("license"); return Task.CompletedTask; }, true)),
+        },
+    }, "\uE72E");
+
+    private UIElement LockedSection(string title, string need)
+    {
+        var page = new StackPanel();
+        page.Children.Add(new TextBlock { Text = title, FontSize = 19, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 10) });
+        page.Children.Add(Locked("Liberado em outro plano", need, need == FeaturePolicy.Tecnico
+            ? "Rotas, rede local, conflitos de IP, Wi-Fi completo, Winsock, TCP/IP e relatórios para o cliente ficam no Técnico, para até 2 PCs."
+            : "No plano grátis você tem a Visão geral e o Teste de internet. Assine para trocar o DNS, analisar o Wi-Fi e reparar a rede."));
+        return page;
     }
 
     private void UpdateLast() => _last.Text = _diag is null ? "Ainda sem diagnóstico" : $"Última análise: {_diag.FinishedUtc.ToLocalTime():dd/MM/yyyy 'às' HH:mm}";
@@ -396,7 +428,7 @@ public sealed partial class NetCenterPage : ToolPageBase
             Btn("Teste de velocidade", () => { MainWindow.Current?.Go("speedtest"); return Task.CompletedTask; }),
             Btn("Traçar rota", () => { Show("route"); return Task.CompletedTask; }),
             Btn("Ver dispositivos da rede", () => { Show("lan"); return Task.CompletedTask; }),
-            Btn("Limpar cache DNS", async () => await RepairAsync(RepairKind.FlushDns)),
+            Btn("Limpar cache DNS", async () => { if (Has(NetCenterAccess.RepairPlan(RepairKind.FlushDns))) await RepairAsync(RepairKind.FlushDns); else Show("repair"); }),
             Btn("Reparar rede", () => { Show("repair"); return Task.CompletedTask; })), ""));
         return page;
     }

@@ -22,7 +22,8 @@ public static class FeaturePolicy
     /// <summary>
     /// Plano mínimo de cada página paga. Tudo que não está aqui é do plano Grátis (com conta): Painel com as correções básicas,
     /// limpeza simples, memória, programas da inicialização, programas (instalar, atualizar, desinstalar), segurança, pontos de
-    /// restauração e Central Desfazer.
+    /// restauração, Central Desfazer, Teste de internet e a Central de Rede só com a Visão geral (o resto dela segue
+    /// <see cref="NetCenterAccess"/>).
     /// </summary>
     public static IReadOnlyDictionary<string, string> PagePlans { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -30,9 +31,9 @@ public static class FeaturePolicy
         ["bios"] = Essencial, ["bios-tune"] = Essencial, ["boot"] = Essencial, ["cleanextras"] = Essencial, ["debloat"] = Essencial,
         ["devices"] = Essencial, ["diskmap"] = Essencial, ["diskmgr"] = Essencial, ["dns"] = Essencial, ["driver-removal"] = Essencial,
         ["drivers"] = Essencial, ["duplicates"] = Essencial, ["fakecheck"] = Essencial, ["ghosts"] = Essencial, ["hardware"] = Essencial,
-        ["largefiles"] = Essencial, ["net-tweaks"] = Essencial, ["netanalyzer"] = Essencial, ["netcenter"] = Essencial, ["periph"] = Essencial, ["periphtest"] = Essencial,
+        ["largefiles"] = Essencial, ["net-tweaks"] = Essencial, ["periph"] = Essencial, ["periphtest"] = Essencial,
         ["privacy"] = Essencial, ["proc-profiles"] = Essencial, ["processes"] = Essencial, ["recipe"] = Essencial, ["registry"] = Essencial,
-        ["removable"] = Essencial, ["repair"] = Essencial, ["services"] = Essencial, ["shredder"] = Essencial, ["speedtest"] = Essencial,
+        ["removable"] = Essencial, ["repair"] = Essencial, ["services"] = Essencial, ["shredder"] = Essencial,
         ["storage"] = Essencial, ["tweaks-all"] = Essencial, ["tweaks-perf"] = Essencial, ["tweaks-storage"] = Essencial,
         ["uninstall-leftovers"] = Essencial, ["visual"] = Essencial, ["weekly"] = Essencial, ["wifi"] = Essencial,
         // Gamer: jogos, benchmark, controle, personalização e monitor
@@ -45,7 +46,7 @@ public static class FeaturePolicy
         // Creator: gravação, lives e editor de vídeos
         ["record"] = Creator, ["shorts"] = Creator, ["studio"] = Creator,
         // Técnico: tudo + ferramentas de assistência
-        ["formatbackup"] = Tecnico, ["iso-create"] = Tecnico, ["postinstall"] = Tecnico, ["reinstall"] = Tecnico, ["remote-tech"] = Tecnico, ["service"] = Tecnico,
+        ["formatbackup"] = Tecnico, ["iso-create"] = Tecnico, ["netanalyzer"] = Tecnico, ["postinstall"] = Tecnico, ["reinstall"] = Tecnico, ["remote-tech"] = Tecnico, ["service"] = Tecnico,
     };
 
     /// <summary>
@@ -66,6 +67,13 @@ public static class FeaturePolicy
     /// <summary>Plano mínimo da página, ou null se for gratuita.</summary>
     public static string? RequiredPlan(string pageKey) => PagePlans.TryGetValue(pageKey, out var plan) ? plan : null;
 
+    /// <summary>
+    /// Plano que vale agora para os recursos dentro das telas: sem aplicação de licença ou no teste grátis, o maior (Técnico);
+    /// com licença válida, o plano dela; senão, Grátis (null).
+    /// </summary>
+    public static string? EffectivePlan(LicenseStatus status, bool enforce, bool trialActive = false) =>
+        !enforce || trialActive ? Tecnico : status.IsValid && status.Payload is not null ? status.Plan : null;
+
     /// <summary>O plano dá acesso à página?</summary>
     public static bool PlanAllows(string? plan, string pageKey) => RequiredPlan(pageKey) is not { } need || Rank(plan) >= Rank(need);
 
@@ -81,6 +89,32 @@ public static class FeaturePolicy
         if (!status.IsValid || status.Payload is null) return false;
         return PlanAllows(status.Plan, pageKey) || status.Payload.Features.Contains(pageKey);
     }
+}
+
+/// <summary>
+/// O que cada plano libera dentro da Central de Rede. Grátis: Visão geral (diagnóstico) e Teste de internet. Essencial, Gamer e
+/// Creator: também DNS, Wi-Fi (sinal e canal da sua rede) e a reparação básica (limpar cache DNS e renovar IP). Técnico: tudo
+/// (rotas, rede local e conflitos, Wi-Fi completo com as redes vizinhas, Winsock, TCP/IP, relatórios e histórico).
+/// </summary>
+public static class NetCenterAccess
+{
+    /// <summary>Plano mínimo de cada seção, ou null se for do Grátis.</summary>
+    public static string? SectionPlan(string section) => section switch
+    {
+        "dns" or "repair" or "wifi" => FeaturePolicy.Essencial,
+        "lan" or "reports" or "route" => FeaturePolicy.Tecnico,
+        _ => null,
+    };
+
+    /// <summary>Plano mínimo de cada correção.</summary>
+    public static string RepairPlan(NetDiag.RepairKind kind) =>
+        kind is NetDiag.RepairKind.FlushDns or NetDiag.RepairKind.RenewDhcp ? FeaturePolicy.Essencial : FeaturePolicy.Tecnico;
+
+    /// <summary>Wi-Fi completo (redes vizinhas, gráfico de canais e melhor canal).</summary>
+    public const string WifiFullPlan = FeaturePolicy.Tecnico;
+
+    /// <summary>O plano libera o recurso que pede <paramref name="need"/>?</summary>
+    public static bool Allows(string? plan, string? need) => need is null || FeaturePolicy.Rank(plan) >= FeaturePolicy.Rank(need);
 }
 
 /// <summary>

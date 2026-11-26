@@ -269,6 +269,12 @@ public sealed partial class NetCenterPage
             Tile("Taxa de conexão", scan.RxMbps is { } rx ? $"{rx:0} Mbps" : "—", scan.TxMbps is { } tx ? $"envio {tx:0} Mbps" : "", Blue, ""),
             Tile("Segurança", cur?.Security ?? "—", cur is null ? "" : cur.Security is "Aberta" or "WEP" ? "fraca" : "ok", cur?.Security is "Aberta" or "WEP" ? Red : Green, "")));
 
+        if (!Has(NetCenterAccess.WifiFullPlan))
+        {
+            page.Children.Add(Locked("Wi-Fi completo", NetCenterAccess.WifiFullPlan,
+                $"Lista das {scan.Networks.Count} redes vizinhas, gráfico de canais, melhor canal e interferências. Sua rede, o sinal e o canal já aparecem acima."));
+            return page;
+        }
         page.Children.Add(Panel($"Redes próximas ({scan.Networks.Count} encontradas)", Table(new[] { "SSID", "Banda", "Canal", "Sinal", "Segurança" }, new double[] { 0, 90, 70, 110, 100 },
             scan.Networks.Take(40).Select(n => (new[]
             {
@@ -365,7 +371,9 @@ public sealed partial class NetCenterPage
         {
             var st = new StackPanel();
             var top = new DockPanel();
-            var run = Btn("Executar", async () => await RepairAsync(a.Kind), true);
+            bool can = Has(NetCenterAccess.RepairPlan(a.Kind));
+            var run = can ? Btn("Executar", async () => await RepairAsync(a.Kind), true)
+                : Btn("Plano Técnico", () => { MainWindow.Current?.Go("license"); return Task.CompletedTask; });
             DockPanel.SetDock(run, Dock.Right); top.Children.Add(run);
             var tt = new StackPanel();
             tt.Children.Add(new TextBlock { Text = a.Title, FontSize = 15, FontWeight = FontWeights.SemiBold });
@@ -388,6 +396,7 @@ public sealed partial class NetCenterPage
 
     private async Task RepairAsync(RepairKind kind)
     {
+        if (!Has(NetCenterAccess.RepairPlan(kind))) { Show("repair"); return; }
         var a = NetRepairCatalog.Get(kind);
         if (MessageBox.Show($"{a.Title}?\n\n{a.What}\n\nImpacto {a.Impact.ToLowerInvariant()}: {a.ImpactText}\n\nAntes, o MB guarda uma foto da configuração de rede.",
                 "Reparação de rede", MessageBoxButton.YesNo, a.Impact == "Alto" ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes) return;

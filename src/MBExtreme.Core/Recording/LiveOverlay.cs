@@ -63,11 +63,16 @@ public sealed record LogoPlacement(int Anchor, int WidthPx, int MarginPx, int Op
 
 /// <summary>
 /// Cano da camada do programa para o FFmpeg: manda a última imagem <see cref="Fps"/> vezes por segundo (transparente até a primeira).
+/// Aceita uma conexão nova a cada vez que o FFmpeg abre (o estúdio pode tentar de novo sozinho ao iniciar, com outros ajustes):
+/// com um cano de uma conexão só, a segunda tentativa achava o cano ocupado pela primeira e o FFmpeg parava com
+/// "Error opening input files: Invalid argument".
 /// </summary>
 public sealed class LiveOverlayCanvas : IDisposable
 {
-    private readonly NamedPipeServerStream _pipe;
+    private readonly string _name;
     private readonly CancellationTokenSource _cts = new();
+    private readonly List<NamedPipeServerStream> _pipes = new();
+    private readonly object _gate = new();
     private byte[] _frame;
 
     public LiveOverlayCanvas(int width, int height, int fps = 10)
@@ -76,10 +81,9 @@ public sealed class LiveOverlayCanvas : IDisposable
         Height = Math.Max(2, height);
         Fps = Math.Clamp(fps, 2, 30);
         _frame = new byte[Width * Height * 4];
-        string name = "mbx-overlay-" + Guid.NewGuid().ToString("N");
-        Input = new LiveOverlayInput(@"\\.\pipe\" + name, Width, Height, Fps);
-        _pipe = new NamedPipeServerStream(name, PipeDirection.Out, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 0, _frame.Length);
-        new Thread(Run) { IsBackground = true, Name = "Camada do programa para a live" }.Start();
+        _name = "mbx-overlay-" + Guid.NewGuid().ToString("N");
+        Input = new LiveOverlayInput(@"\\.\pipe\" + _name, Width, Height, Fps);
+        Listen();
     }
 
     public int Width { get; }
@@ -94,17 +98,33 @@ public sealed class LiveOverlayCanvas : IDisposable
         Volatile.Write(ref _frame, bgra);
     }
 
-    private void Run()
+    /// <summary>Deixa uma porta do cano esperando o próximo FFmpeg.</summary>
+    private void Listen()
+    {
+        if (_cts.IsCancellationRequested) return;
+        NamedPipeServerStream pipe;
+        try
+        {
+            pipe = new NamedPipeServerStream(_name, PipeDirection.Out, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous, 0, _frame.Length);
+        }
+        catch (IOException) { return; }
+        lock (_gate) _pipes.Add(pipe);
+        new Thread(() => Run(pipe)) { IsBackground = true, Name = "Camada do programa para a live" }.Start();
+    }
+
+    private void Run(NamedPipeServerStream pipe)
     {
         try
         {
-            _pipe.WaitForConnectionAsync(_cts.Token).GetAwaiter().GetResult();
+            pipe.WaitForConnectionAsync(_cts.Token).GetAwaiter().GetResult();
+            Listen();   // já deixa a próxima porta aberta para uma nova tentativa do estúdio
             var clock = Stopwatch.StartNew();
             double interval = 1000.0 / Fps, next = 0;
             while (!_cts.IsCancellationRequested)
             {
                 var frame = Volatile.Read(ref _frame);
-                _pipe.Write(frame, 0, frame.Length);
+                pipe.Write(frame, 0, frame.Length);
                 next += interval;
                 double wait = next - clock.Elapsed.TotalMilliseconds;
                 if (wait < -interval * 3) next = clock.Elapsed.TotalMilliseconds;
@@ -112,12 +132,21 @@ public sealed class LiveOverlayCanvas : IDisposable
             }
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException) { }
+        finally
+        {
+            lock (_gate) _pipes.Remove(pipe);
+            pipe.Dispose();
+        }
     }
 
     public void Dispose()
     {
         try { _cts.Cancel(); } catch (ObjectDisposedException) { }
-        _pipe.Dispose();
+        lock (_gate)
+        {
+            foreach (var p in _pipes) p.Dispose();
+            _pipes.Clear();
+        }
     }
 
     /// <summary>Converte BGRA pré-multiplicado (o que o Windows desenha) para BGRA normal (o que o FFmpeg espera).</summary>

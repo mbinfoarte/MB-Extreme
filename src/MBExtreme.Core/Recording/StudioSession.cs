@@ -387,13 +387,17 @@ public sealed class StudioSession : IDisposable
         }
     }
 
+    private string? _previousMessage;
+
     private void OnError(string? line, StreamTarget? target, StreamTarget? verticalTarget)
     {
         if (string.IsNullOrWhiteSpace(line)) return;
         string text = StudioCommand.MaskSecrets(line.Trim(), target, verticalTarget);
         if (_request is { } current) text = StudioCommand.MaskSecrets(text, current.ExtraStreams.Cast<StreamTarget?>().ToArray());   // as outras plataformas também
         if (SceneSwitch.IsCommandEcho(text)) return;   // eco da troca de cena: não é erro
-        LastMessage = text;
+        // "Error opening input files: ..." não diz qual entrada: junta com a linha de antes, que diz
+        LastMessage = StudioErrors.Explain(_previousMessage, text);
+        _previousMessage = text;
         if (text.Contains("Slave muxer", StringComparison.OrdinalIgnoreCase) && text.Contains("fail", StringComparison.OrdinalIgnoreCase))
         {
             StreamDropped = true;

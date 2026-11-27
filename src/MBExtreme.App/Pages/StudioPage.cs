@@ -2232,6 +2232,8 @@ public sealed partial class StudioPage : ToolPageBase
     }
 
     /// <summary>Monta a configuração a partir do que está na tela. <paramref name="write"/> grava a imagem do QR do Pix (só ao iniciar ou aplicar, para não escrever em disco a cada segundo).</summary>
+    private string _encoderSwapNote = "";
+
     private (StudioConfig? Config, string? Error) BuildConfig(bool write)
     {
         if (_ffmpegPath is null || _encoders.Count == 0) return (null, "O motor de vídeo ainda está sendo preparado ou a placa ainda está sendo testada. Aguarde alguns segundos.");
@@ -2286,6 +2288,10 @@ public sealed partial class StudioPage : ToolPageBase
             var strictest = _s.StudioExtraStreams.Any(e => e.Service != (int)StreamService.YouTube) ? StreamService.Twitch : service;
             var forStream = EncoderChoice.ForStream(_encoders, encoder, strictest);
             if (forStream is null) return (null, $"A {PlatformSpecs.For(service).Name} só recebe vídeo em H.264, e a sua placa não tem esse codificador funcionando. Atualize o driver da placa de vídeo.");
+            // a plataforma não recebe o codec escolhido (ex.: AV1 na Twitch): avisa qual vai no lugar, uma vez por escolha
+            string swap = forStream == encoder ? "" : $"{(strictest == service ? PlatformSpecs.For(service).Name : "Uma das plataformas")} só recebe H.264: a live vai em {forStream.Title}.";
+            if (write && swap.Length > 0 && swap != _encoderSwapNote) SetStatus(swap, "MutedBrush");
+            if (write) _encoderSwapNote = swap;
             encoder = forStream;
             if (!_rehearsing) target = new StreamTarget(service, _customUrl.Text, _key.Password);   // no ensaio: o mesmo codec da live, sem enviar
         }
@@ -2386,7 +2392,9 @@ public sealed partial class StudioPage : ToolPageBase
             verticalCopy is not null ? verticalTarget : null, (VerticalPlatform)Math.Clamp(_s.StudioVLivePlatform, 0, 3),
             vEncoder, _s.StudioVRecMbps, _s.StudioVRecQuality, vEffort, _s.StudioVRecFps, mainQuality,
             _s.StudioVRecPostMp4 && (vertical is not null || verticalCopy is not null), LiveOverlay: overlayLogo,
-            ExtraStreams: target is null ? null : ExtraTargets());
+            ExtraStreams: target is null ? null : ExtraTargets(),
+            // modo Ultra da gravação com H.265 ou AV1: 10 bits (sem faixas no céu e nas sombras); se a placa recusar, sai em 8 bits
+            TenBit: target is null && _s.StudioRecordMode == (int)StudioMode.Ultra && mainEncoder.Codec != VideoCodec.H264 && mainEncoder.Kind != EncoderKind.Software);
         // ensaio: tudo igual à live, mas sem gravar, transmitir, replay nem a cópia vertical
         if (_rehearsing) config = config with { Record = false, Stream = null, Replay = false, VerticalStream = null, VerticalCopy = null, PostMp4 = false, Rehearsal = true };
         return (config, null);

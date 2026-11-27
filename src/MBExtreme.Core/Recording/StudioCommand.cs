@@ -293,15 +293,17 @@ public static class StudioCommand
 
         args.AddRange(new[] { "-map", videoMap, "-c:v", r.Encoder.FfmpegName });
         args.AddRange(QualityArgs(r.Encoder, r.Quality));
-        if (r.QualityLevel > 0 && r.Stream is null)
+        bool constantQuality = r.QualityLevel > 0 && r.Stream is null;
+        if (constantQuality)
             args.AddRange(ConstantQualityArgs(r.Encoder, r.QualityLevel));   // só gravando: a imagem manda, o tamanho do arquivo varia
         else
-        {
             args.AddRange(new[] { "-b:v", bitrate, "-maxrate", maxrate, "-bufsize", bufsize });
-            if (r.Stream is not null && r.EncoderTuning) args.AddRange(LiveTuning(r.Encoder));
-        }
+        if (r.EncoderTuning)
+            args.AddRange(r.Stream is not null ? LiveTuning(r.Encoder) : RecordTuning(r.Encoder, constantQuality));
+        if (r.Stream is null && r.TenBit && r.EncoderTuning) args.AddRange(TenBitArgs(r.Encoder));
         if (r.Vertical is not null) args.AddRange(SocialArgs(r.Encoder));
         args.AddRange(new[] { "-g", (fps * 2).ToString(), "-flags", "+global_header" });
+        if (r.Stream is not null) args.AddRange(LiveKeyframes);
         if (audio) args.AddRange(new[] { "-map", "1:a", "-c:a", "aac", "-b:a", Math.Clamp(r.AudioKbps, 64, 320) + "k", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0" });
 
         // ---- saídas
@@ -337,6 +339,7 @@ public static class StudioCommand
                 int kbps = Math.Clamp(r.VerticalStreamKbps, 1000, 9000);
                 args.AddRange(new[] { "-b:v", kbps + "k", "-maxrate", kbps + "k", "-bufsize", kbps + "k" });
                 if (r.EncoderTuning) args.AddRange(LiveTuning(copyEncoder));
+                args.AddRange(LiveKeyframes);
             }
             else if (r.VerticalQualityLevel > 0)
             {
@@ -556,7 +559,7 @@ public static class StudioCommand
         return encoder.Kind switch
         {
             EncoderKind.Nvenc => new[] { "-rc", "vbr", "-cq", q, "-b:v", "0" },
-            EncoderKind.Amf => new[] { "-rc", "cqp", "-qp_i", q, "-qp_p", q },
+            EncoderKind.Amf => new[] { "-rc", "cqp", "-qp_i", q, "-qp_p", q, "-qp_b", q },
             EncoderKind.Qsv => new[] { "-global_quality", q },
             _ => new[] { "-crf", q },
         };
@@ -566,13 +569,40 @@ public static class StudioCommand
     /// O que o OBS usa na live com o codificador da placa (guia da NVIDIA para OBS): taxa constante (CBR), 2 quadros B no H.264 e quantização adaptativa
     /// ("psycho visual tuning"), que distribui melhor os bits e deixa a imagem boa com taxa baixa. Sem look-ahead nem várias passadas: pesam e atrasam.
     /// </summary>
+    /// <remarks>
+    /// NVIDIA: passada dupla rápida (um quarto da resolução, o padrão do OBS), 2 quadros B e sem quadro-chave por troca de cena.
+    /// AMD: modo de baixa latência com VBAQ e pré-análise (o que o OBS liga na AMF). Intel: CBR (taxa = teto) sem look-ahead.
+    /// Processador: sem quadro-chave por troca de cena. Se a placa recusar algum, o estúdio tenta de novo sem estes ajustes.
+    /// </remarks>
     public static IReadOnlyList<string> LiveTuning(EncoderOption encoder) => encoder.Kind switch
     {
-        EncoderKind.Nvenc => encoder.Codec == VideoCodec.H264
-            ? new[] { "-rc", "cbr", "-bf", "2", "-spatial-aq", "1" }
-            : new[] { "-rc", "cbr", "-spatial-aq", "1" },
-        EncoderKind.Amf => new[] { "-rc", "cbr" },
+        EncoderKind.Nvenc => new[] { "-rc", "cbr", "-multipass", "qres", "-bf", "2", "-spatial-aq", "1", "-no-scenecut", "1" },
+        EncoderKind.Amf => new[] { "-rc", "cbr", "-usage", "lowlatency", "-vbaq", "1", "-preanalysis", "1" },
         EncoderKind.Qsv => new[] { "-look_ahead", "0" },
+        _ => new[] { "-sc_threshold", "0" },
+    };
+
+    /// <summary>Quadro-chave a cada 2 segundos certinhos na live (o YouTube e a Twitch pedem isso), mesmo com troca de cena brusca.</summary>
+    public static IReadOnlyList<string> LiveKeyframes { get; } = new[] { "-force_key_frames", "expr:gte(t,n_forced*2)" };
+
+    /// <summary>
+    /// Gravação: NVIDIA com quantização adaptativa e 2 quadros B (mais detalhe no mesmo tamanho); AMD com VBAQ quando a taxa é por bits
+    /// (com qualidade constante a AMF não usa VBAQ). Se a placa recusar, o estúdio tenta de novo sem.
+    /// </summary>
+    public static IReadOnlyList<string> RecordTuning(EncoderOption encoder, bool constantQuality) => encoder.Kind switch
+    {
+        EncoderKind.Nvenc => new[] { "-spatial-aq", "1", "-bf", "2" },
+        EncoderKind.Amf => constantQuality ? Array.Empty<string>() : new[] { "-vbaq", "1" },
+        _ => Array.Empty<string>(),
+    };
+
+    /// <summary>
+    /// 10 bits na gravação (H.265 e AV1): tira as faixas no céu e nas sombras sem aumentar o arquivo. O H.264 da placa não grava 10 bits.
+    /// </summary>
+    public static IReadOnlyList<string> TenBitArgs(EncoderOption encoder) => encoder.Codec switch
+    {
+        VideoCodec.Hevc when encoder.Kind != EncoderKind.Software => new[] { "-pix_fmt", "p010le", "-profile:v", "main10" },
+        VideoCodec.Av1 when encoder.Kind != EncoderKind.Software => new[] { "-pix_fmt", "p010le" },
         _ => Array.Empty<string>(),
     };
 

@@ -220,6 +220,9 @@ public sealed record StudioRequest
     /// <summary>Ajustes de live que o OBS usa no codificador da placa (taxa constante, quadros B, quantização adaptativa). Desligado sozinho se a placa recusar.</summary>
     public bool EncoderTuning { get; init; } = true;
 
+    /// <summary>Gravar em 10 bits (H.265 e AV1, modo Ultra). Faz parte dos ajustes extras: se a placa recusar, sai em 8 bits.</summary>
+    public bool TenBit { get; init; }
+
     /// <summary>Pede as cópias pequenas das câmeras (a sessão cria os canais e preenche <see cref="CameraPreviewPipes"/>).</summary>
     public bool CameraPreviews { get; init; }
 

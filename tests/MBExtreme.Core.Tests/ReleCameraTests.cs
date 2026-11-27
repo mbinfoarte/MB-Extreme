@@ -88,9 +88,9 @@ public class ReleCameraTests
     [Fact]
     public void Live_usa_os_ajustes_do_obs_no_codificador()
     {
-        Assert.Equal(new[] { "-rc", "cbr", "-bf", "2", "-spatial-aq", "1" }, StudioCommand.LiveTuning(Nvenc));
-        Assert.DoesNotContain("-bf", StudioCommand.LiveTuning(new EncoderOption(VideoCodec.Hevc, EncoderKind.Nvenc, "hevc_nvenc")));
-        Assert.Equal(new[] { "-rc", "cbr" }, StudioCommand.LiveTuning(new EncoderOption(VideoCodec.H264, EncoderKind.Amf, "h264_amf")));
+        Assert.Equal(new[] { "-rc", "cbr", "-multipass", "qres", "-bf", "2", "-spatial-aq", "1", "-no-scenecut", "1" }, StudioCommand.LiveTuning(Nvenc));
+        Assert.Contains("-bf", StudioCommand.LiveTuning(new EncoderOption(VideoCodec.Hevc, EncoderKind.Nvenc, "hevc_nvenc")));
+        Assert.Equal(new[] { "-rc", "cbr", "-usage", "lowlatency", "-vbaq", "1", "-preanalysis", "1" }, StudioCommand.LiveTuning(new EncoderOption(VideoCodec.H264, EncoderKind.Amf, "h264_amf")));
 
         var r = new StudioRequest
         {
@@ -99,9 +99,14 @@ public class ReleCameraTests
             Stream = new StreamTarget(StreamService.YouTube, "", "abcd-1234"),
         };
         string live = string.Join(" ", StudioCommand.Build(r));
-        Assert.Contains("-rc cbr -bf 2 -spatial-aq 1", live);
+        Assert.Contains("-rc cbr -multipass qres -bf 2 -spatial-aq 1 -no-scenecut 1", live);
+        Assert.Contains("-force_key_frames expr:gte(t,n_forced*2)", live);
         Assert.DoesNotContain("-spatial-aq", string.Join(" ", StudioCommand.Build(r with { EncoderTuning = false })));
-        Assert.DoesNotContain("-spatial-aq", string.Join(" ", StudioCommand.Build(r with { Stream = null, RecordFile = "g.mkv" })));   // só gravando: não precisa
+        string rec = string.Join(" ", StudioCommand.Build(r with { Stream = null, RecordFile = "g.mkv" }));
+        Assert.DoesNotContain("-rc cbr", rec);                // gravando: sem taxa constante de live
+        Assert.Contains("-spatial-aq 1 -bf 2", rec);           // ajuste próprio da gravação
+        Assert.DoesNotContain("-force_key_frames", rec);
+        Assert.Contains("p010le", string.Join(" ", StudioCommand.Build(r with { Stream = null, RecordFile = "g.mkv", Encoder = new EncoderOption(VideoCodec.Hevc, EncoderKind.Nvenc, "hevc_nvenc"), TenBit = true })));
     }
 
     [Fact]

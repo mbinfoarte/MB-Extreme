@@ -32,7 +32,7 @@ public class GravacaoVerticalTests
     public void Qualidade_constante_por_marca_de_placa()
     {
         Assert.Equal(new[] { "-rc", "vbr", "-cq", "17", "-b:v", "0" }, StudioCommand.ConstantQualityArgs(Nvenc, 3));
-        Assert.Equal(new[] { "-rc", "cqp", "-qp_i", "20", "-qp_p", "20" }, StudioCommand.ConstantQualityArgs(Amf, 2));
+        Assert.Equal(new[] { "-rc", "cqp", "-qp_i", "20", "-qp_p", "20", "-qp_b", "20" }, StudioCommand.ConstantQualityArgs(Amf, 2));
         Assert.Equal(new[] { "-global_quality", "31" }, StudioCommand.ConstantQualityArgs(Qsv, 1));   // AV1 usa escala mais alta
         Assert.Equal(new[] { "-crf", "17" }, StudioCommand.ConstantQualityArgs(X264, 3));
     }

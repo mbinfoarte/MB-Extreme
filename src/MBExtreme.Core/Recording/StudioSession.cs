@@ -157,6 +157,11 @@ public sealed class StudioSession : IDisposable
 
     public event EventHandler? WarningAdded;
 
+    /// <summary>O codificador não está dando conta (velocidade abaixo de 0,93x por 10 s). A tela decide se alivia o esforço.</summary>
+    public event EventHandler? EncoderOverloaded;
+
+    private readonly EncoderLoad _load = new();
+
     /// <summary>O FFmpeg terminou sozinho (disco cheio, driver reiniciado...). Chamado em outra thread.</summary>
     public event EventHandler? Ended;
 
@@ -202,10 +207,12 @@ public sealed class StudioSession : IDisposable
         {
             await LaunchWithModesAsync(request, audio).ConfigureAwait(false);
         }
-        catch (InvalidOperationException) when (request.EncoderTuning && (request.Stream is not null || request.VerticalStream is not null))
+        catch (InvalidOperationException) when (request.EncoderTuning)
         {
-            AddWarning("O codificador da placa não aceitou os ajustes extras de live; transmitindo com o ajuste padrão.");
-            await LaunchWithModesAsync(request with { EncoderTuning = false }, audio).ConfigureAwait(false);
+            AddWarning(request.Stream is not null || request.VerticalStream is not null
+                ? "O codificador da placa não aceitou os ajustes extras de live; transmitindo com o ajuste padrão."
+                : "O codificador da placa não aceitou os ajustes extras de gravação" + (request.TenBit ? " (10 bits)" : "") + "; gravando com o ajuste padrão.");
+            await LaunchWithModesAsync(request with { EncoderTuning = false, TenBit = false }, audio).ConfigureAwait(false);
         }
     }
 
@@ -342,7 +349,14 @@ public sealed class StudioSession : IDisposable
         _request = effective;
         LastMessage = null;
         process.ErrorDataReceived += (_, e) => OnError(e.Data, effective.Stream, effective.VerticalStream);
-        process.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) Progress.Feed(e.Data); };
+        _load.Reset();
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is not { Length: > 0 } data) return;
+            Progress.Feed(data);
+            if (data.StartsWith("speed=", StringComparison.Ordinal) && _load.Feed(Progress.Speed, DateTime.UtcNow) && !_stopping)
+                EncoderOverloaded?.Invoke(this, EventArgs.Empty);
+        };
         process.BeginErrorReadLine();
         process.BeginOutputReadLine();
 

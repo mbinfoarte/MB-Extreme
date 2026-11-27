@@ -52,7 +52,8 @@ internal sealed record StudioConfig(
     bool PostMp4 = false,
     bool Rehearsal = false,
     bool LiveOverlay = false,
-    IReadOnlyList<StreamTarget>? ExtraStreams = null)
+    IReadOnlyList<StreamTarget>? ExtraStreams = null,
+    bool TenBit = false)
 {
     /// <summary>Várias cenas montadas juntas: trocar de cena não reinicia a captura.</summary>
     public bool LiveScenes => Scenes is { Count: > 1 } && Vertical is null && VerticalCopy is null;
@@ -91,6 +92,35 @@ internal sealed class StudioController
                 }
             }));
         _highlightTimer.Tick += (_, _) => HighlightTick();
+        Session.EncoderOverloaded += (_, _) => Application.Current?.Dispatcher.BeginInvoke(new Action(async () => await RelieveEncoderAsync()));
+    }
+
+    private bool _relieving;
+
+    /// <summary>
+    /// O codificador não deu conta por 10 s: baixa um degrau do esforço (Qualidade → Equilibrado → Rápido) e reinicia. A live volta em
+    /// alguns segundos, sem perder quadros depois. No mais leve, só avisa.
+    /// </summary>
+    private async Task RelieveEncoderAsync()
+    {
+        if (_relieving || Config is not { } c || !Session.IsRunning) return;
+        if (EncoderLoad.StepDown(c.Quality) is not { } lower)
+        {
+            Raise("O codificador da placa não está dando conta nem no esforço mais leve. Baixe a resolução ou os quadros por segundo.", false);
+            return;
+        }
+        _relieving = true;
+        try
+        {
+            string name = lower == EncoderQuality.Fast ? "Rápido" : "Equilibrado";
+            Raise($"O codificador da placa não estava dando conta (quadros perdidos). Baixei o esforço para {name}: a imagem continua fluida.", true);
+            await RestartAsync(c with { Quality = lower });
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            Raise("Não foi possível aliviar o codificador: " + ex.Message, false);
+        }
+        finally { _relieving = false; }
     }
 
     public StudioSession Session { get; } = new();
@@ -171,6 +201,7 @@ internal sealed class StudioController
             StreamMaxMbps = streamMax,
             AudioKbps = audioKbps,
             Quality = config.Quality,
+            TenBit = config.TenBit,
             Cameras = config.Cameras ?? Array.Empty<CameraOverlay>(),
             Pix = config.Pix,
             Filter = config.Filter,
